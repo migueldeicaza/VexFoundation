@@ -16,7 +16,10 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "VexFoundation"
+            name: "VexFoundation",
+            resources: [
+                .copy("Resources"),
+            ]
         ),
         .testTarget(
             name: "VexFoundationTests",

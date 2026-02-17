@@ -145,10 +145,13 @@ public final class VexFont: @unchecked Sendable {
 
     // MARK: - Font Registry
 
+    private static let fontsLock = NSLock()
     nonisolated(unsafe) private static var fonts: [String: VexFont] = [:]
 
     /// Load or retrieve a font by name. Optionally set its data and metrics.
     public static func load(name: String, data: FontData? = nil, metrics: FontMetrics? = nil) -> VexFont {
+        fontsLock.lock()
+        defer { fontsLock.unlock() }
         let font = fonts[name] ?? VexFont(name: name)
         fonts[name] = font
         if let data { font.data = data }
