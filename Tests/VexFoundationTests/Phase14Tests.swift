@@ -13,7 +13,7 @@ struct Phase14Tests {
 
     // MARK: - Helper
 
-    private func makeNote(keys: [String] = ["c/4"], duration: String = "4") -> StaveNote {
+    private func makeNote(keys: [String] = ["c/4"], duration: NoteValue = .quarter) -> StaveNote {
         let note = StaveNote(StaveNoteStruct(keys: keys, duration: duration))
         let stave = Stave(x: 10, y: 40, width: 300)
         _ = note.setStave(stave)
@@ -24,7 +24,7 @@ struct Phase14Tests {
 
     private func makeTabNote(
         positions: [TabNotePosition] = [TabNotePosition(str: 1, fret: 5)],
-        duration: String = "q"
+        duration: NoteValue = .quarter
     ) -> TabNote {
         TabNote(TabNoteStruct(positions: positions, duration: duration))
     }
@@ -142,7 +142,7 @@ struct Phase14Tests {
     @Test func tabNoteHasStemWithStem() {
         let tn = TabNote(TabNoteStruct(
             positions: [TabNotePosition(str: 1, fret: 5)],
-            duration: "q"
+            duration: .quarter
         ), drawStem: true)
         #expect(tn.hasStem() == true)
     }
@@ -195,7 +195,7 @@ struct Phase14Tests {
     @Test func tabNoteCustomStemDirection() {
         let tn = TabNote(TabNoteStruct(
             positions: [TabNotePosition(str: 1, fret: 5)],
-            duration: "q",
+            duration: .quarter,
             stemDirection: Stem.DOWN
         ))
         #expect(tn.getStemDirection() == Stem.DOWN)
@@ -498,19 +498,19 @@ struct Phase14Tests {
     // ============================================================
 
     @Test func glyphPropsTabExtensions() {
-        let gp = Tables.getGlyphProps(duration: "4")!
+        let gp = Tables.getGlyphProps(duration: .quarter)!
         #expect(gp.tabnoteStemUpExtension == 0)
         #expect(gp.tabnoteStemDownExtension == 0)
     }
 
     @Test func glyphPropsTabExtensions32nd() {
-        let gp = Tables.getGlyphProps(duration: "32")!
+        let gp = Tables.getGlyphProps(duration: .thirtySecond)!
         #expect(gp.tabnoteStemUpExtension == 9)
         #expect(gp.tabnoteStemDownExtension == 9)
     }
 
     @Test func glyphPropsTabExtensionsWhole() {
-        let gp = Tables.getGlyphProps(duration: "1")!
+        let gp = Tables.getGlyphProps(duration: .whole)!
         #expect(gp.tabnoteStemUpExtension == -Tables.STEM_HEIGHT)
         #expect(gp.tabnoteStemDownExtension == -Tables.STEM_HEIGHT)
     }

@@ -21,17 +21,17 @@ public struct NoteMetrics {
 
 /// Parsed duration components.
 public struct NoteDuration {
-    public var duration: String
+    public var value: NoteValue
     public var dots: Int
-    public var type: String
+    public var type: NoteType
 }
 
 // MARK: - Parsed Note
 
 /// Result of parsing a note struct.
 public struct ParsedNote {
-    public var duration: String
-    public var type: String
+    public var duration: NoteValue
+    public var type: NoteType
     public var customTypes: [String]
     public var dots: Int
     public var ticks: Int
@@ -42,19 +42,19 @@ public struct ParsedNote {
 /// Input structure for creating a note.
 public struct NoteStruct {
     public var keys: [String]
-    public var duration: String
+    public var duration: NoteValue
     public var line: Double?
     public var dots: Int?
-    public var type: String?
+    public var type: NoteType?
     public var alignCenter: Bool?
     public var durationOverride: Fraction?
 
     public init(
         keys: [String] = [],
-        duration: String,
+        duration: NoteValue,
         line: Double? = nil,
         dots: Int? = nil,
-        type: String? = nil,
+        type: NoteType? = nil,
         alignCenter: Bool? = nil,
         durationOverride: Fraction? = nil
     ) {
@@ -65,6 +65,62 @@ public struct NoteStruct {
         self.type = type
         self.alignCenter = alignCenter
         self.durationOverride = durationOverride
+    }
+
+    /// String-based parser for API boundaries and external input.
+    public init(
+        keys: [String] = [],
+        duration: String,
+        line: Double? = nil,
+        dots: Int? = nil,
+        type: String? = nil,
+        alignCenter: Bool? = nil,
+        durationOverride: Fraction? = nil
+    ) throws {
+        let parsed = try NoteDurationSpec(parsing: duration)
+        let parsedType: NoteType?
+        if let type {
+            guard let explicitType = NoteType(parsing: type) else {
+                throw NoteDurationParseError.invalidType(type)
+            }
+            parsedType = explicitType
+        } else if parsed.type == .note {
+            parsedType = nil
+        } else {
+            parsedType = parsed.type
+        }
+
+        self.init(
+            keys: keys,
+            duration: parsed.value,
+            line: line,
+            dots: dots ?? parsed.dots,
+            type: parsedType,
+            alignCenter: alignCenter,
+            durationOverride: durationOverride
+        )
+    }
+
+    /// Failable parser for convenience at call sites that don't want `throw`.
+    public init?(
+        parsingDuration duration: String,
+        keys: [String] = [],
+        line: Double? = nil,
+        dots: Int? = nil,
+        type: String? = nil,
+        alignCenter: Bool? = nil,
+        durationOverride: Fraction? = nil
+    ) {
+        guard let parsed = try? NoteStruct(
+            keys: keys,
+            duration: duration,
+            line: line,
+            dots: dots,
+            type: type,
+            alignCenter: alignCenter,
+            durationOverride: durationOverride
+        ) else { return nil }
+        self = parsed
     }
 }
 
@@ -99,47 +155,27 @@ open class Note: Tickable {
     /// Parse a duration string like "4d", "8", "qr" into components.
     public static func parseDuration(_ durationString: String?) -> NoteDuration? {
         guard let durationString, !durationString.isEmpty else { return nil }
-
-        // Pattern: optional digits or fraction, then optional dots, then optional type
-        let pattern = #"^(\d*\/?\d+|[a-z])(d*)([nrhms]|$)"#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: durationString,
-                range: NSRange(durationString.startIndex..., in: durationString)) else {
-            return nil
-        }
-
-        let dur = String(durationString[Range(match.range(at: 1), in: durationString)!])
-        let dotsStr = String(durationString[Range(match.range(at: 2), in: durationString)!])
-        var typeStr = String(durationString[Range(match.range(at: 3), in: durationString)!])
-        if typeStr.isEmpty { typeStr = "n" }
-
-        return NoteDuration(duration: dur, dots: dotsStr.count, type: typeStr)
+        guard let parsed = try? NoteDurationSpec(parsing: durationString) else { return nil }
+        return NoteDuration(value: parsed.value, dots: parsed.dots, type: parsed.type)
     }
 
     /// Parse a NoteStruct into a ParsedNote.
     public static func parseNoteStruct(_ noteStruct: NoteStruct) -> ParsedNote? {
-        guard let durationProps = parseDuration(noteStruct.duration) else { return nil }
-
-        var type = noteStruct.type
-        if let t = type, Tables.validTypes[t] == nil { return nil }
+        let type = noteStruct.type ?? .note
 
         var customTypes: [String] = []
-        if type == nil {
-            type = durationProps.type.isEmpty ? "n" : durationProps.type
-
-            for (i, k) in noteStruct.keys.enumerated() {
-                let result = k.split(separator: "/").map(String.init)
-                if result.count == 3 {
-                    customTypes.append(result[2])
-                } else {
-                    customTypes.append(contentsOf: Array(repeating: type!, count: max(0, i + 1 - customTypes.count)))
-                }
+        for (i, k) in noteStruct.keys.enumerated() {
+            let result = k.split(separator: "/").map(String.init)
+            if result.count == 3 {
+                customTypes.append(result[2])
+            } else {
+                customTypes.append(contentsOf: Array(repeating: type.rawValue, count: max(0, i + 1 - customTypes.count)))
             }
         }
 
-        guard var ticks = Tables.durationToTicks(durationProps.duration) else { return nil }
+        var ticks = Tables.durationToTicks(noteStruct.duration)
 
-        let dots = noteStruct.dots ?? durationProps.dots
+        let dots = noteStruct.dots ?? 0
 
         var currentTicks = ticks
         for _ in 0..<dots {
@@ -149,8 +185,8 @@ open class Note: Tickable {
         }
 
         return ParsedNote(
-            duration: durationProps.duration,
-            type: type!,
+            duration: noteStruct.duration,
+            type: type,
             customTypes: customTypes,
             dots: dots,
             ticks: ticks
@@ -164,6 +200,8 @@ open class Note: Tickable {
     public var keyProps: [KeyProps] = []
     public weak var noteStave: Stave?
     public var renderOptions = NoteRenderOptions()
+    public var noteValue: NoteValue
+    public var noteTypeValue: NoteType
     public var noteDuration: String
     public var leftDisplacedHeadPx: Double = 0
     public var rightDisplacedHeadPx: Double = 0
@@ -178,12 +216,14 @@ open class Note: Tickable {
 
     public init(_ noteStruct: NoteStruct) {
         guard let parsed = Note.parseNoteStruct(noteStruct) else {
-            fatalError("[VexError] BadArguments: Invalid note initialization data: \(noteStruct.duration)")
+            fatalError("[VexError] BadArguments: Invalid note initialization data: \(noteStruct.duration.rawValue)")
         }
 
         self.keys = noteStruct.keys
-        self.noteDuration = parsed.duration
-        self.noteType = parsed.type
+        self.noteValue = parsed.duration
+        self.noteTypeValue = parsed.type
+        self.noteDuration = parsed.duration.rawValue
+        self.noteType = parsed.type.rawValue
         self.customTypes = parsed.customTypes
 
         super.init()
@@ -310,8 +350,10 @@ open class Note: Tickable {
     // MARK: - Duration
 
     public func getDuration() -> String { noteDuration }
+    public func getNoteValue() -> NoteValue { noteValue }
 
     public func getNoteType() -> String { noteType }
+    public func getNoteTypeValue() -> NoteType { noteTypeValue }
 
     open func hasStem() -> Bool { false }
 

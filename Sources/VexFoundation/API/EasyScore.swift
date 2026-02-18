@@ -26,12 +26,12 @@ public struct NotePiece {
 /// A parsed note piece with duration, dots, type, and options.
 public class Piece {
     public var chord: [NotePiece] = []
-    public var duration: String
+    public var duration: NoteValue
     public var dots: Int = 0
-    public var type: String?
+    public var type: NoteType?
     public var options: [String: String] = [:]
 
-    public init(duration: String) {
+    public init(duration: NoteValue) {
         self.duration = duration
     }
 }
@@ -175,11 +175,11 @@ public final class Builder {
     public var options: [String: String] = [:]
     public var piece: Piece
     public var commitHooks: [CommitHook] = []
-    public var rollingDuration: String = "8"
+    public var rollingDuration: NoteValue = .eighth
 
     public init(factory: Factory) {
         self.factory = factory
-        self.piece = Piece(duration: "8")
+        self.piece = Piece(duration: .eighth)
         reset()
     }
 
@@ -194,7 +194,7 @@ public final class Builder {
             }
         }
         elements = BuilderElements()
-        rollingDuration = "8"
+        rollingDuration = .eighth
         resetPiece()
     }
 
@@ -214,12 +214,22 @@ public final class Builder {
     }
 
     public func setNoteDuration(_ duration: String?) {
-        rollingDuration = duration ?? rollingDuration
+        if let duration {
+            guard let parsed = NoteValue(parsing: duration) else {
+                fatalError("[VexError] BadArguments: Invalid note duration: \(duration)")
+            }
+            rollingDuration = parsed
+        }
         piece.duration = rollingDuration
     }
 
     public func setNoteType(_ type: String?) {
-        if let type { piece.type = type }
+        if let type {
+            guard let parsed = NoteType(parsing: type) else {
+                fatalError("[VexError] BadArguments: Invalid note type: \(type)")
+            }
+            piece.type = parsed
+        }
     }
 
     public func addNoteOption(key: String, value: String) {
@@ -288,7 +298,7 @@ public final class Builder {
 
         // Build note
         let note: StemmableNote
-        if type?.lowercased() == "g" {
+        if type == .ghost {
             note = factory.GhostNote(duration: duration, dots: dots)
         } else {
             note = factory.StaveNote(StaveNoteStruct(
@@ -351,10 +361,10 @@ public struct EasyScoreOptions {
 /// Defaults for EasyScore parsing.
 public struct EasyScoreDefaults {
     public var clef: ClefName = .treble
-    public var time: String = "4/4"
+    public var time: TimeSignatureSpec = .default
     public var stem: String = "auto"
 
-    public init(clef: ClefName = .treble, time: String = "4/4", stem: String = "auto") {
+    public init(clef: ClefName = .treble, time: TimeSignatureSpec = .default, stem: String = "auto") {
         self.clef = clef
         self.time = time
         self.stem = stem
@@ -489,9 +499,9 @@ public final class EasyScore {
     }
 
     /// Create a voice with the given notes.
-    public func voice(_ notes: [Note], time: String? = nil) -> Voice {
+    public func voice(_ notes: [Note], time: TimeSignatureSpec? = nil) -> Voice {
         let t = time ?? defaults.time
-        let voice = factory.Voice(timeSpec: t)
+        let voice = factory.Voice(timeSignature: t)
         _ = voice.addTickables(notes)
         return voice
     }
@@ -523,7 +533,7 @@ import SwiftUI
         _ = score.beam(Array(notes[4..<8]))
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
-        )).addClef(.treble).addKeySignature("G").addTimeSignature("4/4")
+        )).addClef(.treble).addKeySignature("G").addTimeSignature(.meter(4, 4))
 
         system.format()
         try? f.draw()

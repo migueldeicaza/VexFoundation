@@ -8,24 +8,24 @@ import Foundation
 /// Input structure for creating a GraceNote (extends StaveNoteStruct).
 public struct GraceNoteStruct {
     public var keys: [String]
-    public var duration: String
+    public var duration: NoteValue
     public var slash: Bool
     public var stemDirection: StemDirection?
     public var autoStem: Bool?
     public var clef: ClefName?
     public var dots: Int?
-    public var type: String?
+    public var type: NoteType?
     public var octaveShift: Int?
 
     public init(
         keys: [String] = [],
-        duration: String = "8",
+        duration: NoteValue = .eighth,
         slash: Bool = false,
         stemDirection: StemDirection? = nil,
         autoStem: Bool? = nil,
         clef: ClefName? = nil,
         dots: Int? = nil,
-        type: String? = nil,
+        type: NoteType? = nil,
         octaveShift: Int? = nil
     ) {
         self.keys = keys
@@ -37,6 +37,70 @@ public struct GraceNoteStruct {
         self.dots = dots
         self.type = type
         self.octaveShift = octaveShift
+    }
+
+    /// String-based parser for compatibility with external text inputs.
+    public init(
+        keys: [String] = [],
+        duration: String,
+        slash: Bool = false,
+        stemDirection: StemDirection? = nil,
+        autoStem: Bool? = nil,
+        clef: ClefName? = nil,
+        dots: Int? = nil,
+        type: String? = nil,
+        octaveShift: Int? = nil
+    ) throws {
+        let parsedDuration = try NoteDurationSpec(parsing: duration)
+        let parsedType: NoteType?
+        if let type {
+            guard let explicitType = NoteType(parsing: type) else {
+                throw NoteDurationParseError.invalidType(type)
+            }
+            parsedType = explicitType
+        } else if parsedDuration.type == .note {
+            parsedType = nil
+        } else {
+            parsedType = parsedDuration.type
+        }
+
+        self.init(
+            keys: keys,
+            duration: parsedDuration.value,
+            slash: slash,
+            stemDirection: stemDirection,
+            autoStem: autoStem,
+            clef: clef,
+            dots: dots ?? parsedDuration.dots,
+            type: parsedType,
+            octaveShift: octaveShift
+        )
+    }
+
+    /// Failable parser convenience.
+    public init?(
+        parsingDuration duration: String,
+        keys: [String] = [],
+        slash: Bool = false,
+        stemDirection: StemDirection? = nil,
+        autoStem: Bool? = nil,
+        clef: ClefName? = nil,
+        dots: Int? = nil,
+        type: String? = nil,
+        octaveShift: Int? = nil
+    ) {
+        guard let parsed = try? GraceNoteStruct(
+            keys: keys,
+            duration: duration,
+            slash: slash,
+            stemDirection: stemDirection,
+            autoStem: autoStem,
+            clef: clef,
+            dots: dots,
+            type: type,
+            octaveShift: octaveShift
+        ) else { return nil }
+        self = parsed
     }
 
     /// Convert to StaveNoteStruct with grace note scale applied.
@@ -234,7 +298,7 @@ import SwiftUI
         let score = f.EasyScore()
 
         let notes = score.notes("D5/q, E5, F5, G5")
-        let gn = f.GraceNote(GraceNoteStruct(keys: ["C/5"], duration: "8", slash: true))
+        let gn = f.GraceNote(GraceNoteStruct(keys: ["C/5"], duration: .eighth, slash: true))
         let group = f.GraceNoteGroup(notes: [gn], slur: true)
         _ = notes[0].addModifier(group, index: 0)
 
@@ -245,7 +309,7 @@ import SwiftUI
             voices: [score.voice(notes)]
         ))
             .addClef(.treble)
-            .addTimeSignature("4/4")
+            .addTimeSignature(.meter(4, 4))
 
         system.format()
         try? f.draw()

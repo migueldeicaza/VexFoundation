@@ -13,7 +13,7 @@ struct Phase13Tests {
 
     // MARK: - Helper
 
-    private func makeNote(keys: [String] = ["c/4"], duration: String = "4") -> StaveNote {
+    private func makeNote(keys: [String] = ["c/4"], duration: NoteValue = .quarter) -> StaveNote {
         let note = StaveNote(StaveNoteStruct(keys: keys, duration: duration))
         let stave = Stave(x: 10, y: 40, width: 300)
         _ = note.setStave(stave)
@@ -31,31 +31,31 @@ struct Phase13Tests {
     }
 
     @Test func timeSigNoteCreation() {
-        let tsn = TimeSigNote(timeSpec: "4/4")
+        let tsn = TimeSigNote(timeSpec: .meter(4, 4))
         #expect(tsn.shouldIgnoreTicks() == true)
     }
 
     @Test func timeSigNoteWidth() {
-        let tsn = TimeSigNote(timeSpec: "3/4")
+        let tsn = TimeSigNote(timeSpec: .meter(3, 4))
         tsn.preFormat()
         #expect(tsn.getTickableWidth() > 0)
     }
 
     @Test func timeSigNotePreFormat() {
-        let tsn = TimeSigNote(timeSpec: "6/8")
+        let tsn = TimeSigNote(timeSpec: .meter(6, 8))
         tsn.preFormat()
         #expect(tsn.preFormatted == true)
     }
 
     @Test func timeSigNoteAddToModifierContext() {
-        let tsn = TimeSigNote(timeSpec: "4/4")
+        let tsn = TimeSigNote(timeSpec: .meter(4, 4))
         let mc = ModifierContext()
         _ = tsn.addToModifierContext(mc)
         // TimeSigNotes don't participate in modifier context
     }
 
     @Test func timeSigNoteIsNote() {
-        let tsn = TimeSigNote(timeSpec: "4/4")
+        let tsn = TimeSigNote(timeSpec: .meter(4, 4))
         #expect(tsn is Note)
     }
 

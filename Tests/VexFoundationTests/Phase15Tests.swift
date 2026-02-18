@@ -271,14 +271,14 @@ struct Phase15Tests {
     @Test func factoryStaveNote() {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 300)
-        let note = factory.StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "q"))
+        let note = factory.StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         #expect(note.getKeys().count == 1)
     }
 
     @Test func factoryGhostNote() {
         let factory = Factory()
-        let ghost = factory.GhostNote(duration: "q")
-        #expect(ghost.getDuration() == "q")
+        let ghost = factory.GhostNote(duration: .quarter)
+        #expect(ghost.getDuration() == "4")
     }
 
     @Test func factoryAccidental() {
@@ -308,7 +308,7 @@ struct Phase15Tests {
 
     @Test func factoryVoiceTimeSpec() {
         let factory = Factory()
-        let voice = factory.Voice(timeSpec: "3/4")
+        let voice = factory.Voice(timeSignature: .meter(3, 4))
         // 3/4 time = 3 beats of quarter note resolution
         #expect(voice.getTotalTicks().value() > 0)
     }
@@ -317,8 +317,8 @@ struct Phase15Tests {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let notes: [StemmableNote] = [
-            factory.StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
-            factory.StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            factory.StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .eighth)),
+            factory.StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .eighth)),
         ]
         let beam = factory.Beam(notes: notes)
         #expect(beam is Beam)
@@ -328,9 +328,9 @@ struct Phase15Tests {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let notes: [Note] = [
-            factory.StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
-            factory.StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
-            factory.StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+            factory.StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .eighth)),
+            factory.StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .eighth)),
+            factory.StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .eighth)),
         ]
         let tuplet = factory.Tuplet(notes: notes)
         #expect(tuplet.getNoteCount() == 3)
@@ -388,8 +388,8 @@ struct Phase15Tests {
     @Test func factoryStaveTie() {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 300)
-        let n1 = factory.StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "q"))
-        let n2 = factory.StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "q"))
+        let n1 = factory.StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
+        let n2 = factory.StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         let tie = factory.StaveTie(notes: TieNotes(firstNote: n1, lastNote: n2))
         #expect(tie.getCategory() == "StaveTie")
     }
@@ -470,9 +470,9 @@ struct Phase15Tests {
     @Test func easyScoreSetDefaults() {
         let factory = Factory()
         let score = factory.EasyScore()
-        _ = score.set(defaults: EasyScoreDefaults(clef: .bass, time: "3/4"))
+        _ = score.set(defaults: EasyScoreDefaults(clef: .bass, time: .meter(3, 4)))
         #expect(score.defaults.clef == .bass)
-        #expect(score.defaults.time == "3/4")
+        #expect(score.defaults.time == .meter(3, 4))
     }
 
     @Test func easyScoreBeam() {
@@ -700,8 +700,8 @@ struct Phase15Tests {
     @Test func factoryMultipleNoteTypes() {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
-        let sn = factory.StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "q"))
-        let ghost = factory.GhostNote(duration: "q")
+        let sn = factory.StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
+        let ghost = factory.GhostNote(duration: .quarter)
         let accid = factory.Accidental(type: "#")
         #expect(sn.getCategory() == "StaveNote")
         #expect(ghost.getCategory() == "GhostNote")

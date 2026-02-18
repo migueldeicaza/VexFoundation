@@ -141,7 +141,7 @@ import SwiftUI
             factory: f, x: 10, width: 500, y: 10
         ))
 
-        let cresc = Crescendo(NoteStruct(duration: "q"))
+        let cresc = Crescendo(NoteStruct(duration: .quarter))
         _ = cresc.setDecrescendo(false)
         _ = cresc.setHeight(15)
         _ = cresc.setLine(4)

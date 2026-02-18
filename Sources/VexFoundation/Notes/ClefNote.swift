@@ -27,7 +27,7 @@ public final class ClefNote: Note {
         self.clefDef = clef.clefDef
         self.clefAnnotation = clef.annotation
 
-        super.init(NoteStruct(duration: "b"))
+        super.init(NoteStruct(duration: .twoFiftySixth))
         ignoreTicks = true
     }
 

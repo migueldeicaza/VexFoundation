@@ -12,7 +12,7 @@ struct Phase9Tests {
 
     // MARK: - Helper
 
-    private func makeNote(keys: [String] = ["c/4"], duration: String = "4") -> StaveNote {
+    private func makeNote(keys: [String] = ["c/4"], duration: NoteValue = .quarter) -> StaveNote {
         let note = StaveNote(StaveNoteStruct(keys: keys, duration: duration))
         let stave = Stave(x: 10, y: 40, width: 300)
         _ = note.setStave(stave)
@@ -24,24 +24,24 @@ struct Phase9Tests {
     // MARK: - GhostNote
 
     @Test func ghostNoteCreation() {
-        let ghost = GhostNote("4")
+        let ghost = GhostNote(.quarter)
         #expect(GhostNote.category == "GhostNote")
         #expect(ghost.isRest())
     }
 
     @Test func ghostNoteFromStruct() {
-        let ghost = GhostNote(NoteStruct(duration: "8"))
+        let ghost = GhostNote(NoteStruct(duration: .eighth))
         #expect(ghost.isRest())
     }
 
     @Test func ghostNotePreFormat() {
-        let ghost = GhostNote("4")
+        let ghost = GhostNote(.quarter)
         ghost.preFormat()
         #expect(ghost.preFormatted == true)
     }
 
     @Test func ghostNoteDoesNotParticipateInModifierContext() {
-        let ghost = GhostNote("4")
+        let ghost = GhostNote(.quarter)
         let mc = ModifierContext()
         _ = ghost.addToModifierContext(mc)
         // Ghost note should not add itself to modifier context
@@ -52,7 +52,7 @@ struct Phase9Tests {
 
     @Test func glyphNoteCreation() {
         let glyph = Glyph(code: "segno", point: 40)
-        let note = GlyphNote(glyph: glyph, noteStruct: NoteStruct(duration: "q"))
+        let note = GlyphNote(glyph: glyph, noteStruct: NoteStruct(duration: .quarter))
         #expect(GlyphNote.category == "GlyphNote")
         #expect(note.getGlyphWidth() > 0)
     }
@@ -60,7 +60,7 @@ struct Phase9Tests {
     @Test func glyphNoteOptions() {
         let glyph = Glyph(code: "coda", point: 40)
         let options = GlyphNoteOptions(ignoreTicks: true, line: 3)
-        let note = GlyphNote(glyph: glyph, noteStruct: NoteStruct(duration: "q"), options: options)
+        let note = GlyphNote(glyph: glyph, noteStruct: NoteStruct(duration: .quarter), options: options)
         #expect(note.glyphNoteOptions.ignoreTicks == true)
         #expect(note.glyphNoteOptions.line == 3)
     }
@@ -68,7 +68,7 @@ struct Phase9Tests {
     @Test func glyphNoteSetGlyph() {
         let glyph1 = Glyph(code: "segno", point: 40)
         let glyph2 = Glyph(code: "coda", point: 40)
-        let note = GlyphNote(glyph: glyph1, noteStruct: NoteStruct(duration: "q"))
+        let note = GlyphNote(glyph: glyph1, noteStruct: NoteStruct(duration: .quarter))
         let width1 = note.getGlyphWidth()
         _ = note.setGlyph(glyph2)
         let width2 = note.getGlyphWidth()
@@ -79,7 +79,7 @@ struct Phase9Tests {
 
     @Test func glyphNotePreFormat() {
         let glyph = Glyph(code: "segno", point: 40)
-        let note = GlyphNote(glyph: glyph, noteStruct: NoteStruct(duration: "q"))
+        let note = GlyphNote(glyph: glyph, noteStruct: NoteStruct(duration: .quarter))
         note.preFormat()
         #expect(note.preFormatted == true)
     }
@@ -300,7 +300,7 @@ struct Phase9Tests {
 
     @Test func annotationFormat() {
         let stave = Stave(x: 10, y: 40, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         _ = note.setStave(stave)
         _ = note.setStemDirection(Stem.UP)
         _ = note.buildStem()
@@ -317,7 +317,7 @@ struct Phase9Tests {
 
     @Test func annotationFormatBottom() {
         let stave = Stave(x: 10, y: 40, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         _ = note.setStave(stave)
         _ = note.setStemDirection(Stem.UP)
         _ = note.buildStem()
@@ -334,7 +334,7 @@ struct Phase9Tests {
 
     @Test func annotationModifierContext() {
         let stave = Stave(x: 10, y: 40, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         _ = note.setStave(stave)
         _ = note.setStemDirection(Stem.UP)
         _ = note.buildStem()

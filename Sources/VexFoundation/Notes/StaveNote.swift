@@ -8,10 +8,10 @@ import Foundation
 /// Input structure for creating a StaveNote (extends NoteStruct).
 public struct StaveNoteStruct {
     public var keys: [String]
-    public var duration: String
+    public var duration: NoteValue
     public var line: Double?
     public var dots: Int?
-    public var type: String?
+    public var type: NoteType?
     public var alignCenter: Bool?
     public var durationOverride: Fraction?
     public var stemDirection: StemDirection?
@@ -25,10 +25,10 @@ public struct StaveNoteStruct {
 
     public init(
         keys: [String] = [],
-        duration: String = "4",
+        duration: NoteValue = .quarter,
         line: Double? = nil,
         dots: Int? = nil,
-        type: String? = nil,
+        type: NoteType? = nil,
         alignCenter: Bool? = nil,
         durationOverride: Fraction? = nil,
         stemDirection: StemDirection? = nil,
@@ -55,6 +55,94 @@ public struct StaveNoteStruct {
         self.glyphFontScale = glyphFontScale
         self.octaveShift = octaveShift
         self.clef = clef
+    }
+
+    /// String-based parser for compatibility with external text inputs.
+    public init(
+        keys: [String] = [],
+        duration: String,
+        line: Double? = nil,
+        dots: Int? = nil,
+        type: String? = nil,
+        alignCenter: Bool? = nil,
+        durationOverride: Fraction? = nil,
+        stemDirection: StemDirection? = nil,
+        autoStem: Bool? = nil,
+        stemDownXOffset: Double? = nil,
+        stemUpXOffset: Double? = nil,
+        strokePx: Double? = nil,
+        glyphFontScale: Double? = nil,
+        octaveShift: Int? = nil,
+        clef: ClefName? = nil
+    ) throws {
+        let parsedDuration = try NoteDurationSpec(parsing: duration)
+        let parsedType: NoteType?
+        if let type {
+            guard let explicitType = NoteType(parsing: type) else {
+                throw NoteDurationParseError.invalidType(type)
+            }
+            parsedType = explicitType
+        } else if parsedDuration.type == .note {
+            parsedType = nil
+        } else {
+            parsedType = parsedDuration.type
+        }
+
+        self.init(
+            keys: keys,
+            duration: parsedDuration.value,
+            line: line,
+            dots: dots ?? parsedDuration.dots,
+            type: parsedType,
+            alignCenter: alignCenter,
+            durationOverride: durationOverride,
+            stemDirection: stemDirection,
+            autoStem: autoStem,
+            stemDownXOffset: stemDownXOffset,
+            stemUpXOffset: stemUpXOffset,
+            strokePx: strokePx,
+            glyphFontScale: glyphFontScale,
+            octaveShift: octaveShift,
+            clef: clef
+        )
+    }
+
+    /// Failable parser convenience.
+    public init?(
+        parsingDuration duration: String,
+        keys: [String] = [],
+        line: Double? = nil,
+        dots: Int? = nil,
+        type: String? = nil,
+        alignCenter: Bool? = nil,
+        durationOverride: Fraction? = nil,
+        stemDirection: StemDirection? = nil,
+        autoStem: Bool? = nil,
+        stemDownXOffset: Double? = nil,
+        stemUpXOffset: Double? = nil,
+        strokePx: Double? = nil,
+        glyphFontScale: Double? = nil,
+        octaveShift: Int? = nil,
+        clef: ClefName? = nil
+    ) {
+        guard let parsed = try? StaveNoteStruct(
+            keys: keys,
+            duration: duration,
+            line: line,
+            dots: dots,
+            type: type,
+            alignCenter: alignCenter,
+            durationOverride: durationOverride,
+            stemDirection: stemDirection,
+            autoStem: autoStem,
+            stemDownXOffset: stemDownXOffset,
+            stemUpXOffset: stemUpXOffset,
+            strokePx: strokePx,
+            glyphFontScale: glyphFontScale,
+            octaveShift: octaveShift,
+            clef: clef
+        ) else { return nil }
+        self = parsed
     }
 
     /// Convert to NoteStruct for superclass init.
@@ -207,14 +295,14 @@ public class StaveNote: StemmableNote {
             lastLine = line
 
             let notehead = NoteHead(noteHeadStruct: NoteHeadStruct(
-                duration: noteDuration,
+                duration: noteValue,
                 line: noteProps.line,
                 glyphFontScale: renderOptions.glyphFontScale,
                 customGlyphCode: (noteProps.code?.isEmpty ?? true) ? nil : noteProps.code,
                 xShift: noteProps.shiftRight,
                 stemDirection: dir,
                 displaced: isDisplaced,
-                noteType: noteType,
+                noteType: noteTypeValue,
                 keys: keys,
                 dots: nil
             ))
@@ -976,7 +1064,7 @@ import SwiftUI
         ))
         _ = system.addStave(SystemStave(
             voices: [score.voice(score.notes("C5/w, D5/h, E5/q, F5/8, G5/16, A5/16"))]
-        )).addClef(.treble).addTimeSignature("4/4")
+        )).addClef(.treble).addTimeSignature(.meter(4, 4))
 
         system.format()
         try? f.draw()

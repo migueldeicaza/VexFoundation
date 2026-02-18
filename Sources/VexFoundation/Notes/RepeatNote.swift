@@ -27,7 +27,7 @@ public final class RepeatNote: GlyphNote {
         let glyph = Glyph(code: code, point: point, options: GlyphOptions(category: "repeatNote"))
 
         let ns = noteStruct ?? NoteStruct(
-            duration: "q",
+            duration: .quarter,
             alignCenter: type != "slash"
         )
 

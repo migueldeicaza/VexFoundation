@@ -50,13 +50,13 @@ import SwiftUI
         _ = ts.addTabGlyph()
 
         let notes: [TabNote] = [
-            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 5)], duration: "q")),
-            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 7)], duration: "q")),
-            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 7)], duration: "q")),
-            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 5)], duration: "q")),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 5)], duration: .quarter)),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 7)], duration: .quarter)),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 7)], duration: .quarter)),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 5)], duration: .quarter)),
         ]
 
-        let voice = f.Voice(timeSpec: "4/4")
+        let voice = f.Voice(timeSignature: .meter(4, 4))
         _ = voice.addTickables(notes)
 
         let formatter = f.Formatter()

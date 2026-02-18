@@ -458,7 +458,7 @@ open class Stave: VexElement {
     // MARK: - Time Signature
 
     @discardableResult
-    public func setTimeSignature(_ timeSpec: String, customPadding: Double? = nil,
+    public func setTimeSignature(_ timeSpec: TimeSignatureSpec, customPadding: Double? = nil,
                                  position: StaveModifierPosition = .begin) -> Self {
         let timeSigs = getModifiers(position: position, category: TimeSignature.category).compactMap { $0 as? TimeSignature }
         if timeSigs.isEmpty {
@@ -470,7 +470,7 @@ open class Stave: VexElement {
     }
 
     @discardableResult
-    public func addTimeSignature(_ timeSpec: String, customPadding: Double? = nil,
+    public func addTimeSignature(_ timeSpec: TimeSignatureSpec, customPadding: Double? = nil,
                                  position: StaveModifierPosition = .begin) -> Self {
         let ts = TimeSignature(timeSpec: timeSpec, customPadding: customPadding ?? 15)
         addModifier(ts, position: position)
@@ -478,7 +478,7 @@ open class Stave: VexElement {
     }
 
     @discardableResult
-    public func setEndTimeSignature(_ timeSpec: String, customPadding: Double? = nil) -> Self {
+    public func setEndTimeSignature(_ timeSpec: TimeSignatureSpec, customPadding: Double? = nil) -> Self {
         setTimeSignature(timeSpec, customPadding: customPadding, position: .end)
     }
 
@@ -726,7 +726,7 @@ import SwiftUI
         ))
             .addClef(.treble)
             .addKeySignature("G")
-            .addTimeSignature("4/4")
+            .addTimeSignature(.meter(4, 4))
 
         system.format()
         try? factory.draw()

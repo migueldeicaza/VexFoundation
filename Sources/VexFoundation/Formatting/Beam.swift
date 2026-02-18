@@ -504,10 +504,12 @@ public final class Beam: VexElement {
     // MARK: - Static Helpers
 
     /// Get default beam groups for a time signature.
-    public static func getDefaultBeamGroups(_ timeSig: String) -> [Fraction] {
-        var sig = timeSig
-        if sig.isEmpty || sig == "c" { sig = "4/4" }
+    public static func getDefaultBeamGroups(_ timeSignature: TimeSignatureSpec) -> [Fraction] {
+        guard let meter = timeSignature.meter else {
+            fatalError("[VexError] BadTimeSignature: Cannot derive beam groups from \(timeSignature.rawValue).")
+        }
 
+        let sig = meter.rawValue
         let defaults: [String: [String]] = [
             "1/2": ["1/2"], "2/2": ["1/2"], "3/2": ["1/2"], "4/2": ["1/2"],
             "1/4": ["1/4"], "2/4": ["1/4"], "3/4": ["1/4"], "4/4": ["1/4"],
@@ -519,17 +521,12 @@ public final class Beam: VexElement {
             return groups.map { Fraction().parse($0) }
         }
 
-        // Naively determine groups from time signature
-        let parts = sig.split(separator: "/")
-        let beatTotal = Int(parts[0]) ?? 4
-        let beatValue = Int(parts[1]) ?? 4
-
-        if beatTotal % 3 == 0 {
-            return [Fraction(3, beatValue)]
-        } else if beatValue > 4 {
-            return [Fraction(2, beatValue)]
+        if meter.numerator % 3 == 0 {
+            return [Fraction(3, meter.denominator)]
+        } else if meter.denominator > 4 {
+            return [Fraction(2, meter.denominator)]
         } else {
-            return [Fraction(1, beatValue)]
+            return [Fraction(1, meter.denominator)]
         }
     }
 
@@ -716,7 +713,7 @@ import SwiftUI
         _ = score.beam(Array(notes[4..<8]))
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
-        )).addClef(.treble).addTimeSignature("4/4")
+        )).addClef(.treble).addTimeSignature(.meter(4, 4))
 
         system.format()
         try? f.draw()

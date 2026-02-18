@@ -66,7 +66,7 @@ struct Phase7Tests {
 
     @Test func accidentalFormat() {
         let stave = Stave(x: 10, y: 40, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c#/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c#/4"], duration: .quarter))
         _ = note.setStave(stave)
 
         let acc = Accidental("#")
@@ -79,7 +79,7 @@ struct Phase7Tests {
 
     @Test func accidentalFormatMultiple() {
         let stave = Stave(x: 10, y: 40, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c#/4", "e/4", "g#/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c#/4", "e/4", "g#/4"], duration: .quarter))
         _ = note.setStave(stave)
 
         let acc1 = Accidental("#")
@@ -119,7 +119,7 @@ struct Phase7Tests {
 
     @Test func accidentalInModifierContext() {
         let stave = Stave(x: 10, y: 40, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c#/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c#/4"], duration: .quarter))
         _ = note.setStave(stave)
         let acc = Accidental("#")
         _ = note.addModifier(acc, index: 0)
@@ -145,8 +145,8 @@ struct Phase7Tests {
     // MARK: - Beam Creation
 
     @Test func beamCreation() {
-        let note1 = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8"))
-        let note2 = StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8"))
+        let note1 = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .eighth))
+        let note2 = StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .eighth))
         let beam = Beam([note1, note2])
         #expect(beam.getNotes().count == 2)
         #expect(beam.getBeamCount() == 1) // 8th notes = 1 beam
@@ -156,18 +156,18 @@ struct Phase7Tests {
 
     @Test func beamSixteenthNotes() {
         let notes: [StemmableNote] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "16")),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "16")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "16")),
-            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "16")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .sixteenth)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .sixteenth)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .sixteenth)),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: .sixteenth)),
         ]
         let beam = Beam(notes)
         #expect(beam.getBeamCount() == 2) // 16th notes = 2 beams
     }
 
     @Test func beamStemDirection() {
-        let note1 = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8"))
-        let note2 = StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8"))
+        let note1 = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .eighth))
+        let note2 = StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .eighth))
         _ = note1.setStemDirection(Stem.UP)
         _ = note2.setStemDirection(Stem.UP)
         let beam = Beam([note1, note2])
@@ -176,18 +176,18 @@ struct Phase7Tests {
 
     @Test func beamAutoStem() {
         // Notes above middle line → stems down
-        let note1 = StaveNote(StaveNoteStruct(keys: ["a/5"], duration: "8"))
-        let note2 = StaveNote(StaveNoteStruct(keys: ["b/5"], duration: "8"))
+        let note1 = StaveNote(StaveNoteStruct(keys: ["a/5"], duration: .eighth))
+        let note2 = StaveNote(StaveNoteStruct(keys: ["b/5"], duration: .eighth))
         _ = Beam([note1, note2], autoStem: true)
         #expect(note1.getStemDirection() == Stem.DOWN)
     }
 
     @Test func beamBreakSecondary() {
         let notes: [StemmableNote] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "16")),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "16")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "16")),
-            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "16")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .sixteenth)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .sixteenth)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .sixteenth)),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: .sixteenth)),
         ]
         let beam = Beam(notes)
         _ = beam.breakSecondaryAt([2])
@@ -196,8 +196,8 @@ struct Phase7Tests {
     }
 
     @Test func beamRenderOptions() {
-        let note1 = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8"))
-        let note2 = StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8"))
+        let note1 = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .eighth))
+        let note2 = StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .eighth))
         let beam = Beam([note1, note2])
         #expect(beam.renderOptions.beamWidth == 5)
         #expect(beam.renderOptions.slopeIterations == 20)
@@ -207,29 +207,29 @@ struct Phase7Tests {
     // MARK: - Beam Default Groups
 
     @Test func beamDefaultGroups() {
-        let groups44 = Beam.getDefaultBeamGroups("4/4")
+        let groups44 = Beam.getDefaultBeamGroups(.meter(4, 4))
         #expect(groups44.count == 1)
         #expect(groups44[0] == Fraction(1, 4))
 
         // 6/8 is not in the defaults table, falls through to heuristic:
         // beatTotal=6, 6%3==0 → triple meter → 3/8
-        let groups68 = Beam.getDefaultBeamGroups("6/8")
+        let groups68 = Beam.getDefaultBeamGroups(.meter(6, 8))
         #expect(groups68.count == 1)
         #expect(groups68[0] == Fraction(3, 8))
 
-        let groups38 = Beam.getDefaultBeamGroups("3/8")
+        let groups38 = Beam.getDefaultBeamGroups(.meter(3, 8))
         #expect(groups38.count == 1)
         #expect(groups38[0] == Fraction(3, 8))
     }
 
     @Test func beamDefaultGroupsUnknownTime() {
         // 7/8 → triple meter (7 % 3 != 0), beatValue > 4, so 2/8
-        let groups78 = Beam.getDefaultBeamGroups("7/8")
+        let groups78 = Beam.getDefaultBeamGroups(.meter(7, 8))
         #expect(groups78.count == 1)
         #expect(groups78[0] == Fraction(2, 8))
 
         // 9/8 → triple meter (9 % 3 == 0), so 3/8
-        let groups98 = Beam.getDefaultBeamGroups("9/8")
+        let groups98 = Beam.getDefaultBeamGroups(.meter(9, 8))
         #expect(groups98.count == 1)
         #expect(groups98[0] == Fraction(3, 8))
     }
@@ -238,10 +238,10 @@ struct Phase7Tests {
 
     @Test func beamGenerateBasic() {
         let notes: [StemmableNote] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: .eighth)),
         ]
         let beams = Beam.generateBeams(notes)
         // Default group is 2/8, so 4 eighth notes → 2 beams
@@ -250,10 +250,10 @@ struct Phase7Tests {
 
     @Test func beamGenerateQuarterGroups() {
         let notes: [StemmableNote] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: .eighth)),
         ]
         let beams = Beam.generateBeams(notes, config: BeamConfig(groups: [Fraction(1, 4)]))
         // 1/4 grouping → each pair of 8ths beamed → 2 beams
@@ -262,8 +262,8 @@ struct Phase7Tests {
 
     @Test func beamGenerateWithStemDirection() {
         let notes: [StemmableNote] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .eighth)),
         ]
         let beams = Beam.generateBeams(notes, config: BeamConfig(stemDirection: Stem.DOWN))
         #expect(beams.count == 1)
@@ -275,8 +275,8 @@ struct Phase7Tests {
     @Test func beamSlopeCalculation() {
         let stave = Stave(x: 10, y: 40, width: 400)
         let notes: [StemmableNote] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .eighth)),
         ]
         for note in notes {
             _ = (note as! StaveNote).setStave(stave)
@@ -292,8 +292,8 @@ struct Phase7Tests {
     @Test func beamFlatSlope() {
         let stave = Stave(x: 10, y: 40, width: 400)
         let notes: [StemmableNote] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .eighth)),
         ]
         for note in notes {
             _ = (note as! StaveNote).setStave(stave)
@@ -355,7 +355,7 @@ struct Phase7Tests {
 
     @Test func articulationFormat() {
         let stave = Stave(x: 10, y: 40, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         _ = note.setStave(stave)
 
         let artic = Articulation("a.")
@@ -368,7 +368,7 @@ struct Phase7Tests {
 
     @Test func articulationFormatBelow() {
         let stave = Stave(x: 10, y: 40, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         _ = note.setStave(stave)
 
         let artic = Articulation("a.")
@@ -382,7 +382,7 @@ struct Phase7Tests {
 
     @Test func articulationFormatMultiple() {
         let stave = Stave(x: 10, y: 40, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         _ = note.setStave(stave)
 
         let staccato = Articulation("a.")
@@ -400,7 +400,7 @@ struct Phase7Tests {
 
     @Test func articulationInModifierContext() {
         let stave = Stave(x: 10, y: 40, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         _ = note.setStave(stave)
         let artic = Articulation("a.")
         _ = note.addModifier(artic, index: 0)
@@ -436,7 +436,7 @@ struct Phase7Tests {
 
     @Test func noteWithAccidentalAndArticulation() {
         let stave = Stave(x: 10, y: 40, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c#/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c#/4"], duration: .quarter))
         _ = note.setStave(stave)
 
         let acc = Accidental("#")
@@ -459,10 +459,10 @@ struct Phase7Tests {
 
     @Test func beamWithSimpleFormat() {
         let notes: [StaveNote] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: .eighth)),
         ]
         Formatter.SimpleFormat(notes)
         let beams = Beam.generateBeams(notes)
@@ -476,8 +476,8 @@ struct Phase7Tests {
 
     @Test func beamPartialDirection() {
         let notes: [StemmableNote] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .eighth)),
         ]
         let beam = Beam(notes)
         _ = beam.setPartialBeamSideAt(0, side: .right)

@@ -16,6 +16,13 @@ public struct VoiceTime {
         self.beatValue = beatValue
         self.resolution = resolution
     }
+
+    public init(timeSignature: TimeSignatureSpec, resolution: Int = Tables.RESOLUTION) {
+        guard let meter = timeSignature.meter else {
+            fatalError("[VexError] BadArguments: Voice requires a metrical time signature. Got \(timeSignature.rawValue).")
+        }
+        self.init(numBeats: meter.numerator, beatValue: meter.denominator, resolution: resolution)
+    }
 }
 
 // MARK: - Voice Mode
@@ -60,14 +67,9 @@ public final class Voice: VexElement {
         super.init()
     }
 
-    /// Convenience init from a time signature string like "4/4".
-    public convenience init(timeSpec: String) {
-        let parts = timeSpec.split(separator: "/")
-        if parts.count == 2, let num = Int(parts[0]), let beat = Int(parts[1]) {
-            self.init(time: VoiceTime(numBeats: num, beatValue: beat))
-        } else {
-            self.init()
-        }
+    /// Convenience init from a typed time signature.
+    public convenience init(timeSignature: TimeSignatureSpec) {
+        self.init(time: VoiceTime(timeSignature: timeSignature))
     }
 
     // MARK: - Accessors
@@ -240,7 +242,7 @@ import SwiftUI
         let system = f.System(options: SystemOptions(factory: f, x: 10, width: 500, y: 10))
         _ = system.addStave(SystemStave(
             voices: [score.voice(score.notes("C5/q, D5, E5, F5"))]
-        )).addClef(.treble).addTimeSignature("4/4")
+        )).addClef(.treble).addTimeSignature(.meter(4, 4))
 
         system.format()
         try? f.draw()

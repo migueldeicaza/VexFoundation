@@ -691,7 +691,7 @@ import SwiftUI
             voices: [score.voice(notes)]
         ))
             .addClef(.treble)
-            .addTimeSignature("4/4")
+            .addTimeSignature(.meter(4, 4))
 
         system.format()
         try? f.draw()

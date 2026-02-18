@@ -18,10 +18,10 @@ public final class TimeSigNote: Note {
 
     // MARK: - Init
 
-    public init(timeSpec: String, customPadding: Double = 15) {
+    public init(timeSpec: TimeSignatureSpec, customPadding: Double = 15) {
         self.timeSig = TimeSignature(timeSpec: timeSpec, customPadding: customPadding)
 
-        super.init(NoteStruct(duration: "b"))
+        super.init(NoteStruct(duration: .twoFiftySixth))
 
         let glyph = timeSig.getGlyph()
         setTickableWidth(glyph.getMetrics().width)
@@ -77,7 +77,7 @@ import SwiftUI
         ))
         _ = system.addStave(SystemStave(
             voices: [score.voice(score.notes("C5/q, D5, E5, F5"))]
-        )).addClef(.treble).addTimeSignature("4/4")
+        )).addClef(.treble).addTimeSignature(.meter(4, 4))
 
         system.format()
         try? f.draw()

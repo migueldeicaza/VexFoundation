@@ -104,7 +104,7 @@ import SwiftUI
         let system = f.System(options: SystemOptions(factory: f, x: 10, width: 500, y: 10))
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
-        )).addClef(.treble).addTimeSignature("4/4")
+        )).addClef(.treble).addTimeSignature(.meter(4, 4))
 
         system.format()
         try? f.draw()

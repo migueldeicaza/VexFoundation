@@ -110,9 +110,9 @@ public final class TimeSignature: StaveModifier {
     override public class var category: String { "TimeSignature" }
 
     /// Special symbol time signatures.
-    public static let symbolGlyphs: [String: (code: String, line: Double)] = [
-        "C": (code: "timeSigCommon", line: 2),
-        "C|": (code: "timeSigCutCommon", line: 2),
+    public static let symbolGlyphs: [TimeSignatureSymbol: (code: String, line: Double)] = [
+        .common: (code: "timeSigCommon", line: 2),
+        .cutCommon: (code: "timeSigCutCommon", line: 2),
     ]
 
     // MARK: - Properties
@@ -120,10 +120,9 @@ public final class TimeSignature: StaveModifier {
     public var tsPoint: Double
     public var bottomLine: Double
     public var topLine: Double
-    public var timeSpec: String = "4/4"
+    public var timeSpec: TimeSignatureSpec = .default
     public var tsLine: Double = 0
     public var isNumeric: Bool = true
-    public var validateArgs: Bool
 
     /// The glyph used to render this time signature.
     /// For symbol time (C, C|), this is a regular Glyph.
@@ -133,9 +132,7 @@ public final class TimeSignature: StaveModifier {
 
     // MARK: - Init
 
-    public init(timeSpec: String = "4/4", customPadding: Double = 15, validateArgs: Bool = true) {
-        self.validateArgs = validateArgs
-
+    public init(timeSpec: TimeSignatureSpec = .default, customPadding: Double = 15) {
         let musicFont = Glyph.MUSIC_FONT_STACK.first!
         self.tsPoint = (musicFont.lookupMetric("digits.point") as? Double) ?? Tables.NOTATION_FONT_SCALE
         let fontLineShift = (musicFont.lookupMetric("digits.shiftLine") as? Double) ?? 0
@@ -151,7 +148,7 @@ public final class TimeSignature: StaveModifier {
     // MARK: - Methods
 
     @discardableResult
-    public func setTimeSig(_ timeSpec: String) -> Self {
+    public func setTimeSig(_ timeSpec: TimeSignatureSpec) -> Self {
         self.timeSpec = timeSpec
         let info = parseTimeSpec(timeSpec)
         self.tsGlyph = info.glyph
@@ -162,7 +159,8 @@ public final class TimeSignature: StaveModifier {
         return self
     }
 
-    public func getTimeSpec() -> String { timeSpec }
+    public func getTimeSpec() -> TimeSignatureSpec { timeSpec }
+    public func getTimeSpecString() -> String { timeSpec.rawValue }
 
     public func getGlyph() -> Glyph { tsGlyph }
 
@@ -181,51 +179,44 @@ public final class TimeSignature: StaveModifier {
         var num: Bool
     }
 
-    private func parseTimeSpec(_ spec: String) -> ParseResult {
-        if spec == "C" || spec == "C|" {
-            let sym = TimeSignature.symbolGlyphs[spec]!
+    private func parseTimeSpec(_ spec: TimeSignatureSpec) -> ParseResult {
+        switch spec {
+        case .symbol(let symbol):
+            let sym = TimeSignature.symbolGlyphs[symbol]!
             return ParseResult(
                 glyph: Glyph(code: sym.code, point: Tables.NOTATION_FONT_SCALE),
                 composite: nil,
                 line: sym.line,
                 num: false
             )
-        }
-
-        if validateArgs {
-            assertValidTimeSig(spec)
-        }
-
-        let parts = spec.split(separator: "/", maxSplits: 1)
-        let top = parts.count > 0 ? String(parts[0]) : ""
-        let bot = parts.count > 1 ? String(parts[1]) : ""
-
-        let composite = TimeSignatureGlyph(
-            timeSignature: self,
-            topDigits: top,
-            botDigits: bot,
-            code: "timeSig0",
-            point: tsPoint
-        )
-
-        return ParseResult(
-            glyph: composite.glyph,
-            composite: composite,
-            line: 0,
-            num: true
-        )
-    }
-
-    private func assertValidTimeSig(_ spec: String) {
-        let parts = spec.split(separator: "/")
-        guard parts.count == 2 else {
-            fatalError("[VexError] BadTimeSignature: Invalid time spec: \(spec)")
-        }
-        let validChars = CharacterSet(charactersIn: "0123456789+-() ")
-        for part in parts {
-            if part.unicodeScalars.contains(where: { !validChars.contains($0) }) {
-                fatalError("[VexError] BadTimeSignature: Invalid time spec: \(spec)")
-            }
+        case .numeric(let top, let bottom):
+            let composite = TimeSignatureGlyph(
+                timeSignature: self,
+                topDigits: top.rawValue,
+                botDigits: bottom.rawValue,
+                code: "timeSig0",
+                point: tsPoint
+            )
+            return ParseResult(
+                glyph: composite.glyph,
+                composite: composite,
+                line: 0,
+                num: true
+            )
+        case .topOnly(let top):
+            let composite = TimeSignatureGlyph(
+                timeSignature: self,
+                topDigits: top.rawValue,
+                botDigits: "",
+                code: "timeSig0",
+                point: tsPoint
+            )
+            return ParseResult(
+                glyph: composite.glyph,
+                composite: composite,
+                line: 0,
+                num: true
+            )
         }
     }
 
@@ -267,13 +258,13 @@ import SwiftUI
         _ = f.setContext(ctx)
 
         let s1 = f.Stave(x: 10, y: 20, width: 150)
-        _ = s1.addClef(.treble).addTimeSignature("4/4")
+        _ = s1.addClef(.treble).addTimeSignature(.meter(4, 4))
 
         let s2 = f.Stave(x: 170, y: 20, width: 150)
-        _ = s2.addClef(.treble).addTimeSignature("3/4")
+        _ = s2.addClef(.treble).addTimeSignature(.meter(3, 4))
 
         let s3 = f.Stave(x: 330, y: 20, width: 150)
-        _ = s3.addClef(.treble).addTimeSignature("6/8")
+        _ = s3.addClef(.treble).addTimeSignature(.meter(6, 8))
 
         try? f.draw()
     }

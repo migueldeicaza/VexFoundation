@@ -55,14 +55,14 @@ struct StaveTests {
 
     @Test func glyphProps() {
         // Quarter note
-        let quarter = Tables.getGlyphProps(duration: "4")
+        let quarter = Tables.getGlyphProps(duration: .quarter)
         #expect(quarter != nil)
         #expect(quarter!.stem == true)
         #expect(quarter!.flag == false)
         #expect(quarter!.beamCount == 0)
 
         // Eighth note
-        let eighth = Tables.getGlyphProps(duration: "8")
+        let eighth = Tables.getGlyphProps(duration: .eighth)
         #expect(eighth != nil)
         #expect(eighth!.stem == true)
         #expect(eighth!.flag == true)
@@ -70,7 +70,7 @@ struct StaveTests {
         #expect(eighth!.codeFlagUpstem == "flag8thUp")
 
         // Quarter rest
-        let qRest = Tables.getGlyphProps(duration: "4", type: "r")
+        let qRest = Tables.getGlyphProps(duration: .quarter, type: .rest)
         #expect(qRest != nil)
         #expect(qRest!.rest == true)
         #expect(qRest!.codeHead == "restQuarter")
@@ -200,25 +200,25 @@ struct StaveTests {
     // MARK: - Time Signature
 
     @Test func timeSignatureNumeric() {
-        let ts = TimeSignature(timeSpec: "4/4")
+        let ts = TimeSignature(timeSpec: .meter(4, 4))
         #expect(ts.getIsNumeric() == true)
-        #expect(ts.getTimeSpec() == "4/4")
+        #expect(ts.getTimeSpec() == .meter(4, 4))
     }
 
     @Test func timeSignatureCommon() {
-        let ts = TimeSignature(timeSpec: "C")
+        let ts = TimeSignature(timeSpec: .commonTime)
         #expect(ts.getIsNumeric() == false)
-        #expect(ts.getTimeSpec() == "C")
+        #expect(ts.getTimeSpec() == .commonTime)
     }
 
     @Test func timeSignatureCut() {
-        let ts = TimeSignature(timeSpec: "C|")
+        let ts = TimeSignature(timeSpec: .cutTime)
         #expect(ts.getIsNumeric() == false)
     }
 
     @Test func timeSignatureAddToStave() {
         let stave = Stave(x: 0, y: 0, width: 400)
-        stave.addTimeSignature("3/4")
+        stave.addTimeSignature(.meter(3, 4))
 
         let timeSigs = stave.getModifiers(position: .begin, category: "TimeSignature")
         #expect(timeSigs.count == 1)
@@ -230,7 +230,7 @@ struct StaveTests {
         let stave = Stave(x: 10, y: 40, width: 400)
         stave.addClef(.treble)
         stave.addKeySignature("D")
-        stave.addTimeSignature("4/4")
+        stave.addTimeSignature(.meter(4, 4))
 
         // Formatting should position modifiers and calculate start_x
         let startX = stave.getNoteStartX()
@@ -244,7 +244,7 @@ struct StaveTests {
     @Test func staveModifierSorting() {
         let stave = Stave(x: 0, y: 0, width: 400)
         // Add in wrong order
-        stave.addTimeSignature("4/4")
+        stave.addTimeSignature(.meter(4, 4))
         stave.addKeySignature("G")
         stave.addClef(.treble)
 
@@ -301,12 +301,12 @@ struct StaveTests {
 
     @Test func tempoCreation() {
         let tempo = StaveTempo(
-            tempo: StaveTempoOptions(bpm: 120, duration: "4", name: "Allegro"),
+            tempo: StaveTempoOptions(bpm: 120, duration: .quarter, name: "Allegro"),
             x: 0,
             shiftY: 0
         )
         #expect(tempo.tempo.bpm == 120)
-        #expect(tempo.tempo.duration == "4")
+        #expect(tempo.tempo.duration == .quarter)
         #expect(tempo.tempo.name == "Allegro")
     }
 
@@ -316,7 +316,7 @@ struct StaveTests {
         let stave = Stave(x: 10, y: 40, width: 500)
         stave.addClef(.treble)
         stave.addKeySignature("Eb")
-        stave.addTimeSignature("3/4")
+        stave.addTimeSignature(.meter(3, 4))
         stave.setBegBarType(.single)
         stave.setEndBarType(.double)
         stave.setMeasure(1)
@@ -338,11 +338,11 @@ struct StaveTests {
         let stave1 = Stave(x: 10, y: 0, width: 400)
         stave1.addClef(.treble)
         stave1.addKeySignature("D")
-        stave1.addTimeSignature("4/4")
+        stave1.addTimeSignature(.meter(4, 4))
 
         let stave2 = Stave(x: 10, y: 100, width: 400)
         stave2.addClef(.bass)
-        stave2.addTimeSignature("4/4")
+        stave2.addTimeSignature(.meter(4, 4))
 
         Stave.formatBegModifiers([stave1, stave2])
 

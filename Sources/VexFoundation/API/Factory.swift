@@ -147,8 +147,22 @@ public final class Factory {
     }
 
     @discardableResult
-    public func GhostNote(duration: String, dots: Int = 0) -> VexFoundation.GhostNote {
+    public func GhostNote(duration: NoteValue, dots: Int = 0) -> VexFoundation.GhostNote {
         var ns = NoteStruct(duration: duration)
+        ns.dots = dots
+        return GhostNote(ns)
+    }
+
+    @discardableResult
+    public func GhostNote(duration: String, dots: Int = 0) throws -> VexFoundation.GhostNote {
+        var ns = try NoteStruct(duration: duration)
+        ns.dots = dots
+        return GhostNote(ns)
+    }
+
+    @discardableResult
+    public func GhostNote(parsingDuration duration: String, dots: Int = 0) -> VexFoundation.GhostNote? {
+        guard var ns = NoteStruct(parsingDuration: duration) else { return nil }
         ns.dots = dots
         return GhostNote(ns)
     }
@@ -185,7 +199,7 @@ public final class Factory {
     }
 
     @discardableResult
-    public func TimeSigNote(time: String = "4/4") -> VexFoundation.TimeSigNote {
+    public func TimeSigNote(time: TimeSignatureSpec = .default) -> VexFoundation.TimeSigNote {
         let note = VexFoundation.TimeSigNote(timeSpec: time)
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
@@ -344,8 +358,8 @@ public final class Factory {
     }
 
     @discardableResult
-    public func Voice(timeSpec: String) -> VexFoundation.Voice {
-        let voice = VexFoundation.Voice(timeSpec: timeSpec)
+    public func Voice(timeSignature: TimeSignatureSpec) -> VexFoundation.Voice {
+        let voice = VexFoundation.Voice(timeSignature: timeSignature)
         voices.append(voice)
         return voice
     }
@@ -552,7 +566,7 @@ import SwiftUI
         _ = score.beam(Array(notes[1..<3]))
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
-        )).addClef(.treble).addKeySignature("D").addTimeSignature("4/4")
+        )).addClef(.treble).addKeySignature("D").addTimeSignature(.meter(4, 4))
 
         system.format()
         try? f.draw()

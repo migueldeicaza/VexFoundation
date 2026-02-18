@@ -15,7 +15,7 @@ public enum TextJustification: Int {
 
 public struct TextNoteStruct {
     public var keys: [String]
-    public var duration: String
+    public var duration: NoteValue
     public var text: String?
     public var glyph: String?
     public var ignoreTicks: Bool?
@@ -26,7 +26,7 @@ public struct TextNoteStruct {
 
     public init(
         keys: [String] = ["b/4"],
-        duration: String = "q",
+        duration: NoteValue = .quarter,
         text: String? = nil,
         glyph: String? = nil,
         ignoreTicks: Bool? = nil,
@@ -44,6 +44,58 @@ public struct TextNoteStruct {
         self.line = line
         self.superscript = superscript
         self.subscriptText = subscriptText
+    }
+
+    /// String-based parser for compatibility with external text inputs.
+    public init(
+        keys: [String] = ["b/4"],
+        duration: String,
+        text: String? = nil,
+        glyph: String? = nil,
+        ignoreTicks: Bool? = nil,
+        smooth: Bool? = nil,
+        line: Double? = nil,
+        superscript: String? = nil,
+        subscriptText: String? = nil
+    ) throws {
+        let parsedDuration = try NoteDurationSpec(parsing: duration)
+        self.init(
+            keys: keys,
+            duration: parsedDuration.value,
+            text: text,
+            glyph: glyph,
+            ignoreTicks: ignoreTicks,
+            smooth: smooth,
+            line: line,
+            superscript: superscript,
+            subscriptText: subscriptText
+        )
+    }
+
+    /// Failable parser convenience.
+    public init?(
+        parsingDuration duration: String,
+        keys: [String] = ["b/4"],
+        text: String? = nil,
+        glyph: String? = nil,
+        ignoreTicks: Bool? = nil,
+        smooth: Bool? = nil,
+        line: Double? = nil,
+        superscript: String? = nil,
+        subscriptText: String? = nil
+    ) {
+        guard let parsed = try? TextNoteStruct(
+            keys: keys,
+            duration: duration,
+            text: text,
+            glyph: glyph,
+            ignoreTicks: ignoreTicks,
+            smooth: smooth,
+            line: line,
+            superscript: superscript,
+            subscriptText: subscriptText
+        ) else { return nil }
+        self = parsed
     }
 }
 
@@ -226,12 +278,12 @@ import SwiftUI
         let voice = score.voice(notes)
 
         let textNotes: [Note] = [
-            f.TextNote(TextNoteStruct(keys: ["C/5"], duration: "q", text: "do")),
-            f.TextNote(TextNoteStruct(keys: ["D/5"], duration: "q", text: "re")),
-            f.TextNote(TextNoteStruct(keys: ["E/5"], duration: "q", text: "mi")),
-            f.TextNote(TextNoteStruct(keys: ["F/5"], duration: "q", text: "fa")),
+            f.TextNote(TextNoteStruct(keys: ["C/5"], duration: .quarter, text: "do")),
+            f.TextNote(TextNoteStruct(keys: ["D/5"], duration: .quarter, text: "re")),
+            f.TextNote(TextNoteStruct(keys: ["E/5"], duration: .quarter, text: "mi")),
+            f.TextNote(TextNoteStruct(keys: ["F/5"], duration: .quarter, text: "fa")),
         ]
-        let textVoice = f.Voice(timeSpec: "4/4")
+        let textVoice = f.Voice(timeSignature: .meter(4, 4))
         _ = textVoice.addTickables(textNotes)
         for tn in textNotes { _ = (tn as! TextNote).setStave(stave) }
 

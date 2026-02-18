@@ -7,7 +7,7 @@ import Foundation
 
 /// Input structure for creating a NoteHead.
 public struct NoteHeadStruct {
-    public var duration: String
+    public var duration: NoteValue
     public var line: Double
     public var glyphFontScale: Double?
     public var slashed: Bool
@@ -18,7 +18,7 @@ public struct NoteHeadStruct {
     public var xShift: Double
     public var stemDirection: StemDirection
     public var displaced: Bool
-    public var noteType: String?
+    public var noteType: NoteType?
     public var x: Double
     public var y: Double
     public var index: Int?
@@ -26,7 +26,7 @@ public struct NoteHeadStruct {
     public var dots: Int?
 
     public init(
-        duration: String = "4",
+        duration: NoteValue = .quarter,
         line: Double = 0,
         glyphFontScale: Double? = nil,
         slashed: Bool = false,
@@ -37,7 +37,7 @@ public struct NoteHeadStruct {
         xShift: Double = 0,
         stemDirection: StemDirection = .up,
         displaced: Bool = false,
-        noteType: String? = nil,
+        noteType: NoteType? = nil,
         x: Double = 0,
         y: Double = 0,
         index: Int? = nil,
@@ -61,6 +61,60 @@ public struct NoteHeadStruct {
         self.index = index
         self.keys = keys
         self.dots = dots
+    }
+
+    /// String-based parser for compatibility with external text inputs.
+    public init(
+        duration: String,
+        line: Double = 0,
+        glyphFontScale: Double? = nil,
+        slashed: Bool = false,
+        style: ElementStyle? = nil,
+        stemDownXOffset: Double = 0,
+        stemUpXOffset: Double = 0,
+        customGlyphCode: String? = nil,
+        xShift: Double = 0,
+        stemDirection: StemDirection = .up,
+        displaced: Bool = false,
+        noteType: String? = nil,
+        x: Double = 0,
+        y: Double = 0,
+        index: Int? = nil,
+        keys: [String] = [],
+        dots: Int? = nil
+    ) throws {
+        let parsedDuration = try NoteDurationSpec(parsing: duration)
+        let parsedType: NoteType?
+        if let noteType {
+            guard let explicitType = NoteType(parsing: noteType) else {
+                throw NoteDurationParseError.invalidType(noteType)
+            }
+            parsedType = explicitType
+        } else if parsedDuration.type == .note {
+            parsedType = nil
+        } else {
+            parsedType = parsedDuration.type
+        }
+
+        self.init(
+            duration: parsedDuration.value,
+            line: line,
+            glyphFontScale: glyphFontScale,
+            slashed: slashed,
+            style: style,
+            stemDownXOffset: stemDownXOffset,
+            stemUpXOffset: stemUpXOffset,
+            customGlyphCode: customGlyphCode,
+            xShift: xShift,
+            stemDirection: stemDirection,
+            displaced: displaced,
+            noteType: parsedType,
+            x: x,
+            y: y,
+            index: index,
+            keys: keys,
+            dots: dots ?? parsedDuration.dots
+        )
     }
 }
 
@@ -104,10 +158,11 @@ public final class NoteHead: Note {
         super.init(ns)
 
         if let noteType = noteHeadStruct.noteType {
-            self.noteType = noteType
+            self.noteTypeValue = noteType
+            self.noteType = noteType.rawValue
         }
 
-        self.glyphProps = Tables.getGlyphProps(duration: noteDuration, type: noteType)!
+        self.glyphProps = Tables.getGlyphProps(duration: noteValue, type: noteTypeValue)!
 
         self.glyphCode = glyphProps.codeHead
         self.xShift = noteHeadStruct.xShift

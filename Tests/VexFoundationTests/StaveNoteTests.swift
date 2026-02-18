@@ -13,7 +13,7 @@ struct StaveNoteTests {
     // MARK: - StaveNote Creation
 
     @Test func staveNoteCreation() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         #expect(note.getDuration() == "4")
         #expect(note.getNoteType() == "n")
         #expect(note.getKeys().count == 1)
@@ -23,14 +23,14 @@ struct StaveNoteTests {
     }
 
     @Test func staveNoteRest() {
-        let note = StaveNote(StaveNoteStruct(keys: ["b/4"], duration: "4", type: "r"))
+        let note = StaveNote(StaveNoteStruct(keys: ["b/4"], duration: .quarter, type: .rest))
         #expect(note.isRest())
         #expect(!note.hasStem() || note.stem?.hide == true)
         #expect(note.glyphProps.rest)
     }
 
     @Test func staveNoteChord() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "e/4", "g/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "e/4", "g/4"], duration: .quarter))
         #expect(note.isChord())
         #expect(note.getKeys().count == 3)
         #expect(note.keyProps.count == 3)
@@ -38,20 +38,20 @@ struct StaveNoteTests {
     }
 
     @Test func staveNoteWhole() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "1"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .whole))
         #expect(!note.hasStem())
         #expect(!note.hasFlag())
     }
 
     @Test func staveNoteEighth() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .eighth))
         #expect(note.hasStem())
         #expect(note.hasFlag())
         #expect(note.getBeamCount() == 1)
     }
 
     @Test func staveNoteSixteenth() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "16"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .sixteenth))
         #expect(note.hasStem())
         #expect(note.hasFlag())
         #expect(note.getBeamCount() == 2)
@@ -61,19 +61,19 @@ struct StaveNoteTests {
 
     @Test func autoStemUp() {
         // Notes below middle line -> stem up
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4", autoStem: true))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter, autoStem: true))
         #expect(note.getStemDirection() == Stem.UP)
     }
 
     @Test func autoStemDown() {
         // Notes above middle line -> stem down
-        let note = StaveNote(StaveNoteStruct(keys: ["a/5"], duration: "4", autoStem: true))
+        let note = StaveNote(StaveNoteStruct(keys: ["a/5"], duration: .quarter, autoStem: true))
         #expect(note.getStemDirection() == Stem.DOWN)
     }
 
     @Test func autoStemChord() {
         // Chord spanning middle: average determines direction
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "a/5"], duration: "4", autoStem: true))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "a/5"], duration: .quarter, autoStem: true))
         // Average of c/4 (line ~0) and a/5 (line ~5) should be around middle
         let dir = note.getStemDirection()
         #expect(dir == Stem.UP || dir == Stem.DOWN)
@@ -81,19 +81,19 @@ struct StaveNoteTests {
 
     @Test func stemDirectionDefault() {
         // Default is stem up
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         #expect(note.getStemDirection() == Stem.UP)
     }
 
     @Test func stemDirectionExplicit() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4", stemDirection: Stem.DOWN))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter, stemDirection: Stem.DOWN))
         #expect(note.getStemDirection() == Stem.DOWN)
     }
 
     // MARK: - Key Properties
 
     @Test func keyPropsCalculation() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "e/4", "g/4"], duration: "4", clef: .treble))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "e/4", "g/4"], duration: .quarter, clef: .treble))
         #expect(note.keyProps.count == 3)
         #expect(note.sortedKeyProps.count == 3)
         // Sorted by line (ascending)
@@ -103,20 +103,20 @@ struct StaveNoteTests {
 
     @Test func displacementDetection() {
         // E/4 and F/4 are 0.5 lines apart -> displaced
-        let note = StaveNote(StaveNoteStruct(keys: ["e/4", "f/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["e/4", "f/4"], duration: .quarter))
         #expect(note.displaced)
     }
 
     @Test func noDisplacement() {
         // C/4 and E/4 are well separated -> no displacement
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "e/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "e/4"], duration: .quarter))
         #expect(!note.displaced)
     }
 
     // MARK: - Line Numbers
 
     @Test func lineNumber() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "g/4"], duration: "4", clef: .treble))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "g/4"], duration: .quarter, clef: .treble))
         let bottom = note.getLineNumber(isTopNote: false)
         let top = note.getLineNumber(isTopNote: true)
         #expect(top >= bottom)
@@ -126,7 +126,7 @@ struct StaveNoteTests {
 
     @Test func noteHeadBoundsOnStave() {
         let stave = Stave(x: 0, y: 0, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "e/4", "g/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "e/4", "g/4"], duration: .quarter))
         _ = note.setStave(stave)
         let bounds = note.getNoteHeadBounds()
         #expect(bounds.yTop < bounds.yBottom || bounds.yTop == bounds.yBottom)
@@ -137,7 +137,7 @@ struct StaveNoteTests {
 
     @Test func noteHeadBeginX() {
         let stave = Stave(x: 10, y: 0, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         _ = note.setStave(stave)
         Formatter.SimpleFormat([note], x: 0)
         let x = note.getNoteHeadBeginX()
@@ -147,7 +147,7 @@ struct StaveNoteTests {
     // MARK: - PreFormat
 
     @Test func preFormatWidth() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         Formatter.SimpleFormat([note])
         #expect(note.preFormatted)
         let width = note.getTickableWidth()
@@ -157,7 +157,7 @@ struct StaveNoteTests {
     // MARK: - Voice Shift Width
 
     @Test func voiceShiftWidth() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         Formatter.SimpleFormat([note])
         let vsw = note.getVoiceShiftWidth()
         #expect(vsw > 0)
@@ -166,9 +166,9 @@ struct StaveNoteTests {
     // MARK: - Is Chord / Is Rest
 
     @Test func isChordCheck() {
-        let single = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
-        let chord = StaveNote(StaveNoteStruct(keys: ["c/4", "e/4"], duration: "4"))
-        let rest = StaveNote(StaveNoteStruct(keys: ["b/4"], duration: "4", type: "r"))
+        let single = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
+        let chord = StaveNote(StaveNoteStruct(keys: ["c/4", "e/4"], duration: .quarter))
+        let rest = StaveNote(StaveNoteStruct(keys: ["b/4"], duration: .quarter, type: .rest))
         #expect(!single.isChord())
         #expect(chord.isChord())
         #expect(!rest.isChord())
@@ -177,14 +177,14 @@ struct StaveNoteTests {
     // MARK: - Key Line
 
     @Test func keyLine() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4", clef: .treble))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter, clef: .treble))
         let line = note.getKeyLine(0)
         // c/4 in treble clef is below the staff
         #expect(line < 5)
     }
 
     @Test func setKeyLine() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         let originalLine = note.getKeyLine(0)
         _ = note.setKeyLine(0, line: originalLine + 1)
         #expect(note.getKeyLine(0) == originalLine + 1)
@@ -194,7 +194,7 @@ struct StaveNoteTests {
 
     @Test func modifierStartXY() {
         let stave = Stave(x: 0, y: 0, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         _ = note.setStave(stave)
         Formatter.SimpleFormat([note])
         let xy = note.getModifierStartXY(position: .right, index: 0)
@@ -211,21 +211,21 @@ struct StaveNoteTests {
     }
 
     @Test func dotBuildAndAttach() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         Dot.buildAndAttach([note])
         let dots = Dot.getDots(note)
         #expect(dots.count == 1)
     }
 
     @Test func dotBuildAndAttachAll() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "e/4", "g/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "e/4", "g/4"], duration: .quarter))
         Dot.buildAndAttach([note], all: true)
         let dots = Dot.getDots(note)
         #expect(dots.count == 3)
     }
 
     @Test func dotFormat() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         Dot.buildAndAttach([note])
         Formatter.SimpleFormat([note])
         #expect(note.preFormatted)
@@ -257,10 +257,10 @@ struct StaveNoteTests {
 
     @Test func formatterSimpleFormat() {
         let notes: [Tickable] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "4")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: .quarter)),
         ]
         Formatter.SimpleFormat(notes, x: 10, paddingBetween: 15)
         // All notes should be pre-formatted and have X positions
@@ -274,10 +274,10 @@ struct StaveNoteTests {
         _ = voice.setMode(.soft)
 
         let notes: [Tickable] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "4")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: .quarter)),
         ]
         _ = voice.addTickables(notes)
 
@@ -293,10 +293,10 @@ struct StaveNoteTests {
         _ = voice.setMode(.soft)
 
         let notes: [Tickable] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "4")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: .quarter)),
         ]
         _ = voice.addTickables(notes)
 
@@ -313,10 +313,10 @@ struct StaveNoteTests {
         _ = voice.setMode(.soft)
 
         let notes: [Tickable] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "4")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: .quarter)),
         ]
         _ = voice.addTickables(notes)
 
@@ -339,10 +339,10 @@ struct StaveNoteTests {
         _ = voice.setMode(.soft)
 
         let notes: [Tickable] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "4")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: .quarter)),
         ]
         _ = voice.addTickables(notes)
 
@@ -366,14 +366,14 @@ struct StaveNoteTests {
         _ = voice2.setMode(.soft)
 
         let notes1: [Tickable] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "4")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: .quarter)),
         ]
         let notes2: [Tickable] = [
-            StaveNote(StaveNoteStruct(keys: ["g/4"], duration: "2")),
-            StaveNote(StaveNoteStruct(keys: ["a/4"], duration: "2")),
+            StaveNote(StaveNoteStruct(keys: ["g/4"], duration: .half)),
+            StaveNote(StaveNoteStruct(keys: ["a/4"], duration: .half)),
         ]
         _ = voice1.addTickables(notes1)
         _ = voice2.addTickables(notes2)
@@ -387,10 +387,10 @@ struct StaveNoteTests {
         _ = voice.setMode(.soft)
 
         let notes: [Tickable] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "4")),
-            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "4")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: .quarter)),
         ]
         _ = voice.addTickables(notes)
 
@@ -409,10 +409,10 @@ struct StaveNoteTests {
         _ = voice.setMode(.soft)
 
         let notes: [Tickable] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "2")),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "8")),
-            StaveNote(StaveNoteStruct(keys: ["g/4"], duration: "4")),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .half)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: ["g/4"], duration: .quarter)),
         ]
         _ = voice.addTickables(notes)
 
@@ -430,10 +430,10 @@ struct StaveNoteTests {
         let voice = Voice(time: VoiceTime(numBeats: 4, beatValue: 4))
         _ = voice.setMode(.soft)
 
-        let note1 = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note1 = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         Dot.buildAndAttach([note1])
-        let note2 = StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8"))
-        let note3 = StaveNote(StaveNoteStruct(keys: ["g/4"], duration: "2"))
+        let note2 = StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .eighth))
+        let note3 = StaveNote(StaveNoteStruct(keys: ["g/4"], duration: .half))
 
         _ = voice.addTickables([note1, note2, note3])
 
@@ -454,16 +454,16 @@ struct StaveNoteTests {
         _ = voice2.setMode(.soft)
 
         let notes1: [Tickable] = [
-            StaveNote(StaveNoteStruct(keys: ["c/5"], duration: "4", stemDirection: Stem.UP)),
-            StaveNote(StaveNoteStruct(keys: ["d/5"], duration: "4", stemDirection: Stem.UP)),
-            StaveNote(StaveNoteStruct(keys: ["e/5"], duration: "4", stemDirection: Stem.UP)),
-            StaveNote(StaveNoteStruct(keys: ["f/5"], duration: "4", stemDirection: Stem.UP)),
+            StaveNote(StaveNoteStruct(keys: ["c/5"], duration: .quarter, stemDirection: Stem.UP)),
+            StaveNote(StaveNoteStruct(keys: ["d/5"], duration: .quarter, stemDirection: Stem.UP)),
+            StaveNote(StaveNoteStruct(keys: ["e/5"], duration: .quarter, stemDirection: Stem.UP)),
+            StaveNote(StaveNoteStruct(keys: ["f/5"], duration: .quarter, stemDirection: Stem.UP)),
         ]
         let notes2: [Tickable] = [
-            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4", stemDirection: Stem.DOWN)),
-            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "4", stemDirection: Stem.DOWN)),
-            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "4", stemDirection: Stem.DOWN)),
-            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "4", stemDirection: Stem.DOWN)),
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter, stemDirection: Stem.DOWN)),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: .quarter, stemDirection: Stem.DOWN)),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: .quarter, stemDirection: Stem.DOWN)),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: .quarter, stemDirection: Stem.DOWN)),
         ]
         _ = voice1.addTickables(notes1)
         _ = voice2.addTickables(notes2)
@@ -481,13 +481,13 @@ struct StaveNoteTests {
     // MARK: - Clef Variants
 
     @Test func bassClefNote() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/3"], duration: "4", clef: .bass))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/3"], duration: .quarter, clef: .bass))
         #expect(note.clef == .bass)
         #expect(note.keyProps.count == 1)
     }
 
     @Test func altoClefNote() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4", clef: .alto))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter, clef: .alto))
         #expect(note.clef == .alto)
     }
 
@@ -495,7 +495,7 @@ struct StaveNoteTests {
 
     @Test func boundingBox() {
         let stave = Stave(x: 0, y: 0, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         _ = note.setStave(stave)
         Formatter.SimpleFormat([note])
         let bb = note.getBoundingBox()
@@ -512,7 +512,7 @@ struct StaveNoteTests {
         let result = StaveNote.format([], state: &state)
         #expect(!result)
 
-        let n1 = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let n1 = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         let result2 = StaveNote.format([n1], state: &state)
         #expect(!result2)
     }
@@ -520,7 +520,7 @@ struct StaveNoteTests {
     // MARK: - StaveNote PostFormat
 
     @Test func staveNotePostFormat() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
         let result = StaveNote.postFormat([note])
         #expect(result)
     }

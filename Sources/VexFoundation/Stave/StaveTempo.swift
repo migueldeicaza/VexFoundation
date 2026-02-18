@@ -6,15 +6,36 @@ import Foundation
 /// Options for tempo markings.
 public struct StaveTempoOptions {
     public var bpm: Int?
-    public var duration: String?
+    public var duration: NoteValue?
     public var dots: Int?
     public var name: String?
 
-    public init(bpm: Int? = nil, duration: String? = nil, dots: Int? = nil, name: String? = nil) {
+    public init(bpm: Int? = nil, duration: NoteValue? = nil, dots: Int? = nil, name: String? = nil) {
         self.bpm = bpm
         self.duration = duration
         self.dots = dots
         self.name = name
+    }
+
+    public init(bpm: Int? = nil, duration: String?, dots: Int? = nil, name: String? = nil) throws {
+        self.bpm = bpm
+        if let duration {
+            guard let parsed = NoteValue(parsing: duration) else {
+                throw NoteDurationParseError.invalidValue(duration)
+            }
+            self.duration = parsed
+        } else {
+            self.duration = nil
+        }
+        self.dots = dots
+        self.name = name
+    }
+
+    public init?(parsingDuration duration: String?, bpm: Int? = nil, dots: Int? = nil, name: String? = nil) {
+        guard let parsed = try? StaveTempoOptions(bpm: bpm, duration: duration, dots: dots, name: name) else {
+            return nil
+        }
+        self = parsed
     }
 }
 
@@ -158,9 +179,9 @@ import SwiftUI
         _ = f.setContext(ctx)
 
         let s = f.Stave(x: 10, y: 40, width: 490)
-        _ = s.addClef(.treble).addTimeSignature("4/4")
+        _ = s.addClef(.treble).addTimeSignature(.meter(4, 4))
         _ = s.addModifier(StaveTempo(
-            tempo: StaveTempoOptions(bpm: 120, duration: "q"),
+            tempo: StaveTempoOptions(bpm: 120, duration: .quarter),
             x: 0, shiftY: -15
         ))
 

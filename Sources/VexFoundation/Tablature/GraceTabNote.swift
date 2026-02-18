@@ -41,18 +41,18 @@ import SwiftUI
         let ts = f.TabStave(x: 10, y: 10, width: 490)
         _ = ts.addTabGlyph()
 
-        let graceNote = GraceTabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 5)], duration: "8"))
-        let mainNote = f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 7)], duration: "q"))
+        let graceNote = GraceTabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 5)], duration: .eighth))
+        let mainNote = f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 7)], duration: .quarter))
         let restNotes: [Note] = [
-            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 3, fret: 5)], duration: "q")),
-            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 1, fret: 3)], duration: "q")),
-            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 4, fret: 2)], duration: "q")),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 3, fret: 5)], duration: .quarter)),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 1, fret: 3)], duration: .quarter)),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 4, fret: 2)], duration: .quarter)),
         ]
 
         let graceGroup = f.GraceNoteGroup(notes: [graceNote])
         _ = mainNote.addModifier(graceGroup, index: 0)
 
-        let voice = f.Voice(timeSpec: "4/4")
+        let voice = f.Voice(timeSignature: .meter(4, 4))
         _ = voice.addTickables([mainNote] + restNotes)
 
         let formatter = f.Formatter()

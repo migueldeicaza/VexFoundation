@@ -13,9 +13,20 @@ public final class GhostNote: StemmableNote {
 
     // MARK: - Init
 
-    /// Create a ghost note from a duration string (e.g. "4", "8") or NoteStruct.
-    public convenience init(_ duration: String) {
+    /// Create a ghost note from a typed note value.
+    public convenience init(_ duration: NoteValue) {
         self.init(NoteStruct(duration: duration))
+    }
+
+    /// Create a ghost note from a duration string (e.g. "4", "8").
+    public convenience init(_ duration: String) throws {
+        self.init(try NoteStruct(duration: duration))
+    }
+
+    /// Failable string parser convenience.
+    public convenience init?(parsingDuration duration: String) {
+        guard let noteStruct = NoteStruct(parsingDuration: duration) else { return nil }
+        self.init(noteStruct)
     }
 
     public override init(_ noteStruct: NoteStruct) {
@@ -72,7 +83,7 @@ import SwiftUI
         ))
         _ = system.addStave(SystemStave(
             voices: [score.voice(score.notes("C5/q, B4/q/r, E5/q, B4/q/r"))]
-        )).addClef(.treble).addTimeSignature("4/4")
+        )).addClef(.treble).addTimeSignature(.meter(4, 4))
 
         system.format()
         try? f.draw()

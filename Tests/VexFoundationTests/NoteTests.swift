@@ -81,11 +81,11 @@ struct NoteTests {
     }
 
     @Test func codeNoteHead() {
-        #expect(Tables.codeNoteHead("D", duration: "4") == "noteheadDiamondBlack")
-        #expect(Tables.codeNoteHead("D", duration: "1") == "noteheadDiamondWhole")
-        #expect(Tables.codeNoteHead("N", duration: "4") == "noteheadBlack")
-        #expect(Tables.codeNoteHead("N", duration: "1") == "noteheadWhole")
-        #expect(Tables.codeNoteHead("X0", duration: "4") == "noteheadXWhole")
+        #expect(Tables.codeNoteHead("D", duration: .quarter) == "noteheadDiamondBlack")
+        #expect(Tables.codeNoteHead("D", duration: .whole) == "noteheadDiamondWhole")
+        #expect(Tables.codeNoteHead("N", duration: .quarter) == "noteheadBlack")
+        #expect(Tables.codeNoteHead("N", duration: .whole) == "noteheadWhole")
+        #expect(Tables.codeNoteHead("X0", duration: .quarter) == "noteheadXWhole")
     }
 
     @Test func validTypes() {
@@ -216,18 +216,18 @@ struct NoteTests {
     @Test func parseDuration() {
         let result = Note.parseDuration("4")
         #expect(result != nil)
-        #expect(result!.duration == "4")
+        #expect(result!.value == .quarter)
         #expect(result!.dots == 0)
-        #expect(result!.type == "n")
+        #expect(result!.type == .note)
 
         let dotted = Note.parseDuration("8d")
         #expect(dotted != nil)
-        #expect(dotted!.duration == "8")
+        #expect(dotted!.value == .eighth)
         #expect(dotted!.dots == 1)
 
         let rest = Note.parseDuration("4r")
         #expect(rest != nil)
-        #expect(rest!.type == "r")
+        #expect(rest!.type == .rest)
 
         let doubleDotted = Note.parseDuration("2dd")
         #expect(doubleDotted != nil)
@@ -235,17 +235,17 @@ struct NoteTests {
     }
 
     @Test func parseNoteStruct() {
-        let ns = NoteStruct(keys: ["c/4", "e/4", "g/4"], duration: "4")
+        let ns = NoteStruct(keys: ["c/4", "e/4", "g/4"], duration: .quarter)
         let parsed = Note.parseNoteStruct(ns)
         #expect(parsed != nil)
-        #expect(parsed!.duration == "4")
-        #expect(parsed!.type == "n")
+        #expect(parsed!.duration == .quarter)
+        #expect(parsed!.type == .note)
         #expect(parsed!.ticks == Tables.RESOLUTION / 4)
         #expect(parsed!.dots == 0)
     }
 
     @Test func parseNoteStructDotted() {
-        let ns = NoteStruct(keys: ["c/4"], duration: "4", dots: 1)
+        let ns = NoteStruct(keys: ["c/4"], duration: .quarter, dots: 1)
         let parsed = Note.parseNoteStruct(ns)
         #expect(parsed != nil)
         // dotted quarter = 4096 + 2048 = 6144
@@ -253,30 +253,29 @@ struct NoteTests {
     }
 
     @Test func parseNoteStructRest() {
-        let ns = NoteStruct(duration: "4", type: "r")
+        let ns = NoteStruct(duration: .quarter, type: .rest)
         let parsed = Note.parseNoteStruct(ns)
         #expect(parsed != nil)
-        #expect(parsed!.type == "r")
+        #expect(parsed!.type == .rest)
     }
 
     @Test func parseNoteStructInvalid() {
-        let ns = NoteStruct(duration: "4", type: "z")
-        let parsed = Note.parseNoteStruct(ns)
-        #expect(parsed == nil, "Invalid type 'z' should fail")
+        let ns = NoteStruct(parsingDuration: "4z")
+        #expect(ns == nil, "Invalid type 'z' should fail")
     }
 
     // MARK: - Note Creation
 
     @Test func noteCreation() {
-        let note = TestNote(NoteStruct(keys: ["c/4"], duration: "q"))
-        #expect(note.getDuration() == "q") // alias stored as-is; resolved internally by durationToTicks
+        let note = TestNote(NoteStruct(keys: ["c/4"], duration: .quarter))
+        #expect(note.getDuration() == "4")
         #expect(note.getNoteType() == "n")
         #expect(note.getKeys().count == 1)
         #expect(note.getTicks().numerator == 4096) // quarter = 16384/4
     }
 
     @Test func noteCreationEighth() {
-        let note = TestNote(NoteStruct(keys: ["d/5"], duration: "8"))
+        let note = TestNote(NoteStruct(keys: ["d/5"], duration: .eighth))
         #expect(note.getDuration() == "8")
         #expect(note.getTicks().numerator == 2048)
         #expect(note.getGlyphProps().stem == true)
@@ -285,19 +284,19 @@ struct NoteTests {
     }
 
     @Test func noteCreationRest() {
-        let note = TestNote(NoteStruct(duration: "4", type: "r"))
+        let note = TestNote(NoteStruct(duration: .quarter, type: .rest))
         #expect(note.getNoteType() == "r")
         #expect(note.getGlyphProps().rest == true)
         #expect(note.getGlyphProps().codeHead == "restQuarter")
     }
 
     @Test func noteHasStem() {
-        let note = TestNote(NoteStruct(keys: ["c/4"], duration: "4"))
+        let note = TestNote(NoteStruct(keys: ["c/4"], duration: .quarter))
         #expect(note.hasStem() == false) // Note base class returns false
     }
 
     @Test func noteIsRest() {
-        let note = TestNote(NoteStruct(keys: ["c/4"], duration: "4"))
+        let note = TestNote(NoteStruct(keys: ["c/4"], duration: .quarter))
         #expect(note.isRest() == false)
     }
 
@@ -311,7 +310,7 @@ struct NoteTests {
     }
 
     @Test func voiceTimeSpecInit() {
-        let voice = Voice(timeSpec: "3/8")
+        let voice = Voice(timeSignature: .meter(3, 8))
         #expect(voice.time.numBeats == 3)
         #expect(voice.time.beatValue == 8)
     }
@@ -319,7 +318,7 @@ struct NoteTests {
     @Test func voiceAddTickable() {
         let voice = Voice(time: VoiceTime(numBeats: 1, beatValue: 4))
         voice.setMode(.soft)
-        let note = TestNote(NoteStruct(keys: ["c/4"], duration: "4"))
+        let note = TestNote(NoteStruct(keys: ["c/4"], duration: .quarter))
         voice.addTickable(note)
         #expect(voice.getTickables().count == 1)
         #expect(voice.getTicksUsed().numerator == 4096)
@@ -329,7 +328,7 @@ struct NoteTests {
         let voice = Voice(time: VoiceTime(numBeats: 4, beatValue: 4))
         voice.setMode(.soft)
         for _ in 0..<4 {
-            voice.addTickable(TestNote(NoteStruct(keys: ["c/4"], duration: "4")))
+            voice.addTickable(TestNote(NoteStruct(keys: ["c/4"], duration: .quarter)))
         }
         #expect(voice.getTickables().count == 4)
         #expect(voice.isComplete())
@@ -338,8 +337,8 @@ struct NoteTests {
     @Test func voiceSoftmax() {
         let voice = Voice(time: VoiceTime(numBeats: 4, beatValue: 4))
         voice.setMode(.soft)
-        voice.addTickable(TestNote(NoteStruct(keys: ["c/4"], duration: "4")))
-        voice.addTickable(TestNote(NoteStruct(keys: ["d/4"], duration: "4")))
+        voice.addTickable(TestNote(NoteStruct(keys: ["c/4"], duration: .quarter)))
+        voice.addTickable(TestNote(NoteStruct(keys: ["d/4"], duration: .quarter)))
 
         // Each quarter gets equal softmax
         let sm = voice.softmax(4096)
@@ -351,7 +350,7 @@ struct NoteTests {
         let voice = Voice(time: VoiceTime(numBeats: 1, beatValue: 4))
         voice.setMode(.strict)
         // Add exactly one quarter note (4096 ticks) - should work
-        voice.addTickable(TestNote(NoteStruct(keys: ["c/4"], duration: "4")))
+        voice.addTickable(TestNote(NoteStruct(keys: ["c/4"], duration: .quarter)))
         #expect(voice.isComplete())
     }
 
@@ -383,7 +382,7 @@ struct NoteTests {
 
     @Test func tickContextAddTickable() {
         let tc = TickContext()
-        let note = TestNote(NoteStruct(keys: ["c/4"], duration: "4"))
+        let note = TestNote(NoteStruct(keys: ["c/4"], duration: .quarter))
         tc.addTickable(note)
         #expect(tc.getTickables().count == 1)
         #expect(tc.getMaxTicks().numerator == 4096)
@@ -391,8 +390,8 @@ struct NoteTests {
 
     @Test func tickContextMinMaxTicks() {
         let tc = TickContext()
-        let quarter = TestNote(NoteStruct(keys: ["c/4"], duration: "4"))
-        let eighth = TestNote(NoteStruct(keys: ["d/4"], duration: "8"))
+        let quarter = TestNote(NoteStruct(keys: ["c/4"], duration: .quarter))
+        let eighth = TestNote(NoteStruct(keys: ["d/4"], duration: .eighth))
         tc.addTickable(quarter)
         tc.addTickable(eighth)
 
@@ -429,7 +428,7 @@ struct NoteTests {
 
     @Test func noteHeadCreation() {
         let nh = NoteHead(noteHeadStruct: NoteHeadStruct(
-            duration: "4", line: 3
+            duration: .quarter, line: 3
         ))
         #expect(nh.getCategory() == "NoteHead")
         #expect(nh.getLine() == 3)
@@ -438,14 +437,14 @@ struct NoteTests {
 
     @Test func noteHeadDisplacement() {
         let nh = NoteHead(noteHeadStruct: NoteHeadStruct(
-            duration: "4", line: 3, displaced: true
+            duration: .quarter, line: 3, displaced: true
         ))
         #expect(nh.isDisplaced() == true)
     }
 
     @Test func noteHeadLineSet() {
         let nh = NoteHead(noteHeadStruct: NoteHeadStruct(
-            duration: "4", line: 2
+            duration: .quarter, line: 2
         ))
         #expect(nh.getLine() == 2)
         nh.setLine(4)
@@ -455,7 +454,7 @@ struct NoteTests {
     // MARK: - StemmableNote (via TestStemmableNote)
 
     @Test func stemmableNoteStemDirection() {
-        let note = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: "4"))
+        let note = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: .quarter))
         note.buildStem()
         note.setStemDirection(Stem.UP)
         #expect(note.getStemDirection() == Stem.UP)
@@ -465,7 +464,7 @@ struct NoteTests {
     }
 
     @Test func stemmableNoteStemLength() {
-        let note = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: "4"))
+        let note = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: .quarter))
         note.buildStem()
         note.setStemDirection(Stem.UP)
         let length = note.getStemLength()
@@ -473,23 +472,23 @@ struct NoteTests {
     }
 
     @Test func stemmableNoteBeamCount() {
-        let q = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: "4"))
+        let q = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: .quarter))
         #expect(q.getBeamCount() == 0)
 
-        let e = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: "8"))
+        let e = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: .eighth))
         #expect(e.getBeamCount() == 1)
 
-        let s = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: "16"))
+        let s = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: .sixteenth))
         #expect(s.getBeamCount() == 2)
     }
 
     @Test func stemmableNoteHasFlag() {
-        let e = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: "8"))
+        let e = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: .eighth))
         e.buildStem()
         e.setStemDirection(Stem.UP)
         #expect(e.hasFlag() == true)
 
-        let q = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: "4"))
+        let q = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: .quarter))
         q.buildStem()
         q.setStemDirection(Stem.UP)
         #expect(q.hasFlag() == false)

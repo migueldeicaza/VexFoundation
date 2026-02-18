@@ -32,7 +32,7 @@ public final class BarNote: Note {
         self.barlineType = type
         self.barline = Barline(type)
 
-        super.init(NoteStruct(duration: "b"))
+        super.init(NoteStruct(duration: .twoFiftySixth))
 
         ignoreTicks = true
         setTickableWidth(BarNote.widths[type] ?? 0)

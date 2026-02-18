@@ -13,7 +13,7 @@ struct Phase12Tests {
 
     // MARK: - Helper
 
-    private func makeNote(keys: [String] = ["c/4"], duration: String = "4") -> StaveNote {
+    private func makeNote(keys: [String] = ["c/4"], duration: NoteValue = .quarter) -> StaveNote {
         let note = StaveNote(StaveNoteStruct(keys: keys, duration: duration))
         let stave = Stave(x: 10, y: 40, width: 300)
         _ = note.setStave(stave)
@@ -285,7 +285,7 @@ struct Phase12Tests {
 
     @Test func parenthesisSetNoteGrace() {
         let paren = Parenthesis(position: .left)
-        let graceNote = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: "8"))
+        let graceNote = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: .eighth))
         _ = paren.setNote(graceNote)
         // Grace note should get a smaller point
         #expect(paren.point == Note.getPoint("gracenote"))
@@ -341,37 +341,37 @@ struct Phase12Tests {
     }
 
     @Test func crescendoCreation() {
-        let cresc = Crescendo(NoteStruct(duration: "4"))
+        let cresc = Crescendo(NoteStruct(duration: .quarter))
         #expect(cresc.decrescendo == false)
         #expect(cresc.height == 15)
         #expect(cresc.line == 0)
     }
 
     @Test func crescendoWithLine() {
-        let cresc = Crescendo(NoteStruct(duration: "4", line: 3))
+        let cresc = Crescendo(NoteStruct(duration: .quarter, line: 3))
         #expect(cresc.line == 3)
     }
 
     @Test func crescendoSetDecrescendo() {
-        let cresc = Crescendo(NoteStruct(duration: "4"))
+        let cresc = Crescendo(NoteStruct(duration: .quarter))
         _ = cresc.setDecrescendo(true)
         #expect(cresc.decrescendo == true)
     }
 
     @Test func crescendoSetHeight() {
-        let cresc = Crescendo(NoteStruct(duration: "4"))
+        let cresc = Crescendo(NoteStruct(duration: .quarter))
         _ = cresc.setHeight(20)
         #expect(cresc.height == 20)
     }
 
     @Test func crescendoSetLine() {
-        let cresc = Crescendo(NoteStruct(duration: "4"))
+        let cresc = Crescendo(NoteStruct(duration: .quarter))
         _ = cresc.setLine(2)
         #expect(cresc.line == 2)
     }
 
     @Test func crescendoPreFormat() {
-        let cresc = Crescendo(NoteStruct(duration: "4"))
+        let cresc = Crescendo(NoteStruct(duration: .quarter))
         cresc.preFormat()
         #expect(cresc.preFormatted == true)
     }
@@ -517,7 +517,7 @@ struct Phase12Tests {
     }
 
     @Test func crescendoIsNote() {
-        let cresc = Crescendo(NoteStruct(duration: "4"))
+        let cresc = Crescendo(NoteStruct(duration: .quarter))
         #expect(cresc is Note)
     }
 

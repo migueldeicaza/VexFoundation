@@ -13,7 +13,7 @@ struct Phase11Tests {
 
     // MARK: - Helper
 
-    private func makeNote(keys: [String] = ["c/4"], duration: String = "4") -> StaveNote {
+    private func makeNote(keys: [String] = ["c/4"], duration: NoteValue = .quarter) -> StaveNote {
         let note = StaveNote(StaveNoteStruct(keys: keys, duration: duration))
         let stave = Stave(x: 10, y: 40, width: 300)
         _ = note.setStave(stave)
@@ -22,7 +22,7 @@ struct Phase11Tests {
         return note
     }
 
-    private func makeFormattedNote(keys: [String] = ["c/4"], duration: String = "4") -> StaveNote {
+    private func makeFormattedNote(keys: [String] = ["c/4"], duration: NoteValue = .quarter) -> StaveNote {
         let note = makeNote(keys: keys, duration: duration)
         note.preFormat()
         return note
@@ -39,25 +39,25 @@ struct Phase11Tests {
     }
 
     @Test func graceNoteCreation() {
-        let gn = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: "8"))
+        let gn = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: .eighth))
         #expect(gn.slash == false)
         #expect(gn.slur == true)
         #expect(gn.tickableWidth == 3)
     }
 
     @Test func graceNoteWithSlash() {
-        let gn = GraceNote(GraceNoteStruct(keys: ["d/4"], duration: "8", slash: true))
+        let gn = GraceNote(GraceNoteStruct(keys: ["d/4"], duration: .eighth, slash: true))
         #expect(gn.slash == true)
     }
 
     @Test func graceNoteGetStaveNoteScale() {
-        let gn = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: "8"))
+        let gn = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: .eighth))
         let scale = gn.getStaveNoteScale()
         #expect(abs(scale - 0.66) < 0.01)
     }
 
     @Test func graceNoteStemExtension() {
-        let gn = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: "8"))
+        let gn = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: .eighth))
         let stave = Stave(x: 10, y: 40, width: 300)
         _ = gn.setStave(stave)
         _ = gn.setStemDirection(Stem.UP)
@@ -85,31 +85,31 @@ struct Phase11Tests {
     }
 
     @Test func graceNoteGroupCreation() {
-        let gn1 = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: "8"))
-        let gn2 = GraceNote(GraceNoteStruct(keys: ["d/4"], duration: "8"))
+        let gn1 = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: .eighth))
+        let gn2 = GraceNote(GraceNoteStruct(keys: ["d/4"], duration: .eighth))
         let group = GraceNoteGroup(graceNotes: [gn1, gn2])
         #expect(group.graceNotes.count == 2)
         #expect(group.position == .left)
     }
 
     @Test func graceNoteGroupPreFormat() {
-        let gn1 = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: "8"))
-        let gn2 = GraceNote(GraceNoteStruct(keys: ["d/4"], duration: "8"))
+        let gn1 = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: .eighth))
+        let gn2 = GraceNote(GraceNoteStruct(keys: ["d/4"], duration: .eighth))
         let group = GraceNoteGroup(graceNotes: [gn1, gn2])
         group.preFormat()
         #expect(group.getWidth() > 0)
     }
 
     @Test func graceNoteGroupBeamNotes() {
-        let gn1 = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: "8"))
-        let gn2 = GraceNote(GraceNoteStruct(keys: ["d/4"], duration: "8"))
+        let gn1 = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: .eighth))
+        let gn2 = GraceNote(GraceNoteStruct(keys: ["d/4"], duration: .eighth))
         let group = GraceNoteGroup(graceNotes: [gn1, gn2])
         _ = group.beamNotes()
         #expect(group.beams.count == 1)
     }
 
     @Test func graceNoteGroupSingleNoteNoBeam() {
-        let gn1 = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: "8"))
+        let gn1 = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: .eighth))
         let group = GraceNoteGroup(graceNotes: [gn1])
         _ = group.beamNotes()
         // Single note can't be beamed
@@ -117,15 +117,15 @@ struct Phase11Tests {
     }
 
     @Test func graceNoteGroupGetGraceNotes() {
-        let gn1 = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: "8"))
-        let gn2 = GraceNote(GraceNoteStruct(keys: ["d/4"], duration: "8"))
+        let gn1 = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: .eighth))
+        let gn2 = GraceNote(GraceNoteStruct(keys: ["d/4"], duration: .eighth))
         let group = GraceNoteGroup(graceNotes: [gn1, gn2])
         #expect(group.getGraceNotes().count == 2)
     }
 
     @Test func graceNoteGroupFormat() {
         let note = makeNote()
-        let gn = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: "8"))
+        let gn = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: .eighth))
         let group = GraceNoteGroup(graceNotes: [gn])
         _ = group.setNote(note)
         _ = group.setIndex(0)
@@ -144,7 +144,7 @@ struct Phase11Tests {
 
     @Test func graceNoteGroupInModifierContext() {
         let note = makeNote()
-        let gn = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: "8"))
+        let gn = GraceNote(GraceNoteStruct(keys: ["c/4"], duration: .eighth))
         let group = GraceNoteGroup(graceNotes: [gn])
         _ = note.addModifier(group, index: 0)
 

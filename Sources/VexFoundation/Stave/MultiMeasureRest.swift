@@ -74,7 +74,7 @@ public final class MultiMeasureRest: VexElement {
 
     private static func getSemibreveRest() -> SemibreveRestInfo {
         let noteHead = NoteHead(noteHeadStruct: NoteHeadStruct(
-            duration: "w", noteType: "r"
+            duration: .whole, noteType: .rest
         ))
         return SemibreveRestInfo(
             glyphFontScale: noteHead.renderOptions.glyphFontScale,
@@ -259,8 +259,11 @@ public final class MultiMeasureRest: VexElement {
         }
 
         if options.showNumber {
-            let timeSpec = "/\(numberOfMeasures)"
-            let timeSig = TimeSignature(timeSpec: timeSpec, customPadding: 0, validateArgs: false)
+            guard let numberDigits = TimeSignatureDigits(rawValue: String(numberOfMeasures)) else {
+                fatalError("[VexError] BadArguments: Invalid multi-measure rest number: \(numberOfMeasures)")
+            }
+            let timeSpec: TimeSignatureSpec = .topOnly(numberDigits)
+            let timeSig = TimeSignature(timeSpec: timeSpec, customPadding: 0)
             timeSig.tsPoint = options.numberGlyphPoint
             _ = timeSig.setTimeSig(timeSpec)
             _ = timeSig.setStave(stave)

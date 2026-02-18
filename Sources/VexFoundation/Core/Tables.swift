@@ -123,8 +123,16 @@ public enum Tables {
 
     /// Convert a duration string to ticks.
     public static func durationToTicks(_ duration: String) -> Int? {
-        let resolved = durationAliases[duration] ?? duration
-        return durations[resolved]
+        guard let value = NoteValue(parsing: duration) else { return nil }
+        return durationToTicks(value)
+    }
+
+    /// Convert a strongly typed duration to ticks.
+    public static func durationToTicks(_ duration: NoteValue) -> Int {
+        guard let ticks = durations[duration.rawValue] else {
+            fatalError("[VexError] BadArguments: Missing tick mapping for duration \(duration.rawValue).")
+        }
+        return ticks
     }
 
     // MARK: - Key Signatures
@@ -346,8 +354,14 @@ public enum Tables {
     // MARK: - Duration Codes (Glyph Properties)
 
     /// Get glyph properties for a given duration and type.
+    public static func getGlyphProps(duration: NoteValue, type: NoteType = .note) -> GlyphProps? {
+        getGlyphProps(duration: duration.rawValue, type: type.rawValue)
+    }
+
+    /// Get glyph properties for a given duration and type.
     public static func getGlyphProps(duration: String, type: String = "n") -> GlyphProps? {
-        let dur = durationAliases[duration] ?? duration
+        guard let noteValue = NoteValue(parsing: duration) else { return nil }
+        let dur = noteValue.rawValue
         guard let common = durationCodes[dur] else { return nil }
         let typeProps = durationTypeOverrides[dur]?[type]
 
@@ -529,11 +543,15 @@ public enum Tables {
 
     /// Sanitize duration: resolve aliases and validate.
     public static func sanitizeDuration(_ duration: String) -> String {
-        let resolved = durationAliases[duration] ?? duration
-        guard durations[resolved] != nil else {
+        guard let value = NoteValue(parsing: duration) else {
             fatalError("[VexError] BadArguments: The provided duration is not valid: \(duration)")
         }
-        return resolved
+        return value.rawValue
+    }
+
+    /// Sanitize duration for typed APIs.
+    public static func sanitizeDuration(_ duration: NoteValue) -> String {
+        duration.rawValue
     }
 
     /// Convert duration to a Fraction.
@@ -541,8 +559,18 @@ public enum Tables {
         Fraction().parse(sanitizeDuration(duration))
     }
 
+    /// Convert duration to a Fraction.
+    public static func durationToFraction(_ duration: NoteValue) -> Fraction {
+        Fraction().parse(duration.rawValue)
+    }
+
     /// Convert duration to a number.
     public static func durationToNumber(_ duration: String) -> Double {
+        durationToFraction(duration).value()
+    }
+
+    /// Convert duration to a number.
+    public static func durationToNumber(_ duration: NoteValue) -> Double {
         durationToFraction(duration).value()
     }
 
@@ -582,7 +610,7 @@ public enum Tables {
 
         var code = value.code
         if pieces.count > 2 && !pieces[2].isEmpty {
-            code = codeNoteHead(pieces[2].uppercased(), duration: "4")
+            code = codeNoteHead(pieces[2].uppercased(), duration: .quarter)
         }
 
         return KeyProps(
@@ -603,6 +631,11 @@ public enum Tables {
             fatalError("[VexError] BadArguments: integerToNote requires integer [0, 11]: \(integer)")
         }
         return note
+    }
+
+    /// Get the notehead glyph code for a custom type and duration.
+    public static func codeNoteHead(_ type: String, duration: NoteValue) -> String {
+        codeNoteHead(type, duration: duration.rawValue)
     }
 
     /// Get the notehead glyph code for a custom type and duration.

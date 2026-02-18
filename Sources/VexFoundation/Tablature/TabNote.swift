@@ -28,16 +28,16 @@ public struct TabNotePosition {
 /// Input structure for creating a TabNote.
 public struct TabNoteStruct {
     public var positions: [TabNotePosition]
-    public var duration: String
+    public var duration: NoteValue
     public var dots: Int?
-    public var type: String?
+    public var type: NoteType?
     public var stemDirection: StemDirection?
 
     public init(
         positions: [TabNotePosition],
-        duration: String = "q",
+        duration: NoteValue = .quarter,
         dots: Int? = nil,
-        type: String? = nil,
+        type: NoteType? = nil,
         stemDirection: StemDirection? = nil
     ) {
         self.positions = positions
@@ -45,6 +45,54 @@ public struct TabNoteStruct {
         self.dots = dots
         self.type = type
         self.stemDirection = stemDirection
+    }
+
+    /// String-based parser for compatibility with external text inputs.
+    public init(
+        positions: [TabNotePosition],
+        duration: String,
+        dots: Int? = nil,
+        type: String? = nil,
+        stemDirection: StemDirection? = nil
+    ) throws {
+        let parsedDuration = try NoteDurationSpec(parsing: duration)
+        let parsedType: NoteType?
+        if let type {
+            guard let explicitType = NoteType(parsing: type) else {
+                throw NoteDurationParseError.invalidType(type)
+            }
+            parsedType = explicitType
+        } else if parsedDuration.type == .note {
+            parsedType = nil
+        } else {
+            parsedType = parsedDuration.type
+        }
+
+        self.init(
+            positions: positions,
+            duration: parsedDuration.value,
+            dots: dots ?? parsedDuration.dots,
+            type: parsedType,
+            stemDirection: stemDirection
+        )
+    }
+
+    /// Failable parser convenience.
+    public init?(
+        parsingDuration duration: String,
+        positions: [TabNotePosition],
+        dots: Int? = nil,
+        type: String? = nil,
+        stemDirection: StemDirection? = nil
+    ) {
+        guard let parsed = try? TabNoteStruct(
+            positions: positions,
+            duration: duration,
+            dots: dots,
+            type: type,
+            stemDirection: stemDirection
+        ) else { return nil }
+        self = parsed
     }
 }
 
@@ -470,17 +518,17 @@ import SwiftUI
         _ = ts.addTabGlyph()
 
         let notes: [Note] = [
-            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 1, fret: 3)], duration: "q")),
-            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 5)], duration: "q")),
-            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 3, fret: 7)], duration: "q")),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 1, fret: 3)], duration: .quarter)),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 5)], duration: .quarter)),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 3, fret: 7)], duration: .quarter)),
             f.TabNote(TabNoteStruct(positions: [
                 TabNotePosition(str: 1, fret: 0),
                 TabNotePosition(str: 2, fret: 1),
                 TabNotePosition(str: 3, fret: 0),
-            ], duration: "q")),
+            ], duration: .quarter)),
         ]
 
-        let voice = f.Voice(timeSpec: "4/4")
+        let voice = f.Voice(timeSignature: .meter(4, 4))
         _ = voice.addTickables(notes)
 
         let formatter = f.Formatter()

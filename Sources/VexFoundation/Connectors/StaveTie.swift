@@ -249,7 +249,7 @@ import SwiftUI
         let notes = score.notes("C5/q, C5, E5, E5")
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
-        )).addClef(.treble).addTimeSignature("4/4")
+        )).addClef(.treble).addTimeSignature(.meter(4, 4))
 
         system.format()
 
