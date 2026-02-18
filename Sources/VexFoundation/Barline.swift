@@ -1,0 +1,172 @@
+// VexFoundation - Ported from VexFlow (https://vexflow.com)
+// Original: Copyright (c) Mohit Muthanna 2010. Author Larry Kuhns 2011.
+
+import Foundation
+
+// MARK: - Barline Type
+
+/// Types of bar lines that can appear on a stave.
+public enum BarlineType: Int, Sendable {
+    case single = 1
+    case double = 2
+    case end = 3
+    case repeatBegin = 4
+    case repeatEnd = 5
+    case repeatBoth = 6
+    case none = 7
+}
+
+// MARK: - Barline
+
+/// Renders bar lines on a stave.
+public final class Barline: StaveModifier {
+
+    override public class var CATEGORY: String { "Barline" }
+
+    /// Map string names to barline types.
+    public static let typeString: [String: BarlineType] = [
+        "single": .single,
+        "double": .double,
+        "end": .end,
+        "repeatBegin": .repeatBegin,
+        "repeatEnd": .repeatEnd,
+        "repeatBoth": .repeatBoth,
+        "none": .none,
+    ]
+
+    // MARK: - Properties
+
+    private var barlineType: BarlineType = .single
+    private var thickness: Double
+
+    private static let widths: [BarlineType: Double] = [
+        .single: 5, .double: 5, .end: 5,
+        .repeatBegin: 5, .repeatEnd: 5, .repeatBoth: 5, .none: 5,
+    ]
+
+    private static let paddings: [BarlineType: Double] = [
+        .single: 0, .double: 0, .end: 0,
+        .repeatBegin: 15, .repeatEnd: 15, .repeatBoth: 15, .none: 0,
+    ]
+
+    private static let layoutMetricsMap: [BarlineType: LayoutMetrics] = [
+        .single: LayoutMetrics(xMin: 0, xMax: 1, paddingLeft: 5, paddingRight: 5),
+        .double: LayoutMetrics(xMin: -3, xMax: 1, paddingLeft: 5, paddingRight: 5),
+        .end: LayoutMetrics(xMin: -5, xMax: 1, paddingLeft: 5, paddingRight: 5),
+        .repeatEnd: LayoutMetrics(xMin: -10, xMax: 1, paddingLeft: 5, paddingRight: 5),
+        .repeatBegin: LayoutMetrics(xMin: -2, xMax: 10, paddingLeft: 5, paddingRight: 5),
+        .repeatBoth: LayoutMetrics(xMin: -10, xMax: 10, paddingLeft: 5, paddingRight: 5),
+        .none: LayoutMetrics(xMin: 0, xMax: 0, paddingLeft: 5, paddingRight: 5),
+    ]
+
+    // MARK: - Init
+
+    public init(_ type: BarlineType) {
+        self.thickness = Tables.STAVE_LINE_THICKNESS
+        super.init()
+        setPosition(.begin)
+        setBarlineType(type)
+    }
+
+    // MARK: - Type
+
+    public func getBarlineType() -> BarlineType { barlineType }
+
+    @discardableResult
+    public func setBarlineType(_ type: BarlineType) -> Self {
+        self.barlineType = type
+        self.modifierWidth = Barline.widths[type] ?? 5
+        self.padding = Barline.paddings[type] ?? 0
+        if let metrics = Barline.layoutMetricsMap[type] {
+            self.layoutMetrics = metrics
+        }
+        return self
+    }
+
+    // MARK: - Draw
+
+    override public func drawStave(stave: Stave, xShift: Double = 0) throws {
+        let ctx = try stave.checkContext()
+        setRendered()
+        applyStyle(context: ctx)
+        _ = ctx.openGroup("stavebarline", getAttribute("id"))
+
+        switch barlineType {
+        case .single:
+            drawVerticalBar(stave: stave, x: modifierX)
+        case .double:
+            drawVerticalBar(stave: stave, x: modifierX, doubleBar: true)
+        case .end:
+            drawVerticalEndBar(stave: stave, x: modifierX)
+        case .repeatBegin:
+            drawRepeatBar(stave: stave, x: modifierX, begin: true)
+            if stave.getX() != modifierX {
+                drawVerticalBar(stave: stave, x: stave.getX())
+            }
+        case .repeatEnd:
+            drawRepeatBar(stave: stave, x: modifierX, begin: false)
+        case .repeatBoth:
+            drawRepeatBar(stave: stave, x: modifierX, begin: false)
+            drawRepeatBar(stave: stave, x: modifierX, begin: true)
+        case .none:
+            break
+        }
+
+        ctx.closeGroup()
+        restoreStyle(context: ctx)
+    }
+
+    // MARK: - Drawing Helpers
+
+    private func drawVerticalBar(stave: Stave, x: Double, doubleBar: Bool = false) {
+        let ctx = try! stave.checkContext()
+        let topY = stave.getTopLineTopY()
+        let botY = stave.getBottomLineBottomY()
+        if doubleBar {
+            ctx.fillRect(x - 3, topY, 1, botY - topY)
+        }
+        ctx.fillRect(x, topY, 1, botY - topY)
+    }
+
+    private func drawVerticalEndBar(stave: Stave, x: Double) {
+        let ctx = try! stave.checkContext()
+        let topY = stave.getTopLineTopY()
+        let botY = stave.getBottomLineBottomY()
+        ctx.fillRect(x - 5, topY, 1, botY - topY)
+        ctx.fillRect(x - 2, topY, 3, botY - topY)
+    }
+
+    private func drawRepeatBar(stave: Stave, x: Double, begin: Bool) {
+        let ctx = try! stave.checkContext()
+        let topY = stave.getTopLineTopY()
+        let botY = stave.getBottomLineBottomY()
+
+        var xShift: Double = begin ? 3 : -5
+
+        ctx.fillRect(x + xShift, topY, 1, botY - topY)
+        ctx.fillRect(x - 2, topY, 3, botY - topY)
+
+        let dotRadius: Double = 2
+        if begin {
+            xShift += 4
+        } else {
+            xShift -= 4
+        }
+        let dotX = x + xShift + dotRadius / 2
+
+        var yOffset = Double(stave.getNumLines() - 1) * stave.getSpacingBetweenLines()
+        yOffset = yOffset / 2 - stave.getSpacingBetweenLines() / 2
+        var dotY = topY + yOffset + dotRadius / 2
+
+        // Top repeat dot
+        ctx.beginPath()
+        ctx.arc(dotX, dotY, dotRadius, 0, .pi * 2, false)
+        ctx.fill()
+
+        // Bottom repeat dot
+        dotY += stave.getSpacingBetweenLines()
+        ctx.beginPath()
+        ctx.arc(dotX, dotY, dotRadius, 0, .pi * 2, false)
+        ctx.fill()
+    }
+}

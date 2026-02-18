@@ -1,0 +1,403 @@
+// VexFoundation - Tests for Phase 8: StaveTie, Curve, Tuplet
+
+import Testing
+@testable import VexFoundation
+
+@Suite("StaveTie, Curve & Tuplet")
+struct Phase8Tests {
+
+    init() {
+        FontLoader.loadDefaultFonts()
+    }
+
+    // MARK: - Helper
+
+    private func makeNote(keys: [String], duration: String) -> StaveNote {
+        let note = StaveNote(StaveNoteStruct(keys: keys, duration: duration))
+        let stave = Stave(x: 10, y: 40, width: 300)
+        _ = note.setStave(stave)
+        _ = note.setStemDirection(Stem.UP)
+        _ = note.buildStem()
+        return note
+    }
+
+    // MARK: - StaveTie Creation
+
+    @Test func staveTieCreation() {
+        let note1 = makeNote(keys: ["c/4"], duration: "4")
+        let note2 = makeNote(keys: ["c/4"], duration: "4")
+        let tie = StaveTie(notes: TieNotes(firstNote: note1, lastNote: note2))
+        #expect(tie.getNotes().firstNote === note1)
+        #expect(tie.getNotes().lastNote === note2)
+        #expect(!tie.isPartial())
+    }
+
+    @Test func staveTieWithText() {
+        let note1 = makeNote(keys: ["c/4"], duration: "4")
+        let note2 = makeNote(keys: ["c/4"], duration: "4")
+        let tie = StaveTie(notes: TieNotes(firstNote: note1, lastNote: note2), text: "H")
+        #expect(tie.text == "H")
+    }
+
+    @Test func staveTiePartialFirst() {
+        let note = makeNote(keys: ["c/4"], duration: "4")
+        let tie = StaveTie(notes: TieNotes(lastNote: note))
+        #expect(tie.isPartial())
+        #expect(tie.getNotes().firstNote == nil)
+        #expect(tie.getNotes().lastNote === note)
+    }
+
+    @Test func staveTiePartialLast() {
+        let note = makeNote(keys: ["c/4"], duration: "4")
+        let tie = StaveTie(notes: TieNotes(firstNote: note))
+        #expect(tie.isPartial())
+        #expect(tie.getNotes().firstNote === note)
+        #expect(tie.getNotes().lastNote == nil)
+    }
+
+    @Test func staveTieIndices() {
+        let note1 = makeNote(keys: ["c/4", "e/4", "g/4"], duration: "4")
+        let note2 = makeNote(keys: ["c/4", "e/4", "g/4"], duration: "4")
+        let tie = StaveTie(notes: TieNotes(
+            firstNote: note1, lastNote: note2,
+            firstIndices: [0, 1, 2], lastIndices: [0, 1, 2]
+        ))
+        #expect(tie.getNotes().firstIndices == [0, 1, 2])
+        #expect(tie.getNotes().lastIndices == [0, 1, 2])
+    }
+
+    @Test func staveTieDefaultIndices() {
+        let note1 = makeNote(keys: ["c/4"], duration: "4")
+        let note2 = makeNote(keys: ["c/4"], duration: "4")
+        let tie = StaveTie(notes: TieNotes(firstNote: note1, lastNote: note2))
+        #expect(tie.getNotes().firstIndices == [0])
+        #expect(tie.getNotes().lastIndices == [0])
+    }
+
+    @Test func staveTieDirection() {
+        let note1 = makeNote(keys: ["c/4"], duration: "4")
+        let note2 = makeNote(keys: ["c/4"], duration: "4")
+        let tie = StaveTie(notes: TieNotes(firstNote: note1, lastNote: note2))
+        _ = tie.setDirection(Stem.DOWN)
+        #expect(tie.direction == Stem.DOWN)
+    }
+
+    @Test func staveTieRenderOptions() {
+        let note1 = makeNote(keys: ["c/4"], duration: "4")
+        let note2 = makeNote(keys: ["c/4"], duration: "4")
+        let tie = StaveTie(notes: TieNotes(firstNote: note1, lastNote: note2))
+        #expect(tie.renderOptions.cp1 == 8)
+        #expect(tie.renderOptions.cp2 == 12)
+        #expect(tie.renderOptions.yShift == 7)
+        #expect(tie.renderOptions.tieSpacing == 0)
+    }
+
+    @Test func staveTieCategory() {
+        #expect(StaveTie.CATEGORY == "StaveTie")
+    }
+
+    // MARK: - Curve Creation
+
+    @Test func curveCreation() {
+        let note1 = makeNote(keys: ["c/4"], duration: "4")
+        let note2 = makeNote(keys: ["e/4"], duration: "4")
+        let curve = Curve(from: note1, to: note2)
+        #expect(curve.from === note1)
+        #expect(curve.to === note2)
+        #expect(!curve.isPartial())
+    }
+
+    @Test func curvePartial() {
+        let note1 = makeNote(keys: ["c/4"], duration: "4")
+        let curve = Curve(from: note1, to: nil)
+        #expect(curve.isPartial())
+    }
+
+    @Test func curveDefaultOptions() {
+        let note1 = makeNote(keys: ["c/4"], duration: "4")
+        let note2 = makeNote(keys: ["e/4"], duration: "4")
+        let curve = Curve(from: note1, to: note2)
+        #expect(curve.renderOptions.thickness == 2)
+        #expect(curve.renderOptions.xShift == 0)
+        #expect(curve.renderOptions.yShift == 10)
+        #expect(curve.renderOptions.position == .nearHead)
+        #expect(curve.renderOptions.positionEnd == .nearHead)
+        #expect(curve.renderOptions.invert == false)
+        #expect(curve.renderOptions.cps.count == 2)
+    }
+
+    @Test func curveCustomOptions() {
+        let note1 = makeNote(keys: ["c/4"], duration: "4")
+        let note2 = makeNote(keys: ["e/4"], duration: "4")
+        let opts = CurveOptions(
+            cps: [(5, 20), (5, 20)],
+            thickness: 3,
+            xShift: 5,
+            yShift: 15,
+            position: .nearTop,
+            positionEnd: .nearTop,
+            invert: true
+        )
+        let curve = Curve(from: note1, to: note2, options: opts)
+        #expect(curve.renderOptions.thickness == 3)
+        #expect(curve.renderOptions.xShift == 5)
+        #expect(curve.renderOptions.yShift == 15)
+        #expect(curve.renderOptions.position == .nearTop)
+        #expect(curve.renderOptions.positionEnd == .nearTop)
+        #expect(curve.renderOptions.invert == true)
+    }
+
+    @Test func curveSetNotes() {
+        let note1 = makeNote(keys: ["c/4"], duration: "4")
+        let note2 = makeNote(keys: ["e/4"], duration: "4")
+        let note3 = makeNote(keys: ["g/4"], duration: "4")
+        let curve = Curve(from: note1, to: note2)
+        _ = curve.setNotes(from: note1, to: note3)
+        #expect(curve.to === note3)
+    }
+
+    @Test func curveCategory() {
+        #expect(Curve.CATEGORY == "Curve")
+    }
+
+    @Test func curvePositionEnum() {
+        #expect(CurvePosition.nearHead.rawValue == 1)
+        #expect(CurvePosition.nearTop.rawValue == 2)
+    }
+
+    // MARK: - Tuplet Creation
+
+    @Test func tupletCreation() {
+        let notes: [Note] = [
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+        ]
+        let tuplet = Tuplet(notes: notes)
+        #expect(tuplet.numNotes == 3)
+        #expect(tuplet.notesOccupied == 2) // default
+        #expect(tuplet.getNotes().count == 3)
+    }
+
+    @Test func tupletDefaultBracketed() {
+        // Notes without beams should default to bracketed
+        let notes: [Note] = [
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+        ]
+        let tuplet = Tuplet(notes: notes)
+        #expect(tuplet.bracketed == true) // no beams
+    }
+
+    @Test func tupletBeamedNotBracketed() {
+        // All notes beamed → not bracketed
+        let notes: [StemmableNote] = [
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+        ]
+        let beam = Beam(notes) // must retain beam since Note.beam is weak
+        let tuplet = Tuplet(notes: notes as [Note])
+        #expect(tuplet.bracketed == false) // all beamed
+        _ = beam // keep beam alive
+    }
+
+    @Test func tupletSetBracketed() {
+        let notes: [Note] = [
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+        ]
+        let tuplet = Tuplet(notes: notes)
+        _ = tuplet.setBracketed(false)
+        #expect(tuplet.bracketed == false)
+    }
+
+    @Test func tupletRatioed() {
+        // Difference of 1 (3:2) → not ratioed
+        let notes3: [Note] = [
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+        ]
+        let triplet = Tuplet(notes: notes3)
+        #expect(triplet.ratioed == false) // abs(2-3) = 1, not > 1
+
+        // Difference > 1 (5:3) → ratioed
+        let notes5: [Note] = [
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["f/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["g/4"], duration: "8")),
+        ]
+        let quintuplet = Tuplet(notes: notes5, options: TupletOptions(notesOccupied: 3))
+        #expect(quintuplet.ratioed == true) // abs(3-5) = 2 > 1
+    }
+
+    @Test func tupletSetRatioed() {
+        let notes: [Note] = [
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+        ]
+        let tuplet = Tuplet(notes: notes)
+        _ = tuplet.setRatioed(true)
+        #expect(tuplet.ratioed == true)
+    }
+
+    @Test func tupletLocation() {
+        let notes: [Note] = [
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+        ]
+        let tuplet = Tuplet(notes: notes)
+        #expect(tuplet.location == .top)
+
+        _ = tuplet.setTupletLocation(.bottom)
+        #expect(tuplet.location == .bottom)
+    }
+
+    @Test func tupletLocationEnum() {
+        #expect(TupletLocation.top.rawValue == 1)
+        #expect(TupletLocation.bottom.rawValue == -1)
+    }
+
+    @Test func tupletCustomNumNotes() {
+        let notes: [Note] = [
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4")),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "4")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "4")),
+        ]
+        let tuplet = Tuplet(notes: notes, options: TupletOptions(numNotes: 3, notesOccupied: 2))
+        #expect(tuplet.numNotes == 3)
+        #expect(tuplet.notesOccupied == 2)
+    }
+
+    @Test func tupletCategory() {
+        #expect(Tuplet.CATEGORY == "Tuplet")
+    }
+
+    @Test func tupletNestingOffset() {
+        #expect(Tuplet.NESTING_OFFSET == 15)
+    }
+
+    @Test func tupletAttach() {
+        let notes: [Note] = [
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+        ]
+        let tuplet = Tuplet(notes: notes)
+        // Each note should have this tuplet in its stack
+        for note in notes {
+            #expect(note.getTupletStack().contains { $0 === tuplet })
+        }
+    }
+
+    @Test func tupletDetach() {
+        let notes: [Note] = [
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+        ]
+        let tuplet = Tuplet(notes: notes)
+        tuplet.detach()
+        for note in notes {
+            #expect(!note.getTupletStack().contains { $0 === tuplet })
+        }
+    }
+
+    @Test func tupletTickMultiplier() {
+        // A triplet should adjust ticks: multiply by 2/3
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8"))
+        let ticksBefore = note.getTicks()
+        let notes: [Note] = [
+            note,
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+        ]
+        _ = Tuplet(notes: notes)
+        let ticksAfter = note.getTicks()
+        // Triplet: 3 notes in space of 2 → ticks * 2/3
+        let expectedTicks = ticksBefore.value() * 2.0 / 3.0
+        #expect(abs(ticksAfter.value() - expectedTicks) < 0.01)
+    }
+
+    @Test func tupletMetrics() {
+        let m = Tuplet.metrics
+        #expect(m.noteHeadOffset > 0)
+        #expect(m.stemOffset > 0)
+        #expect(m.bottomLine > 0)
+        #expect(m.topModifierOffset > 0)
+    }
+
+    @Test func tupletGetNoteCount() {
+        let notes: [Note] = [
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+        ]
+        let tuplet = Tuplet(notes: notes)
+        #expect(tuplet.getNoteCount() == 3)
+        #expect(tuplet.getNotesOccupied() == 2)
+    }
+
+    @Test func tupletYPositionTop() {
+        let stave = Stave(x: 10, y: 40, width: 300)
+        let notes: [Note] = [
+            StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+        ]
+        for note in notes {
+            _ = note.setStave(stave)
+            if let sn = note as? StaveNote {
+                _ = sn.setStemDirection(Stem.UP)
+                _ = sn.buildStem()
+            }
+        }
+        let tuplet = Tuplet(notes: notes)
+        let yPos = tuplet.getYPosition()
+        // Y should be above the stave (lower value = higher position)
+        #expect(yPos < stave.getYForLine(3))
+    }
+
+    @Test func tupletYPositionBottom() {
+        let stave = Stave(x: 10, y: 40, width: 300)
+        let notes: [Note] = [
+            StaveNote(StaveNoteStruct(keys: ["c/5"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["d/5"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/5"], duration: "8")),
+        ]
+        for note in notes {
+            _ = note.setStave(stave)
+            if let sn = note as? StaveNote {
+                _ = sn.setStemDirection(Stem.DOWN)
+                _ = sn.buildStem()
+            }
+        }
+        let tuplet = Tuplet(notes: notes, options: TupletOptions(location: .bottom))
+        let yPos = tuplet.getYPosition()
+        // Y should be below the stave (higher value = lower position)
+        #expect(yPos > stave.getYForLine(3))
+    }
+
+    // MARK: - Tickable Tuplet Stack
+
+    @Test func tickableTupletStack() {
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "8"))
+        #expect(note.getTupletStack().isEmpty)
+
+        let notes: [Note] = [
+            note,
+            StaveNote(StaveNoteStruct(keys: ["d/4"], duration: "8")),
+            StaveNote(StaveNoteStruct(keys: ["e/4"], duration: "8")),
+        ]
+        let tuplet = Tuplet(notes: notes)
+        #expect(note.getTupletStack().count == 1)
+        #expect(note.getTuplet() === tuplet)
+    }
+}

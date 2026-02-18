@@ -1,0 +1,957 @@
+// VexFoundation - Ported from VexFlow (https://vexflow.com)
+// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+
+import Foundation
+
+// MARK: - StaveNote Struct
+
+/// Input structure for creating a StaveNote (extends NoteStruct).
+public struct StaveNoteStruct {
+    public var keys: [String]
+    public var duration: String
+    public var line: Double?
+    public var dots: Int?
+    public var type: String?
+    public var alignCenter: Bool?
+    public var durationOverride: Fraction?
+    public var stemDirection: Int?
+    public var autoStem: Bool?
+    public var stemDownXOffset: Double?
+    public var stemUpXOffset: Double?
+    public var strokePx: Double?
+    public var glyphFontScale: Double?
+    public var octaveShift: Int?
+    public var clef: String?
+
+    public init(
+        keys: [String] = [],
+        duration: String = "4",
+        line: Double? = nil,
+        dots: Int? = nil,
+        type: String? = nil,
+        alignCenter: Bool? = nil,
+        durationOverride: Fraction? = nil,
+        stemDirection: Int? = nil,
+        autoStem: Bool? = nil,
+        stemDownXOffset: Double? = nil,
+        stemUpXOffset: Double? = nil,
+        strokePx: Double? = nil,
+        glyphFontScale: Double? = nil,
+        octaveShift: Int? = nil,
+        clef: String? = nil
+    ) {
+        self.keys = keys
+        self.duration = duration
+        self.line = line
+        self.dots = dots
+        self.type = type
+        self.alignCenter = alignCenter
+        self.durationOverride = durationOverride
+        self.stemDirection = stemDirection
+        self.autoStem = autoStem
+        self.stemDownXOffset = stemDownXOffset
+        self.stemUpXOffset = stemUpXOffset
+        self.strokePx = strokePx
+        self.glyphFontScale = glyphFontScale
+        self.octaveShift = octaveShift
+        self.clef = clef
+    }
+
+    /// Convert to NoteStruct for superclass init.
+    func toNoteStruct() -> NoteStruct {
+        NoteStruct(
+            keys: keys, duration: duration, line: line, dots: dots,
+            type: type, alignCenter: alignCenter, durationOverride: durationOverride
+        )
+    }
+}
+
+// MARK: - NoteHead Bounds
+
+/// Bounds info for noteheads, used by stem, ledger lines, and bounding box.
+public struct StaveNoteHeadBounds {
+    public var yTop: Double
+    public var yBottom: Double
+    public var displacedX: Double?
+    public var nonDisplacedX: Double?
+    public var highestLine: Double
+    public var lowestLine: Double
+    public var highestDisplacedLine: Double?
+    public var lowestDisplacedLine: Double?
+    public var highestNonDisplacedLine: Double
+    public var lowestNonDisplacedLine: Double
+}
+
+// MARK: - StaveNote
+
+/// The main class for rendering standard notes on a stave.
+/// Manages noteheads, stems, flags, ledger lines, and modifiers.
+public class StaveNote: StemmableNote {
+
+    override public class var CATEGORY: String { "StaveNote" }
+
+    public static let LEDGER_LINE_OFFSET: Double = 3
+
+    public static var minNoteheadPadding: Double {
+        let musicFont = Glyph.MUSIC_FONT_STACK.first!
+        return (musicFont.lookupMetric("noteHead.minPadding") as? Double) ?? 2
+    }
+
+    // MARK: - Properties
+
+    public var minLine: Double = 0
+    public var maxLine: Double = 0
+    public let clef: String
+    public let octaveShift: Int
+    public var displaced: Bool = false
+    public var dotShiftY: Double = 0
+    public var useDefaultHeadX: Bool = false
+    public var ledgerLineStyle: ElementStyle?
+    public var noteHeads: [NoteHead] = []
+    public var sortedKeyProps: [(keyProps: KeyProps, index: Int)] = []
+
+    // MARK: - Init
+
+    public init(_ noteStruct: StaveNoteStruct) {
+        self.clef = noteStruct.clef ?? "treble"
+        self.octaveShift = noteStruct.octaveShift ?? 0
+
+        super.init(noteStruct.toNoteStruct())
+
+        // Refresh glyph props with resolved duration/type
+        glyphProps = Tables.getGlyphProps(duration: noteDuration, type: noteType)
+        guard glyphProps != nil else {
+            fatalError("[VexError] BadArguments: No glyph found for duration '\(noteDuration)' and type '\(noteType)'")
+        }
+
+        renderOptions.glyphFontScale = noteStruct.glyphFontScale ?? Tables.NOTATION_FONT_SCALE
+        renderOptions.strokePx = noteStruct.strokePx ?? StaveNote.LEDGER_LINE_OFFSET
+
+        noteModifiers = []
+
+        calculateKeyProps()
+        _ = buildStem()
+
+        if noteStruct.autoStem == true {
+            autoStem()
+        } else {
+            _ = setStemDirection(noteStruct.stemDirection ?? Stem.UP)
+        }
+
+        reset()
+        buildFlag()
+    }
+
+    // MARK: - Reset
+
+    @discardableResult
+    public func reset() -> Self {
+        let noteHeadStyles = noteHeads.map { $0.getStyle() }
+        buildNoteHeads()
+        for (index, noteHead) in noteHeads.enumerated() {
+            if index < noteHeadStyles.count, let style = noteHeadStyles[index] {
+                noteHead.setStyle(style)
+            }
+        }
+        if let stave = noteStave {
+            _ = setStave(stave)
+        }
+        calcNoteDisplacements()
+        return self
+    }
+
+    // MARK: - Build Stem
+
+    @discardableResult
+    override public func buildStem() -> Self {
+        _ = setStem(Stem(options: StemOptions(hide: isRest())))
+        return self
+    }
+
+    // MARK: - Build NoteHeads
+
+    @discardableResult
+    public func buildNoteHeads() -> Self {
+        noteHeads = []
+        let dir = getStemDirection()
+        let keyCount = keys.count
+
+        var lastLine: Double?
+        var isDisplaced = false
+
+        let start: Int
+        let end: Int
+        let step: Int
+        if dir == Stem.UP {
+            start = 0; end = keyCount; step = 1
+        } else {
+            start = keyCount - 1; end = -1; step = -1
+        }
+
+        var i = start
+        while i != end {
+            let noteProps = sortedKeyProps[i].keyProps
+            let line = noteProps.line
+
+            if lastLine == nil {
+                lastLine = line
+            } else {
+                let lineDiff = abs(lastLine! - line)
+                if lineDiff == 0 || lineDiff == 0.5 {
+                    isDisplaced = !isDisplaced
+                } else {
+                    isDisplaced = false
+                    useDefaultHeadX = true
+                }
+            }
+            lastLine = line
+
+            let notehead = NoteHead(noteHeadStruct: NoteHeadStruct(
+                duration: noteDuration,
+                line: noteProps.line,
+                glyphFontScale: renderOptions.glyphFontScale,
+                customGlyphCode: (noteProps.code?.isEmpty ?? true) ? nil : noteProps.code,
+                xShift: noteProps.shiftRight,
+                stemDirection: dir,
+                displaced: isDisplaced,
+                noteType: noteType,
+                keys: keys,
+                dots: nil
+            ))
+
+            addChildElement(notehead)
+            // Store at the original (unsorted) index
+            let originalIndex = sortedKeyProps[i].index
+            if noteHeads.count <= originalIndex {
+                noteHeads.append(contentsOf: Array(repeating: notehead, count: originalIndex - noteHeads.count + 1))
+            }
+            noteHeads[originalIndex] = notehead
+
+            i += step
+        }
+        return self
+    }
+
+    // MARK: - Calculate Key Props
+
+    public func calculateKeyProps() {
+        keyProps = []
+        sortedKeyProps = []
+
+        var lastLine: Double?
+        for i in 0..<keys.count {
+            let key = keys[i]
+
+            if glyphProps.rest {
+                glyphProps.position = key
+            }
+
+            var props: KeyProps
+            do {
+                props = try Tables.keyProperties(key, clef: clef, octaveShift: octaveShift)
+            } catch {
+                fatalError("[VexError] BadArguments: Invalid key for note properties: \(key)")
+            }
+
+            // Override line placement for default rests
+            if props.key == "R" {
+                props.line = (noteDuration == "1" || noteDuration == "w") ? 4 : 3
+            }
+
+            // Detect displacement for seconds
+            let line = props.line
+            if let prevLine = lastLine {
+                if abs(prevLine - line) == 0.5 {
+                    displaced = true
+                    props.displaced = true
+                    if keyProps.count > 0 {
+                        keyProps[i - 1].displaced = true
+                    }
+                }
+            }
+            lastLine = line
+            keyProps.append(props)
+        }
+
+        // Sort by line (ascending)
+        for (index, kp) in keyProps.enumerated() {
+            sortedKeyProps.append((keyProps: kp, index: index))
+        }
+        sortedKeyProps.sort { $0.keyProps.line < $1.keyProps.line }
+    }
+
+    // MARK: - Auto Stem
+
+    public func autoStem() {
+        _ = setStemDirection(calculateOptimalStemDirection())
+    }
+
+    public func calculateOptimalStemDirection() -> Int {
+        minLine = sortedKeyProps[0].keyProps.line
+        maxLine = sortedKeyProps[keyProps.count - 1].keyProps.line
+
+        let MIDDLE_LINE: Double = 3
+        let decider = (minLine + maxLine) / 2
+        return decider < MIDDLE_LINE ? Stem.UP : Stem.DOWN
+    }
+
+    // MARK: - Rest / Chord / Stem / Flag
+
+    override public func isRest() -> Bool {
+        glyphProps.rest
+    }
+
+    public func isChord() -> Bool {
+        !isRest() && keys.count > 1
+    }
+
+    override public func hasStem() -> Bool {
+        glyphProps.stem
+    }
+
+    override public func hasFlag() -> Bool {
+        super.hasFlag() && !isRest()
+    }
+
+    // MARK: - Stem X
+
+    override public func getStemX() -> Double {
+        if noteType == "r" {
+            return getCenterGlyphX()
+        }
+        return super.getStemX() + (stemDirection != nil ? Stem.WIDTH / (2 * Double(-stemDirection!)) : 0)
+    }
+
+    // MARK: - Displaced
+
+    public func isDisplaced() -> Bool { displaced }
+
+    @discardableResult
+    public func setNoteDisplaced(_ displaced: Bool) -> Self {
+        self.displaced = displaced
+        return self
+    }
+
+    // MARK: - Stave
+
+    @discardableResult
+    override public func setStave(_ stave: Stave) -> Self {
+        _ = super.setStave(stave)
+
+        let ys = noteHeads.map { noteHead -> Double in
+            _ = noteHead.setStave(stave)
+            return noteHead.getHeadY()
+        }
+        _ = setYs(ys)
+
+        if let stem {
+            let bounds = getNoteHeadBounds()
+            stem.setYBounds(bounds.yTop, bounds.yBottom)
+        }
+
+        return self
+    }
+
+    // MARK: - Line Numbers
+
+    override public func getLineNumber(isTopNote: Bool = false) -> Double {
+        guard !keyProps.isEmpty else {
+            fatalError("[VexError] NoKeyProps: Can't get line number without key properties.")
+        }
+        var resultLine = keyProps[0].line
+        for kp in keyProps {
+            if isTopNote {
+                if kp.line > resultLine { resultLine = kp.line }
+            } else {
+                if kp.line < resultLine { resultLine = kp.line }
+            }
+        }
+        return resultLine
+    }
+
+    override public func getLineForRest() -> Double {
+        var restLine = keyProps[0].line
+        if keyProps.count > 1 {
+            let lastLine = keyProps[keyProps.count - 1].line
+            let top = max(restLine, lastLine)
+            let bot = min(restLine, lastLine)
+            restLine = (top + bot) / 2
+        }
+        return restLine
+    }
+
+    // MARK: - Key Line
+
+    @discardableResult
+    public func setKeyLine(_ index: Int, line: Double) -> Self {
+        keyProps[index].line = line
+        reset()
+        return self
+    }
+
+    public func getKeyLine(_ index: Int) -> Double {
+        keyProps[index].line
+    }
+
+    // MARK: - Voice Shift Width
+
+    public func getVoiceShiftWidth() -> Double {
+        getGlyphWidth() * (displaced ? 2 : 1)
+    }
+
+    // MARK: - Note Displacements
+
+    public func calcNoteDisplacements() {
+        _ = setLeftDisplacedHeadPx(displaced && stemDirection == Stem.DOWN ? getGlyphWidth() : 0)
+        _ = setRightDisplacedHeadPx(!hasFlag() && displaced && stemDirection == Stem.UP ? getGlyphWidth() : 0)
+    }
+
+    // MARK: - Modifier Start XY
+
+    public func getModifierStartXY(position: ModifierPosition, index: Int, forceFlagRight: Bool = false) -> (x: Double, y: Double) {
+        guard preFormatted else {
+            fatalError("[VexError] UnformattedNote: Can't call getModifierStartXY on an unformatted note.")
+        }
+        guard !ys.isEmpty else {
+            fatalError("[VexError] NoYValues: No Y-values calculated for this note.")
+        }
+
+        var x: Double = 0
+        switch position {
+        case .left:
+            x = -1 * 2
+        case .right:
+            x = getGlyphWidth() + xShift + 2
+            if stemDirection == Stem.UP && hasFlag()
+                && (forceFlagRight || isInnerNoteIndex(index)) {
+                x += flag?.getMetrics().width ?? 0
+            }
+        case .above, .below:
+            x = getGlyphWidth() / 2
+        case .center:
+            break
+        }
+
+        return (x: getAbsoluteX() + x, y: ys[index])
+    }
+
+    private func isInnerNoteIndex(_ index: Int) -> Bool {
+        index == (getStemDirection() == Stem.UP ? keyProps.count - 1 : 0)
+    }
+
+    // MARK: - First Dot Px
+
+    /// Returns the x offset for the first dot after the notehead.
+    public func getFirstDotPx() -> Double {
+        var dotX = getGlyphWidth() + xShift + 2
+        if stemDirection == Stem.UP && hasFlag() {
+            dotX += flag?.getMetrics().width ?? 0
+        }
+        return dotX
+    }
+
+    // MARK: - Ledger Line Style
+
+    public func setLedgerLineStyle(_ style: ElementStyle) {
+        ledgerLineStyle = style
+    }
+
+    public func getLedgerLineStyle() -> ElementStyle? {
+        ledgerLineStyle
+    }
+
+    // MARK: - Stem Style
+
+    @discardableResult
+    public func setStemStyle(_ style: ElementStyle) -> Self {
+        stem?.setStyle(style)
+        return self
+    }
+
+    public func getStemStyle() -> ElementStyle? {
+        stem?.getStyle()
+    }
+
+    // MARK: - Flag Style
+
+    public func setFlagStyle(_ style: ElementStyle) {
+        flag?.setStyle(style)
+    }
+
+    public func getFlagStyle() -> ElementStyle? {
+        flag?.getStyle()
+    }
+
+    // MARK: - Key Style
+
+    @discardableResult
+    public func setKeyStyle(_ index: Int, style: ElementStyle) -> Self {
+        noteHeads[index].setStyle(style)
+        return self
+    }
+
+    // MARK: - NoteHead Bounds
+
+    public func getNoteHeadBounds() -> StaveNoteHeadBounds {
+        var yTop = Double.infinity
+        var yBottom = -Double.infinity
+        var displacedX: Double?
+        var nonDisplacedX: Double?
+
+        let numLines = Double(noteStave?.getNumLines() ?? 5)
+        var highestLine = numLines
+        var lowestLine: Double = 1
+        var highestDisplacedLine: Double?
+        var lowestDisplacedLine: Double?
+        var highestNonDisplacedLine = highestLine
+        var lowestNonDisplacedLine = lowestLine
+
+        for notehead in noteHeads {
+            let line = notehead.getLine()
+            let y = notehead.getHeadY()
+
+            yTop = min(y, yTop)
+            yBottom = max(y, yBottom)
+
+            if displacedX == nil && notehead.isDisplaced() {
+                displacedX = notehead.getAbsoluteX()
+            }
+            if nonDisplacedX == nil && !notehead.isDisplaced() {
+                nonDisplacedX = notehead.getAbsoluteX()
+            }
+
+            highestLine = max(line, highestLine)
+            lowestLine = min(line, lowestLine)
+
+            if notehead.isDisplaced() {
+                highestDisplacedLine = highestDisplacedLine == nil ? line : max(line, highestDisplacedLine!)
+                lowestDisplacedLine = lowestDisplacedLine == nil ? line : min(line, lowestDisplacedLine!)
+            } else {
+                highestNonDisplacedLine = max(line, highestNonDisplacedLine)
+                lowestNonDisplacedLine = min(line, lowestNonDisplacedLine)
+            }
+        }
+
+        return StaveNoteHeadBounds(
+            yTop: yTop, yBottom: yBottom,
+            displacedX: displacedX, nonDisplacedX: nonDisplacedX,
+            highestLine: highestLine, lowestLine: lowestLine,
+            highestDisplacedLine: highestDisplacedLine,
+            lowestDisplacedLine: lowestDisplacedLine,
+            highestNonDisplacedLine: highestNonDisplacedLine,
+            lowestNonDisplacedLine: lowestNonDisplacedLine
+        )
+    }
+
+    // MARK: - NoteHead X
+
+    public func getNoteHeadBeginX() -> Double {
+        getAbsoluteX() + xShift
+    }
+
+    public func getNoteHeadEndX() -> Double {
+        getNoteHeadBeginX() + getGlyphWidth()
+    }
+
+    // MARK: - Should Draw Flag
+
+    public func shouldDrawFlag() -> Bool {
+        stem != nil && glyphProps.flag && beam == nil
+    }
+
+    // MARK: - Stave Note Scale
+
+    public func getStaveNoteScale() -> Double { 1.0 }
+
+    // MARK: - Stem Extension Override
+
+    override public func getStemExtension() -> Double {
+        let superExt = super.getStemExtension()
+        if !glyphProps.stem { return superExt }
+
+        let dir = getStemDirection()
+        if dir != calculateOptimalStemDirection() {
+            return superExt
+        }
+
+        let MIDDLE_LINE: Double = 3
+        let midLineDistance: Double
+        if dir == Stem.UP {
+            midLineDistance = MIDDLE_LINE - maxLine
+        } else {
+            midLineDistance = minLine - MIDDLE_LINE
+        }
+
+        let linesOverOctave = midLineDistance - 3.5
+        if linesOverOctave <= 0 { return superExt }
+
+        let spacing = noteStave?.getSpacingBetweenLines() ?? 10
+        return superExt + linesOverOctave * spacing
+    }
+
+    // MARK: - Tie Positions
+
+    override public func getTieRightX() -> Double {
+        var tieStartX = getAbsoluteX()
+        tieStartX += getGlyphWidth() + xShift + rightDisplacedHeadPx
+        if let mc = modifierContext {
+            tieStartX += mc.getRightShift()
+        }
+        return tieStartX
+    }
+
+    override public func getTieLeftX() -> Double {
+        var tieEndX = getAbsoluteX()
+        tieEndX += xShift - leftDisplacedHeadPx
+        return tieEndX
+    }
+
+    // MARK: - PreFormat
+
+    override public func preFormat() {
+        if preFormatted { return }
+
+        var noteHeadPadding: Double = 0
+        if let mc = modifierContext {
+            mc.preFormat()
+            if mc.getWidth() == 0 {
+                noteHeadPadding = StaveNote.minNoteheadPadding
+            }
+        }
+
+        var width = getGlyphWidth() + leftDisplacedHeadPx + rightDisplacedHeadPx + noteHeadPadding
+
+        if shouldDrawFlag() && stemDirection == Stem.UP {
+            width += getGlyphWidth()
+        }
+
+        setTickableWidth(width)
+        preFormatted = true
+    }
+
+    // MARK: - Bounding Box
+
+    override public func getBoundingBox() -> BoundingBox? {
+        guard preFormatted else {
+            fatalError("[VexError] UnformattedNote: Can't call getBoundingBox on an unformatted note.")
+        }
+
+        let metrics = getMetrics()
+        let x = getAbsoluteX() - metrics.modLeftPx - metrics.leftDisplacedHeadPx
+        let halfLineSpacing = (noteStave?.getSpacingBetweenLines() ?? 0) / 2
+        let lineSpacing = halfLineSpacing * 2
+
+        var minY: Double = 0
+        var maxY: Double = 0
+
+        if isRest() {
+            let y = ys[0]
+            let frac = Tables.durationToFraction(noteDuration)
+            if frac == Fraction(1, 1) || frac == Fraction(2, 1) {
+                minY = y - halfLineSpacing
+                maxY = y + halfLineSpacing
+            } else {
+                minY = y - glyphProps.lineAbove * lineSpacing
+                maxY = y + glyphProps.lineBelow * lineSpacing
+            }
+        } else if glyphProps.stem {
+            var extents = getStemExtents()
+            extents.baseY += halfLineSpacing * Double(getStemDirection())
+            minY = min(extents.topY, extents.baseY)
+            maxY = max(extents.topY, extents.baseY)
+        } else {
+            for (i, yy) in ys.enumerated() {
+                if i == 0 {
+                    minY = yy
+                    maxY = yy
+                } else {
+                    minY = min(yy, minY)
+                    maxY = max(yy, maxY)
+                }
+            }
+            minY -= halfLineSpacing
+            maxY += halfLineSpacing
+        }
+
+        return BoundingBox(x: x, y: minY, w: metrics.width, h: maxY - minY)
+    }
+
+    // MARK: - Static Format (for ModifierContext)
+
+    @discardableResult
+    public static func format(_ notes: [StaveNote], state: inout ModifierContextState) -> Bool {
+        if notes.count < 2 { return false }
+
+        struct FormatSettings {
+            var line: Double
+            var maxLine: Double
+            var minLine: Double
+            var isRest: Bool
+            var stemDirection: Int
+            var stemMax: Double
+            var stemMin: Double
+            var voiceShift: Double
+            var isDisplaced: Bool
+            var note: StaveNote
+        }
+
+        var notesList: [FormatSettings] = []
+
+        for note in notes {
+            let props = note.sortedKeyProps
+            let line = props[0].keyProps.line
+            var minL = props[props.count - 1].keyProps.line
+            let dir = note.getStemDirection()
+            let stemMax = note.getStemLength() / 10
+            let stemMin = note.getStemMinimumLength() / 10
+
+            let maxL: Double
+            if note.isRest() {
+                maxL = line + note.glyphProps.lineAbove
+                minL = line - note.glyphProps.lineBelow
+            } else {
+                maxL = dir == 1
+                    ? props[props.count - 1].keyProps.line + stemMax
+                    : props[props.count - 1].keyProps.line
+                minL = dir == 1
+                    ? props[0].keyProps.line
+                    : props[0].keyProps.line - stemMax
+            }
+
+            notesList.append(FormatSettings(
+                line: props[0].keyProps.line,
+                maxLine: maxL, minLine: minL,
+                isRest: note.isRest(),
+                stemDirection: dir,
+                stemMax: stemMax, stemMin: stemMin,
+                voiceShift: note.getVoiceShiftWidth(),
+                isDisplaced: note.isDisplaced(),
+                note: note
+            ))
+        }
+
+        // Determine visible notes
+        var voices = 0
+        var noteU: FormatSettings?
+        var noteL: FormatSettings?
+        let draw = notesList.map { $0.note.renderOptions.draw }
+
+        if notesList.count >= 3 && draw[0] && draw[1] && draw[2] {
+            voices = 3
+            noteU = notesList[0]
+            noteL = notesList[2]
+        } else if draw.count >= 2 && draw[0] && draw[1] {
+            voices = 2
+            noteU = notesList[0]
+            noteL = notesList[1]
+        } else {
+            return true
+        }
+
+        guard var u = noteU, var l = noteL else { return true }
+
+        // Ensure upper voice has stems up for 2-voice
+        if voices == 2 && u.stemDirection == -1 && l.stemDirection == 1 {
+            swap(&u, &l)
+        }
+
+        let voiceXShift = max(u.voiceShift, l.voiceShift)
+        var xShift: Double = 0
+
+        if voices == 2 {
+            let lineSpacing: Double =
+                u.note.hasStem() && l.note.hasStem() && u.stemDirection == l.stemDirection ? 0.0 : 0.5
+
+            if u.minLine <= l.maxLine + lineSpacing {
+                if u.isRest {
+                    // shift rest up
+                    u.line += 1; u.maxLine += 1; u.minLine += 1
+                    u.note.setKeyLine(0, line: u.note.getKeyLine(0) + 1)
+                } else if l.isRest {
+                    // shift rest down
+                    l.line -= 1; l.maxLine -= 1; l.minLine -= 1
+                    l.note.setKeyLine(0, line: l.note.getKeyLine(0) - 1)
+                } else {
+                    xShift = voiceXShift + 2
+                    if u.stemDirection == l.stemDirection {
+                        u.note.setXShift(xShift)
+                    } else {
+                        l.note.setXShift(xShift)
+                    }
+                }
+            }
+        }
+
+        state.rightShift += xShift
+        return true
+    }
+
+    // MARK: - Static PostFormat
+
+    @discardableResult
+    public static func postFormat(_ notes: [Note]) -> Bool {
+        for note in notes { _ = note.postFormat() }
+        return true
+    }
+
+    // MARK: - Draw
+
+    override public func draw() throws {
+        guard renderOptions.draw else { return }
+        guard !ys.isEmpty else {
+            fatalError("[VexError] NoYValues: Can't draw note without Y values.")
+        }
+
+        let ctx = try checkContext()
+        let xBegin = getNoteHeadBeginX()
+        let shouldRenderStem = hasStem() && beam == nil
+
+        // Position noteheads
+        for notehead in noteHeads {
+            notehead.setHeadX(xBegin)
+        }
+
+        // Position stem
+        if let stem {
+            let stemX = getStemX()
+            stem.setNoteHeadXBounds(stemX, stemX)
+        }
+
+        applyStyle()
+        _ = ctx.openGroup("stavenote", getAttribute("id"))
+
+        try drawLedgerLines()
+        if shouldRenderStem { try drawStemForNote() }
+        try drawNoteHeads()
+        try drawFlag()
+
+        ctx.closeGroup()
+        restoreStyle()
+        setRendered()
+    }
+
+    // MARK: - Draw Ledger Lines
+
+    public func drawLedgerLines() throws {
+        let stave = checkStave()
+        let ctx = try checkContext()
+        let strokePx = renderOptions.strokePx
+        let glyphWidth = getGlyphWidth()
+        let width = glyphWidth + strokePx * 2
+        let doubleWidth = 2 * (glyphWidth + strokePx) - Stem.WIDTH / 2
+
+        if isRest() { return }
+
+        let bounds = getNoteHeadBounds()
+        if bounds.highestLine < 6 && bounds.lowestLine > 0 { return }
+
+        let minX = min(bounds.displacedX ?? 0, bounds.nonDisplacedX ?? 0)
+
+        func drawLine(y: Double, normal: Bool, displaced: Bool) {
+            let x: Double
+            if displaced && normal { x = minX - strokePx }
+            else if normal { x = (bounds.nonDisplacedX ?? 0) - strokePx }
+            else { x = (bounds.displacedX ?? 0) - strokePx }
+            let ledgerWidth = normal && displaced ? doubleWidth : width
+
+            ctx.beginPath()
+            ctx.moveTo(x, y)
+            ctx.lineTo(x + ledgerWidth, y)
+            ctx.stroke()
+        }
+
+        // Ledger lines below the staff (lines 6, 7, 8, ...)
+        var line = 6.0
+        while line <= bounds.highestLine {
+            let normal = bounds.nonDisplacedX != nil && line <= bounds.highestNonDisplacedLine
+            let disp = bounds.highestDisplacedLine != nil && line <= (bounds.highestDisplacedLine ?? 0)
+            drawLine(y: stave.getYForNote(line), normal: normal, displaced: disp)
+            line += 1
+        }
+
+        // Ledger lines above the staff (lines 0, -1, -2, ...)
+        line = 0
+        while line >= bounds.lowestLine {
+            let normal = bounds.nonDisplacedX != nil && line >= bounds.lowestNonDisplacedLine
+            let disp = bounds.lowestDisplacedLine != nil && line >= (bounds.lowestDisplacedLine ?? 0)
+            drawLine(y: stave.getYForNote(line), normal: normal, displaced: disp)
+            line -= 1
+        }
+    }
+
+    // MARK: - Draw NoteHeads
+
+    public func drawNoteHeads() throws {
+        let ctx = try checkContext()
+        for notehead in noteHeads {
+            notehead.applyStyle()
+            _ = ctx.openGroup("notehead", notehead.getAttribute("id"))
+            notehead.setContext(ctx)
+            try notehead.draw()
+            drawModifiers(notehead)
+            ctx.closeGroup()
+            notehead.restoreStyle()
+        }
+    }
+
+    // MARK: - Draw Modifiers
+
+    public func drawModifiers(_ noteheadParam: NoteHead) {
+        for modifier in noteModifiers {
+            guard let index = modifier.getIndex(),
+                  index < noteHeads.count else { continue }
+            let notehead = noteHeads[index]
+            if notehead === noteheadParam {
+                if let ctx = getContext() {
+                    modifier.setContext(ctx)
+                    try? modifier.drawWithStyle()
+                }
+            }
+        }
+    }
+
+    // MARK: - Draw Stem (for note)
+
+    public func drawStemForNote(_ stemOptions: StemOptions? = nil) throws {
+        let ctx = try checkContext()
+
+        if let opts = stemOptions {
+            _ = setStem(Stem(options: opts))
+        }
+
+        if shouldDrawFlag(), let stem {
+            stem.adjustHeightForFlag()
+        }
+
+        if let stem {
+            stem.setContext(ctx)
+            try stem.draw()
+        }
+    }
+
+    // MARK: - Draw Flag
+
+    public func drawFlag() throws {
+        _ = try checkContext()
+
+        if shouldDrawFlag() {
+            let bounds = getNoteHeadBounds()
+            let noteStemHeight = stem!.getHeight()
+            let flagX = getStemX()
+            let scale = getStaveNoteScale()
+
+            let flagY: Double
+            if getStemDirection() == Stem.DOWN {
+                flagY = bounds.yTop - noteStemHeight + 2
+                    - glyphProps.stemDownExtension * scale
+                    - (flag?.getMetrics().yShift ?? 0) * (1 - scale)
+            } else {
+                flagY = bounds.yBottom - noteStemHeight - 2
+                    + glyphProps.stemUpExtension * scale
+                    - (flag?.getMetrics().yShift ?? 0) * (1 - scale)
+            }
+
+            flag?.render(ctx: getContext()!, x: flagX, y: flagY)
+        }
+    }
+}
