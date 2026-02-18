@@ -576,7 +576,7 @@ public final class ChordSymbol: Modifier {
             if hasStem {
                 let stemExt = stemmable.checkStem().getExtents()
                 let spacing = stave.getSpacingBetweenLines()
-                let stemBase = stemmable.getStemDirection() == 1 ? stemExt.baseY : stemExt.topY
+                let stemBase = stemmable.getStemDirection() == .up ? stemExt.baseY : stemExt.topY
                 y = max(y, stemBase + spacing * (textLine + 2))
             }
         } else {
@@ -690,7 +690,7 @@ import SwiftUI
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
         ))
-            .addClef("treble")
+            .addClef(.treble)
             .addTimeSignature("4/4")
 
         system.format()

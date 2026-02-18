@@ -289,7 +289,7 @@ import SwiftUI
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
         ))
-            .addClef("treble")
+            .addClef(.treble)
             .addTimeSignature("4/4")
 
         system.format()

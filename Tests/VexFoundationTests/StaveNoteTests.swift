@@ -93,7 +93,7 @@ struct StaveNoteTests {
     // MARK: - Key Properties
 
     @Test func keyPropsCalculation() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "e/4", "g/4"], duration: "4", clef: "treble"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "e/4", "g/4"], duration: "4", clef: .treble))
         #expect(note.keyProps.count == 3)
         #expect(note.sortedKeyProps.count == 3)
         // Sorted by line (ascending)
@@ -116,7 +116,7 @@ struct StaveNoteTests {
     // MARK: - Line Numbers
 
     @Test func lineNumber() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "g/4"], duration: "4", clef: "treble"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4", "g/4"], duration: "4", clef: .treble))
         let bottom = note.getLineNumber(isTopNote: false)
         let top = note.getLineNumber(isTopNote: true)
         #expect(top >= bottom)
@@ -177,7 +177,7 @@ struct StaveNoteTests {
     // MARK: - Key Line
 
     @Test func keyLine() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4", clef: "treble"))
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4", clef: .treble))
         let line = note.getKeyLine(0)
         // c/4 in treble clef is below the staff
         #expect(line < 5)
@@ -481,14 +481,14 @@ struct StaveNoteTests {
     // MARK: - Clef Variants
 
     @Test func bassClefNote() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/3"], duration: "4", clef: "bass"))
-        #expect(note.clef == "bass")
+        let note = StaveNote(StaveNoteStruct(keys: ["c/3"], duration: "4", clef: .bass))
+        #expect(note.clef == .bass)
         #expect(note.keyProps.count == 1)
     }
 
     @Test func altoClefNote() {
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4", clef: "alto"))
-        #expect(note.clef == "alto")
+        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: "4", clef: .alto))
+        #expect(note.clef == .alto)
     }
 
     // MARK: - Bounding Box

@@ -112,7 +112,7 @@ public final class KeySignature: StaveModifier {
         }
 
         if !accList.isEmpty {
-            let clef: String
+            let clef: ClefName
             if position == .end {
                 clef = stave.getEndClef() ?? stave.getClef()
             } else {
@@ -186,26 +186,26 @@ public final class KeySignature: StaveModifier {
         return (accList: cancelled, type: cancelAccList[0].type)
     }
 
-    private func convertAccLines(clef: String, type: String?, accList: inout [(type: String, line: Double)]) {
+    private func convertAccLines(clef: ClefName, type: String?, accList: inout [(type: String, line: Double)]) {
         var offset: Double = 0
         var customLines: [Double]?
 
         switch clef {
-        case "soprano":
+        case .soprano:
             if type == "#" { customLines = [2.5, 0.5, 2, 0, 1.5, -0.5, 1] }
             else { offset = -1 }
-        case "mezzo-soprano":
+        case .mezzoSoprano:
             if type == "b" { customLines = [0, 2, 0.5, 2.5, 1, 3, 1.5] }
             else { offset = 1.5 }
-        case "alto":
+        case .alto:
             offset = 0.5
-        case "tenor":
+        case .tenor:
             if type == "#" { customLines = [3, 1, 2.5, 0.5, 2, 0, 1.5] }
             else { offset = -0.5 }
-        case "baritone-f", "baritone-c":
+        case .baritoneF, .baritoneC:
             if type == "b" { customLines = [0.5, 2.5, 1, 3, 1.5, 3.5, 2] }
             else { offset = 2 }
-        case "bass", "french":
+        case .bass, .french:
             offset = 1
         default:
             break
@@ -267,10 +267,10 @@ import SwiftUI
         _ = f.setContext(ctx)
 
         let s1 = f.Stave(x: 10, y: 20, width: 240)
-        _ = s1.addClef("treble").addKeySignature("A")
+        _ = s1.addClef(.treble).addKeySignature("A")
 
         let s2 = f.Stave(x: 260, y: 20, width: 240)
-        _ = s2.addClef("treble").addKeySignature("Bb")
+        _ = s2.addClef(.treble).addKeySignature("Bb")
 
         try? f.draw()
     }

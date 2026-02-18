@@ -149,7 +149,7 @@ import SwiftUI
         let notes = score.notes("C5/q, D5, E5")
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes + [cresc])]
-        )).addClef("treble")
+        )).addClef(.treble)
 
         system.format()
         try? f.draw()

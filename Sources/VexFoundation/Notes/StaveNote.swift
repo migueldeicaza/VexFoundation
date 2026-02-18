@@ -14,14 +14,14 @@ public struct StaveNoteStruct {
     public var type: String?
     public var alignCenter: Bool?
     public var durationOverride: Fraction?
-    public var stemDirection: Int?
+    public var stemDirection: StemDirection?
     public var autoStem: Bool?
     public var stemDownXOffset: Double?
     public var stemUpXOffset: Double?
     public var strokePx: Double?
     public var glyphFontScale: Double?
     public var octaveShift: Int?
-    public var clef: String?
+    public var clef: ClefName?
 
     public init(
         keys: [String] = [],
@@ -31,14 +31,14 @@ public struct StaveNoteStruct {
         type: String? = nil,
         alignCenter: Bool? = nil,
         durationOverride: Fraction? = nil,
-        stemDirection: Int? = nil,
+        stemDirection: StemDirection? = nil,
         autoStem: Bool? = nil,
         stemDownXOffset: Double? = nil,
         stemUpXOffset: Double? = nil,
         strokePx: Double? = nil,
         glyphFontScale: Double? = nil,
         octaveShift: Int? = nil,
-        clef: String? = nil
+        clef: ClefName? = nil
     ) {
         self.keys = keys
         self.duration = duration
@@ -101,7 +101,7 @@ public class StaveNote: StemmableNote {
 
     public var minLine: Double = 0
     public var maxLine: Double = 0
-    public let clef: String
+    public let clef: ClefName
     public let octaveShift: Int
     public var displaced: Bool = false
     public var dotShiftY: Double = 0
@@ -113,7 +113,7 @@ public class StaveNote: StemmableNote {
     // MARK: - Init
 
     public init(_ noteStruct: StaveNoteStruct) {
-        self.clef = noteStruct.clef ?? "treble"
+        self.clef = noteStruct.clef ?? .treble
         self.octaveShift = noteStruct.octaveShift ?? 0
 
         super.init(noteStruct.toNoteStruct())
@@ -135,7 +135,7 @@ public class StaveNote: StemmableNote {
         if noteStruct.autoStem == true {
             autoStem()
         } else {
-            _ = setStemDirection(noteStruct.stemDirection ?? Stem.UP)
+            _ = setStemDirection(noteStruct.stemDirection ?? .up)
         }
 
         reset()
@@ -286,13 +286,13 @@ public class StaveNote: StemmableNote {
         _ = setStemDirection(calculateOptimalStemDirection())
     }
 
-    public func calculateOptimalStemDirection() -> Int {
+    public func calculateOptimalStemDirection() -> StemDirection {
         minLine = sortedKeyProps[0].keyProps.line
         maxLine = sortedKeyProps[keyProps.count - 1].keyProps.line
 
         let MIDDLE_LINE: Double = 3
         let decider = (minLine + maxLine) / 2
-        return decider < MIDDLE_LINE ? Stem.UP : Stem.DOWN
+        return decider < MIDDLE_LINE ? .up : .down
     }
 
     // MARK: - Rest / Chord / Stem / Flag
@@ -319,7 +319,7 @@ public class StaveNote: StemmableNote {
         if noteType == "r" {
             return getCenterGlyphX()
         }
-        return super.getStemX() + (stemDirection != nil ? Stem.WIDTH / (2 * Double(-stemDirection!)) : 0)
+        return super.getStemX() + (stemDirection != nil ? Stem.WIDTH / (2 * -stemDirection!.signDouble) : 0)
     }
 
     // MARK: - Displaced
@@ -656,7 +656,7 @@ public class StaveNote: StemmableNote {
             }
         } else if glyphProps.stem {
             var extents = getStemExtents()
-            extents.baseY += halfLineSpacing * Double(getStemDirection())
+            extents.baseY += halfLineSpacing * getStemDirection().signDouble
             minY = min(extents.topY, extents.baseY)
             maxY = max(extents.topY, extents.baseY)
         } else {
@@ -687,7 +687,7 @@ public class StaveNote: StemmableNote {
             var maxLine: Double
             var minLine: Double
             var isRest: Bool
-            var stemDirection: Int
+            var stemDirection: StemDirection
             var stemMax: Double
             var stemMin: Double
             var voiceShift: Double
@@ -710,10 +710,10 @@ public class StaveNote: StemmableNote {
                 maxL = line + note.glyphProps.lineAbove
                 minL = line - note.glyphProps.lineBelow
             } else {
-                maxL = dir == 1
+                maxL = dir == .up
                     ? props[props.count - 1].keyProps.line + stemMax
                     : props[props.count - 1].keyProps.line
-                minL = dir == 1
+                minL = dir == .up
                     ? props[0].keyProps.line
                     : props[0].keyProps.line - stemMax
             }
@@ -751,7 +751,7 @@ public class StaveNote: StemmableNote {
         guard var u = noteU, var l = noteL else { return true }
 
         // Ensure upper voice has stems up for 2-voice
-        if voices == 2 && u.stemDirection == -1 && l.stemDirection == 1 {
+        if voices == 2 && u.stemDirection == .down && l.stemDirection == .up {
             swap(&u, &l)
         }
 
@@ -976,7 +976,7 @@ import SwiftUI
         ))
         _ = system.addStave(SystemStave(
             voices: [score.voice(score.notes("C5/w, D5/h, E5/q, F5/8, G5/16, A5/16"))]
-        )).addClef("treble").addTimeSignature("4/4")
+        )).addClef(.treble).addTimeSignature("4/4")
 
         system.format()
         try? f.draw()

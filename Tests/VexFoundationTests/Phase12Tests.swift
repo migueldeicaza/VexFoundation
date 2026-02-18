@@ -35,28 +35,28 @@ struct Phase12Tests {
     }
 
     @Test func noteSubGroupCreation() {
-        let clefNote = ClefNote(type: "treble")
+        let clefNote = ClefNote(type: .treble)
         let group = NoteSubGroup(subNotes: [clefNote])
         #expect(group.subNotes.count == 1)
         #expect(group.position == .left)
     }
 
     @Test func noteSubGroupMultipleNotes() {
-        let clef = ClefNote(type: "bass")
-        let clef2 = ClefNote(type: "treble")
+        let clef = ClefNote(type: .bass)
+        let clef2 = ClefNote(type: .treble)
         let group = NoteSubGroup(subNotes: [clef, clef2])
         #expect(group.subNotes.count == 2)
     }
 
     @Test func noteSubGroupPreFormat() {
-        let clef = ClefNote(type: "treble")
+        let clef = ClefNote(type: .treble)
         let group = NoteSubGroup(subNotes: [clef])
         group.preFormat()
         #expect(group.getWidth() > 0)
     }
 
     @Test func noteSubGroupPreFormatIdempotent() {
-        let clef = ClefNote(type: "treble")
+        let clef = ClefNote(type: .treble)
         let group = NoteSubGroup(subNotes: [clef])
         group.preFormat()
         let w1 = group.getWidth()
@@ -66,7 +66,7 @@ struct Phase12Tests {
     }
 
     @Test func noteSubGroupStaticFormat() {
-        let clef = ClefNote(type: "treble")
+        let clef = ClefNote(type: .treble)
         let group = NoteSubGroup(subNotes: [clef])
         var state = ModifierContextState()
         let result = NoteSubGroup.format([group], state: &state)
@@ -472,7 +472,7 @@ struct Phase12Tests {
     // ============================================================
 
     @Test func modifierContextIncludesNoteSubGroup() {
-        let clef = ClefNote(type: "treble")
+        let clef = ClefNote(type: .treble)
         let group = NoteSubGroup(subNotes: [clef])
         let note = makeNote()
         _ = note.addModifier(group, index: 0)
@@ -543,7 +543,7 @@ struct Phase12Tests {
     }
 
     @Test func noteSubGroupIsModifier() {
-        let clef = ClefNote(type: "treble")
+        let clef = ClefNote(type: .treble)
         let group = NoteSubGroup(subNotes: [clef])
         #expect(group is Modifier)
     }

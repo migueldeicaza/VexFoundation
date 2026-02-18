@@ -137,26 +137,26 @@ struct StaveTests {
     // MARK: - Clef
 
     @Test func clefTypes() {
-        #expect(Clef.types["treble"] != nil)
-        #expect(Clef.types["treble"]!.code == "gClef")
-        #expect(Clef.types["bass"]!.code == "fClef")
-        #expect(Clef.types["alto"]!.code == "cClef")
+        #expect(Clef.types[.treble] != nil)
+        #expect(Clef.types[.treble]!.code == "gClef")
+        #expect(Clef.types[.bass]!.code == "fClef")
+        #expect(Clef.types[.alto]!.code == "cClef")
     }
 
     @Test func clefAddition() {
         let stave = Stave(x: 0, y: 0, width: 400)
-        stave.addClef("treble")
-        #expect(stave.getClef() == "treble")
+        stave.addClef(.treble)
+        #expect(stave.getClef() == .treble)
 
         let clefs = stave.getModifiers(position: .begin, category: "Clef")
         #expect(clefs.count == 1)
     }
 
     @Test func clefPoint() {
-        let defaultPoint = Clef.getPoint("default")
+        let defaultPoint = Clef.getPoint(.default)
         #expect(defaultPoint == Tables.NOTATION_FONT_SCALE)
 
-        let smallPoint = Clef.getPoint("small")
+        let smallPoint = Clef.getPoint(.small)
         #expect(smallPoint < defaultPoint)
     }
 
@@ -164,7 +164,7 @@ struct StaveTests {
 
     @Test func keySignatureCreation() {
         let stave = Stave(x: 0, y: 0, width: 400)
-        stave.addClef("treble")
+        stave.addClef(.treble)
         stave.addKeySignature("D")
 
         let keySigs = stave.getModifiers(position: .begin, category: "KeySignature")
@@ -176,7 +176,7 @@ struct StaveTests {
 
     @Test func keySignatureGlyphs() {
         let stave = Stave(x: 0, y: 0, width: 400)
-        stave.addClef("treble")
+        stave.addClef(.treble)
         let ks = KeySignature(keySpec: "A")
         ks.setStave(stave)
         ks.format()
@@ -187,7 +187,7 @@ struct StaveTests {
 
     @Test func keySignatureCancel() {
         let stave = Stave(x: 0, y: 0, width: 400)
-        stave.addClef("treble")
+        stave.addClef(.treble)
         let ks = KeySignature(keySpec: "C", cancelKeySpec: "D")
         ks.setStave(stave)
         ks.format()
@@ -228,7 +228,7 @@ struct StaveTests {
 
     @Test func staveFormat() {
         let stave = Stave(x: 10, y: 40, width: 400)
-        stave.addClef("treble")
+        stave.addClef(.treble)
         stave.addKeySignature("D")
         stave.addTimeSignature("4/4")
 
@@ -246,7 +246,7 @@ struct StaveTests {
         // Add in wrong order
         stave.addTimeSignature("4/4")
         stave.addKeySignature("G")
-        stave.addClef("treble")
+        stave.addClef(.treble)
 
         // After format, modifiers should be positioned: Barline < Clef < KeySig < TimeSig
         stave.format()
@@ -314,7 +314,7 @@ struct StaveTests {
 
     @Test func fullStaveSetup() {
         let stave = Stave(x: 10, y: 40, width: 500)
-        stave.addClef("treble")
+        stave.addClef(.treble)
         stave.addKeySignature("Eb")
         stave.addTimeSignature("3/4")
         stave.setBegBarType(.single)
@@ -325,7 +325,7 @@ struct StaveTests {
         let startX = stave.getNoteStartX()
         #expect(startX > stave.getX())
         #expect(stave.getMeasure() == 1)
-        #expect(stave.getClef() == "treble")
+        #expect(stave.getClef() == .treble)
 
         // Check Eb has 3 flats
         let keySigs = stave.getModifiers(position: .begin, category: "KeySignature")
@@ -336,12 +336,12 @@ struct StaveTests {
 
     @Test func multipleStaveAlignment() {
         let stave1 = Stave(x: 10, y: 0, width: 400)
-        stave1.addClef("treble")
+        stave1.addClef(.treble)
         stave1.addKeySignature("D")
         stave1.addTimeSignature("4/4")
 
         let stave2 = Stave(x: 10, y: 100, width: 400)
-        stave2.addClef("bass")
+        stave2.addClef(.bass)
         stave2.addTimeSignature("4/4")
 
         Stave.formatBegModifiers([stave1, stave2])

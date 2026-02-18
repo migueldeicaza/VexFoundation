@@ -104,7 +104,7 @@ import SwiftUI
         _ = f.setContext(ctx)
 
         let s = f.Stave(x: 10, y: 30, width: 490)
-        _ = s.addClef("treble")
+        _ = s.addClef(.treble)
         _ = s.addModifier(StaveSection(section: "A", x: 0, shiftY: 5))
 
         try? f.draw()

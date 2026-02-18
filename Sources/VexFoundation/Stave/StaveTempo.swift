@@ -158,7 +158,7 @@ import SwiftUI
         _ = f.setContext(ctx)
 
         let s = f.Stave(x: 10, y: 40, width: 490)
-        _ = s.addClef("treble").addTimeSignature("4/4")
+        _ = s.addClef(.treble).addTimeSignature("4/4")
         _ = s.addModifier(StaveTempo(
             tempo: StaveTempoOptions(bpm: 120, duration: "q"),
             x: 0, shiftY: -15

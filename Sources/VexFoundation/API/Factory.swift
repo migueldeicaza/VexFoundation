@@ -173,9 +173,9 @@ public final class Factory {
 
     @discardableResult
     public func ClefNote(
-        type: String = "treble",
-        size: String? = nil,
-        annotation: String? = nil
+        type: ClefName = .treble,
+        size: ClefSize = .default,
+        annotation: ClefAnnotation? = nil
     ) -> VexFoundation.ClefNote {
         let note = VexFoundation.ClefNote(type: type, size: size, annotation: annotation)
         if let stave = currentStave { _ = note.setStave(stave) }
@@ -408,7 +408,7 @@ public final class Factory {
 
     @discardableResult
     public func StaveTie(notes: TieNotes, text: String? = nil,
-                         direction: Int? = nil) -> VexFoundation.StaveTie {
+                         direction: TieDirection? = nil) -> VexFoundation.StaveTie {
         let tie = VexFoundation.StaveTie(notes: notes, text: text)
         if let direction { _ = tie.setDirection(direction) }
         if let ctx = context { _ = tie.setContext(ctx) }
@@ -552,7 +552,7 @@ import SwiftUI
         _ = score.beam(Array(notes[1..<3]))
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
-        )).addClef("treble").addKeySignature("D").addTimeSignature("4/4")
+        )).addClef(.treble).addKeySignature("D").addTimeSignature("4/4")
 
         system.format()
         try? f.draw()

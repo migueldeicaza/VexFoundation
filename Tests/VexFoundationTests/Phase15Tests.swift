@@ -403,7 +403,7 @@ struct Phase15Tests {
     @Test func factoryEasyScore() {
         let factory = Factory()
         let score = factory.EasyScore()
-        #expect(score.defaults.clef == "treble")
+        #expect(score.defaults.clef == .treble)
     }
 
     // ============================================================
@@ -470,8 +470,8 @@ struct Phase15Tests {
     @Test func easyScoreSetDefaults() {
         let factory = Factory()
         let score = factory.EasyScore()
-        _ = score.set(defaults: EasyScoreDefaults(clef: "bass", time: "3/4"))
-        #expect(score.defaults.clef == "bass")
+        _ = score.set(defaults: EasyScoreDefaults(clef: .bass, time: "3/4"))
+        #expect(score.defaults.clef == .bass)
         #expect(score.defaults.time == "3/4")
     }
 

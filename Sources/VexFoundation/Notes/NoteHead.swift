@@ -16,7 +16,7 @@ public struct NoteHeadStruct {
     public var stemUpXOffset: Double
     public var customGlyphCode: String?
     public var xShift: Double
-    public var stemDirection: Int
+    public var stemDirection: StemDirection
     public var displaced: Bool
     public var noteType: String?
     public var x: Double
@@ -35,7 +35,7 @@ public struct NoteHeadStruct {
         stemUpXOffset: Double = 0,
         customGlyphCode: String? = nil,
         xShift: Double = 0,
-        stemDirection: Int = 1,
+        stemDirection: StemDirection = .up,
         displaced: Bool = false,
         noteType: String? = nil,
         x: Double = 0,
@@ -76,7 +76,7 @@ public final class NoteHead: Note {
     public var stemUpXOffset: Double = 0
     public var stemDownXOffset: Double = 0
     public var displaced: Bool
-    public var headStemDirection: Int
+    public var headStemDirection: StemDirection
     public var headX: Double
     public var headY: Double
     public var line: Double
@@ -168,11 +168,12 @@ public final class NoteHead: Note {
         let x = !preFormatted ? headX : super.getAbsoluteX()
         let displacementStemAdjustment = Stem.WIDTH / 2
         let musicFont = Glyph.MUSIC_FONT_STACK.first!
-        let fontShift = ((musicFont.lookupMetric("notehead.shiftX") as? Double) ?? 0) * Double(headStemDirection)
-        let displacedFontShift = ((musicFont.lookupMetric("noteHead.displacedShiftX") as? Double) ?? 0) * Double(headStemDirection)
+        let fontShift = ((musicFont.lookupMetric("notehead.shiftX") as? Double) ?? 0) * headStemDirection.signDouble
+        let displacedFontShift =
+            ((musicFont.lookupMetric("noteHead.displacedShiftX") as? Double) ?? 0) * headStemDirection.signDouble
 
         return x + fontShift + (displaced
-            ? (tickableWidth - displacementStemAdjustment) * Double(headStemDirection) + displacedFontShift
+            ? (tickableWidth - displacementStemAdjustment) * headStemDirection.signDouble + displacedFontShift
             : 0)
     }
 
@@ -258,7 +259,7 @@ import SwiftUI
         ))
         _ = system.addStave(SystemStave(
             voices: [score.voice(score.notes("C5/w, D5/h, E5/q, F5/8"))]
-        )).addClef("treble")
+        )).addClef(.treble)
 
         system.format()
         try? f.draw()

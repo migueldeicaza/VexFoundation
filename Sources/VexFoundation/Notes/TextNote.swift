@@ -220,7 +220,7 @@ import SwiftUI
         let score = f.EasyScore()
 
         let stave = f.Stave(x: 10, y: 10, width: 500)
-        _ = stave.addClef("treble")
+        _ = stave.addClef(.treble)
 
         let notes = score.notes("C5/q, D5, E5, F5")
         let voice = score.voice(notes)

@@ -267,13 +267,13 @@ import SwiftUI
         _ = f.setContext(ctx)
 
         let s1 = f.Stave(x: 10, y: 20, width: 150)
-        _ = s1.addClef("treble").addTimeSignature("4/4")
+        _ = s1.addClef(.treble).addTimeSignature("4/4")
 
         let s2 = f.Stave(x: 170, y: 20, width: 150)
-        _ = s2.addClef("treble").addTimeSignature("3/4")
+        _ = s2.addClef(.treble).addTimeSignature("3/4")
 
         let s3 = f.Stave(x: 330, y: 20, width: 150)
-        _ = s3.addClef("treble").addTimeSignature("6/8")
+        _ = s3.addClef(.treble).addTimeSignature("6/8")
 
         try? f.draw()
     }

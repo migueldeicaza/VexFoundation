@@ -283,7 +283,7 @@ struct Phase14Tests {
         _ = n1.setStave(ts)
         _ = n2.setStave(ts)
         let tie = TabTie(notes: TieNotes(firstNote: n1, lastNote: n2))
-        #expect(tie.direction == -1) // Tab ties are always face up
+        #expect(tie.direction == .down) // Tab ties are always face up
     }
 
     @Test func tabTieRenderOptions() {
@@ -332,8 +332,8 @@ struct Phase14Tests {
     }
 
     @Test func tabSlideConstants() {
-        #expect(TabSlide.SLIDE_UP == 1)
-        #expect(TabSlide.SLIDE_DOWN == -1)
+        #expect(TabSlide.SLIDE_UP.rawValue == 1)
+        #expect(TabSlide.SLIDE_DOWN.rawValue == -1)
     }
 
     @Test func tabSlideCreation() {
@@ -780,7 +780,7 @@ struct Phase14Tests {
         _ = n2.setStave(ts)
         let tie = TabTie.createHammeron(notes: TieNotes(firstNote: n1, lastNote: n2))
         #expect(tie.text == "H")
-        #expect(tie.direction == -1)
+        #expect(tie.direction == .down)
     }
 
     @Test func graceTabNoteOnTabStave() {

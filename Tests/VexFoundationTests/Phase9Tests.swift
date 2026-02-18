@@ -113,34 +113,34 @@ struct Phase9Tests {
     // MARK: - ClefNote
 
     @Test func clefNoteCreation() {
-        let note = ClefNote(type: "treble")
+        let note = ClefNote(type: .treble)
         #expect(ClefNote.category == "ClefNote")
         #expect(note.clefDef.code == "gClef")
-        #expect(note.clefSize == "default")
+        #expect(note.clefSize == .default)
     }
 
     @Test func clefNoteBass() {
-        let note = ClefNote(type: "bass")
+        let note = ClefNote(type: .bass)
         #expect(note.clefDef.code == "fClef")
     }
 
     @Test func clefNoteAlto() {
-        let note = ClefNote(type: "alto")
+        let note = ClefNote(type: .alto)
         #expect(note.clefDef.code == "cClef")
     }
 
     @Test func clefNoteSmallSize() {
-        let note = ClefNote(type: "treble", size: "small")
-        #expect(note.clefSize == "small")
+        let note = ClefNote(type: .treble, size: .small)
+        #expect(note.clefSize == .small)
     }
 
     @Test func clefNoteWithAnnotation() {
-        let note = ClefNote(type: "treble", annotation: "8va")
+        let note = ClefNote(type: .treble, annotation: .octaveUp)
         #expect(note.clefAnnotation != nil)
     }
 
     @Test func clefNotePreFormat() {
-        let note = ClefNote(type: "treble")
+        let note = ClefNote(type: .treble)
         let stave = Stave(x: 10, y: 40, width: 300)
         _ = note.setStave(stave)
         note.preFormat()
@@ -148,10 +148,10 @@ struct Phase9Tests {
     }
 
     @Test func clefNoteSetType() {
-        let note = ClefNote(type: "treble")
-        _ = note.setType("bass")
+        let note = ClefNote(type: .treble)
+        _ = note.setType(.bass)
         #expect(note.clefDef.code == "fClef")
-        #expect(note.clefTypeName == "bass")
+        #expect(note.clefTypeName == .bass)
     }
 
     // MARK: - KeySigNote

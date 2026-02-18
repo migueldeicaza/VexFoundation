@@ -13,8 +13,8 @@ public final class TabSlide: TabTie {
 
     // MARK: - Constants
 
-    public static let SLIDE_UP: Int = 1
-    public static let SLIDE_DOWN: Int = -1
+    public static let SLIDE_UP: TieDirection = .up
+    public static let SLIDE_DOWN: TieDirection = .down
 
     // MARK: - Factory Methods
 
@@ -28,7 +28,7 @@ public final class TabSlide: TabTie {
 
     // MARK: - Init
 
-    public init(notes: TieNotes, direction: Int? = nil) {
+    public init(notes: TieNotes, direction: TieDirection? = nil) {
         var dir = direction
 
         // Determine slide direction automatically if not provided
@@ -59,7 +59,7 @@ public final class TabSlide: TabTie {
     // MARK: - Render Tie
 
     override public func renderTie(
-        direction: Int,
+        direction: TieDirection,
         firstXPx: Double,
         lastXPx: Double,
         firstYs: [Double],
@@ -71,10 +71,6 @@ public final class TabSlide: TabTie {
 
         let ctx = try checkContext()
 
-        guard direction == TabSlide.SLIDE_UP || direction == TabSlide.SLIDE_DOWN else {
-            fatalError("[VexError] BadSlide: Invalid slide direction")
-        }
-
         let firstIndices = notes.firstIndices
         for i in 0..<firstIndices.count {
             let slideY = firstYs[firstIndices[i]] + renderOptions.yShift
@@ -84,8 +80,8 @@ public final class TabSlide: TabTie {
             }
 
             ctx.beginPath()
-            ctx.moveTo(firstXPx, slideY + 3 * Double(direction))
-            ctx.lineTo(lastXPx, slideY - 3 * Double(direction))
+            ctx.moveTo(firstXPx, slideY + 3 * direction.signDouble)
+            ctx.lineTo(lastXPx, slideY - 3 * direction.signDouble)
             ctx.closePath()
             ctx.stroke()
         }

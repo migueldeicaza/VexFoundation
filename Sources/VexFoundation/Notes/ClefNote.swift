@@ -14,14 +14,14 @@ public final class ClefNote: Note {
 
     public var clefDef: ClefType
     public var clefAnnotation: ClefAnnotationType?
-    public var clefTypeName: String
-    public var clefSize: String
+    public var clefTypeName: ClefName
+    public var clefSize: ClefSize
 
     // MARK: - Init
 
-    public init(type: String, size: String? = nil, annotation: String? = nil) {
+    public init(type: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil) {
         self.clefTypeName = type
-        self.clefSize = size ?? "default"
+        self.clefSize = size
 
         let clef = Clef(type: type, size: size, annotation: annotation)
         self.clefDef = clef.clefDef
@@ -34,9 +34,9 @@ public final class ClefNote: Note {
     // MARK: - Setters
 
     @discardableResult
-    public func setType(_ type: String, size: String? = nil, annotation: String? = nil) -> Self {
+    public func setType(_ type: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil) -> Self {
         clefTypeName = type
-        clefSize = size ?? "default"
+        clefSize = size
         let clef = Clef(type: type, size: size, annotation: annotation)
         clefDef = clef.clefDef
         clefAnnotation = clef.annotation
@@ -51,7 +51,7 @@ public final class ClefNote: Note {
         preFormatted = true
         let point = Clef.getPoint(clefSize)
         tickableWidth = Glyph.getWidth(code: clefDef.code, point: point,
-                                        category: "clefNote_\(clefSize)")
+                                        category: "clefNote_\(clefSize.rawValue)")
     }
 
     // MARK: - Draw
@@ -70,7 +70,7 @@ public final class ClefNote: Note {
             yPos: stave.getYForLine(clefDef.line),
             point: point,
             code: clefDef.code,
-            category: "clefNote_\(clefSize)"
+            category: "clefNote_\(clefSize.rawValue)"
         )
 
         // Render annotation (8va/8vb) if present
@@ -106,7 +106,7 @@ import SwiftUI
         ))
         _ = system.addStave(SystemStave(
             voices: [score.voice(score.notes("C5/q, D5, E5, F5"))]
-        )).addClef("treble")
+        )).addClef(.treble)
 
         system.format()
         try? f.draw()

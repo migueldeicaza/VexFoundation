@@ -77,7 +77,7 @@ import SwiftUI
         ))
         _ = system.addStave(SystemStave(
             voices: [score.voice(score.notes("C5/q, D5, E5, F5"))]
-        )).addClef("treble").addTimeSignature("4/4")
+        )).addClef(.treble).addTimeSignature("4/4")
 
         system.format()
         try? f.draw()

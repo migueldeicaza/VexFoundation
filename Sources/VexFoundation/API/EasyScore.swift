@@ -260,7 +260,10 @@ public final class Builder {
     public func commitPiece() {
         let mergedOptions = options.merging(piece.options) { _, new in new }
         let stem = (mergedOptions["stem"] ?? "auto").lowercased()
-        let clef = (mergedOptions["clef"] ?? "treble").lowercased()
+        let clefString = (mergedOptions["clef"] ?? ClefName.treble.rawValue).lowercased()
+        guard let clef = ClefName(parsing: clefString) else {
+            fatalError("[VexError] BadArguments: Invalid clef: \(clefString)")
+        }
         let chord = piece.chord
         let duration = piece.duration
         let dots = piece.dots
@@ -274,6 +277,14 @@ public final class Builder {
         }
 
         let autoStem = stem == "auto"
+        let explicitStemDirection: StemDirection?
+        if autoStem {
+            explicitStemDirection = nil
+        } else if let parsed = StemDirection(parsing: stem) {
+            explicitStemDirection = parsed
+        } else {
+            fatalError("[VexError] BadArguments: Invalid stem direction: \(stem)")
+        }
 
         // Build note
         let note: StemmableNote
@@ -285,8 +296,8 @@ public final class Builder {
                 type: type, autoStem: autoStem, clef: clef
             ))
         }
-        if !autoStem {
-            _ = note.setStemDirection(stem == "up" ? Stem.UP : Stem.DOWN)
+        if let explicitStemDirection {
+            _ = note.setStemDirection(explicitStemDirection)
         }
 
         // Attach accidentals
@@ -339,11 +350,11 @@ public struct EasyScoreOptions {
 
 /// Defaults for EasyScore parsing.
 public struct EasyScoreDefaults {
-    public var clef: String = "treble"
+    public var clef: ClefName = .treble
     public var time: String = "4/4"
     public var stem: String = "auto"
 
-    public init(clef: String = "treble", time: String = "4/4", stem: String = "auto") {
+    public init(clef: ClefName = .treble, time: String = "4/4", stem: String = "auto") {
         self.clef = clef
         self.time = time
         self.stem = stem
@@ -471,7 +482,7 @@ public final class EasyScore {
 
     /// Parse a notation string and return the notes.
     public func notes(_ line: String, options: [String: String] = [:]) -> [StemmableNote] {
-        var mergedOptions = ["clef": defaults.clef, "stem": defaults.stem]
+        var mergedOptions = ["clef": defaults.clef.rawValue, "stem": defaults.stem]
         for (k, v) in options { mergedOptions[k] = v }
         _ = parse(line, options: mergedOptions)
         return builder.getElements().notes
@@ -512,7 +523,7 @@ import SwiftUI
         _ = score.beam(Array(notes[4..<8]))
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
-        )).addClef("treble").addKeySignature("G").addTimeSignature("4/4")
+        )).addClef(.treble).addKeySignature("G").addTimeSignature("4/4")
 
         system.format()
         try? f.draw()

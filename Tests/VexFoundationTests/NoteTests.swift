@@ -35,10 +35,10 @@ struct NoteTests {
     }
 
     @Test func clefPropertiesLookup() {
-        #expect(Tables.clefProperties("treble") == 0)
-        #expect(Tables.clefProperties("bass") == 6)
-        #expect(Tables.clefProperties("alto") == 3)
-        #expect(Tables.clefProperties("tenor") == 4)
+        #expect(Tables.clefProperties(.treble) == 0)
+        #expect(Tables.clefProperties(.bass) == 6)
+        #expect(Tables.clefProperties(.alto) == 3)
+        #expect(Tables.clefProperties(.tenor) == 4)
     }
 
     @Test func keyPropertiesBasic() throws {
@@ -62,7 +62,7 @@ struct NoteTests {
         #expect(c4.line == 0)
 
         // On bass clef, C/4 should be higher
-        let c4Bass = try Tables.keyProperties("c/4", clef: "bass")
+        let c4Bass = try Tables.keyProperties("c/4", clef: .bass)
         #expect(c4Bass.line == 6) // shifted by 6
     }
 
@@ -123,8 +123,8 @@ struct NoteTests {
     // MARK: - Stem
 
     @Test func stemDirections() {
-        #expect(Stem.UP == 1)
-        #expect(Stem.DOWN == -1)
+        #expect(Stem.UP.rawValue == 1)
+        #expect(Stem.DOWN.rawValue == -1)
     }
 
     @Test func stemDimensions() {

@@ -31,14 +31,14 @@ public struct TabNoteStruct {
     public var duration: String
     public var dots: Int?
     public var type: String?
-    public var stemDirection: Int?
+    public var stemDirection: StemDirection?
 
     public init(
         positions: [TabNotePosition],
         duration: String = "q",
         dots: Int? = nil,
         type: String? = nil,
-        stemDirection: Int? = nil
+        stemDirection: StemDirection? = nil
     ) {
         self.positions = positions
         self.duration = duration
@@ -68,10 +68,10 @@ private func getUnusedStringGroups(numLines: Int, stringsUsed: [Int]) -> [[Int]]
 
 /// Gets groups of points that outline the partial stem lines between fret positions.
 private func getPartialStemLines(
-    stemY: Double, unusedStrings: [[Int]], stave: Stave, stemDirection: Int
+    stemY: Double, unusedStrings: [[Int]], stave: Stave, stemDirection: StemDirection
 ) -> [[Double]] {
-    let upStem = stemDirection != 1
-    let downStem = stemDirection != -1
+    let upStem = stemDirection != .up
+    let downStem = stemDirection != .down
     let lineSpacing = stave.getSpacingBetweenLines()
     let totalLines = stave.getNumLines()
 
@@ -104,9 +104,9 @@ private func getPartialStemLines(
 
             lineYs.append(y)
 
-            if stemDirection == 1 && isTopBound {
+            if stemDirection == .up && isTopBound {
                 lineYs.append(stemY - 2)
-            } else if stemDirection == -1 && isBottomBound {
+            } else if stemDirection == .down && isBottomBound {
                 lineYs.append(stemY + 2)
             }
         }
@@ -163,7 +163,7 @@ open class TabNote: StemmableNote {
         if let dir = noteStruct.stemDirection {
             setStemDirection(dir)
         } else {
-            setStemDirection(Stem.UP)
+            setStemDirection(.up)
         }
 
         updateWidth()

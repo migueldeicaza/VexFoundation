@@ -79,7 +79,7 @@ struct Phase8Tests {
         let note2 = makeNote(keys: ["c/4"], duration: "4")
         let tie = StaveTie(notes: TieNotes(firstNote: note1, lastNote: note2))
         _ = tie.setDirection(Stem.DOWN)
-        #expect(tie.direction == Stem.DOWN)
+        #expect(tie.direction == .down)
     }
 
     @Test func staveTieRenderOptions() {

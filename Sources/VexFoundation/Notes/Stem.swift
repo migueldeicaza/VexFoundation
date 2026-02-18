@@ -14,7 +14,7 @@ public struct StemOptions {
     public var stemletHeight: Double
     public var isStemlet: Bool
     public var hide: Bool
-    public var stemDirection: Int
+    public var stemDirection: StemDirection
     public var stemExtension: Double
     public var yBottom: Double
     public var yTop: Double
@@ -25,7 +25,7 @@ public struct StemOptions {
         stemDownYBaseOffset: Double = 0, stemUpYBaseOffset: Double = 0,
         stemDownYOffset: Double = 0, stemUpYOffset: Double = 0,
         stemletHeight: Double = 0, isStemlet: Bool = false,
-        hide: Bool = false, stemDirection: Int = 0,
+        hide: Bool = false, stemDirection: StemDirection = .up,
         stemExtension: Double = 0, yBottom: Double = 0,
         yTop: Double = 0, xEnd: Double = 0, xBegin: Double = 0
     ) {
@@ -53,8 +53,8 @@ public final class Stem: VexElement {
     override public class var category: String { "Stem" }
 
     // Stem directions
-    public static let UP: Int = 1
-    public static let DOWN: Int = -1
+    public static let UP: StemDirection = .up
+    public static let DOWN: StemDirection = .down
 
     // Theme
     public static var WIDTH: Double { Tables.STEM_WIDTH }
@@ -73,7 +73,7 @@ public final class Stem: VexElement {
     public var stemDownYOffset: Double = 0
     public var stemUpYBaseOffset: Double = 0
     public var stemDownYBaseOffset: Double = 0
-    public var stemDirection: Int
+    public var stemDirection: StemDirection
     public var stemExtension: Double
     public var renderHeightAdjustment: Double = 0
 
@@ -85,7 +85,7 @@ public final class Stem: VexElement {
         self.yTop = options?.yTop ?? 0
         self.yBottom = options?.yBottom ?? 0
         self.stemExtension = options?.stemExtension ?? 0
-        self.stemDirection = options?.stemDirection ?? 0
+        self.stemDirection = options?.stemDirection ?? .up
         self.hide = options?.hide ?? false
         self.isStemlet = options?.isStemlet ?? false
         self.stemletHeight = options?.stemletHeight ?? 0
@@ -109,7 +109,7 @@ public final class Stem: VexElement {
         return self
     }
 
-    public func setDirection(_ direction: Int) {
+    public func setDirection(_ direction: StemDirection) {
         stemDirection = direction
     }
 
@@ -127,7 +127,7 @@ public final class Stem: VexElement {
     public func getHeight() -> Double {
         let yOffset = stemDirection == Stem.UP ? stemUpYOffset : stemDownYOffset
         let unsignedHeight = yBottom - yTop + (Stem.HEIGHT - yOffset + stemExtension)
-        return unsignedHeight * Double(stemDirection)
+        return unsignedHeight * stemDirection.signDouble
     }
 
     public func getExtents() -> (topY: Double, baseY: Double) {
@@ -137,7 +137,7 @@ public final class Stem: VexElement {
 
         let innerMostNoteheadY = isStemUp ? ys.min()! : ys.max()!
         let outerMostNoteheadY = isStemUp ? ys.max()! : ys.min()!
-        let stemTipY = innerMostNoteheadY + stemHeight * Double(-stemDirection)
+        let stemTipY = innerMostNoteheadY + stemHeight * -stemDirection.signDouble
 
         return (topY: stemTipY, baseY: outerMostNoteheadY)
     }
@@ -186,7 +186,7 @@ public final class Stem: VexElement {
         }
 
         let stemHeight = getHeight()
-        let stemletYOffset = isStemlet ? stemHeight - stemletHeight * Double(stemDirection) : 0
+        let stemletYOffset = isStemlet ? stemHeight - stemletHeight * stemDirection.signDouble : 0
 
         ctx.save()
         applyStyle()
@@ -194,7 +194,7 @@ public final class Stem: VexElement {
         ctx.beginPath()
         ctx.setLineWidth(Stem.WIDTH)
         ctx.moveTo(stemX, stemY - stemletYOffset + yBaseOffset)
-        ctx.lineTo(stemX, stemY - stemHeight - renderHeightAdjustment * Double(stemDirection))
+        ctx.lineTo(stemX, stemY - stemHeight - renderHeightAdjustment * stemDirection.signDouble)
         ctx.stroke()
         ctx.closeGroup()
         restoreStyle()
@@ -223,7 +223,7 @@ import SwiftUI
         let upNotes = score.notes("E5/q, F5, G5, A5", options: ["stem": "up"])
         _ = system.addStave(SystemStave(
             voices: [score.voice(upNotes)]
-        )).addClef("treble")
+        )).addClef(.treble)
 
         system.format()
         try? f.draw()

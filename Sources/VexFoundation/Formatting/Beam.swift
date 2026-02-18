@@ -32,7 +32,7 @@ public struct BeamRenderOptions {
 
 public struct BeamConfig {
     public var groups: [Fraction]?
-    public var stemDirection: Int?
+    public var stemDirection: StemDirection?
     public var beamRests: Bool = false
     public var beamMiddleOnly: Bool = false
     public var showStemlets: Bool = false
@@ -43,7 +43,7 @@ public struct BeamConfig {
 
     public init(
         groups: [Fraction]? = nil,
-        stemDirection: Int? = nil,
+        stemDirection: StemDirection? = nil,
         beamRests: Bool = false,
         beamMiddleOnly: Bool = false,
         showStemlets: Bool = false,
@@ -66,14 +66,14 @@ public struct BeamConfig {
 
 // MARK: - Helper Functions
 
-private func calculateStemDirection(_ notes: [StemmableNote]) -> Int {
+private func calculateStemDirection(_ notes: [StemmableNote]) -> StemDirection {
     var lineSum: Double = 0
     for note in notes {
         for prop in note.keyProps {
             lineSum += prop.line - 3
         }
     }
-    return lineSum >= 0 ? Stem.DOWN : Stem.UP
+    return lineSum >= 0 ? .down : .up
 }
 
 private func getStemSlope(_ firstNote: StemmableNote, _ lastNote: StemmableNote) -> Double {
@@ -97,7 +97,7 @@ public final class Beam: VexElement {
     public var slope: Double = 0
     public var renderOptions = BeamRenderOptions()
 
-    private let stemDirection: Int
+    private let stemDirection: StemDirection
     private let ticks: Double
     private var yShift: Double = 0
     private var breakOnIndices: [Int] = []
@@ -140,7 +140,7 @@ public final class Beam: VexElement {
 
     // MARK: - Accessors
 
-    public func getStemDirection() -> Int { stemDirection }
+    public func getStemDirection() -> StemDirection { stemDirection }
     public func getNotes() -> [StemmableNote] { notes }
 
     public func getBeamCount() -> Int {
@@ -194,12 +194,12 @@ public final class Beam: VexElement {
 
                     let stemTipY = note.getStemExtents().topY
 
-                    if stemTipY * Double(stemDirection) < adjustedStemTipY * Double(stemDirection) {
+                    if stemTipY * stemDirection.signDouble < adjustedStemTipY * stemDirection.signDouble {
                         let diff = abs(stemTipY - adjustedStemTipY)
-                        yShiftTemp += diff * Double(-stemDirection)
+                        yShiftTemp += diff * -stemDirection.signDouble
                         totalStemExtension += diff * Double(i)
                     } else {
-                        totalStemExtension += (stemTipY - adjustedStemTipY) * Double(stemDirection)
+                        totalStemExtension += (stemTipY - adjustedStemTipY) * stemDirection.signDouble
                     }
                 }
             }
@@ -244,7 +244,7 @@ public final class Beam: VexElement {
         var offset = total / Double(notes.count)
         let beamWidth = renderOptions.beamWidth * 1.5
         let extremeTest = renderOptions.minFlatBeamOffset + Double(extremeBeamCount) * beamWidth
-        let newOffset = extremeY + extremeTest * Double(-stemDirection)
+        let newOffset = extremeY + extremeTest * -stemDirection.signDouble
 
         if stemDirection == Stem.DOWN && offset < newOffset {
             offset = extremeY + extremeTest
@@ -460,7 +460,7 @@ public final class Beam: VexElement {
         let validDurations = ["4", "8", "16", "32", "64"]
         let firstStemX = notes[0].getStemX()
         var beamY = getBeamYToDraw()
-        let beamThickness = renderOptions.beamWidth * Double(stemDirection)
+        let beamThickness = renderOptions.beamWidth * stemDirection.signDouble
 
         for duration in validDurations {
             let beamLines = getBeamLines(duration)
@@ -643,7 +643,7 @@ public final class Beam: VexElement {
 
         // Format stems
         for group in noteGroups {
-            let direction: Int
+            let direction: StemDirection
             if config.maintainStemDirections {
                 direction = group.first(where: { !$0.isRest() })?.getStemDirection() ?? Stem.UP
             } else if let configDir = config.stemDirection {
@@ -687,7 +687,7 @@ public final class Beam: VexElement {
     /// Convenience: build beams for a voice.
     public static func applyAndGetBeams(
         _ voice: Voice,
-        stemDirection: Int? = nil,
+        stemDirection: StemDirection? = nil,
         groups: [Fraction]? = nil
     ) -> [Beam] {
         let notes = voice.getTickables().compactMap { $0 as? StemmableNote }
@@ -716,7 +716,7 @@ import SwiftUI
         _ = score.beam(Array(notes[4..<8]))
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
-        )).addClef("treble").addTimeSignature("4/4")
+        )).addClef(.treble).addTimeSignature("4/4")
 
         system.format()
         try? f.draw()

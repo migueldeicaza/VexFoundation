@@ -166,9 +166,9 @@ import SwiftUI
         _ = f.setContext(ctx)
 
         let top = f.Stave(x: 40, y: 20, width: 240)
-        _ = top.addClef("treble")
+        _ = top.addClef(.treble)
         let bottom = f.Stave(x: 40, y: 120, width: 240)
-        _ = bottom.addClef("bass")
+        _ = bottom.addClef(.bass)
 
         _ = f.StaveConnector(topStave: top, bottomStave: bottom, type: .brace)
         _ = f.StaveConnector(topStave: top, bottomStave: bottom, type: .singleLeft)

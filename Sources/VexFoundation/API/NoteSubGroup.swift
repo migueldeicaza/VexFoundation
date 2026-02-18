@@ -95,7 +95,7 @@ import SwiftUI
         _ = f.setContext(ctx)
         let score = f.EasyScore()
 
-        let clefNote = f.ClefNote(type: "bass", size: "small")
+        let clefNote = f.ClefNote(type: .bass, size: .small)
         let subGroup = f.NoteSubGroup(notes: [clefNote])
 
         let notes = score.notes("C5/q, D5, E5, F5")
@@ -104,7 +104,7 @@ import SwiftUI
         let system = f.System(options: SystemOptions(factory: f, x: 10, width: 500, y: 10))
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
-        )).addClef("treble").addTimeSignature("4/4")
+        )).addClef(.treble).addTimeSignature("4/4")
 
         system.format()
         try? f.draw()

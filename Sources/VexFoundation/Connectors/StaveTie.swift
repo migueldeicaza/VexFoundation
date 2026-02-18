@@ -50,7 +50,7 @@ open class StaveTie: VexElement {
     public var renderOptions = TieRenderOptions()
     public var notes: TieNotes
     public var text: String?
-    public var direction: Int?
+    public var direction: TieDirection?
 
     // MARK: - Init
 
@@ -64,9 +64,14 @@ open class StaveTie: VexElement {
     // MARK: - Direction
 
     @discardableResult
-    public func setDirection(_ direction: Int) -> Self {
+    public func setDirection(_ direction: TieDirection) -> Self {
         self.direction = direction
         return self
+    }
+
+    @discardableResult
+    public func setDirection(_ direction: StemDirection) -> Self {
+        setDirection(TieDirection(stemDirection: direction))
     }
 
     // MARK: - Notes
@@ -98,7 +103,7 @@ open class StaveTie: VexElement {
     // MARK: - Render Tie
 
     open func renderTie(
-        direction: Int,
+        direction: TieDirection,
         firstXPx: Double,
         lastXPx: Double,
         firstYs: [Double],
@@ -119,7 +124,7 @@ open class StaveTie: VexElement {
 
         let firstXShift = renderOptions.firstXShift
         let lastXShift = renderOptions.lastXShift
-        let yShift = renderOptions.yShift * Double(direction)
+        let yShift = renderOptions.yShift * direction.signDouble
 
         let firstIndices = notes.firstIndices
         let lastIndices = notes.lastIndices
@@ -136,8 +141,8 @@ open class StaveTie: VexElement {
                 fatalError("[VexError] BadArguments: Bad indices for tie rendering.")
             }
 
-            let topCpY = (firstYPx + lastYPx) / 2 + cp1 * Double(direction)
-            let bottomCpY = (firstYPx + lastYPx) / 2 + cp2 * Double(direction)
+            let topCpY = (firstYPx + lastYPx) / 2 + cp1 * direction.signDouble
+            let bottomCpY = (firstYPx + lastYPx) / 2 + cp2 * direction.signDouble
 
             ctx.beginPath()
             ctx.moveTo(firstXPx + firstXShift, firstYPx)
@@ -185,11 +190,11 @@ open class StaveTie: VexElement {
         var lastXPx: Double = 0
         var firstYs: [Double] = [0]
         var lastYs: [Double] = [0]
-        var stemDirection: Int = 0
+        var tieDirection: TieDirection?
 
         if let firstNote {
             firstXPx = firstNote.getTieRightX() + renderOptions.tieSpacing
-            stemDirection = firstNote.getStemDirection()
+            tieDirection = TieDirection(stemDirection: firstNote.getStemDirection())
             firstYs = firstNote.getYs()
         } else if let lastNote {
             let stave = lastNote.checkStave()
@@ -200,7 +205,7 @@ open class StaveTie: VexElement {
 
         if let lastNote {
             lastXPx = lastNote.getTieLeftX() + renderOptions.tieSpacing
-            stemDirection = lastNote.getStemDirection()
+            tieDirection = TieDirection(stemDirection: lastNote.getStemDirection())
             lastYs = lastNote.getYs()
         } else if let firstNote {
             let stave = firstNote.checkStave()
@@ -209,12 +214,12 @@ open class StaveTie: VexElement {
             notes.lastIndices = notes.firstIndices
         }
 
-        if let dir = direction {
-            stemDirection = dir
+        if let direction {
+            tieDirection = direction
         }
 
         try renderTie(
-            direction: stemDirection,
+            direction: tieDirection ?? .up,
             firstXPx: firstXPx,
             lastXPx: lastXPx,
             firstYs: firstYs,
@@ -244,7 +249,7 @@ import SwiftUI
         let notes = score.notes("C5/q, C5, E5, E5")
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
-        )).addClef("treble").addTimeSignature("4/4")
+        )).addClef(.treble).addTimeSignature("4/4")
 
         system.format()
 

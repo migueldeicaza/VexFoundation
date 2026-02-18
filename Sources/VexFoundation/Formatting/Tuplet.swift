@@ -396,7 +396,7 @@ import SwiftUI
         _ = score.tuplet(Array(notes[0..<3]))
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
-        )).addClef("treble")
+        )).addClef(.treble)
 
         system.format()
         try? f.draw()

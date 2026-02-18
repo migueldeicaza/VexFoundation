@@ -287,7 +287,7 @@ import SwiftUI
         _ = f.setContext(ctx)
 
         let stave = f.Stave(x: 10, y: 30, width: 490)
-        _ = stave.addClef("treble")
+        _ = stave.addClef(.treble)
 
         let mmr = f.MultiMeasureRest(
             numberOfMeasures: 4,

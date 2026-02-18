@@ -10,9 +10,9 @@ public struct GraceNoteStruct {
     public var keys: [String]
     public var duration: String
     public var slash: Bool
-    public var stemDirection: Int?
+    public var stemDirection: StemDirection?
     public var autoStem: Bool?
-    public var clef: String?
+    public var clef: ClefName?
     public var dots: Int?
     public var type: String?
     public var octaveShift: Int?
@@ -21,9 +21,9 @@ public struct GraceNoteStruct {
         keys: [String] = [],
         duration: String = "8",
         slash: Bool = false,
-        stemDirection: Int? = nil,
+        stemDirection: StemDirection? = nil,
         autoStem: Bool? = nil,
-        clef: String? = nil,
+        clef: ClefName? = nil,
         dots: Int? = nil,
         type: String? = nil,
         octaveShift: Int? = nil
@@ -148,7 +148,7 @@ public class GraceNote: StaveNote {
             var defaultOffsetY = Tables.STEM_HEIGHT
             defaultOffsetY -= defaultOffsetY / 2.8
             defaultOffsetY += defaultStemExtension
-            y += defaultOffsetY * staveNoteScale * Double(stemDirection)
+            y += defaultOffsetY * staveNoteScale * stemDirection.signDouble
 
             let offsets: (x1: Double, y1: Double, x2: Double, y2: Double)
             if stemDirection == Stem.UP {
@@ -198,7 +198,7 @@ public class GraceNote: StaveNote {
         let iPointDx = cos(beamAngle) * slashBeamOffset
         let iPointDy = sin(beamAngle) * slashBeamOffset
 
-        let adjustedStemOffset = slashStemOffset * Double(getStemDirection())
+        let adjustedStemOffset = slashStemOffset * getStemDirection().signDouble
         let slashAngle = atan((iPointDy - adjustedStemOffset) / iPointDx)
         let protrusionStemDx = cos(slashAngle) * stemProtrusion * scaleX
         let protrusionStemDy = sin(slashAngle) * stemProtrusion
@@ -244,7 +244,7 @@ import SwiftUI
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
         ))
-            .addClef("treble")
+            .addClef(.treble)
             .addTimeSignature("4/4")
 
         system.format()

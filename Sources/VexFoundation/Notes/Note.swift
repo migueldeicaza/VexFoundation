@@ -387,7 +387,7 @@ open class Note: Tickable {
 
     // MARK: - Stem (default - overridden by StemmableNote)
 
-    open func getStemDirection() -> Int {
+    open func getStemDirection() -> StemDirection {
         fatalError("[VexError] NoStem: No stem attached to this note.")
     }
 

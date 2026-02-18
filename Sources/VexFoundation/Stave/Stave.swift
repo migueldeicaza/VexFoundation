@@ -112,8 +112,8 @@ open class Stave: VexElement {
     public var endX: Double
     public var formatted: Bool = false
     public var measure: Int = 0
-    public var clefName: String = "treble"
-    public var endClefName: String?
+    public var clefName: ClefName = .treble
+    public var endClefName: ClefName?
     public var modifiers: [StaveModifier] = []
     public var defaultLedgerLineStyle: ElementStyle
 
@@ -378,17 +378,17 @@ open class Stave: VexElement {
     // MARK: - Clef
 
     @discardableResult
-    public func setClefLines(_ clefSpec: String) -> Self {
+    public func setClefLines(_ clefSpec: ClefName) -> Self {
         clefName = clefSpec
         return self
     }
 
-    public func getClef() -> String { clefName }
+    public func getClef() -> ClefName { clefName }
 
-    public func getEndClef() -> String? { endClefName }
+    public func getEndClef() -> ClefName? { endClefName }
 
     @discardableResult
-    public func setClef(_ clefSpec: String, size: String? = nil, annotation: String? = nil,
+    public func setClef(_ clefSpec: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil,
                         position: StaveModifierPosition = .begin) -> Self {
         if position == .end {
             endClefName = clefSpec
@@ -406,7 +406,7 @@ open class Stave: VexElement {
     }
 
     @discardableResult
-    public func addClef(_ clef: String, size: String? = nil, annotation: String? = nil,
+    public func addClef(_ clef: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil,
                         position: StaveModifierPosition = .begin) -> Self {
         if position == .begin {
             clefName = clef
@@ -418,12 +418,12 @@ open class Stave: VexElement {
     }
 
     @discardableResult
-    public func setEndClef(_ clefSpec: String, size: String? = nil, annotation: String? = nil) -> Self {
+    public func setEndClef(_ clefSpec: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil) -> Self {
         setClef(clefSpec, size: size, annotation: annotation, position: .end)
     }
 
     @discardableResult
-    public func addEndClef(_ clef: String, size: String? = nil, annotation: String? = nil) -> Self {
+    public func addEndClef(_ clef: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil) -> Self {
         addClef(clef, size: size, annotation: annotation, position: .end)
     }
 
@@ -724,7 +724,7 @@ import SwiftUI
                 score.voice(score.notes("C5/q, D5, E5, F5"))
             ]
         ))
-            .addClef("treble")
+            .addClef(.treble)
             .addKeySignature("G")
             .addTimeSignature("4/4")
 

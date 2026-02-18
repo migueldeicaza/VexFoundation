@@ -85,12 +85,12 @@ public final class Curve: VexElement {
         firstY: Double,
         lastX: Double,
         lastY: Double,
-        direction: Int
+        direction: TieDirection
     ) throws {
         let ctx = try checkContext()
 
         let xShift = renderOptions.xShift
-        let yShift = renderOptions.yShift * Double(direction)
+        let yShift = renderOptions.yShift * direction.signDouble
 
         let fx = firstX + xShift
         let fy = firstY + yShift
@@ -110,17 +110,17 @@ public final class Curve: VexElement {
         ctx.moveTo(fx, fy)
         ctx.bezierCurveTo(
             fx + cpSpacing + cp0x,
-            fy + cp0y * Double(direction),
+            fy + cp0y * direction.signDouble,
             lx - cpSpacing + cp1x,
-            ly + cp1y * Double(direction),
+            ly + cp1y * direction.signDouble,
             lx,
             ly
         )
         ctx.bezierCurveTo(
             lx - cpSpacing + cp1x,
-            ly + (cp1y + thickness) * Double(direction),
+            ly + (cp1y + thickness) * direction.signDouble,
             fx + cpSpacing + cp0x,
-            fy + (cp0y + thickness) * Double(direction),
+            fy + (cp0y + thickness) * direction.signDouble,
             fx,
             fy
         )
@@ -142,7 +142,7 @@ public final class Curve: VexElement {
         var lastX: Double = 0
         var firstY: Double = 0
         var lastY: Double = 0
-        var stemDirection: Int = 0
+        var tieDirection: TieDirection?
 
         // Determine Y metric based on position
         let useTopYForStart = renderOptions.position == .nearTop
@@ -150,7 +150,7 @@ public final class Curve: VexElement {
 
         if let firstNote {
             firstX = firstNote.getTieRightX()
-            stemDirection = firstNote.getStemDirection()
+            tieDirection = TieDirection(stemDirection: firstNote.getStemDirection())
             let extents = firstNote.getStemExtents()
             firstY = useTopYForStart ? extents.topY : extents.baseY
         } else if let lastNote {
@@ -162,7 +162,7 @@ public final class Curve: VexElement {
 
         if let lastNote {
             lastX = lastNote.getTieLeftX()
-            stemDirection = lastNote.getStemDirection()
+            tieDirection = TieDirection(stemDirection: lastNote.getStemDirection())
             let extents = lastNote.getStemExtents()
             lastY = useTopYForEnd ? extents.topY : extents.baseY
         } else if let firstNote {
@@ -172,14 +172,14 @@ public final class Curve: VexElement {
             lastY = useTopYForEnd ? extents.topY : extents.baseY
         }
 
-        let dir = stemDirection * (renderOptions.invert ? -1 : 1)
+        let direction = renderOptions.invert ? (tieDirection ?? .up).inverted : (tieDirection ?? .up)
 
         try renderCurve(
             firstX: firstX,
             firstY: firstY,
             lastX: lastX,
             lastY: lastY,
-            direction: dir
+            direction: direction
         )
     }
 }
@@ -203,7 +203,7 @@ import SwiftUI
         let notes = score.notes("C5/q, D5, E5, F5")
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
-        )).addClef("treble")
+        )).addClef(.treble)
 
         system.format()
 

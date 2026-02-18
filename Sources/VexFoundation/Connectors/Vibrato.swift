@@ -191,7 +191,7 @@ import SwiftUI
         _ = notes[1].addModifier(Vibrato())
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
-        )).addClef("treble")
+        )).addClef(.treble)
 
         system.format()
         try? f.draw()

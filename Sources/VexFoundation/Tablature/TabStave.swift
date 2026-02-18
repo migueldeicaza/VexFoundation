@@ -30,7 +30,7 @@ public final class TabStave: Stave {
 
     @discardableResult
     public func addTabGlyph() -> Self {
-        _ = addClef("tab")
+        _ = addClef(.tab)
         return self
     }
 }

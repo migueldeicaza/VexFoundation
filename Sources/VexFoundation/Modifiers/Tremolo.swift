@@ -43,13 +43,13 @@ public final class Tremolo: Modifier {
 
         guard let musicFont = Glyph.MUSIC_FONT_STACK.first else { return }
         var ySpacing = (musicFont.lookupMetric("\(category).spacing") as? Double ?? 12)
-            * Double(stemDirection)
+            * stemDirection.signDouble
         ySpacing *= ySpacingScale
 
         let height = Double(num) * ySpacing
         var y = note.getStemExtents().baseY - height
 
-        if stemDirection < 0 {
+        if stemDirection == .down {
             y += (musicFont.lookupMetric("\(category).offsetYStemDown") as? Double ?? 0)
         } else {
             y += (musicFont.lookupMetric("\(category).offsetYStemUp") as? Double ?? 0)
@@ -105,7 +105,7 @@ import SwiftUI
         _ = system.addStave(SystemStave(
             voices: [score.voice(notes)]
         ))
-            .addClef("treble")
+            .addClef(.treble)
             .addTimeSignature("4/4")
 
         system.format()

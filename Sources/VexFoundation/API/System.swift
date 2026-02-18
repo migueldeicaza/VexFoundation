@@ -305,12 +305,12 @@ import SwiftUI
         let treble = system.addStave(SystemStave(
             voices: [score.voice(score.notes("C5/q, D5, E5, F5"))]
         ))
-        _ = treble.addClef("treble").addTimeSignature("4/4")
+        _ = treble.addClef(.treble).addTimeSignature("4/4")
 
         let bass = system.addStave(SystemStave(
             voices: [score.voice(score.notes("C3/q, D3, E3, F3", options: ["clef": "bass"]))]
         ))
-        _ = bass.addClef("bass").addTimeSignature("4/4")
+        _ = bass.addClef(.bass).addTimeSignature("4/4")
 
         system.addConnector(type: .brace)
         system.addConnector(type: .singleLeft)

@@ -28,7 +28,7 @@ open class TabTie: StaveTie {
         renderOptions.cp1 = 9
         renderOptions.cp2 = 11
         renderOptions.yShift = 3
-        direction = -1  // Tab ties are always face up
+        direction = .down  // Tab ties are always face up
     }
 }
 

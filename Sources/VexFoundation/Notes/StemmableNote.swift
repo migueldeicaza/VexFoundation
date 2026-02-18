@@ -11,7 +11,7 @@ open class StemmableNote: Note {
 
     override open class var category: String { "StemmableNote" }
 
-    public var stemDirection: Int?
+    public var stemDirection: StemDirection?
     public var stem: Stem?
     public var flag: Glyph?
     public var stemExtensionOverride: Double?
@@ -83,7 +83,7 @@ open class StemmableNote: Note {
 
     // MARK: - Stem Direction
 
-    override public func getStemDirection() -> Int {
+    override public func getStemDirection() -> StemDirection {
         guard let stemDirection else {
             fatalError("[VexError] NoStem: No stem attached to this note.")
         }
@@ -91,12 +91,8 @@ open class StemmableNote: Note {
     }
 
     @discardableResult
-    public func setStemDirection(_ direction: Int? = nil) -> Self {
-        let dir = direction ?? Stem.UP
-        guard dir == Stem.UP || dir == Stem.DOWN else {
-            fatalError("[VexError] BadArgument: Invalid stem direction: \(String(describing: direction))")
-        }
-
+    public func setStemDirection(_ direction: StemDirection = .up) -> Self {
+        let dir = direction
         stemDirection = dir
 
         if hasFlag() {

@@ -329,18 +329,18 @@ public enum Tables {
     // MARK: - Clef Data
 
     /// Clef vertical line shifts for key signature positioning.
-    public static let clefLineShifts: [String: Int] = [
-        "treble": 0,
-        "bass": 6,
-        "tenor": 4,
-        "alto": 3,
-        "soprano": 1,
-        "percussion": 0,
-        "mezzo-soprano": 2,
-        "baritone-c": 5,
-        "baritone-f": 5,
-        "subbass": 7,
-        "french": -1,
+    public static let clefLineShifts: [ClefName: Int] = [
+        .treble: 0,
+        .bass: 6,
+        .tenor: 4,
+        .alto: 3,
+        .soprano: 1,
+        .percussion: 0,
+        .mezzoSoprano: 2,
+        .baritoneC: 5,
+        .baritoneF: 5,
+        .subbass: 7,
+        .french: -1,
     ]
 
     // MARK: - Duration Codes (Glyph Properties)
@@ -519,16 +519,10 @@ public enum Tables {
     ]
 
     /// Clef line shift for note line calculation.
-    private static let clefs: [String: Int] = [
-        "treble": 0, "bass": 6, "tenor": 4, "alto": 3,
-        "soprano": 1, "percussion": 0, "mezzo-soprano": 2,
-        "baritone-c": 5, "baritone-f": 5, "subbass": 7, "french": -1,
-    ]
-
     /// Get clef properties (line_shift).
-    public static func clefProperties(_ clef: String) -> Int {
-        guard let shift = clefs[clef] else {
-            fatalError("[VexError] BadArgument: Invalid clef: \(clef)")
+    public static func clefProperties(_ clef: ClefName) -> Int {
+        guard let shift = clefLineShifts[clef] else {
+            fatalError("[VexError] BadArgument: Invalid clef: \(clef.rawValue)")
         }
         return shift
     }
@@ -555,7 +549,7 @@ public enum Tables {
     /// Get properties for a key/octave string (e.g., "c/4", "g/5/x2").
     public static func keyProperties(
         _ keyOctaveGlyph: String,
-        clef: String = "treble",
+        clef: ClefName = .treble,
         octaveShift: Int = 0
     ) throws -> KeyProps {
         let pieces = keyOctaveGlyph.split(separator: "/").map(String.init)
