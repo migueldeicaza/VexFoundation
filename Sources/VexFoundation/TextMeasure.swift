@@ -14,6 +14,9 @@ public struct TextMeasure: Sendable {
     public var width: Double
     public var height: Double
 
+    /// Alias for `y`, the minimum Y (typically negative, top of ascender).
+    public var yMin: Double { y }
+
     public init(x: Double = 0, y: Double = 0, width: Double = 0, height: Double = 0) {
         self.x = x
         self.y = y

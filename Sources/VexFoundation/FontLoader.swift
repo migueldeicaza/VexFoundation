@@ -96,7 +96,7 @@ public enum FontLoader {
     // MARK: - Internal
 
     private static func loadFontData(resourceName: String) -> FontData {
-        guard let url = Bundle.module.url(forResource: resourceName, withExtension: "json", subdirectory: "Resources") else {
+        guard let url = Bundle.module.url(forResource: resourceName, withExtension: "json") else {
             fatalError("[VexFoundation] Missing font resource: \(resourceName).json")
         }
 
@@ -130,7 +130,7 @@ public enum FontLoader {
     }
 
     private static func loadMetrics(resourceName: String) -> FontMetrics {
-        guard let url = Bundle.module.url(forResource: resourceName, withExtension: "json", subdirectory: "Resources") else {
+        guard let url = Bundle.module.url(forResource: resourceName, withExtension: "json") else {
             fatalError("[VexFoundation] Missing metrics resource: \(resourceName).json")
         }
 

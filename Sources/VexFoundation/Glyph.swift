@@ -377,6 +377,7 @@ public final class Glyph: VexElement {
     public var yShift: Double = 0
     public var glyphScale: Double = 1
     public var point: Double
+    public weak var stave: Stave?
 
     // MARK: - Init
 
@@ -484,6 +485,38 @@ public final class Glyph: VexElement {
         applyStyle(context: ctx)
         let xPos = x + originShift.x + m.xShift
         let yPos = y + originShift.y + m.yShift
+        Glyph.renderOutline(ctx: ctx, outline: m.outline, scale: scale, xPos: xPos, yPos: yPos)
+        restoreStyle(context: ctx)
+    }
+
+    // MARK: - Stave
+
+    @discardableResult
+    public func setStave(_ stave: Stave) -> Glyph {
+        self.stave = stave
+        return self
+    }
+
+    public func checkStave() -> Stave {
+        guard let stave else {
+            fatalError("[VexError] NoStave: No stave attached to glyph.")
+        }
+        return stave
+    }
+
+    /// Render the glyph at the given x position on the attached stave.
+    public func renderToStave(x: Double) {
+        guard let ctx = getContext() else {
+            fatalError("[VexError] NoContext: No rendering context for glyph.")
+        }
+        let m = glyphMetrics!
+        let scale = glyphScale * m.scale
+        let stave = checkStave()
+
+        setRendered()
+        applyStyle(context: ctx)
+        let xPos = x + xShift + m.xShift
+        let yPos = stave.getYForGlyphs() + yShift + m.yShift
         Glyph.renderOutline(ctx: ctx, outline: m.outline, scale: scale, xPos: xPos, yPos: yPos)
         restoreStyle(context: ctx)
     }

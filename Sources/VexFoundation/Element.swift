@@ -202,6 +202,13 @@ open class VexElement {
         return self
     }
 
+    // MARK: - Registry
+
+    /// Called when this element is registered with a Registry.
+    open func onRegister(_ registry: Registry) {
+        // Subclasses can override to handle registration.
+    }
+
     // MARK: - Context
 
     public func getContext() -> RenderContext? { context }

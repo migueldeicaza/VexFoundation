@@ -18,7 +18,7 @@ let package = Package(
         .target(
             name: "VexFoundation",
             resources: [
-                .copy("Resources"),
+                .process("Resources"),
             ]
         ),
         .testTarget(
