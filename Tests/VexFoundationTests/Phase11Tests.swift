@@ -31,7 +31,7 @@ struct Phase11Tests {
     // MARK: - GraceNote Creation
 
     @Test func graceNoteCategory() {
-        #expect(GraceNote.CATEGORY == "GraceNote")
+        #expect(GraceNote.category == "GraceNote")
     }
 
     @Test func graceNoteScale() {
@@ -81,7 +81,7 @@ struct Phase11Tests {
     // MARK: - GraceNoteGroup
 
     @Test func graceNoteGroupCategory() {
-        #expect(GraceNoteGroup.CATEGORY == "GraceNoteGroup")
+        #expect(GraceNoteGroup.category == "GraceNoteGroup")
     }
 
     @Test func graceNoteGroupCreation() {
@@ -159,7 +159,7 @@ struct Phase11Tests {
     // MARK: - TextDynamics
 
     @Test func textDynamicsCategory() {
-        #expect(TextDynamics.CATEGORY == "TextDynamics")
+        #expect(TextDynamics.category == "TextDynamics")
     }
 
     @Test func textDynamicsCreation() {
@@ -213,7 +213,7 @@ struct Phase11Tests {
     // MARK: - TextBracket
 
     @Test func textBracketCategory() {
-        #expect(TextBracket.CATEGORY == "TextBracket")
+        #expect(TextBracket.category == "TextBracket")
     }
 
     @Test func textBracketCreation() {
@@ -275,7 +275,7 @@ struct Phase11Tests {
     // MARK: - PedalMarking
 
     @Test func pedalMarkingCategory() {
-        #expect(PedalMarking.CATEGORY == "PedalMarking")
+        #expect(PedalMarking.category == "PedalMarking")
     }
 
     @Test func pedalMarkingCreation() {
@@ -370,7 +370,7 @@ struct Phase11Tests {
     // MARK: - StaveLine
 
     @Test func staveLineCategory() {
-        #expect(StaveLine.CATEGORY == "StaveLine")
+        #expect(StaveLine.category == "StaveLine")
     }
 
     @Test func staveLineCreation() {

@@ -9,7 +9,7 @@ import Foundation
 /// Positioned to the right of the notehead.
 public final class Dot: Modifier {
 
-    override public class var CATEGORY: String { "Dot" }
+    override public class var category: String { "Dot" }
 
     // MARK: - Properties
 
@@ -183,3 +183,34 @@ public final class Dot: Modifier {
         ctx.fill()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Dot", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500, height: 150))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let notes = score.notes("C5/q., D5/h., E5/q, F5/8.")
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        ))
+            .addClef("treble")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

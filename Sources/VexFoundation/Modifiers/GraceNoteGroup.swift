@@ -8,7 +8,7 @@ import Foundation
 /// Formats and renders a group of grace notes attached to a main note.
 public final class GraceNoteGroup: Modifier {
 
-    override public class var CATEGORY: String { "GraceNoteGroup" }
+    override public class var category: String { "GraceNoteGroup" }
 
     // MARK: - Properties
 
@@ -164,3 +164,40 @@ public final class GraceNoteGroup: Modifier {
         }
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("GraceNoteGroup", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500, height: 150))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let notes = score.notes("E5/q, F5, G5, A5")
+        let gn1 = f.GraceNote(GraceNoteStruct(keys: ["C/5"], duration: "16", slash: false))
+        let gn2 = f.GraceNote(GraceNoteStruct(keys: ["D/5"], duration: "16", slash: false))
+        let group = f.GraceNoteGroup(notes: [gn1, gn2], slur: true)
+        _ = notes[0].addModifier(group, index: 0)
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        ))
+            .addClef("treble")
+            .addTimeSignature("4/4")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

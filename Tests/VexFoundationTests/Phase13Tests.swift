@@ -27,7 +27,7 @@ struct Phase13Tests {
     // ============================================================
 
     @Test func timeSigNoteCategory() {
-        #expect(TimeSigNote.CATEGORY == "TimeSigNote")
+        #expect(TimeSigNote.category == "TimeSigNote")
     }
 
     @Test func timeSigNoteCreation() {
@@ -307,7 +307,7 @@ struct Phase13Tests {
     // ============================================================
 
     @Test func bendCategory() {
-        #expect(Bend.CATEGORY == "Bend")
+        #expect(Bend.category == "Bend")
     }
 
     @Test func bendCreation() {
@@ -371,7 +371,7 @@ struct Phase13Tests {
     // ============================================================
 
     @Test func fretHandFingerCategory() {
-        #expect(FretHandFinger.CATEGORY == "FretHandFinger")
+        #expect(FretHandFinger.category == "FretHandFinger")
     }
 
     @Test func fretHandFingerCreation() {
@@ -415,7 +415,7 @@ struct Phase13Tests {
     // ============================================================
 
     @Test func stringNumberCategory() {
-        #expect(StringNumber.CATEGORY == "StringNumber")
+        #expect(StringNumber.category == "StringNumber")
     }
 
     @Test func stringNumberCreation() {
@@ -476,7 +476,7 @@ struct Phase13Tests {
     // ============================================================
 
     @Test func strokeCategory() {
-        #expect(Stroke.CATEGORY == "Stroke")
+        #expect(Stroke.category == "Stroke")
     }
 
     @Test func strokeCreation() {

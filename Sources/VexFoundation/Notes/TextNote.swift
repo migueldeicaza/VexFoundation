@@ -62,7 +62,7 @@ private struct TextNoteGlyphInfo {
 /// Used for dynamics, lyrics, and other text-based elements.
 public final class TextNote: Note {
 
-    override public class var CATEGORY: String { "TextNote" }
+    override public class var category: String { "TextNote" }
 
     // MARK: - Glyph Definitions
 
@@ -203,3 +203,45 @@ public final class TextNote: Note {
         }
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("TextNote", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let stave = f.Stave(x: 10, y: 10, width: 500)
+        _ = stave.addClef("treble")
+
+        let notes = score.notes("C5/q, D5, E5, F5")
+        let voice = score.voice(notes)
+
+        let textNotes: [Note] = [
+            f.TextNote(TextNoteStruct(keys: ["C/5"], duration: "q", text: "do")),
+            f.TextNote(TextNoteStruct(keys: ["D/5"], duration: "q", text: "re")),
+            f.TextNote(TextNoteStruct(keys: ["E/5"], duration: "q", text: "mi")),
+            f.TextNote(TextNoteStruct(keys: ["F/5"], duration: "q", text: "fa")),
+        ]
+        let textVoice = f.Voice(timeSpec: "4/4")
+        _ = textVoice.addTickables(textNotes)
+        for tn in textNotes { _ = (tn as! TextNote).setStave(stave) }
+
+        let formatter = f.Formatter()
+        _ = formatter.joinVoices([voice])
+        _ = formatter.joinVoices([textVoice])
+        _ = formatter.format([voice, textVoice], justifyWidth: 400)
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

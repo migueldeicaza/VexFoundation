@@ -19,7 +19,7 @@ public struct FormatterMetrics {
 /// Tickables occupy space in the musical rendering dimension.
 open class Tickable: VexElement {
 
-    override open class var CATEGORY: String { "Tickable" }
+    override open class var category: String { "Tickable" }
 
     // MARK: - Properties
 
@@ -63,7 +63,7 @@ open class Tickable: VexElement {
         guard _preFormatted else {
             fatalError("[VexError] UnformattedNote: Can't call getWidth on an unformatted note.")
         }
-        return tickableWidth
+        return tickableWidth + (modifierContext?.getWidth() ?? 0)
     }
 
     // MARK: - X Position

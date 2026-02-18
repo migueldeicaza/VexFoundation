@@ -61,7 +61,7 @@ public struct GraceNoteStruct {
 /// A grace note: a small ornamental note rendered before or after a main note.
 public class GraceNote: StaveNote {
 
-    override public class var CATEGORY: String { "GraceNote" }
+    override public class var category: String { "GraceNote" }
 
     public static let GRACE_LEDGER_LINE_OFFSET: Double = 2
     public static var LEDGER_LINE_OFFSET_OVERRIDE: Double { GRACE_LEDGER_LINE_OFFSET }
@@ -217,3 +217,39 @@ public class GraceNote: StaveNote {
         )
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("GraceNote", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500, height: 150))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let notes = score.notes("D5/q, E5, F5, G5")
+        let gn = f.GraceNote(GraceNoteStruct(keys: ["C/5"], duration: "8", slash: true))
+        let group = f.GraceNoteGroup(notes: [gn], slur: true)
+        _ = notes[0].addModifier(group, index: 0)
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        ))
+            .addClef("treble")
+            .addTimeSignature("4/4")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

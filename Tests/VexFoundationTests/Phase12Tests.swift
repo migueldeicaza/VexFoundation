@@ -31,7 +31,7 @@ struct Phase12Tests {
     // ============================================================
 
     @Test func noteSubGroupCategory() {
-        #expect(NoteSubGroup.CATEGORY == "NoteSubGroup")
+        #expect(NoteSubGroup.category == "NoteSubGroup")
     }
 
     @Test func noteSubGroupCreation() {
@@ -85,7 +85,7 @@ struct Phase12Tests {
     // ============================================================
 
     @Test func barNoteCategory() {
-        #expect(BarNote.CATEGORY == "BarNote")
+        #expect(BarNote.category == "BarNote")
     }
 
     @Test func barNoteDefaultCreation() {
@@ -144,7 +144,7 @@ struct Phase12Tests {
     // ============================================================
 
     @Test func vibratoCategory() {
-        #expect(Vibrato.CATEGORY == "Vibrato")
+        #expect(Vibrato.category == "Vibrato")
     }
 
     @Test func vibratoCreation() {
@@ -206,7 +206,7 @@ struct Phase12Tests {
     // ============================================================
 
     @Test func vibratoBracketCategory() {
-        #expect(VibratoBracket.CATEGORY == "VibratoBracket")
+        #expect(VibratoBracket.category == "VibratoBracket")
     }
 
     @Test func vibratoBracketWithStart() {
@@ -260,7 +260,7 @@ struct Phase12Tests {
     // ============================================================
 
     @Test func parenthesisCategory() {
-        #expect(Parenthesis.CATEGORY == "Parenthesis")
+        #expect(Parenthesis.category == "Parenthesis")
     }
 
     @Test func parenthesisLeftCreation() {
@@ -337,7 +337,7 @@ struct Phase12Tests {
     // ============================================================
 
     @Test func crescendoCategory() {
-        #expect(Crescendo.CATEGORY == "Crescendo")
+        #expect(Crescendo.category == "Crescendo")
     }
 
     @Test func crescendoCreation() {
@@ -395,7 +395,7 @@ struct Phase12Tests {
     // ============================================================
 
     @Test func multiMeasureRestCategory() {
-        #expect(MultiMeasureRest.CATEGORY == "MultiMeasureRest")
+        #expect(MultiMeasureRest.category == "MultiMeasureRest")
     }
 
     @Test func multiMeasureRestCreation() {

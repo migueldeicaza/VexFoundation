@@ -37,7 +37,7 @@ public struct PedalMarkingRenderOptions {
 /// Renders pedal markings (sustain, sostenuto, una corda) below notes.
 public final class PedalMarking: VexElement {
 
-    override public class var CATEGORY: String { "PedalMarking" }
+    override public class var category: String { "PedalMarking" }
 
     // MARK: - Glyph Data
 
@@ -228,3 +228,37 @@ public final class PedalMarking: VexElement {
         ctx.restore()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("PedalMarking", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 200) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(factory: f, x: 10, width: 500, y: 20))
+        let notes = score.notes("C5/q, D5, E5, F5")
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        )).addClef("treble")
+
+        system.format()
+
+        _ = f.PedalMarking(
+            notes: [notes[0] as! StaveNote, notes[3] as! StaveNote],
+            type: .text
+        )
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

@@ -43,7 +43,7 @@ public struct TieRenderOptions {
 /// hammer ons, pull offs, and slides.
 open class StaveTie: VexElement {
 
-    override open class var CATEGORY: String { "StaveTie" }
+    override open class var category: String { "StaveTie" }
 
     // MARK: - Properties
 
@@ -224,3 +224,41 @@ open class StaveTie: VexElement {
         try renderText(firstXPx: firstXPx, lastXPx: lastXPx)
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("StaveTie", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(factory: f, x: 10, width: 500, y: 10))
+        let notes = score.notes("C5/q, C5, E5, E5")
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        )).addClef("treble").addTimeSignature("4/4")
+
+        system.format()
+
+        _ = f.StaveTie(notes: TieNotes(
+            firstNote: notes[0], lastNote: notes[1],
+            firstIndices: [0], lastIndices: [0]
+        ))
+        _ = f.StaveTie(notes: TieNotes(
+            firstNote: notes[2], lastNote: notes[3],
+            firstIndices: [0], lastIndices: [0]
+        ))
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

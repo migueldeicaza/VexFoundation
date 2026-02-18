@@ -9,7 +9,7 @@ import Foundation
 /// Renders vibrato effect between two notes using a wave bracket.
 public final class VibratoBracket: VexElement {
 
-    override public class var CATEGORY: String { "VibratoBracket" }
+    override public class var category: String { "VibratoBracket" }
 
     // MARK: - Properties
 
@@ -81,3 +81,34 @@ public final class VibratoBracket: VexElement {
         Vibrato.renderVibrato(ctx: ctx, x: startX, y: y, opts: vibRenderOptions)
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("VibratoBracket", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(factory: f, x: 10, width: 500, y: 10))
+        let notes = score.notes("C5/q, D5, E5, F5")
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        )).addClef("treble")
+
+        system.format()
+
+        _ = f.VibratoBracket(from: notes[0], to: notes[3])
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

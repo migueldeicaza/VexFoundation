@@ -69,7 +69,7 @@ public struct NoteHeadStruct {
 /// Renders note heads. Typically managed internally by StaveNote.
 public final class NoteHead: Note {
 
-    override public class var CATEGORY: String { "NoteHead" }
+    override public class var category: String { "NoteHead" }
 
     public var glyphCode: String
     public var customGlyph: Bool = false
@@ -237,3 +237,32 @@ public final class NoteHead: Note {
         }
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("NoteHead", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(score.notes("C5/w, D5/h, E5/q, F5/8"))]
+        )).addClef("treble")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

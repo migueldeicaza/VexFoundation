@@ -53,7 +53,7 @@ public enum SymbolModifier: Int {
 /// Supports mixed text and glyph blocks with super/subscript positioning.
 public final class ChordSymbol: Modifier {
 
-    override public class var CATEGORY: String { "ChordSymbol" }
+    override public class var category: String { "ChordSymbol" }
 
     // MARK: - Static Glyph Data
 
@@ -650,3 +650,52 @@ public final class ChordSymbol: Modifier {
         ctx.restore()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("ChordSymbol", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 180) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500, height: 170))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let notes = score.notes("C5/q, D5, E5, F5")
+
+        let cs1 = f.ChordSymbol(vJustify: .top, hJustify: .left)
+        _ = cs1.addGlyphOrText("Cmaj7")
+        _ = notes[0].addModifier(cs1, index: 0)
+
+        let cs2 = f.ChordSymbol(vJustify: .top, hJustify: .left)
+        _ = cs2.addGlyphOrText("Dm")
+        _ = notes[1].addModifier(cs2, index: 0)
+
+        let cs3 = f.ChordSymbol(vJustify: .top, hJustify: .left)
+        _ = cs3.addGlyphOrText("G7")
+        _ = notes[2].addModifier(cs3, index: 0)
+
+        let cs4 = f.ChordSymbol(vJustify: .top, hJustify: .left)
+        _ = cs4.addGlyphOrText("F")
+        _ = notes[3].addModifier(cs4, index: 0)
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        ))
+            .addClef("treble")
+            .addTimeSignature("4/4")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

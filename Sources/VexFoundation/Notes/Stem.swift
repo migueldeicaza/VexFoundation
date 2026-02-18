@@ -50,7 +50,7 @@ public struct StemOptions {
 /// Renders the stem of a note. Generally handled by its parent StemmableNote.
 public final class Stem: VexElement {
 
-    override public class var CATEGORY: String { "Stem" }
+    override public class var category: String { "Stem" }
 
     // Stem directions
     public static let UP: Int = 1
@@ -201,3 +201,33 @@ public final class Stem: VexElement {
         ctx.restore()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Stem", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        let upNotes = score.notes("E5/q, F5, G5, A5", options: ["stem": "up"])
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(upNotes)]
+        )).addClef("treble")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

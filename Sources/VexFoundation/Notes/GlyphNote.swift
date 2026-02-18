@@ -20,7 +20,7 @@ public struct GlyphNoteOptions {
 /// A note that renders a single glyph (e.g. repeat signs, segno, coda).
 open class GlyphNote: Note {
 
-    override open class var CATEGORY: String { "GlyphNote" }
+    override open class var category: String { "GlyphNote" }
 
     // MARK: - Properties
 
@@ -108,3 +108,32 @@ open class GlyphNote: Note {
         restoreStyle(context: ctx, style: getStyle())
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("GlyphNote", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(score.notes("C5/q, D5, E5, F5"))]
+        )).addClef("treble")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

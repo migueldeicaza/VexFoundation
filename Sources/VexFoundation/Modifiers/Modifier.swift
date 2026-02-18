@@ -20,7 +20,7 @@ public enum ModifierPosition: Int, Sendable {
 /// Examples: Accidental, Annotation, Stroke, Dot, etc.
 open class Modifier: VexElement {
 
-    override open class var CATEGORY: String { "Modifier" }
+    override open class var category: String { "Modifier" }
 
     public static let positionString: [String: ModifierPosition] = [
         "center": .center, "above": .above, "below": .below,

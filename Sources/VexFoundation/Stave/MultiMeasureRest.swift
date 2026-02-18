@@ -62,7 +62,7 @@ public struct MultiMeasureRestRenderOptions {
 /// or symbol glyphs (1-bar, 2-bar, 4-bar rest symbols), plus a measure count.
 public final class MultiMeasureRest: VexElement {
 
-    override public class var CATEGORY: String { "MultiMeasureRest" }
+    override public class var category: String { "MultiMeasureRest" }
 
     // MARK: - Semibreve Rest Cache
 
@@ -271,3 +271,32 @@ public final class MultiMeasureRest: VexElement {
         }
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("MultiMeasureRest", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 140) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory()
+        _ = f.setContext(ctx)
+
+        let stave = f.Stave(x: 10, y: 30, width: 490)
+        _ = stave.addClef("treble")
+
+        let mmr = f.MultiMeasureRest(
+            numberOfMeasures: 4,
+            options: MultiMeasureRestRenderOptions(numberOfMeasures: 4)
+        )
+        _ = mmr.setStave(stave)
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

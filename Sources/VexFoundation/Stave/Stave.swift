@@ -76,9 +76,9 @@ private let SORT_ORDER_END_MODIFIERS: [String: Int] = [
 /// Main stave class. Manages modifiers, calculates layout, and renders staff lines.
 open class Stave: VexElement {
 
-    override open class var CATEGORY: String { "Stave" }
+    override open class var category: String { "Stave" }
 
-    override public class var TEXT_FONT: FontInfo {
+    override public class var textFont: FontInfo {
         FontInfo(
             family: VexFont.SANS_SERIF,
             size: 8,
@@ -396,7 +396,7 @@ open class Stave: VexElement {
             clefName = clefSpec
         }
 
-        let clefs = getModifiers(position: position, category: Clef.CATEGORY).compactMap { $0 as? Clef }
+        let clefs = getModifiers(position: position, category: Clef.category).compactMap { $0 as? Clef }
         if clefs.isEmpty {
             addClef(clefSpec, size: size, annotation: annotation, position: position)
         } else {
@@ -432,7 +432,7 @@ open class Stave: VexElement {
     @discardableResult
     public func setKeySignature(_ keySpec: String, cancelKeySpec: String? = nil,
                                 position: StaveModifierPosition = .begin) -> Self {
-        let keySigs = getModifiers(position: position, category: KeySignature.CATEGORY).compactMap { $0 as? KeySignature }
+        let keySigs = getModifiers(position: position, category: KeySignature.category).compactMap { $0 as? KeySignature }
         if keySigs.isEmpty {
             addKeySignature(keySpec, cancelKeySpec: cancelKeySpec, position: position)
         } else {
@@ -460,7 +460,7 @@ open class Stave: VexElement {
     @discardableResult
     public func setTimeSignature(_ timeSpec: String, customPadding: Double? = nil,
                                  position: StaveModifierPosition = .begin) -> Self {
-        let timeSigs = getModifiers(position: position, category: TimeSignature.CATEGORY).compactMap { $0 as? TimeSignature }
+        let timeSigs = getModifiers(position: position, category: TimeSignature.category).compactMap { $0 as? TimeSignature }
         if timeSigs.isEmpty {
             addTimeSignature(timeSpec, customPadding: customPadding, position: position)
         } else {
@@ -700,3 +700,37 @@ open class Stave: VexElement {
         }
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Stave", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 500, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let factory = Factory(options: FactoryOptions(width: 480, height: 150))
+        _ = factory.setContext(ctx)
+        let score = factory.EasyScore()
+
+        let system = factory.System(options: SystemOptions(
+            factory: factory, x: 10, width: 480, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [
+                score.voice(score.notes("C5/q, D5, E5, F5"))
+            ]
+        ))
+            .addClef("treble")
+            .addKeySignature("G")
+            .addTimeSignature("4/4")
+
+        system.format()
+        try? factory.draw()
+    }
+    .padding()
+}
+#endif

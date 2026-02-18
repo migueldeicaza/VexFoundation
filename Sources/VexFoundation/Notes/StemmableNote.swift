@@ -9,7 +9,7 @@ import Foundation
 /// Examples: StaveNote, TabNote.
 open class StemmableNote: Note {
 
-    override open class var CATEGORY: String { "StemmableNote" }
+    override open class var category: String { "StemmableNote" }
 
     public var stemDirection: Int?
     public var stem: Stem?

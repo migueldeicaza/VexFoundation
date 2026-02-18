@@ -23,9 +23,9 @@ public enum RepetitionType: Int {
 /// Renders repetition markers (Coda, Segno, D.C., D.S., Fine, etc.) on a stave.
 public final class StaveRepetition: StaveModifier {
 
-    override public class var CATEGORY: String { "Repetition" }
+    override public class var category: String { "Repetition" }
 
-    override public class var TEXT_FONT: FontInfo {
+    override public class var textFont: FontInfo {
         FontInfo(
             family: VexFont.SERIF,
             size: Tables.NOTATION_FONT_SCALE / 3,
@@ -129,3 +129,29 @@ public final class StaveRepetition: StaveModifier {
         ctx.restore()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("StaveRepetition", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 120) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory()
+        _ = f.setContext(ctx)
+
+        let s1 = f.Stave(x: 10, y: 20, width: 240)
+        _ = s1.addEndModifier(StaveRepetition(type: .codaRight, x: 0, yShift: 0))
+
+        let s2 = f.Stave(x: 260, y: 20, width: 240)
+        _ = s2.addModifier(StaveRepetition(type: .segnoLeft, x: 0, yShift: 0), position: .begin)
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

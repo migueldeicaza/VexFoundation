@@ -55,7 +55,7 @@ public struct StaveLineRenderOptions {
 /// Draws lines connecting two notes (glissando, pedagogical diagrams, etc.).
 public final class StaveLine: VexElement {
 
-    override public class var CATEGORY: String { "StaveLine" }
+    override public class var category: String { "StaveLine" }
 
     // MARK: - Properties
 
@@ -297,3 +297,39 @@ public final class StaveLine: VexElement {
         ctx.restore()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("StaveLine", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(factory: f, x: 10, width: 500, y: 10))
+        let notes = score.notes("C5/q, D5, E5, F5")
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        )).addClef("treble")
+
+        system.format()
+
+        _ = f.StaveLine(notes: StaveLineNotes(
+            firstNote: notes[0] as! StaveNote,
+            firstIndices: [0],
+            lastNote: notes[3] as! StaveNote,
+            lastIndices: [0]
+        ))
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

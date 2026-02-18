@@ -88,7 +88,7 @@ public struct StaveNoteHeadBounds {
 /// Manages noteheads, stems, flags, ledger lines, and modifiers.
 public class StaveNote: StemmableNote {
 
-    override public class var CATEGORY: String { "StaveNote" }
+    override public class var category: String { "StaveNote" }
 
     public static let LEDGER_LINE_OFFSET: Double = 3
 
@@ -955,3 +955,32 @@ public class StaveNote: StemmableNote {
         }
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("StaveNote", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(score.notes("C5/w, D5/h, E5/q, F5/8, G5/16, A5/16"))]
+        )).addClef("treble").addTimeSignature("4/4")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

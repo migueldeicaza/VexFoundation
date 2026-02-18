@@ -21,9 +21,9 @@ public struct StaveTempoOptions {
 /// Renders tempo markings (e.g. "Allegro ♩= 120") on a stave.
 public final class StaveTempo: StaveModifier {
 
-    override public class var CATEGORY: String { "StaveTempo" }
+    override public class var category: String { "StaveTempo" }
 
-    override public class var TEXT_FONT: FontInfo {
+    override public class var textFont: FontInfo {
         FontInfo(
             family: VexFont.SERIF,
             size: 14,
@@ -142,3 +142,30 @@ public final class StaveTempo: StaveModifier {
         ctx.restore()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("StaveTempo", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 150) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory()
+        _ = f.setContext(ctx)
+
+        let s = f.Stave(x: 10, y: 40, width: 490)
+        _ = s.addClef("treble").addTimeSignature("4/4")
+        _ = s.addModifier(StaveTempo(
+            tempo: StaveTempoOptions(bpm: 120, duration: "q"),
+            x: 0, shiftY: -15
+        ))
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

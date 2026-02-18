@@ -6,7 +6,7 @@ import Foundation
 /// Renders key signatures (sharps/flats) on a stave.
 public final class KeySignature: StaveModifier {
 
-    override public class var CATEGORY: String { "KeySignature" }
+    override public class var category: String { "KeySignature" }
 
     // MARK: - Accidental Spacing
 
@@ -251,3 +251,29 @@ public final class KeySignature: StaveModifier {
         restoreStyle(context: ctx)
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("KeySignature", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 120) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory()
+        _ = f.setContext(ctx)
+
+        let s1 = f.Stave(x: 10, y: 20, width: 240)
+        _ = s1.addClef("treble").addKeySignature("A")
+
+        let s2 = f.Stave(x: 260, y: 20, width: 240)
+        _ = s2.addClef("treble").addKeySignature("Bb")
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

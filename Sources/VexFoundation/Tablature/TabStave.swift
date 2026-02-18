@@ -8,7 +8,7 @@ import Foundation
 /// A tablature stave with default 6 lines and wider line spacing.
 public final class TabStave: Stave {
 
-    override public class var CATEGORY: String { "TabStave" }
+    override public class var category: String { "TabStave" }
 
     // MARK: - Init
 
@@ -34,3 +34,26 @@ public final class TabStave: Stave {
         return self
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("TabStave", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 500, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory()
+        _ = f.setContext(ctx)
+
+        let ts = f.TabStave(x: 10, y: 20, width: 490)
+        _ = ts.addTabGlyph()
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

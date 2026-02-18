@@ -107,7 +107,7 @@ public final class TimeSignatureGlyph {
 /// Renders time signatures on a stave.
 public final class TimeSignature: StaveModifier {
 
-    override public class var CATEGORY: String { "TimeSignature" }
+    override public class var category: String { "TimeSignature" }
 
     /// Special symbol time signatures.
     public static let symbolGlyphs: [String: (code: String, line: Double)] = [
@@ -251,3 +251,32 @@ public final class TimeSignature: StaveModifier {
         restoreStyle(context: ctx)
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("TimeSignature", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 120) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory()
+        _ = f.setContext(ctx)
+
+        let s1 = f.Stave(x: 10, y: 20, width: 150)
+        _ = s1.addClef("treble").addTimeSignature("4/4")
+
+        let s2 = f.Stave(x: 170, y: 20, width: 150)
+        _ = s2.addClef("treble").addTimeSignature("3/4")
+
+        let s3 = f.Stave(x: 330, y: 20, width: 150)
+        _ = s3.addClef("treble").addTimeSignature("6/8")
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

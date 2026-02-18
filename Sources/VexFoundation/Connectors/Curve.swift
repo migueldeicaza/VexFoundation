@@ -45,7 +45,7 @@ public struct CurveOptions {
 /// Implements curves (slurs) between notes using cubic Bézier curves.
 public final class Curve: VexElement {
 
-    override public class var CATEGORY: String { "Curve" }
+    override public class var category: String { "Curve" }
 
     // MARK: - Properties
 
@@ -183,3 +183,34 @@ public final class Curve: VexElement {
         )
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Curve", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(factory: f, x: 10, width: 500, y: 10))
+        let notes = score.notes("C5/q, D5, E5, F5")
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        )).addClef("treble")
+
+        system.format()
+
+        _ = f.Curve(from: notes[0], to: notes[3])
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

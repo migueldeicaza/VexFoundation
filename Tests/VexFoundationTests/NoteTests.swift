@@ -500,11 +500,11 @@ struct NoteTests {
 
 /// Concrete subclass of Note for testing (Note is abstract in intent).
 private class TestNote: Note {
-    override class var CATEGORY: String { "TestNote" }
+    override class var category: String { "TestNote" }
 }
 
 /// Concrete subclass of StemmableNote for testing.
 private class TestStemmableNote: StemmableNote {
-    override class var CATEGORY: String { "TestStemmableNote" }
+    override class var category: String { "TestStemmableNote" }
     override func hasStem() -> Bool { glyphProps?.stem ?? false }
 }

@@ -27,7 +27,7 @@ public struct CrescendoOptions {
 /// Formatted as part of a Voice like any other Note type.
 public final class Crescendo: Note {
 
-    override public class var CATEGORY: String { "Crescendo" }
+    override public class var category: String { "Crescendo" }
 
     // MARK: - Properties
 
@@ -121,3 +121,39 @@ public final class Crescendo: Note {
         ctx.closePath()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Crescendo", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 150) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+
+        let cresc = Crescendo(NoteStruct(duration: "q"))
+        _ = cresc.setDecrescendo(false)
+        _ = cresc.setHeight(15)
+        _ = cresc.setLine(4)
+
+        let notes = score.notes("C5/q, D5, E5")
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes + [cresc])]
+        )).addClef("treble")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

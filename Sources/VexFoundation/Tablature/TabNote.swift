@@ -123,7 +123,7 @@ private func getPartialStemLines(
 /// and can be drawn with or without stems.
 open class TabNote: StemmableNote {
 
-    override open class var CATEGORY: String { "TabNote" }
+    override open class var category: String { "TabNote" }
 
     // MARK: - Properties
 
@@ -451,3 +451,44 @@ open class TabNote: StemmableNote {
         restoreStyle()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("TabNote", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 500, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+
+        let ts = f.TabStave(x: 10, y: 10, width: 490)
+        _ = ts.addTabGlyph()
+
+        let notes: [Note] = [
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 1, fret: 3)], duration: "q")),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 5)], duration: "q")),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 3, fret: 7)], duration: "q")),
+            f.TabNote(TabNoteStruct(positions: [
+                TabNotePosition(str: 1, fret: 0),
+                TabNotePosition(str: 2, fret: 1),
+                TabNotePosition(str: 3, fret: 0),
+            ], duration: "q")),
+        ]
+
+        let voice = f.Voice(timeSpec: "4/4")
+        _ = voice.addTickables(notes)
+
+        let formatter = f.Formatter()
+        _ = formatter.joinVoices([voice])
+        _ = formatter.format([voice], justifyWidth: 400)
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

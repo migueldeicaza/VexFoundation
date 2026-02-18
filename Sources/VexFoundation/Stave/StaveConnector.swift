@@ -22,7 +22,7 @@ public enum ConnectorType: Int {
 /// Connects two staves with brackets, braces, or lines.
 public final class StaveConnector: VexElement {
 
-    override public class var CATEGORY: String { "StaveConnector" }
+    override public class var category: String { "StaveConnector" }
 
     // MARK: - Properties
 
@@ -150,3 +150,31 @@ public final class StaveConnector: VexElement {
         }
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("StaveConnector", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 300, height: 250) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory()
+        _ = f.setContext(ctx)
+
+        let top = f.Stave(x: 40, y: 20, width: 240)
+        _ = top.addClef("treble")
+        let bottom = f.Stave(x: 40, y: 120, width: 240)
+        _ = bottom.addClef("bass")
+
+        _ = f.StaveConnector(topStave: top, bottomStave: bottom, type: .brace)
+        _ = f.StaveConnector(topStave: top, bottomStave: bottom, type: .singleLeft)
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

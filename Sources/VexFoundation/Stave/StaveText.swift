@@ -13,9 +13,9 @@ public enum StaveTextJustification: Int {
 /// Renders text above, below, left, or right of a stave.
 public final class StaveText: StaveModifier {
 
-    override public class var CATEGORY: String { "StaveText" }
+    override public class var category: String { "StaveText" }
 
-    override public class var TEXT_FONT: FontInfo {
+    override public class var textFont: FontInfo {
         FontInfo(
             family: VexFont.SERIF,
             size: 16,
@@ -104,3 +104,27 @@ public final class StaveText: StaveModifier {
         ctx.restore()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("StaveText", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 140) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory()
+        _ = f.setContext(ctx)
+
+        let s = f.Stave(x: 10, y: 30, width: 490)
+        _ = s.addClef("treble")
+        _ = s.addModifier(StaveText(text: "Allegro", position: .above))
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

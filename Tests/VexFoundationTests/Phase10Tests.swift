@@ -24,7 +24,7 @@ struct Phase10Tests {
     // MARK: - Ornament Creation
 
     @Test func ornamentCategory() {
-        #expect(Ornament.CATEGORY == "Ornament")
+        #expect(Ornament.category == "Ornament")
     }
 
     @Test func ornamentTrillCreation() {
@@ -204,7 +204,7 @@ struct Phase10Tests {
     // MARK: - Tremolo
 
     @Test func tremoloCategory() {
-        #expect(Tremolo.CATEGORY == "Tremolo")
+        #expect(Tremolo.category == "Tremolo")
     }
 
     @Test func tremoloCreation() {
@@ -271,7 +271,7 @@ struct Phase10Tests {
     // MARK: - StaveHairpin
 
     @Test func staveHairpinCategory() {
-        #expect(StaveHairpin.CATEGORY == "StaveHairpin")
+        #expect(StaveHairpin.category == "StaveHairpin")
     }
 
     @Test func staveHairpinCrescendo() {
@@ -344,7 +344,7 @@ struct Phase10Tests {
     // MARK: - StaveConnector
 
     @Test func staveConnectorCategory() {
-        #expect(StaveConnector.CATEGORY == "StaveConnector")
+        #expect(StaveConnector.category == "StaveConnector")
     }
 
     @Test func staveConnectorCreation() {

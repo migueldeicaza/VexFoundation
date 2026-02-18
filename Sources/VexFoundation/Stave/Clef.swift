@@ -24,7 +24,7 @@ public struct ClefAnnotationType: Sendable {
 /// Renders clefs (treble, bass, alto, tenor, percussion, tab, etc.) on a stave.
 public final class Clef: StaveModifier {
 
-    override public class var CATEGORY: String { "Clef" }
+    override public class var category: String { "Clef" }
 
     // MARK: - Clef Types
 
@@ -145,3 +145,32 @@ public final class Clef: StaveModifier {
         restoreStyle(context: ctx)
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Clef", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 120) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory()
+        _ = f.setContext(ctx)
+
+        let s1 = f.Stave(x: 10, y: 20, width: 150)
+        _ = s1.addClef("treble")
+
+        let s2 = f.Stave(x: 170, y: 20, width: 150)
+        _ = s2.addClef("bass")
+
+        let s3 = f.Stave(x: 330, y: 20, width: 150)
+        _ = s3.addClef("alto")
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

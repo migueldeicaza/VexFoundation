@@ -24,7 +24,7 @@ public enum AnnotationVerticalJustify: Int {
 /// Modifier that renders text annotations above or below notes.
 public final class Annotation: Modifier {
 
-    override public class var CATEGORY: String { "Annotation" }
+    override public class var category: String { "Annotation" }
 
     // MARK: - Properties
 
@@ -189,3 +189,40 @@ public final class Annotation: Modifier {
         ctx.restore()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Annotation", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 180) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500, height: 170))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let notes = score.notes("C5/q, D5, E5, F5")
+        _ = notes[0].addModifier(f.Annotation(text: "p", vJustify: .bottom))
+        _ = notes[1].addModifier(f.Annotation(text: "mf", vJustify: .bottom))
+        _ = notes[2].addModifier(f.Annotation(text: "f", vJustify: .bottom))
+        _ = notes[3].addModifier(f.Annotation(text: "ff", vJustify: .bottom))
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        ))
+            .addClef("treble")
+            .addTimeSignature("4/4")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

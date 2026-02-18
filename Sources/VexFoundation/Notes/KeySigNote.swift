@@ -8,7 +8,7 @@ import Foundation
 /// A note that renders a key signature change inline with other notes.
 public final class KeySigNote: Note {
 
-    override public class var CATEGORY: String { "KeySigNote" }
+    override public class var category: String { "KeySigNote" }
 
     // MARK: - Properties
 
@@ -46,3 +46,32 @@ public final class KeySigNote: Note {
         try keySignature.drawStave(stave: stave)
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("KeySigNote", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(score.notes("C5/q, D5, E5, F5"))]
+        )).addClef("treble").addKeySignature("D")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

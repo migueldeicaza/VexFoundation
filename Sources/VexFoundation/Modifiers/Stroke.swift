@@ -21,7 +21,7 @@ public enum StrokeType: Int {
 /// Renders chord strokes (arpeggiated, brushed, rasquedo, etc.).
 public final class Stroke: Modifier {
 
-    override public class var CATEGORY: String { "Stroke" }
+    override public class var category: String { "Stroke" }
 
     // MARK: - Static Format
 
@@ -192,3 +192,40 @@ public final class Stroke: Modifier {
         }
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Stroke", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500, height: 150))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let notes = score.notes("(C5 E5 G5)/q, (D5 F5 A5), (E5 G5 B5), (F5 A5 C6)")
+        _ = notes[0].addModifier(Stroke(type: .brushDown), index: 0)
+        _ = notes[1].addModifier(Stroke(type: .brushUp), index: 0)
+        _ = notes[2].addModifier(Stroke(type: .rollDown), index: 0)
+        _ = notes[3].addModifier(Stroke(type: .rollUp), index: 0)
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        ))
+            .addClef("treble")
+            .addTimeSignature("4/4")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

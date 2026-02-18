@@ -62,10 +62,12 @@ public struct SystemOptions {
     public var formatOptions: FormatParams = FormatParams()
     public var noJustification: Bool = false
 
+    /// When width is not provided (nil), autoWidth is enabled and the system
+    /// auto-sizes to fit content — matching JS VexFlow's behavior.
     public init(factory: Factory? = nil, noPadding: Bool = false,
                 debugFormatter: Bool = false, spaceBetweenStaves: Double = 12,
                 formatIterations: Int = 0, autoWidth: Bool = false,
-                x: Double = 10, width: Double = 500, y: Double = 10,
+                x: Double = 10, width: Double? = nil, y: Double = 10,
                 details: SystemFormatterOptions = SystemFormatterOptions(),
                 formatOptions: FormatParams = FormatParams(),
                 noJustification: Bool = false) {
@@ -74,9 +76,10 @@ public struct SystemOptions {
         self.debugFormatter = debugFormatter
         self.spaceBetweenStaves = spaceBetweenStaves
         self.formatIterations = formatIterations
-        self.autoWidth = autoWidth
+        // Match JS: autoWidth when width is not explicitly provided
+        self.autoWidth = width == nil ? (noJustification ? false : true) : autoWidth
         self.x = x
-        self.width = width
+        self.width = width ?? 500
         self.y = y
         self.details = details
         self.formatOptions = formatOptions
@@ -89,7 +92,7 @@ public struct SystemOptions {
 /// A musical system: a collection of staves with voices, formatted together.
 public final class System: VexElement {
 
-    override public class var CATEGORY: String { "System" }
+    override public class var category: String { "System" }
 
     // MARK: - Properties
 
@@ -111,9 +114,6 @@ public final class System: VexElement {
         }
         self.factory = factory
         self.options = options
-        if options.noJustification == false && options.width == 500 {
-            self.options.autoWidth = true
-        }
         super.init()
     }
 
@@ -284,3 +284,40 @@ public final class System: VexElement {
         setRendered()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("System", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 500, height: 260) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(factory: f, x: 10, width: 500, y: 10))
+
+        let treble = system.addStave(SystemStave(
+            voices: [score.voice(score.notes("C5/q, D5, E5, F5"))]
+        ))
+        _ = treble.addClef("treble").addTimeSignature("4/4")
+
+        let bass = system.addStave(SystemStave(
+            voices: [score.voice(score.notes("C3/q, D3, E3, F3", options: ["clef": "bass"]))]
+        ))
+        _ = bass.addClef("bass").addTimeSignature("4/4")
+
+        system.addConnector(type: .brace)
+        system.addConnector(type: .singleLeft)
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

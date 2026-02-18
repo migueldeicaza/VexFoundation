@@ -15,9 +15,9 @@ public enum VoltaType: Int {
 /// Renders volta brackets (1st/2nd endings) above a stave.
 public final class Volta: StaveModifier {
 
-    override public class var CATEGORY: String { "Volta" }
+    override public class var category: String { "Volta" }
 
-    override public class var TEXT_FONT: FontInfo {
+    override public class var textFont: FontInfo {
         FontInfo(
             family: VexFont.SANS_SERIF,
             size: 9,
@@ -84,3 +84,29 @@ public final class Volta: StaveModifier {
         ctx.fillRect(modifierX + xShift, topY, width, 1)
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Volta", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 140) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory()
+        _ = f.setContext(ctx)
+
+        let s1 = f.Stave(x: 10, y: 30, width: 240)
+        _ = s1.addModifier(Volta(type: .begin, number: "1.", x: 0, yShift: -5))
+
+        let s2 = f.Stave(x: 260, y: 30, width: 240)
+        _ = s2.addModifier(Volta(type: .beginEnd, number: "2.", x: 0, yShift: -5))
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

@@ -46,7 +46,7 @@ public struct BendRenderOptions {
 /// Renders tablature bends on notes with up/down arrows and text.
 public final class Bend: Modifier {
 
-    override public class var CATEGORY: String { "Bend" }
+    override public class var category: String { "Bend" }
 
     public static let UP = 0
     public static let DOWN = 1
@@ -261,3 +261,38 @@ public final class Bend: Modifier {
         ctx.restore()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Bend", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 200) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500, height: 190))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let notes = score.notes("C5/q, D5, E5, F5")
+        _ = notes[0].addModifier(Bend("Full"), index: 0)
+        _ = notes[2].addModifier(Bend("1/2", release: true), index: 0)
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        ))
+            .addClef("treble")
+            .addTimeSignature("4/4")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

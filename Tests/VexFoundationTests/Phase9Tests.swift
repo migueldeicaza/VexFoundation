@@ -25,7 +25,7 @@ struct Phase9Tests {
 
     @Test func ghostNoteCreation() {
         let ghost = GhostNote("4")
-        #expect(GhostNote.CATEGORY == "GhostNote")
+        #expect(GhostNote.category == "GhostNote")
         #expect(ghost.isRest())
     }
 
@@ -53,7 +53,7 @@ struct Phase9Tests {
     @Test func glyphNoteCreation() {
         let glyph = Glyph(code: "segno", point: 40)
         let note = GlyphNote(glyph: glyph, noteStruct: NoteStruct(duration: "q"))
-        #expect(GlyphNote.CATEGORY == "GlyphNote")
+        #expect(GlyphNote.category == "GlyphNote")
         #expect(note.getGlyphWidth() > 0)
     }
 
@@ -88,7 +88,7 @@ struct Phase9Tests {
 
     @Test func repeatNoteCreation() {
         let note = RepeatNote(type: "1")
-        #expect(RepeatNote.CATEGORY == "RepeatNote")
+        #expect(RepeatNote.category == "RepeatNote")
         #expect(note.getGlyphWidth() > 0)
     }
 
@@ -114,7 +114,7 @@ struct Phase9Tests {
 
     @Test func clefNoteCreation() {
         let note = ClefNote(type: "treble")
-        #expect(ClefNote.CATEGORY == "ClefNote")
+        #expect(ClefNote.category == "ClefNote")
         #expect(note.clefDef.code == "gClef")
         #expect(note.clefSize == "default")
     }
@@ -158,7 +158,7 @@ struct Phase9Tests {
 
     @Test func keySigNoteCreation() {
         let note = KeySigNote(keySpec: "G")
-        #expect(KeySigNote.CATEGORY == "KeySigNote")
+        #expect(KeySigNote.category == "KeySigNote")
         #expect(note.shouldIgnoreTicks())
     }
 
@@ -181,7 +181,7 @@ struct Phase9Tests {
 
     @Test func textNoteCreation() {
         let note = TextNote(TextNoteStruct(text: "Hello"))
-        #expect(TextNote.CATEGORY == "TextNote")
+        #expect(TextNote.category == "TextNote")
         #expect(note.getText() == "Hello")
     }
 
@@ -256,7 +256,7 @@ struct Phase9Tests {
 
     @Test func annotationCreation() {
         let ann = Annotation("Test")
-        #expect(Annotation.CATEGORY == "Annotation")
+        #expect(Annotation.category == "Annotation")
         #expect(ann.text == "Test")
         #expect(ann.getWidth() > 0)
     }

@@ -170,7 +170,7 @@ public final class Glyph: VexElement {
 
     // MARK: - Static Members
 
-    override public class var CATEGORY: String { "Glyph" }
+    override public class var category: String { "Glyph" }
 
     nonisolated(unsafe) static var glyphCache = GlyphCache()
 
@@ -521,3 +521,32 @@ public final class Glyph: VexElement {
         restoreStyle(context: ctx)
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Glyph", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 500, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let glyphs: [(String, Double)] = [
+            ("noteheadBlack", 40),
+            ("noteheadHalf", 100),
+            ("noteheadWhole", 160),
+            ("accidentalSharp", 220),
+            ("accidentalFlat", 270),
+            ("gClef", 330),
+            ("fClef", 400),
+        ]
+
+        for (code, x) in glyphs {
+            Glyph.renderGlyph(ctx: ctx, xPos: x, yPos: 80, point: 40, code: code)
+        }
+    }
+    .padding()
+}
+#endif

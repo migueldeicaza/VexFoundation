@@ -92,7 +92,7 @@ public struct NoteRenderOptions {
 /// Notes have a value (pitch, fret, etc.) and a duration (quarter, half, etc.).
 open class Note: Tickable {
 
-    override open class var CATEGORY: String { "Note" }
+    override open class var category: String { "Note" }
 
     // MARK: - Static Parsing
 
@@ -346,8 +346,8 @@ open class Note: Tickable {
             fatalError("[VexError] UnformattedNote: Can't call getMetrics on an unformatted note.")
         }
 
-        let modLeftPx: Double = 0
-        let modRightPx: Double = 0
+        let modLeftPx = modifierContext?.getState().leftShift ?? 0
+        let modRightPx = modifierContext?.getState().rightShift ?? 0
         let width = getTickableWidth()
         let glyphWidth = getGlyphWidth()
         let notePx = width - modLeftPx - modRightPx - leftDisplacedHeadPx - rightDisplacedHeadPx

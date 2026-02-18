@@ -38,7 +38,7 @@ struct Phase14Tests {
     // ============================================================
 
     @Test func tabStaveCategory() {
-        #expect(TabStave.CATEGORY == "TabStave")
+        #expect(TabStave.category == "TabStave")
     }
 
     @Test func tabStaveDefaultLines() {
@@ -88,7 +88,7 @@ struct Phase14Tests {
     // ============================================================
 
     @Test func tabNoteCategory() {
-        #expect(TabNote.CATEGORY == "TabNote")
+        #expect(TabNote.category == "TabNote")
     }
 
     @Test func tabNoteCreation() {
@@ -273,7 +273,7 @@ struct Phase14Tests {
     // ============================================================
 
     @Test func tabTieCategory() {
-        #expect(TabTie.CATEGORY == "TabTie")
+        #expect(TabTie.category == "TabTie")
     }
 
     @Test func tabTieCreation() {
@@ -328,7 +328,7 @@ struct Phase14Tests {
     // ============================================================
 
     @Test func tabSlideCategory() {
-        #expect(TabSlide.CATEGORY == "TabSlide")
+        #expect(TabSlide.category == "TabSlide")
     }
 
     @Test func tabSlideConstants() {
@@ -410,7 +410,7 @@ struct Phase14Tests {
     // ============================================================
 
     @Test func graceTabNoteCategory() {
-        #expect(GraceTabNote.CATEGORY == "GraceTabNote")
+        #expect(GraceTabNote.category == "GraceTabNote")
     }
 
     @Test func graceTabNoteScale() {
@@ -520,7 +520,7 @@ struct Phase14Tests {
     // ============================================================
 
     @Test func chordSymbolCategory() {
-        #expect(ChordSymbol.CATEGORY == "ChordSymbol")
+        #expect(ChordSymbol.category == "ChordSymbol")
     }
 
     @Test func chordSymbolCreation() {

@@ -9,7 +9,7 @@ import Foundation
 /// Renders straight diagonal lines instead of curved ties.
 public final class TabSlide: TabTie {
 
-    override public class var CATEGORY: String { "TabSlide" }
+    override public class var category: String { "TabSlide" }
 
     // MARK: - Constants
 
@@ -93,3 +93,48 @@ public final class TabSlide: TabTie {
         setRendered()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("TabSlide", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 500, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+
+        let ts = f.TabStave(x: 10, y: 10, width: 490)
+        _ = ts.addTabGlyph()
+
+        let notes: [TabNote] = [
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 5)], duration: "q")),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 9)], duration: "q")),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 3, fret: 7)], duration: "q")),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 3, fret: 3)], duration: "q")),
+        ]
+
+        let voice = f.Voice(timeSpec: "4/4")
+        _ = voice.addTickables(notes)
+
+        let formatter = f.Formatter()
+        _ = formatter.joinVoices([voice])
+        _ = formatter.format([voice], justifyWidth: 400)
+
+        let slideUp = TabSlide(notes: TieNotes(firstNote: notes[0], lastNote: notes[1], firstIndices: [0], lastIndices: [0]), direction: TabSlide.SLIDE_UP)
+        _ = slideUp.setContext(ctx)
+
+        let slideDown = TabSlide(notes: TieNotes(firstNote: notes[2], lastNote: notes[3], firstIndices: [0], lastIndices: [0]), direction: TabSlide.SLIDE_DOWN)
+        _ = slideDown.setContext(ctx)
+
+        try? f.draw()
+        try? slideUp.draw()
+        try? slideDown.draw()
+    }
+    .padding()
+}
+#endif

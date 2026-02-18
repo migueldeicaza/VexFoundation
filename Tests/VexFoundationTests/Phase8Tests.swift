@@ -93,7 +93,7 @@ struct Phase8Tests {
     }
 
     @Test func staveTieCategory() {
-        #expect(StaveTie.CATEGORY == "StaveTie")
+        #expect(StaveTie.category == "StaveTie")
     }
 
     // MARK: - Curve Creation
@@ -157,7 +157,7 @@ struct Phase8Tests {
     }
 
     @Test func curveCategory() {
-        #expect(Curve.CATEGORY == "Curve")
+        #expect(Curve.category == "Curve")
     }
 
     @Test func curvePositionEnum() {
@@ -277,7 +277,7 @@ struct Phase8Tests {
     }
 
     @Test func tupletCategory() {
-        #expect(Tuplet.CATEGORY == "Tuplet")
+        #expect(Tuplet.category == "Tuplet")
     }
 
     @Test func tupletNestingOffset() {

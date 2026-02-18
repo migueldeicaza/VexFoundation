@@ -9,7 +9,7 @@ import Foundation
 /// Formats and renders notes as a Modifier (e.g., ClefNote, TimeSigNote, BarNote).
 public final class NoteSubGroup: Modifier {
 
-    override public class var CATEGORY: String { "NoteSubGroup" }
+    override public class var category: String { "NoteSubGroup" }
 
     // MARK: - Properties
 
@@ -79,3 +79,36 @@ public final class NoteSubGroup: Modifier {
         }
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("NoteSubGroup", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 500, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let clefNote = f.ClefNote(type: "bass", size: "small")
+        let subGroup = f.NoteSubGroup(notes: [clefNote])
+
+        let notes = score.notes("C5/q, D5, E5, F5")
+        _ = notes[0].addModifier(subGroup, index: 0)
+
+        let system = f.System(options: SystemOptions(factory: f, x: 10, width: 500, y: 10))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        )).addClef("treble").addTimeSignature("4/4")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

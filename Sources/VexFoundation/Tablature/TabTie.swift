@@ -9,7 +9,7 @@ import Foundation
 /// hammer ons, pull offs, and slides.
 open class TabTie: StaveTie {
 
-    override open class var CATEGORY: String { "TabTie" }
+    override open class var category: String { "TabTie" }
 
     // MARK: - Factory Methods
 
@@ -31,3 +31,48 @@ open class TabTie: StaveTie {
         direction = -1  // Tab ties are always face up
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("TabTie", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 500, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+
+        let ts = f.TabStave(x: 10, y: 10, width: 490)
+        _ = ts.addTabGlyph()
+
+        let notes: [TabNote] = [
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 5)], duration: "q")),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 7)], duration: "q")),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 7)], duration: "q")),
+            f.TabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 5)], duration: "q")),
+        ]
+
+        let voice = f.Voice(timeSpec: "4/4")
+        _ = voice.addTickables(notes)
+
+        let formatter = f.Formatter()
+        _ = formatter.joinVoices([voice])
+        _ = formatter.format([voice], justifyWidth: 400)
+
+        let hammeron = TabTie(notes: TieNotes(firstNote: notes[0], lastNote: notes[1], firstIndices: [0], lastIndices: [0]), text: "H")
+        _ = hammeron.setContext(ctx)
+
+        let pulloff = TabTie(notes: TieNotes(firstNote: notes[2], lastNote: notes[3], firstIndices: [0], lastIndices: [0]), text: "P")
+        _ = pulloff.setContext(ctx)
+
+        try? f.draw()
+        try? hammeron.draw()
+        try? pulloff.draw()
+    }
+    .padding()
+}
+#endif

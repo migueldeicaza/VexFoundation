@@ -21,7 +21,7 @@ struct AccidentalLineMetrics {
 /// Positioned to the left of the notehead.
 public final class Accidental: Modifier {
 
-    override public class var CATEGORY: String { "Accidental" }
+    override public class var category: String { "Accidental" }
 
     // MARK: - Properties
 
@@ -360,3 +360,35 @@ public final class Accidental: Modifier {
         }
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Accidental", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500, height: 150))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let notes = score.notes("C#5/q, Db5, En5, F#5")
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        ))
+            .addClef("treble")
+            .addTimeSignature("4/4")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

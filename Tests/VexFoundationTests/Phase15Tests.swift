@@ -524,7 +524,7 @@ struct Phase15Tests {
     // ============================================================
 
     @Test func systemCategory() {
-        #expect(System.CATEGORY == "System")
+        #expect(System.category == "System")
     }
 
     @Test func systemCreation() {

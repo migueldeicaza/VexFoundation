@@ -32,7 +32,7 @@ public struct VibratoRenderOptions {
 /// Modifier that renders vibrato notation on notes.
 public final class Vibrato: Modifier {
 
-    override public class var CATEGORY: String { "Vibrato" }
+    override public class var category: String { "Vibrato" }
 
     // MARK: - Properties
 
@@ -170,3 +170,32 @@ public final class Vibrato: Modifier {
         Vibrato.renderVibrato(ctx: ctx, x: vx, y: vy, opts: vibratoRenderOptions)
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Vibrato", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(factory: f, x: 10, width: 500, y: 10))
+        let notes = score.notes("C5/q, D5, E5, F5")
+        _ = notes[1].addModifier(Vibrato())
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        )).addClef("treble")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

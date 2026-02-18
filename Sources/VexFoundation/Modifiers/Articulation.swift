@@ -68,7 +68,7 @@ private func getInitialOffset(_ note: Note, _ position: ModifierPosition) -> Dou
 /// Positioned above or below the note.
 public final class Articulation: Modifier {
 
-    override public class var CATEGORY: String { "Articulation" }
+    override public class var category: String { "Articulation" }
 
     static let INITIAL_OFFSET: Double = -0.5
 
@@ -294,3 +294,40 @@ public final class Articulation: Modifier {
         }
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Articulation", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500, height: 150))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let notes = score.notes("C5/q, D5, E5, F5")
+        _ = notes[0].addModifier(f.Articulation(type: "a."), index: 0)  // staccato
+        _ = notes[1].addModifier(f.Articulation(type: "a>"), index: 0)  // accent
+        _ = notes[2].addModifier(f.Articulation(type: "a-"), index: 0)  // tenuto
+        _ = notes[3].addModifier(f.Articulation(type: "a^"), index: 0)  // marcato
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        ))
+            .addClef("treble")
+            .addTimeSignature("4/4")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

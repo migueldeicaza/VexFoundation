@@ -23,10 +23,10 @@ public struct ElementAttributes {
 /// notation element.
 open class VexElement {
     /// Category string identifying the element type.
-    open class var CATEGORY: String { "Element" }
+    open class var category: String { "Element" }
 
     /// Default text font. Subclasses may override.
-    open class var TEXT_FONT: FontInfo {
+    open class var textFont: FontInfo {
         FontInfo(
             family: VexFont.SANS_SERIF,
             size: "\(VexFont.SIZE)pt",
@@ -60,7 +60,7 @@ open class VexElement {
     public init() {
         self.attrs = ElementAttributes(
             id: VexElement.newID(),
-            type: type(of: self).CATEGORY
+            type: type(of: self).category
         )
     }
 
@@ -76,7 +76,7 @@ open class VexElement {
     // MARK: - Category
 
     public func getCategory() -> String {
-        type(of: self).CATEGORY
+        type(of: self).category
     }
 
     // MARK: - Style
@@ -232,7 +232,7 @@ open class VexElement {
         weight: String? = nil,
         style: String? = nil
     ) -> Self {
-        let defaults = type(of: self).TEXT_FONT
+        let defaults = type(of: self).textFont
         if let font {
             textFont = FontInfo(
                 family: font.family.isEmpty ? defaults.family : font.family,

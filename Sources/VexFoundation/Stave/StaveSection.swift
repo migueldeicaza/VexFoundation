@@ -6,9 +6,9 @@ import Foundation
 /// Renders section labels (e.g. "A", "B", "Coda") on a stave.
 public final class StaveSection: StaveModifier {
 
-    override public class var CATEGORY: String { "StaveSection" }
+    override public class var category: String { "StaveSection" }
 
-    override public class var TEXT_FONT: FontInfo {
+    override public class var textFont: FontInfo {
         FontInfo(
             family: VexFont.SANS_SERIF,
             size: 10,
@@ -88,3 +88,27 @@ public final class StaveSection: StaveModifier {
         ctx.restore()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("StaveSection", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 140) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory()
+        _ = f.setContext(ctx)
+
+        let s = f.Stave(x: 10, y: 30, width: 490)
+        _ = s.addClef("treble")
+        _ = s.addModifier(StaveSection(section: "A", x: 0, shiftY: 5))
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

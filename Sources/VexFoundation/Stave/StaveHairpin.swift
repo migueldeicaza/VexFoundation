@@ -37,7 +37,7 @@ public struct HairpinRenderOptions {
 /// Renders crescendo and decrescendo hairpins between two notes.
 public final class StaveHairpin: VexElement {
 
-    override public class var CATEGORY: String { "StaveHairpin" }
+    override public class var category: String { "StaveHairpin" }
 
     // MARK: - Properties
 
@@ -145,3 +145,42 @@ public final class StaveHairpin: VexElement {
         )
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("StaveHairpin", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 150) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        let notes = score.notes("C5/q, D5, E5, F5")
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        )).addClef("treble")
+
+        system.format()
+
+        let hp = StaveHairpin(firstNote: notes[0], lastNote: notes[1], type: .crescendo)
+        _ = hp.setContext(ctx)
+
+        let hp2 = StaveHairpin(firstNote: notes[2], lastNote: notes[3], type: .decrescendo)
+        _ = hp2.setContext(ctx)
+
+        try? f.draw()
+        try? hp.draw()
+        try? hp2.draw()
+    }
+    .padding()
+}
+#endif

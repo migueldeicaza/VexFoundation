@@ -9,7 +9,7 @@ import Foundation
 /// Renders fret-hand finger numbers on notes.
 public final class FretHandFinger: Modifier {
 
-    override public class var CATEGORY: String { "FretHandFinger" }
+    override public class var category: String { "FretHandFinger" }
 
     // MARK: - Static Format
 
@@ -189,3 +189,40 @@ public final class FretHandFinger: Modifier {
         }
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("FretHandFinger", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500, height: 150))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let notes = score.notes("C5/q, D5, E5, F5")
+        _ = notes[0].addModifier(f.Fingering(number: "1"), index: 0)
+        _ = notes[1].addModifier(f.Fingering(number: "2"), index: 0)
+        _ = notes[2].addModifier(f.Fingering(number: "3"), index: 0)
+        _ = notes[3].addModifier(f.Fingering(number: "4"), index: 0)
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        ))
+            .addClef("treble")
+            .addTimeSignature("4/4")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

@@ -38,7 +38,7 @@ public enum StaveModifierPosition: Int {
 /// Base class for all stave modifiers (barlines, clefs, key signatures, time signatures, etc.).
 open class StaveModifier: VexElement {
 
-    override open class var CATEGORY: String { "StaveModifier" }
+    override open class var category: String { "StaveModifier" }
 
     // MARK: - Properties
 

@@ -21,7 +21,7 @@ public enum BarlineType: Int, Sendable {
 /// Renders bar lines on a stave.
 public final class Barline: StaveModifier {
 
-    override public class var CATEGORY: String { "Barline" }
+    override public class var category: String { "Barline" }
 
     /// Map string names to barline types.
     public static let typeString: [String: BarlineType] = [
@@ -170,3 +170,35 @@ public final class Barline: StaveModifier {
         ctx.fill()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("Barline", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 120) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory()
+        _ = f.setContext(ctx)
+
+        let s1 = f.Stave(x: 10, y: 20, width: 120)
+        _ = s1.setBegBarType(.single)
+        _ = s1.setEndBarType(.double)
+
+        let s2 = f.Stave(x: 140, y: 20, width: 120)
+        _ = s2.setBegBarType(.repeatBegin)
+        _ = s2.setEndBarType(.repeatEnd)
+
+        let s3 = f.Stave(x: 270, y: 20, width: 120)
+        _ = s3.setBegBarType(.repeatBoth)
+        _ = s3.setEndBarType(.end)
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

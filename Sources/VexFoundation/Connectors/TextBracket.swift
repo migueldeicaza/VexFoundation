@@ -46,7 +46,7 @@ public struct TextBracketRenderOptions {
 /// Renders text brackets spanning between two notes (8va, 8vb, 15ma, etc.).
 public final class TextBracket: VexElement {
 
-    override public class var CATEGORY: String { "TextBracket" }
+    override public class var category: String { "TextBracket" }
 
     // MARK: - Properties
 
@@ -188,3 +188,34 @@ public final class TextBracket: VexElement {
         ctx.restore()
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("TextBracket", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 180) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(factory: f, x: 10, width: 500, y: 20))
+        let notes = score.notes("C5/q, D5, E5, F5")
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(notes)]
+        )).addClef("treble")
+
+        system.format()
+
+        _ = f.TextBracket(from: notes[0], to: notes[3], text: "8va", superscript: "ma")
+
+        try? f.draw()
+    }
+    .padding()
+}
+#endif

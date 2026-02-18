@@ -10,7 +10,7 @@ import Foundation
 /// Has no duration and consumes no ticks.
 public final class TimeSigNote: Note {
 
-    override public class var CATEGORY: String { "TimeSigNote" }
+    override public class var category: String { "TimeSigNote" }
 
     // MARK: - Properties
 
@@ -56,3 +56,32 @@ public final class TimeSigNote: Note {
         tsGlyph.renderToStave(x: getAbsoluteX())
     }
 }
+
+// MARK: - Preview
+
+#if DEBUG
+import SwiftUI
+
+@available(iOS 17.0, macOS 14.0, *)
+#Preview("TimeSigNote", traits: .sizeThatFitsLayout) {
+    VexCanvas(width: 520, height: 160) { ctx in
+        ctx.clear()
+        FontLoader.loadDefaultFonts()
+
+        let f = Factory(options: FactoryOptions(width: 500))
+        _ = f.setContext(ctx)
+        let score = f.EasyScore()
+
+        let system = f.System(options: SystemOptions(
+            factory: f, x: 10, width: 500, y: 10
+        ))
+        _ = system.addStave(SystemStave(
+            voices: [score.voice(score.notes("C5/q, D5, E5, F5"))]
+        )).addClef("treble").addTimeSignature("4/4")
+
+        system.format()
+        try? f.draw()
+    }
+    .padding()
+}
+#endif
