@@ -14,7 +14,7 @@ public enum TextJustification: Int {
 // MARK: - Text Note Struct
 
 public struct TextNoteStruct {
-    public var keys: [String]
+    public var keys: [StaffKeySpec]
     public var duration: NoteValue
     public var text: String?
     public var glyph: String?
@@ -25,7 +25,7 @@ public struct TextNoteStruct {
     public var subscriptText: String?
 
     public init(
-        keys: [String] = ["b/4"],
+        keys: [StaffKeySpec] = [StaffKeySpec(letter: .b, octave: 4)],
         duration: NoteValue = .quarter,
         text: String? = nil,
         glyph: String? = nil,
@@ -48,7 +48,7 @@ public struct TextNoteStruct {
 
     /// String-based parser for compatibility with external text inputs.
     public init(
-        keys: [String] = ["b/4"],
+        parsingKeys keys: [String] = ["b/4"],
         duration: String,
         text: String? = nil,
         glyph: String? = nil,
@@ -59,8 +59,9 @@ public struct TextNoteStruct {
         subscriptText: String? = nil
     ) throws {
         let parsedDuration = try NoteDurationSpec(parsing: duration)
+        let parsedKeys = try StaffKeySpec.parseMany(keys)
         self.init(
-            keys: keys,
+            keys: parsedKeys,
             duration: parsedDuration.value,
             text: text,
             glyph: glyph,
@@ -85,7 +86,58 @@ public struct TextNoteStruct {
         subscriptText: String? = nil
     ) {
         guard let parsed = try? TextNoteStruct(
-            keys: keys,
+            parsingKeys: keys,
+            duration: duration,
+            text: text,
+            glyph: glyph,
+            ignoreTicks: ignoreTicks,
+            smooth: smooth,
+            line: line,
+            superscript: superscript,
+            subscriptText: subscriptText
+        ) else { return nil }
+        self = parsed
+    }
+
+    /// String-key parser for typed duration inputs.
+    public init(
+        parsingKeys keys: [String],
+        duration: NoteValue = .quarter,
+        text: String? = nil,
+        glyph: String? = nil,
+        ignoreTicks: Bool? = nil,
+        smooth: Bool? = nil,
+        line: Double? = nil,
+        superscript: String? = nil,
+        subscriptText: String? = nil
+    ) throws {
+        self.init(
+            keys: try StaffKeySpec.parseMany(keys),
+            duration: duration,
+            text: text,
+            glyph: glyph,
+            ignoreTicks: ignoreTicks,
+            smooth: smooth,
+            line: line,
+            superscript: superscript,
+            subscriptText: subscriptText
+        )
+    }
+
+    /// Failable string-key parser for typed duration inputs.
+    public init?(
+        parsingKeysOrNil keys: [String],
+        duration: NoteValue = .quarter,
+        text: String? = nil,
+        glyph: String? = nil,
+        ignoreTicks: Bool? = nil,
+        smooth: Bool? = nil,
+        line: Double? = nil,
+        superscript: String? = nil,
+        subscriptText: String? = nil
+    ) {
+        guard let parsed = try? TextNoteStruct(
+            parsingKeys: keys,
             duration: duration,
             text: text,
             glyph: glyph,
@@ -159,7 +211,7 @@ public final class TextNote: Note {
         self.smooth = noteStruct.smooth ?? false
         self.line = noteStruct.line ?? 0
 
-        let ns = NoteStruct(keys: noteStruct.keys, duration: noteStruct.duration)
+        let ns = NoteStruct(keys: noteStruct.keys.map(\.rawValue), duration: noteStruct.duration)
         super.init(ns)
 
         if let ig = noteStruct.ignoreTicks {
@@ -278,10 +330,10 @@ import SwiftUI
         let voice = score.voice(notes)
 
         let textNotes: [Note] = [
-            f.TextNote(TextNoteStruct(keys: ["C/5"], duration: .quarter, text: "do")),
-            f.TextNote(TextNoteStruct(keys: ["D/5"], duration: .quarter, text: "re")),
-            f.TextNote(TextNoteStruct(keys: ["E/5"], duration: .quarter, text: "mi")),
-            f.TextNote(TextNoteStruct(keys: ["F/5"], duration: .quarter, text: "fa")),
+            f.TextNote(TextNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 5)], duration: .quarter, text: "do")),
+            f.TextNote(TextNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 5)], duration: .quarter, text: "re")),
+            f.TextNote(TextNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 5)], duration: .quarter, text: "mi")),
+            f.TextNote(TextNoteStruct(keys: [StaffKeySpec(letter: .f, octave: 5)], duration: .quarter, text: "fa")),
         ]
         let textVoice = f.Voice(timeSignature: .meter(4, 4))
         _ = textVoice.addTickables(textNotes)

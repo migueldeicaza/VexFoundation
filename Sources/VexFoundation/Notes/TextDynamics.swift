@@ -36,7 +36,7 @@ public final class TextDynamics: Note {
         self.dynamicsLine = noteStruct.line ?? 0
 
         super.init(NoteStruct(
-            keys: noteStruct.keys,
+            keys: noteStruct.keys.map(\.rawValue),
             duration: noteStruct.duration
         ))
 

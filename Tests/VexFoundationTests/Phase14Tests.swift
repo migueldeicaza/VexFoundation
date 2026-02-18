@@ -13,7 +13,7 @@ struct Phase14Tests {
 
     // MARK: - Helper
 
-    private func makeNote(keys: [String] = ["c/4"], duration: NoteValue = .quarter) -> StaveNote {
+    private func makeNote(keys: [StaffKeySpec] = [StaffKeySpec(letter: .c, octave: 4)], duration: NoteValue = .quarter) -> StaveNote {
         let note = StaveNote(StaveNoteStruct(keys: keys, duration: duration))
         let stave = Stave(x: 10, y: 40, width: 300)
         _ = note.setStave(stave)
@@ -794,7 +794,7 @@ struct Phase14Tests {
     }
 
     @Test func chordSymbolOnNote() {
-        let note = makeNote(keys: ["c/4", "e/4", "g/4"])
+        let note = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4), StaffKeySpec(letter: .e, octave: 4), StaffKeySpec(letter: .g, octave: 4)])
         let cs = ChordSymbol()
         _ = cs.addText("C")
         _ = cs.setVertical(.top)

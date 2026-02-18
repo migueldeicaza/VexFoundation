@@ -576,6 +576,15 @@ public enum Tables {
 
     /// Get properties for a key/octave string (e.g., "c/4", "g/5/x2").
     public static func keyProperties(
+        _ key: StaffKeySpec,
+        clef: ClefName = .treble,
+        octaveShift: Int = 0
+    ) throws -> KeyProps {
+        try keyProperties(key.rawValue, clef: clef, octaveShift: octaveShift)
+    }
+
+    /// Get properties for a key/octave string (e.g., "c/4", "g/5/x2").
+    public static func keyProperties(
         _ keyOctaveGlyph: String,
         clef: ClefName = .treble,
         octaveShift: Int = 0

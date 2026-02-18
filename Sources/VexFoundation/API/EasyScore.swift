@@ -301,10 +301,17 @@ public final class Builder {
         if type == .ghost {
             note = factory.GhostNote(duration: duration, dots: dots)
         } else {
-            note = factory.StaveNote(StaveNoteStruct(
-                keys: keys, duration: duration, dots: dots,
-                type: type, autoStem: autoStem, clef: clef
-            ))
+            guard let noteStruct = StaveNoteStruct(
+                parsingKeysOrNil: keys,
+                duration: duration,
+                dots: dots,
+                type: type,
+                autoStem: autoStem,
+                clef: clef
+            ) else {
+                fatalError("[VexError] BadArguments: Invalid stave note keys: \(keys)")
+            }
+            note = factory.StaveNote(noteStruct)
         }
         if let explicitStemDirection {
             _ = note.setStemDirection(explicitStemDirection)

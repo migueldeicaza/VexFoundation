@@ -7,7 +7,7 @@ import Foundation
 
 /// Input structure for creating a StaveNote (extends NoteStruct).
 public struct StaveNoteStruct {
-    public var keys: [String]
+    public var keys: [StaffKeySpec]
     public var duration: NoteValue
     public var line: Double?
     public var dots: Int?
@@ -24,7 +24,7 @@ public struct StaveNoteStruct {
     public var clef: ClefName?
 
     public init(
-        keys: [String] = [],
+        keys: [StaffKeySpec] = [],
         duration: NoteValue = .quarter,
         line: Double? = nil,
         dots: Int? = nil,
@@ -59,7 +59,7 @@ public struct StaveNoteStruct {
 
     /// String-based parser for compatibility with external text inputs.
     public init(
-        keys: [String] = [],
+        parsingKeys keys: [String] = [],
         duration: String,
         line: Double? = nil,
         dots: Int? = nil,
@@ -76,6 +76,7 @@ public struct StaveNoteStruct {
         clef: ClefName? = nil
     ) throws {
         let parsedDuration = try NoteDurationSpec(parsing: duration)
+        let parsedKeys = try StaffKeySpec.parseMany(keys)
         let parsedType: NoteType?
         if let type {
             guard let explicitType = NoteType(parsing: type) else {
@@ -89,7 +90,7 @@ public struct StaveNoteStruct {
         }
 
         self.init(
-            keys: keys,
+            keys: parsedKeys,
             duration: parsedDuration.value,
             line: line,
             dots: dots ?? parsedDuration.dots,
@@ -126,7 +127,82 @@ public struct StaveNoteStruct {
         clef: ClefName? = nil
     ) {
         guard let parsed = try? StaveNoteStruct(
-            keys: keys,
+            parsingKeys: keys,
+            duration: duration,
+            line: line,
+            dots: dots,
+            type: type,
+            alignCenter: alignCenter,
+            durationOverride: durationOverride,
+            stemDirection: stemDirection,
+            autoStem: autoStem,
+            stemDownXOffset: stemDownXOffset,
+            stemUpXOffset: stemUpXOffset,
+            strokePx: strokePx,
+            glyphFontScale: glyphFontScale,
+            octaveShift: octaveShift,
+            clef: clef
+        ) else { return nil }
+        self = parsed
+    }
+
+    /// String-key parser for typed duration inputs.
+    public init(
+        parsingKeys keys: [String],
+        duration: NoteValue = .quarter,
+        line: Double? = nil,
+        dots: Int? = nil,
+        type: NoteType? = nil,
+        alignCenter: Bool? = nil,
+        durationOverride: Fraction? = nil,
+        stemDirection: StemDirection? = nil,
+        autoStem: Bool? = nil,
+        stemDownXOffset: Double? = nil,
+        stemUpXOffset: Double? = nil,
+        strokePx: Double? = nil,
+        glyphFontScale: Double? = nil,
+        octaveShift: Int? = nil,
+        clef: ClefName? = nil
+    ) throws {
+        self.init(
+            keys: try StaffKeySpec.parseMany(keys),
+            duration: duration,
+            line: line,
+            dots: dots,
+            type: type,
+            alignCenter: alignCenter,
+            durationOverride: durationOverride,
+            stemDirection: stemDirection,
+            autoStem: autoStem,
+            stemDownXOffset: stemDownXOffset,
+            stemUpXOffset: stemUpXOffset,
+            strokePx: strokePx,
+            glyphFontScale: glyphFontScale,
+            octaveShift: octaveShift,
+            clef: clef
+        )
+    }
+
+    /// Failable string-key parser for typed duration inputs.
+    public init?(
+        parsingKeysOrNil keys: [String],
+        duration: NoteValue = .quarter,
+        line: Double? = nil,
+        dots: Int? = nil,
+        type: NoteType? = nil,
+        alignCenter: Bool? = nil,
+        durationOverride: Fraction? = nil,
+        stemDirection: StemDirection? = nil,
+        autoStem: Bool? = nil,
+        stemDownXOffset: Double? = nil,
+        stemUpXOffset: Double? = nil,
+        strokePx: Double? = nil,
+        glyphFontScale: Double? = nil,
+        octaveShift: Int? = nil,
+        clef: ClefName? = nil
+    ) {
+        guard let parsed = try? StaveNoteStruct(
+            parsingKeys: keys,
             duration: duration,
             line: line,
             dots: dots,
@@ -148,7 +224,7 @@ public struct StaveNoteStruct {
     /// Convert to NoteStruct for superclass init.
     func toNoteStruct() -> NoteStruct {
         NoteStruct(
-            keys: keys, duration: duration, line: line, dots: dots,
+            keys: keys.map(\.rawValue), duration: duration, line: line, dots: dots,
             type: type, alignCenter: alignCenter, durationOverride: durationOverride
         )
     }

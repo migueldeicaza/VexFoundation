@@ -12,7 +12,7 @@ struct Phase9Tests {
 
     // MARK: - Helper
 
-    private func makeNote(keys: [String] = ["c/4"], duration: NoteValue = .quarter) -> StaveNote {
+    private func makeNote(keys: [StaffKeySpec] = [StaffKeySpec(letter: .c, octave: 4)], duration: NoteValue = .quarter) -> StaveNote {
         let note = StaveNote(StaveNoteStruct(keys: keys, duration: duration))
         let stave = Stave(x: 10, y: 40, width: 300)
         _ = note.setStave(stave)
@@ -300,7 +300,7 @@ struct Phase9Tests {
 
     @Test func annotationFormat() {
         let stave = Stave(x: 10, y: 40, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
+        let note = StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter))
         _ = note.setStave(stave)
         _ = note.setStemDirection(Stem.UP)
         _ = note.buildStem()
@@ -317,7 +317,7 @@ struct Phase9Tests {
 
     @Test func annotationFormatBottom() {
         let stave = Stave(x: 10, y: 40, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
+        let note = StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter))
         _ = note.setStave(stave)
         _ = note.setStemDirection(Stem.UP)
         _ = note.buildStem()
@@ -334,7 +334,7 @@ struct Phase9Tests {
 
     @Test func annotationModifierContext() {
         let stave = Stave(x: 10, y: 40, width: 300)
-        let note = StaveNote(StaveNoteStruct(keys: ["c/4"], duration: .quarter))
+        let note = StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter))
         _ = note.setStave(stave)
         _ = note.setStemDirection(Stem.UP)
         _ = note.buildStem()
