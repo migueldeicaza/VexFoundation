@@ -182,12 +182,12 @@ import SwiftUI
 
         let notes = score.notes("E5/q, F5, G5, A5")
         let gn1 = f.GraceNote(GraceNoteStruct(
-            keys: [StaffKeySpec(letter: .c, octave: 5)],
+            keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 5)),
             duration: .sixteenth,
             slash: false
         ))
         let gn2 = f.GraceNote(GraceNoteStruct(
-            keys: [StaffKeySpec(letter: .d, octave: 5)],
+            keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 5)),
             duration: .sixteenth,
             slash: false
         ))

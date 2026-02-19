@@ -142,7 +142,7 @@ public final class NoteHead: Note {
     public init(noteHeadStruct: NoteHeadStruct) {
         let ns = NoteStruct(
             keys: noteHeadStruct.keys,
-            duration: noteHeadStruct.duration,
+            duration: NoteDurationSpec(uncheckedValue: noteHeadStruct.duration),
             dots: noteHeadStruct.dots
         )
 

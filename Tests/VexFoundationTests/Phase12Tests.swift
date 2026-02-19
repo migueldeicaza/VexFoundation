@@ -13,7 +13,7 @@ struct Phase12Tests {
 
     // MARK: - Helper
 
-    private func makeNote(keys: [StaffKeySpec] = [StaffKeySpec(letter: .c, octave: 4)], duration: NoteValue = .quarter) -> StaveNote {
+    private func makeNote(keys: NonEmptyArray<StaffKeySpec> = NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: NoteValue = .quarter) -> StaveNote {
         let note = StaveNote(StaveNoteStruct(keys: keys, duration: duration))
         let stave = Stave(x: 10, y: 40, width: 300)
         _ = note.setStave(stave)
@@ -285,14 +285,14 @@ struct Phase12Tests {
 
     @Test func parenthesisSetNoteGrace() {
         let paren = Parenthesis(position: .left)
-        let graceNote = GraceNote(GraceNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth))
+        let graceNote = GraceNote(GraceNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth))
         _ = paren.setNote(graceNote)
         // Grace note should get a smaller point
         #expect(paren.point == Note.getPoint("gracenote"))
     }
 
     @Test func parenthesisBuildAndAttach() {
-        let note = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4), StaffKeySpec(letter: .e, octave: 4)])
+        let note = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4), StaffKeySpec(letter: .e, octave: 4)))
         Parenthesis.buildAndAttach([note])
         // Each key gets left + right parenthesis = 4 total for 2 keys
         let mods = note.getModifiers()

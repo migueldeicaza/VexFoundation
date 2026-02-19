@@ -15,7 +15,7 @@ public final class GhostNote: StemmableNote {
 
     /// Create a ghost note from a typed note value.
     public convenience init(_ duration: NoteValue) {
-        self.init(NoteStruct(duration: duration))
+        self.init(NoteStruct(duration: NoteDurationSpec(uncheckedValue: duration)))
     }
 
     /// Create a ghost note from a duration string (e.g. "4", "8").

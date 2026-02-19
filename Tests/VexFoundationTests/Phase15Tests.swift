@@ -271,7 +271,7 @@ struct Phase15Tests {
     @Test func factoryStaveNote() {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 300)
-        let note = factory.StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter))
+        let note = factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter))
         #expect(note.getKeys().count == 1)
     }
 
@@ -317,8 +317,8 @@ struct Phase15Tests {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let notes: [StemmableNote] = [
-            factory.StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth)),
-            factory.StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
+            factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth)),
+            factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
         ]
         let beam = factory.Beam(notes: notes)
         #expect(beam is Beam)
@@ -328,9 +328,9 @@ struct Phase15Tests {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let notes: [Note] = [
-            factory.StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth)),
-            factory.StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            factory.StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
+            factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth)),
+            factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         let tuplet = factory.Tuplet(notes: notes)
         #expect(tuplet.getNoteCount() == 3)
@@ -388,8 +388,8 @@ struct Phase15Tests {
     @Test func factoryStaveTie() {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 300)
-        let n1 = factory.StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter))
-        let n2 = factory.StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter))
+        let n1 = factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter))
+        let n2 = factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter))
         let tie = factory.StaveTie(notes: TieNotes(firstNote: n1, lastNote: n2))
         #expect(tie.getCategory() == "StaveTie")
     }
@@ -700,7 +700,7 @@ struct Phase15Tests {
     @Test func factoryMultipleNoteTypes() {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
-        let sn = factory.StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter))
+        let sn = factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter))
         let ghost = factory.GhostNote(duration: .quarter)
         let accid = factory.Accidental(type: "#")
         #expect(sn.getCategory() == "StaveNote")

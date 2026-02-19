@@ -7,7 +7,7 @@ import Foundation
 
 /// Input structure for creating a StaveNote (extends NoteStruct).
 public struct StaveNoteStruct {
-    public var keys: [StaffKeySpec]
+    public var keys: NonEmptyArray<StaffKeySpec>
     public var duration: NoteValue
     public var line: Double?
     public var dots: Int?
@@ -24,7 +24,7 @@ public struct StaveNoteStruct {
     public var clef: ClefName?
 
     public init(
-        keys: [StaffKeySpec] = [],
+        keys: NonEmptyArray<StaffKeySpec>,
         duration: NoteValue = .quarter,
         line: Double? = nil,
         dots: Int? = nil,
@@ -76,7 +76,7 @@ public struct StaveNoteStruct {
         clef: ClefName? = nil
     ) throws {
         let parsedDuration = try NoteDurationSpec(parsing: duration)
-        let parsedKeys = try StaffKeySpec.parseMany(keys)
+        let parsedKeys = try StaffKeySpec.parseManyNonEmpty(keys)
         let parsedType: NoteType?
         if let type {
             guard let explicitType = NoteType(parsing: type) else {
@@ -111,7 +111,7 @@ public struct StaveNoteStruct {
     /// Failable parser convenience.
     public init?(
         parsingDuration duration: String,
-        keys: [String] = [],
+        keys: [String],
         line: Double? = nil,
         dots: Int? = nil,
         type: String? = nil,
@@ -165,7 +165,7 @@ public struct StaveNoteStruct {
         clef: ClefName? = nil
     ) throws {
         self.init(
-            keys: try StaffKeySpec.parseMany(keys),
+            keys: try StaffKeySpec.parseManyNonEmpty(keys),
             duration: duration,
             line: line,
             dots: dots,
@@ -224,7 +224,7 @@ public struct StaveNoteStruct {
     /// Convert to NoteStruct for superclass init.
     func toNoteStruct() -> NoteStruct {
         NoteStruct(
-            keys: keys.map(\.rawValue), duration: duration, line: line, dots: dots,
+            keys: keys.array.map(\.rawValue), duration: NoteDurationSpec(uncheckedValue: duration), line: line, dots: dots,
             type: type, alignCenter: alignCenter, durationOverride: durationOverride
         )
     }

@@ -7,7 +7,7 @@ import Foundation
 
 /// Input structure for creating a GraceNote (extends StaveNoteStruct).
 public struct GraceNoteStruct {
-    public var keys: [StaffKeySpec]
+    public var keys: NonEmptyArray<StaffKeySpec>
     public var duration: NoteValue
     public var slash: Bool
     public var stemDirection: StemDirection?
@@ -18,7 +18,7 @@ public struct GraceNoteStruct {
     public var octaveShift: Int?
 
     public init(
-        keys: [StaffKeySpec] = [],
+        keys: NonEmptyArray<StaffKeySpec>,
         duration: NoteValue = .eighth,
         slash: Bool = false,
         stemDirection: StemDirection? = nil,
@@ -52,7 +52,7 @@ public struct GraceNoteStruct {
         octaveShift: Int? = nil
     ) throws {
         let parsedDuration = try NoteDurationSpec(parsing: duration)
-        let parsedKeys = try StaffKeySpec.parseMany(keys)
+        let parsedKeys = try StaffKeySpec.parseManyNonEmpty(keys)
         let parsedType: NoteType?
         if let type {
             guard let explicitType = NoteType(parsing: type) else {
@@ -81,7 +81,7 @@ public struct GraceNoteStruct {
     /// Failable parser convenience.
     public init?(
         parsingDuration duration: String,
-        keys: [String] = [],
+        keys: [String],
         slash: Bool = false,
         stemDirection: StemDirection? = nil,
         autoStem: Bool? = nil,
@@ -117,7 +117,7 @@ public struct GraceNoteStruct {
         octaveShift: Int? = nil
     ) throws {
         self.init(
-            keys: try StaffKeySpec.parseMany(keys),
+            keys: try StaffKeySpec.parseManyNonEmpty(keys),
             duration: duration,
             slash: slash,
             stemDirection: stemDirection,
@@ -351,7 +351,7 @@ import SwiftUI
 
         let notes = score.notes("D5/q, E5, F5, G5")
         let gn = f.GraceNote(GraceNoteStruct(
-            keys: [StaffKeySpec(letter: .c, octave: 5)],
+            keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 5)),
             duration: .eighth,
             slash: true
         ))

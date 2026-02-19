@@ -42,7 +42,7 @@ public struct ParsedNote {
 /// Input structure for creating a note.
 public struct NoteStruct {
     public var keys: [String]
-    public var duration: NoteValue
+    public var duration: NoteDurationSpec
     public var line: Double?
     public var dots: Int?
     public var type: NoteType?
@@ -51,7 +51,7 @@ public struct NoteStruct {
 
     public init(
         keys: [String] = [],
-        duration: NoteValue,
+        duration: NoteDurationSpec,
         line: Double? = nil,
         dots: Int? = nil,
         type: NoteType? = nil,
@@ -92,7 +92,7 @@ public struct NoteStruct {
 
         self.init(
             keys: keys,
-            duration: parsed.value,
+            duration: parsed,
             line: line,
             dots: dots ?? parsed.dots,
             type: parsedType,
@@ -161,7 +161,7 @@ open class Note: Tickable {
 
     /// Parse a NoteStruct into a ParsedNote.
     public static func parseNoteStruct(_ noteStruct: NoteStruct) -> ParsedNote? {
-        let type = noteStruct.type ?? .note
+        let type = noteStruct.type ?? noteStruct.duration.type
 
         var customTypes: [String] = []
         for (i, k) in noteStruct.keys.enumerated() {
@@ -173,9 +173,9 @@ open class Note: Tickable {
             }
         }
 
-        var ticks = Tables.durationToTicks(noteStruct.duration)
+        var ticks = Tables.durationToTicks(noteStruct.duration.value)
 
-        let dots = noteStruct.dots ?? 0
+        let dots = noteStruct.dots ?? noteStruct.duration.dots
 
         var currentTicks = ticks
         for _ in 0..<dots {
@@ -185,7 +185,7 @@ open class Note: Tickable {
         }
 
         return ParsedNote(
-            duration: noteStruct.duration,
+            duration: noteStruct.duration.value,
             type: type,
             customTypes: customTypes,
             dots: dots,

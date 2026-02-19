@@ -148,7 +148,7 @@ public final class Factory {
 
     @discardableResult
     public func GhostNote(duration: NoteValue, dots: Int = 0) -> VexFoundation.GhostNote {
-        var ns = NoteStruct(duration: duration)
+        var ns = NoteStruct(duration: NoteDurationSpec(uncheckedValue: duration))
         ns.dots = dots
         return GhostNote(ns)
     }

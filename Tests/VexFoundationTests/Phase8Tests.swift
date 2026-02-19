@@ -12,7 +12,7 @@ struct Phase8Tests {
 
     // MARK: - Helper
 
-    private func makeNote(keys: [StaffKeySpec], duration: NoteValue) -> StaveNote {
+    private func makeNote(keys: NonEmptyArray<StaffKeySpec>, duration: NoteValue) -> StaveNote {
         let note = StaveNote(StaveNoteStruct(keys: keys, duration: duration))
         let stave = Stave(x: 10, y: 40, width: 300)
         _ = note.setStave(stave)
@@ -24,8 +24,8 @@ struct Phase8Tests {
     // MARK: - StaveTie Creation
 
     @Test func staveTieCreation() {
-        let note1 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
-        let note2 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
+        let note1 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
+        let note2 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
         let tie = StaveTie(notes: TieNotes(firstNote: note1, lastNote: note2))
         #expect(tie.getNotes().firstNote === note1)
         #expect(tie.getNotes().lastNote === note2)
@@ -33,14 +33,14 @@ struct Phase8Tests {
     }
 
     @Test func staveTieWithText() {
-        let note1 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
-        let note2 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
+        let note1 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
+        let note2 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
         let tie = StaveTie(notes: TieNotes(firstNote: note1, lastNote: note2), text: "H")
         #expect(tie.text == "H")
     }
 
     @Test func staveTiePartialFirst() {
-        let note = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
+        let note = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
         let tie = StaveTie(notes: TieNotes(lastNote: note))
         #expect(tie.isPartial())
         #expect(tie.getNotes().firstNote == nil)
@@ -48,7 +48,7 @@ struct Phase8Tests {
     }
 
     @Test func staveTiePartialLast() {
-        let note = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
+        let note = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
         let tie = StaveTie(notes: TieNotes(firstNote: note))
         #expect(tie.isPartial())
         #expect(tie.getNotes().firstNote === note)
@@ -56,8 +56,8 @@ struct Phase8Tests {
     }
 
     @Test func staveTieIndices() {
-        let note1 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4), StaffKeySpec(letter: .e, octave: 4), StaffKeySpec(letter: .g, octave: 4)], duration: .quarter)
-        let note2 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4), StaffKeySpec(letter: .e, octave: 4), StaffKeySpec(letter: .g, octave: 4)], duration: .quarter)
+        let note1 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4), StaffKeySpec(letter: .e, octave: 4), StaffKeySpec(letter: .g, octave: 4)), duration: .quarter)
+        let note2 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4), StaffKeySpec(letter: .e, octave: 4), StaffKeySpec(letter: .g, octave: 4)), duration: .quarter)
         let tie = StaveTie(notes: TieNotes(
             firstNote: note1, lastNote: note2,
             firstIndices: [0, 1, 2], lastIndices: [0, 1, 2]
@@ -67,24 +67,24 @@ struct Phase8Tests {
     }
 
     @Test func staveTieDefaultIndices() {
-        let note1 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
-        let note2 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
+        let note1 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
+        let note2 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
         let tie = StaveTie(notes: TieNotes(firstNote: note1, lastNote: note2))
         #expect(tie.getNotes().firstIndices == [0])
         #expect(tie.getNotes().lastIndices == [0])
     }
 
     @Test func staveTieDirection() {
-        let note1 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
-        let note2 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
+        let note1 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
+        let note2 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
         let tie = StaveTie(notes: TieNotes(firstNote: note1, lastNote: note2))
         _ = tie.setDirection(Stem.DOWN)
         #expect(tie.direction == .down)
     }
 
     @Test func staveTieRenderOptions() {
-        let note1 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
-        let note2 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
+        let note1 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
+        let note2 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
         let tie = StaveTie(notes: TieNotes(firstNote: note1, lastNote: note2))
         #expect(tie.renderOptions.cp1 == 8)
         #expect(tie.renderOptions.cp2 == 12)
@@ -99,8 +99,8 @@ struct Phase8Tests {
     // MARK: - Curve Creation
 
     @Test func curveCreation() {
-        let note1 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
-        let note2 = makeNote(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .quarter)
+        let note1 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
+        let note2 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .quarter)
         let curve = Curve(from: note1, to: note2)
         #expect(curve.from === note1)
         #expect(curve.to === note2)
@@ -108,14 +108,14 @@ struct Phase8Tests {
     }
 
     @Test func curvePartial() {
-        let note1 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
+        let note1 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
         let curve = Curve(from: note1, to: nil)
         #expect(curve.isPartial())
     }
 
     @Test func curveDefaultOptions() {
-        let note1 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
-        let note2 = makeNote(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .quarter)
+        let note1 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
+        let note2 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .quarter)
         let curve = Curve(from: note1, to: note2)
         #expect(curve.renderOptions.thickness == 2)
         #expect(curve.renderOptions.xShift == 0)
@@ -127,8 +127,8 @@ struct Phase8Tests {
     }
 
     @Test func curveCustomOptions() {
-        let note1 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
-        let note2 = makeNote(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .quarter)
+        let note1 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
+        let note2 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .quarter)
         let opts = CurveOptions(
             cps: [(5, 20), (5, 20)],
             thickness: 3,
@@ -148,9 +148,9 @@ struct Phase8Tests {
     }
 
     @Test func curveSetNotes() {
-        let note1 = makeNote(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)
-        let note2 = makeNote(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .quarter)
-        let note3 = makeNote(keys: [StaffKeySpec(letter: .g, octave: 4)], duration: .quarter)
+        let note1 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
+        let note2 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .quarter)
+        let note3 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .g, octave: 4)), duration: .quarter)
         let curve = Curve(from: note1, to: note2)
         _ = curve.setNotes(from: note1, to: note3)
         #expect(curve.to === note3)
@@ -169,9 +169,9 @@ struct Phase8Tests {
 
     @Test func tupletCreation() {
         let notes: [Note] = [
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         let tuplet = Tuplet(notes: notes)
         #expect(tuplet.numNotes == 3)
@@ -182,9 +182,9 @@ struct Phase8Tests {
     @Test func tupletDefaultBracketed() {
         // Notes without beams should default to bracketed
         let notes: [Note] = [
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         let tuplet = Tuplet(notes: notes)
         #expect(tuplet.bracketed == true) // no beams
@@ -193,9 +193,9 @@ struct Phase8Tests {
     @Test func tupletBeamedNotBracketed() {
         // All notes beamed → not bracketed
         let notes: [StemmableNote] = [
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         let beam = Beam(notes) // must retain beam since Note.beam is weak
         let tuplet = Tuplet(notes: notes as [Note])
@@ -205,9 +205,9 @@ struct Phase8Tests {
 
     @Test func tupletSetBracketed() {
         let notes: [Note] = [
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         let tuplet = Tuplet(notes: notes)
         _ = tuplet.setBracketed(false)
@@ -217,20 +217,20 @@ struct Phase8Tests {
     @Test func tupletRatioed() {
         // Difference of 1 (3:2) → not ratioed
         let notes3: [Note] = [
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         let triplet = Tuplet(notes: notes3)
         #expect(triplet.ratioed == false) // abs(2-3) = 1, not > 1
 
         // Difference > 1 (5:3) → ratioed
         let notes5: [Note] = [
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .f, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .g, octave: 4)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .f, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .g, octave: 4)), duration: .eighth)),
         ]
         let quintuplet = Tuplet(notes: notes5, options: TupletOptions(notesOccupied: 3))
         #expect(quintuplet.ratioed == true) // abs(3-5) = 2 > 1
@@ -238,9 +238,9 @@ struct Phase8Tests {
 
     @Test func tupletSetRatioed() {
         let notes: [Note] = [
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         let tuplet = Tuplet(notes: notes)
         _ = tuplet.setRatioed(true)
@@ -249,9 +249,9 @@ struct Phase8Tests {
 
     @Test func tupletLocation() {
         let notes: [Note] = [
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         let tuplet = Tuplet(notes: notes)
         #expect(tuplet.location == .top)
@@ -267,9 +267,9 @@ struct Phase8Tests {
 
     @Test func tupletCustomNumNotes() {
         let notes: [Note] = [
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .quarter)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .quarter)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .quarter)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .quarter)),
         ]
         let tuplet = Tuplet(notes: notes, options: TupletOptions(numNotes: 3, notesOccupied: 2))
         #expect(tuplet.numNotes == 3)
@@ -286,9 +286,9 @@ struct Phase8Tests {
 
     @Test func tupletAttach() {
         let notes: [Note] = [
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         let tuplet = Tuplet(notes: notes)
         // Each note should have this tuplet in its stack
@@ -299,9 +299,9 @@ struct Phase8Tests {
 
     @Test func tupletDetach() {
         let notes: [Note] = [
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         let tuplet = Tuplet(notes: notes)
         tuplet.detach()
@@ -312,12 +312,12 @@ struct Phase8Tests {
 
     @Test func tupletTickMultiplier() {
         // A triplet should adjust ticks: multiply by 2/3
-        let note = StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth))
+        let note = StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth))
         let ticksBefore = note.getTicks()
         let notes: [Note] = [
             note,
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         _ = Tuplet(notes: notes)
         let ticksAfter = note.getTicks()
@@ -336,9 +336,9 @@ struct Phase8Tests {
 
     @Test func tupletGetNoteCount() {
         let notes: [Note] = [
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         let tuplet = Tuplet(notes: notes)
         #expect(tuplet.getNoteCount() == 3)
@@ -348,9 +348,9 @@ struct Phase8Tests {
     @Test func tupletYPositionTop() {
         let stave = Stave(x: 10, y: 40, width: 300)
         let notes: [Note] = [
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         for note in notes {
             _ = note.setStave(stave)
@@ -368,9 +368,9 @@ struct Phase8Tests {
     @Test func tupletYPositionBottom() {
         let stave = Stave(x: 10, y: 40, width: 300)
         let notes: [Note] = [
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 5)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 5)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 5)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 5)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 5)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 5)), duration: .eighth)),
         ]
         for note in notes {
             _ = note.setStave(stave)
@@ -388,13 +388,13 @@ struct Phase8Tests {
     // MARK: - Tickable Tuplet Stack
 
     @Test func tickableTupletStack() {
-        let note = StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 4)], duration: .eighth))
+        let note = StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth))
         #expect(note.getTupletStack().isEmpty)
 
         let notes: [Note] = [
             note,
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 4)], duration: .eighth)),
-            StaveNote(StaveNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 4)], duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         let tuplet = Tuplet(notes: notes)
         #expect(note.getTupletStack().count == 1)

@@ -186,7 +186,7 @@ open class TabNote: StemmableNote {
 
         let noteInput = NoteStruct(
             keys: noteStruct.positions.map { "\(String($0.fret))/\($0.str)" },
-            duration: noteStruct.duration,
+            duration: NoteDurationSpec(uncheckedValue: noteStruct.duration),
             dots: noteStruct.dots,
             type: noteStruct.type
         )

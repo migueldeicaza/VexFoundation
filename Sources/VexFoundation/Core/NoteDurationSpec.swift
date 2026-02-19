@@ -89,6 +89,26 @@ public struct NoteDurationSpec: Equatable, Hashable, Sendable, Codable {
     public let dots: Int
     public let type: NoteType
 
+    public static let doubleWhole = NoteDurationSpec(uncheckedValue: .doubleWhole)
+    public static let whole = NoteDurationSpec(uncheckedValue: .whole)
+    public static let half = NoteDurationSpec(uncheckedValue: .half)
+    public static let quarter = NoteDurationSpec(uncheckedValue: .quarter)
+    public static let eighth = NoteDurationSpec(uncheckedValue: .eighth)
+    public static let sixteenth = NoteDurationSpec(uncheckedValue: .sixteenth)
+    public static let thirtySecond = NoteDurationSpec(uncheckedValue: .thirtySecond)
+    public static let sixtyFourth = NoteDurationSpec(uncheckedValue: .sixtyFourth)
+    public static let oneTwentyEighth = NoteDurationSpec(uncheckedValue: .oneTwentyEighth)
+    public static let twoFiftySixth = NoteDurationSpec(uncheckedValue: .twoFiftySixth)
+
+    /// Construct from trusted typed inputs without throwing.
+    /// Use throwing initializers/parsers at API boundaries.
+    public init(uncheckedValue value: NoteValue, dots: Int = 0, type: NoteType = .note) {
+        precondition(dots >= 0, "Dots must be non-negative.")
+        self.value = value
+        self.dots = dots
+        self.type = type
+    }
+
     public init(value: NoteValue, dots: Int = 0, type: NoteType = .note) throws {
         guard dots >= 0 else { throw NoteDurationParseError.negativeDots(dots) }
         self.value = value

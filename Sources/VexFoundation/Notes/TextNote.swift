@@ -211,7 +211,10 @@ public final class TextNote: Note {
         self.smooth = noteStruct.smooth ?? false
         self.line = noteStruct.line ?? 0
 
-        let ns = NoteStruct(keys: noteStruct.keys.map(\.rawValue), duration: noteStruct.duration)
+        let ns = NoteStruct(
+            keys: noteStruct.keys.map(\.rawValue),
+            duration: NoteDurationSpec(uncheckedValue: noteStruct.duration)
+        )
         super.init(ns)
 
         if let ig = noteStruct.ignoreTicks {
