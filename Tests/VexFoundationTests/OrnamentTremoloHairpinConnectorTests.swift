@@ -4,7 +4,7 @@ import Testing
 @testable import VexFoundation
 
 @Suite("Ornament, Tremolo, Hairpin & Connector")
-struct Phase10Tests {
+struct OrnamentTremoloHairpinConnectorTests {
 
     init() {
         FontLoader.loadDefaultFonts()

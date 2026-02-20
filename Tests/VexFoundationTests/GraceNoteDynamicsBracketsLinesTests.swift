@@ -5,7 +5,7 @@ import Testing
 @testable import VexFoundation
 
 @Suite("GraceNote, Dynamics, Brackets & Lines")
-struct Phase11Tests {
+struct GraceNoteDynamicsBracketsLinesTests {
 
     init() {
         FontLoader.loadDefaultFonts()

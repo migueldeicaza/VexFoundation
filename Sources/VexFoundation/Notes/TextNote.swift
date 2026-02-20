@@ -282,8 +282,11 @@ public final class TextNote: Note {
         } else if let glyph = noteGlyph {
             tickableWidth = glyph.getMetrics().width
         } else {
-            // Estimate text width (actual measurement happens during draw)
-            tickableWidth = Double(text.count) * 7.0
+            let formatter = TextFormatter.create(
+                font: fontInfo,
+                context: getContext() ?? noteStave?.getContext()
+            )
+            tickableWidth = formatter.getWidthForTextInPx(text)
         }
 
         // Adjust displaced head offsets based on justification
@@ -317,19 +320,19 @@ public final class TextNote: Note {
             glyph.render(ctx: ctx, x: x, y: y)
         } else {
             applyStyle(context: ctx, style: getStyle())
-            ctx.setFont(getFont())
+            ctx.setFont(fontInfo)
+            let formatter = TextFormatter.create(font: fontInfo, context: ctx)
+            let textMeasure = formatter.measure(text)
             ctx.fillText(text, x, y)
 
             // Render superscript
             if let sup = superscriptText, !sup.isEmpty {
-                let m = ctx.measureText(text)
-                ctx.fillText(sup, x + m.width + 2, y - m.height / 2.2)
+                ctx.fillText(sup, x + textMeasure.width + 2, y - textMeasure.height / 2.2)
             }
 
             // Render subscript
             if let sub = subscriptText, !sub.isEmpty {
-                let m = ctx.measureText(text)
-                ctx.fillText(sub, x + m.width + 2, y + m.height / 2.2 - 1)
+                ctx.fillText(sub, x + textMeasure.width + 2, y + textMeasure.height / 2.2 - 1)
             }
 
             restoreStyle(context: ctx, style: getStyle())

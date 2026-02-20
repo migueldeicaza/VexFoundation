@@ -65,14 +65,27 @@ Reason: these modules are tied to browser/DOM runtime concerns that do not map c
 
 ### Text Layout Replacement Contract
 
-VexFoundation does not currently ship a direct `TextFormatter` port as a module.
-The replacement contract is:
+VexFoundation now ships a Swift-native ``TextFormatter`` replacement contract.
+It is intentionally not a strict browser-module port, but provides equivalent text metric behavior for layout flows.
+
+Core contract:
 
 - ``RenderContext/measureText(_:)`` for width/height/ascent/descent metrics.
 - ``TextMeasure`` as the typed metric payload.
 - ``FontInfo`` and ``VexFont`` for normalized text-font inputs.
+- ``TextFormatter`` for cached measurement helpers (`measure`, width px/em, y extents).
 
-This contract is the baseline for P3.2/P3.3 work (text formatting API + metric parity tests).
+This contract is validated by parity tests in `Phase18Tests`.
+
+## 7. Optional Compatibility Layer
+
+For incremental migrations, VexFoundation includes lightweight compatibility facades:
+
+- ``Flow``: selected constants/utilities, font-stack helpers, build metadata bridge.
+- ``Vex``: selected helper functions (`sortAndUnique`, `contains`, `stackTrace`, `benchmark`).
+- ``Version`` / ``VexVersion``: build/version metadata.
+
+These APIs keep typed-first pathways as the default and keep string convenience methods explicit (`throws` or failable).
 
 ## Related
 

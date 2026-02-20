@@ -74,9 +74,14 @@ public final class Annotation: Modifier {
             let note = annotation.checkAttachedNote()
             let glyphWidth = note.getGlyphWidth()
 
-            // Estimate text dimensions
-            let textWidth = annotation.getWidth()
-            let textHeight: Double = 12 // approximate line height
+            let formatter = TextFormatter.create(
+                font: annotation.fontInfo,
+                context: note.getStave()?.getContext() ?? annotation.getContext()
+            )
+            let textMeasure = formatter.measure(annotation.text)
+            let textWidth = textMeasure.width
+            let textHeight = max(textMeasure.height, annotation.fontSizeInPixels)
+            _ = annotation.setWidth(textWidth)
 
             // Distribute width based on justification
             if annotation.horizontalJustification == .left {
@@ -129,11 +134,13 @@ public final class Annotation: Modifier {
         ctx.save()
         applyStyle(context: ctx, style: getStyle())
         _ = ctx.openGroup("annotation", getAttribute("id") ?? "")
-        ctx.setFont(getFont())
+        ctx.setFont(fontInfo)
 
-        // Estimate text dimensions
-        let textWidth = getWidth()
-        let textHeight: Double = 12
+        let formatter = TextFormatter.create(font: fontInfo, context: ctx)
+        let textMeasure = formatter.measure(text)
+
+        let textWidth = textMeasure.width
+        let textHeight = max(textMeasure.height, fontSizeInPixels)
 
         // Calculate x position based on horizontal justification
         var x: Double

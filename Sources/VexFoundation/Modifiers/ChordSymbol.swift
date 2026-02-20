@@ -356,15 +356,14 @@ public final class ChordSymbol: Modifier {
     // MARK: - Text Measurement
 
     public func getYOffsetForText(_ text: String) -> Double {
-        // Simplified: approximate y offset based on text content
-        // The TS version uses TextFormatter to get per-glyph y_max metrics
-        0
+        let formatter = TextFormatter.create(font: fontInfo, context: getContext())
+        let extent = formatter.getYForStringInPx(text)
+        return extent.yMax / max(fontSizeInPixels, 1)
     }
 
-    /// Approximate width for text in em units (simplified from TextFormatter).
     private func getWidthForTextInEm(_ text: String) -> Double {
-        // Approximate: each character ~0.6 em
-        Double(text.count) * 0.6
+        let formatter = TextFormatter.create(font: fontInfo, context: getContext())
+        return formatter.getWidthForTextInEm(text)
     }
 
     // MARK: - Over Bar Adjustments

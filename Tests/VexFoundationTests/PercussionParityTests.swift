@@ -5,7 +5,7 @@ import Testing
 @testable import VexFoundation
 
 @Suite("Percussion")
-struct Phase17Tests {
+struct PercussionParityTests {
 
     init() {
         FontLoader.loadDefaultFonts()

@@ -5,7 +5,7 @@ import Testing
 @testable import VexFoundation
 
 @Suite("Rests, Rhythm, Three-Voice & Unison")
-struct Phase16Tests {
+struct RestsRhythmThreeVoiceUnisonTests {
 
     init() {
         FontLoader.loadDefaultFonts()

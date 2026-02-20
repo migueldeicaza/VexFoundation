@@ -5,7 +5,7 @@ import Testing
 @testable import VexFoundation
 
 @Suite("TabStave, TabNote, TabTie, TabSlide, GraceTabNote, ChordSymbol")
-struct Phase14Tests {
+struct TablatureAndChordSymbolTests {
 
     init() {
         FontLoader.loadDefaultFonts()

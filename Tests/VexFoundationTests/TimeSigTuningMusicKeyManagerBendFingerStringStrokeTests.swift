@@ -5,7 +5,7 @@ import Testing
 @testable import VexFoundation
 
 @Suite("TimeSigNote, Tuning, Music, KeyManager, Bend, FretHandFinger, StringNumber, Stroke")
-struct Phase13Tests {
+struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
 
     init() {
         FontLoader.loadDefaultFonts()

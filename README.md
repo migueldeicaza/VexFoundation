@@ -9,7 +9,7 @@ The project keeps VexFlow concepts (`Factory`, `EasyScore`, `System`, notes, mod
 - Swift Package (`swift-tools-version: 6.0`)
 - Platforms: iOS 16+, macOS 13+
 - Active port: API parity with VexFlow is in progress and APIs may evolve
-- Current test suite: `692` passing tests
+- Current test suite: `731` passing tests
 
 ## Installation
 
@@ -156,11 +156,29 @@ let ghost = try GhostNote("8r")
 let maybeGhost = GhostNote(parsingDuration: "8r")
 ```
 
+## Compatibility Layer (Optional)
+
+VexFoundation ships lightweight compatibility symbols for migration scenarios:
+
+- `Flow`: selected constants/utilities and music-font helpers.
+- `Vex`: selected helper utilities.
+- `Version` / `VexVersion`: build metadata.
+
+String convenience APIs remain explicit and safe:
+
+```swift
+import VexFoundation
+
+_ = try Flow.setMusicFont(parsing: ["Bravura", "Custom"])
+let maybeFonts = Flow.setMusicFont(parsingOrNil: ["Petaluma", "Custom"])
+```
+
 ## Key Differences from VexFlow
 
 - API redesign favors compile-time validation.
 - Invalid states are reduced via typed enums/specs and non-empty collections.
 - Parsing is explicit at boundaries, not implicit throughout the API.
+- Lightweight `Flow`/`Vex` compatibility facades are available for incremental migration.
 - SwiftUI rendering backend (`VexCanvas` / `SwiftUICanvasContext`) is provided for app integration.
 - Core scope is Swift-native rendering abstractions (`RenderContext`) rather than 1:1 browser modules (`renderer`, `canvascontext`, `svgcontext`, `web`).
 
@@ -169,6 +187,13 @@ let maybeGhost = GhostNote(parsingDuration: "8r")
 ```bash
 swift build
 swift test
+tools/generate_parity_matrix.sh
+```
+
+CI verifies parity matrix freshness with:
+
+```bash
+tools/generate_parity_matrix.sh --check
 ```
 
 ## Documentation (DocC)

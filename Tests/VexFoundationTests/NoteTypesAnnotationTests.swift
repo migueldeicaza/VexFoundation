@@ -4,7 +4,7 @@ import Testing
 @testable import VexFoundation
 
 @Suite("Note Types & Annotation")
-struct Phase9Tests {
+struct NoteTypesAnnotationTests {
 
     init() {
         FontLoader.loadDefaultFonts()

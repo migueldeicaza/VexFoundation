@@ -5,7 +5,7 @@ import Testing
 @testable import VexFoundation
 
 @Suite("NoteSubGroup, BarNote, Vibrato, VibratoBracket, Parenthesis, Crescendo, MultiMeasureRest")
-struct Phase12Tests {
+struct NoteSubGroupBarNoteVibratoParenthesisMMRTests {
 
     init() {
         FontLoader.loadDefaultFonts()

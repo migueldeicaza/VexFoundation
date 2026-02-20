@@ -4,7 +4,7 @@ import Testing
 @testable import VexFoundation
 
 @Suite("StaveTie, Curve & Tuplet")
-struct Phase8Tests {
+struct StaveTieCurveTupletTests {
 
     init() {
         FontLoader.loadDefaultFonts()

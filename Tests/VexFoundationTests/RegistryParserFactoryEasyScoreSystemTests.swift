@@ -4,7 +4,7 @@ import Testing
 @testable import VexFoundation
 
 @Suite("Registry, Parser, Factory, EasyScore, System")
-struct Phase15Tests {
+struct RegistryParserFactoryEasyScoreSystemTests {
 
     init() {
         FontLoader.loadDefaultFonts()

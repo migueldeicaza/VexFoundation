@@ -4,7 +4,7 @@ import Testing
 @testable import VexFoundation
 
 @Suite("Accidental, Beam & Articulation")
-struct Phase7Tests {
+struct AccidentalBeamArticulationTests {
 
     init() {
         FontLoader.loadDefaultFonts()
