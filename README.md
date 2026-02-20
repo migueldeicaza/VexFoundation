@@ -191,6 +191,10 @@ The package includes `swift-docc-plugin` support in `Package.swift`.
 
 Docs are published by `.github/workflows/docs.yml` on pushes to `main` (and manually via `workflow_dispatch`).
 
+Published docs:
+
+- https://migueldeicaza.github.io/VexFoundation/
+
 ## Attribution
 
 VexFoundation is derived from VexFlow and preserves original attribution:
