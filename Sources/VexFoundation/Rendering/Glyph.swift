@@ -214,7 +214,13 @@ public final class Glyph: VexElement {
 
     /// Load metrics for a glyph code, parsing its outline if needed.
     public static func loadMetrics(fontStack: [VexFont], code: String, category: String?) -> GlyphMetrics {
-        let (font, glyph) = try! lookupGlyph(fontStack: fontStack, code: code)
+        let fontAndGlyph: (font: VexFont, glyph: FontGlyph)
+        do {
+            fontAndGlyph = try lookupGlyph(fontStack: fontStack, code: code)
+        } catch {
+            fatalError("[VexError] BadGlyph: Glyph \(code) does not exist in font.")
+        }
+        let (font, glyph) = fontAndGlyph
 
         guard let outlineStr = glyph.outline else {
             fatalError("[VexError] BadGlyph: Glyph \(code) has no outline defined.")

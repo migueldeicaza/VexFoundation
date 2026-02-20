@@ -93,21 +93,21 @@ public final class Barline: StaveModifier {
 
         switch barlineType {
         case .single:
-            drawVerticalBar(stave: stave, x: modifierX)
+            try drawVerticalBar(stave: stave, x: modifierX)
         case .double:
-            drawVerticalBar(stave: stave, x: modifierX, doubleBar: true)
+            try drawVerticalBar(stave: stave, x: modifierX, doubleBar: true)
         case .end:
-            drawVerticalEndBar(stave: stave, x: modifierX)
+            try drawVerticalEndBar(stave: stave, x: modifierX)
         case .repeatBegin:
-            drawRepeatBar(stave: stave, x: modifierX, begin: true)
+            try drawRepeatBar(stave: stave, x: modifierX, begin: true)
             if stave.getX() != modifierX {
-                drawVerticalBar(stave: stave, x: stave.getX())
+                try drawVerticalBar(stave: stave, x: stave.getX())
             }
         case .repeatEnd:
-            drawRepeatBar(stave: stave, x: modifierX, begin: false)
+            try drawRepeatBar(stave: stave, x: modifierX, begin: false)
         case .repeatBoth:
-            drawRepeatBar(stave: stave, x: modifierX, begin: false)
-            drawRepeatBar(stave: stave, x: modifierX, begin: true)
+            try drawRepeatBar(stave: stave, x: modifierX, begin: false)
+            try drawRepeatBar(stave: stave, x: modifierX, begin: true)
         case .none:
             break
         }
@@ -118,8 +118,8 @@ public final class Barline: StaveModifier {
 
     // MARK: - Drawing Helpers
 
-    private func drawVerticalBar(stave: Stave, x: Double, doubleBar: Bool = false) {
-        let ctx = try! stave.checkContext()
+    private func drawVerticalBar(stave: Stave, x: Double, doubleBar: Bool = false) throws {
+        let ctx = try stave.checkContext()
         let topY = stave.getTopLineTopY()
         let botY = stave.getBottomLineBottomY()
         if doubleBar {
@@ -128,16 +128,16 @@ public final class Barline: StaveModifier {
         ctx.fillRect(x, topY, 1, botY - topY)
     }
 
-    private func drawVerticalEndBar(stave: Stave, x: Double) {
-        let ctx = try! stave.checkContext()
+    private func drawVerticalEndBar(stave: Stave, x: Double) throws {
+        let ctx = try stave.checkContext()
         let topY = stave.getTopLineTopY()
         let botY = stave.getBottomLineBottomY()
         ctx.fillRect(x - 5, topY, 1, botY - topY)
         ctx.fillRect(x - 2, topY, 3, botY - topY)
     }
 
-    private func drawRepeatBar(stave: Stave, x: Double, begin: Bool) {
-        let ctx = try! stave.checkContext()
+    private func drawRepeatBar(stave: Stave, x: Double, begin: Bool) throws {
+        let ctx = try stave.checkContext()
         let topY = stave.getTopLineTopY()
         let botY = stave.getBottomLineBottomY()
 

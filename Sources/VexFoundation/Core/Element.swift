@@ -51,6 +51,7 @@ open class VexElement {
     public private(set) var rendered: Bool = false
     public var style: ElementStyle?
     private var attrs: ElementAttributes
+    private weak var registry: Registry?
     public var boundingBox: BoundingBox?
     public var textFont: FontInfo?
     public var children: [VexElement] = []
@@ -62,6 +63,10 @@ open class VexElement {
             id: VexElement.newID(),
             type: type(of: self).category
         )
+
+        // Match VexFlow behavior: newly created elements register automatically
+        // when a default registry has been enabled.
+        Registry.getDefaultRegistry()?.register(self)
     }
 
     // MARK: - Children
@@ -156,6 +161,12 @@ open class VexElement {
         } else {
             attrs.class += " \(className)"
         }
+        _ = registry?.onUpdate(RegistryUpdate(
+            id: attrs.id,
+            name: "class",
+            value: className,
+            oldValue: nil
+        ))
         return self
     }
 
@@ -165,6 +176,12 @@ open class VexElement {
         var parts = attrs.class.split(separator: " ").map(String.init)
         parts.removeAll { $0 == className }
         attrs.class = parts.joined(separator: " ")
+        _ = registry?.onUpdate(RegistryUpdate(
+            id: attrs.id,
+            name: "class",
+            value: nil,
+            oldValue: className
+        ))
         return self
     }
 
@@ -193,11 +210,27 @@ open class VexElement {
 
     @discardableResult
     public func setAttribute(_ name: String, _ value: String?) -> Self {
+        let oldID = attrs.id
+        var oldValue: String?
         switch name {
-        case "id": attrs.id = value ?? ""
-        case "type": attrs.type = value ?? ""
-        case "class": attrs.class = value ?? ""
+        case "id":
+            oldValue = attrs.id
+            attrs.id = value ?? ""
+        case "type":
+            oldValue = attrs.type
+            attrs.type = value ?? ""
+        case "class":
+            oldValue = attrs.class
+            attrs.class = value ?? ""
         default: break
+        }
+        if name == "id" || name == "type" || name == "class" {
+            _ = registry?.onUpdate(RegistryUpdate(
+                id: oldID,
+                name: name,
+                value: value,
+                oldValue: oldValue
+            ))
         }
         return self
     }
@@ -206,7 +239,7 @@ open class VexElement {
 
     /// Called when this element is registered with a Registry.
     open func onRegister(_ registry: Registry) {
-        // Subclasses can override to handle registration.
+        self.registry = registry
     }
 
     // MARK: - Context

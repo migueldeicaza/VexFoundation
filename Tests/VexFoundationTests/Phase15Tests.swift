@@ -66,6 +66,16 @@ struct Phase15Tests {
         #expect(Registry.getDefaultRegistry() == nil)
     }
 
+    @Test func registryDefaultRegistryAutoRegistersElements() {
+        let reg = Registry()
+        Registry.enableDefaultRegistry(reg)
+        defer { Registry.disableDefaultRegistry() }
+
+        let elem = VexElement()
+        let id = elem.getAttribute("id")!
+        #expect(reg.getElementById(id) != nil)
+    }
+
     @Test func registryUpdateIndex() {
         let reg = Registry()
         let elem = VexElement()
@@ -87,11 +97,36 @@ struct Phase15Tests {
     @Test func registryGetElementsByClass() {
         let reg = Registry()
         let elem = VexElement()
-        _ = elem.addClass("highlight")
         _ = reg.register(elem, id: "e1")
-        reg.setIndexValue(name: "class", value: "highlight", id: "e1", elem: elem)
+        _ = elem.addClass("highlight")
         let found = reg.getElementsByClass("highlight")
         #expect(found.count == 1)
+    }
+
+    @Test func registryTracksIdMutation() {
+        let reg = Registry()
+        let elem = VexElement()
+        _ = reg.register(elem, id: "e1")
+
+        _ = elem.setAttribute("id", "e2")
+        #expect(reg.getElementById("e1") == nil)
+        #expect(reg.getElementById("e2") != nil)
+    }
+
+    @Test func registryTracksClassMutation() {
+        let reg = Registry()
+        let elem = VexElement()
+        _ = reg.register(elem, id: "e1")
+
+        _ = elem.addClass("foo")
+        #expect(reg.getElementsByClass("foo").count == 1)
+
+        _ = elem.addClass("bar")
+        #expect(reg.getElementsByClass("bar").count == 1)
+
+        _ = elem.removeClass("foo")
+        #expect(reg.getElementsByClass("foo").count == 0)
+        #expect(reg.getElementsByClass("bar").count == 1)
     }
 
     @Test func registryMultipleElements() {
