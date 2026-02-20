@@ -1,0 +1,182 @@
+# VexFoundation
+
+VexFoundation is a Swift port of [VexFlow](https://vexflow.com), focused on music notation rendering with Swift-native APIs and stronger type safety than the original TypeScript surface.
+
+The project keeps VexFlow concepts (`Factory`, `EasyScore`, `System`, notes, modifiers, beams, tuplets, tablature, etc.) while intentionally preferring typed models over stringly-typed inputs.
+
+## Status
+
+- Swift Package (`swift-tools-version: 6.0`)
+- Platforms: iOS 16+, macOS 13+
+- Active port: API parity with VexFlow is in progress and APIs may evolve
+- Current test suite: `692` passing tests
+
+## Installation
+
+Add the package as a local dependency in `Package.swift`:
+
+```swift
+dependencies: [
+    .package(path: "../VexFoundation")
+]
+```
+
+Then add `"VexFoundation"` to your target dependencies.
+
+## Quick Start (SwiftUI + EasyScore)
+
+```swift
+import SwiftUI
+import VexFoundation
+
+struct ScoreView: View {
+    var body: some View {
+        VexCanvas(width: 500, height: 200) { ctx in
+            ctx.clear()
+            FontLoader.loadDefaultFonts()
+
+            let f = Factory(options: FactoryOptions(width: 500, height: 200))
+            _ = f.setContext(ctx)
+
+            let score = f.EasyScore()
+            let system = f.System(options: SystemOptions(factory: f, x: 10, width: 480, y: 10))
+
+            let upper = score.notes("C#5/q, B4, A4, G#4", options: ["stem": "up"])
+            let lower = score.notes("C#4/h, C#4", options: ["stem": "down"])
+
+            _ = system.addStave(SystemStave(
+                voices: [
+                    score.voice(upper.map { $0 as Note }),
+                    score.voice(lower.map { $0 as Note })
+                ]
+            ))
+            .addClef(.treble)
+            .addTimeSignature(.meter(4, 4))
+
+            system.format()
+            try? f.draw()
+        }
+    }
+}
+```
+
+## Native Typed API (Without EasyScore Strings)
+
+```swift
+import SwiftUI
+import VexFoundation
+
+struct TypedScoreView: View {
+    var body: some View {
+        VexCanvas(width: 500, height: 200) { ctx in
+            ctx.clear()
+            FontLoader.loadDefaultFonts()
+
+            let f = Factory(options: FactoryOptions(width: 500, height: 200))
+            _ = f.setContext(ctx)
+
+            let c4 = StaffKeySpec(letter: .c, octave: 4)
+            let e4 = StaffKeySpec(letter: .e, octave: 4)
+            let g4 = StaffKeySpec(letter: .g, octave: 4)
+
+            let n1 = f.StaveNote(StaveNoteStruct(
+                keys: NonEmptyArray(c4),
+                duration: .quarter
+            ))
+            let n2 = f.StaveNote(StaveNoteStruct(
+                keys: NonEmptyArray(e4),
+                duration: .quarter
+            ))
+            let n3 = f.StaveNote(StaveNoteStruct(
+                keys: NonEmptyArray(g4),
+                duration: .half
+            ))
+
+            let voice = f.Voice(timeSignature: .meter(4, 4))
+            _ = voice.addTickables([n1, n2, n3])
+
+            let system = f.System(options: SystemOptions(factory: f, x: 10, width: 480, y: 10))
+            _ = system.addStave(SystemStave(voices: [voice]))
+                .addClef(.treble)
+                .addTimeSignature(.meter(4, 4))
+
+            system.format()
+            try? f.draw()
+        }
+    }
+}
+```
+
+## Strongly Typed API (Preferred)
+
+VexFoundation favors typed specs over free-form strings:
+
+- `NoteDurationSpec` instead of raw duration strings
+- `StaffKeySpec` instead of raw key tokens
+- `TimeSignatureSpec` instead of raw time signature strings
+- `NonEmptyArray` where empty collections are invalid (for example, stave/grace note keys)
+
+```swift
+import VexFoundation
+
+let cSharp4 = StaffKeySpec(letter: .c, accidental: .sharp, octave: 4)
+let e4 = StaffKeySpec(letter: .e, octave: 4)
+
+let sn = StaveNote(StaveNoteStruct(
+    keys: NonEmptyArray(cSharp4, e4),
+    duration: .quarter
+))
+```
+
+## String Parsing at API Boundaries
+
+String constructors / factory paths are still available, but explicit:
+
+- Throwing parse APIs for recoverable errors
+- Failable parse APIs when you want `nil` on failure
+- Typed APIs remain the recommended default
+
+```swift
+import VexFoundation
+
+// Throwing parse API
+let parsed = try StaveNoteStruct(
+    parsingKeys: ["c#/4", "e/4"],
+    duration: "8dr"
+)
+
+// Failable parse API
+let maybeParsed = StaveNoteStruct(
+    parsingKeysOrNil: ["c#/4", "e/4"],
+    duration: .eighth
+)
+
+// Duration-only parse examples
+let ghost = try GhostNote("8r")
+let maybeGhost = GhostNote(parsingDuration: "8r")
+```
+
+## Key Differences from VexFlow
+
+- API redesign favors compile-time validation.
+- Invalid states are reduced via typed enums/specs and non-empty collections.
+- Parsing is explicit at boundaries, not implicit throughout the API.
+- SwiftUI rendering backend (`VexCanvas` / `SwiftUICanvasContext`) is provided for app integration.
+
+## Development
+
+```bash
+swift build
+swift test
+```
+
+## Attribution
+
+VexFoundation is derived from VexFlow and preserves original attribution:
+
+- VexFlow: https://github.com/vexflow/vexflow
+- Original author: Mohit Muthanna Cheppudira
+
+## License
+
+MIT (see `LICENSE`).
