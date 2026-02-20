@@ -268,6 +268,31 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(result.errorPos != nil)
     }
 
+    @Test func parserInvalidGrammarRuleFailsWithoutCrash() {
+        class BadGrammar: Grammar {
+            func begin() -> RuleFunction { BAD }
+            func BAD() -> Rule { Rule() }
+        }
+        let parser = Parser(grammar: BadGrammar())
+        let result = parser.parse("anything")
+        #expect(result.success == false)
+        #expect(result.parserError == .invalidGrammarRuleMissingTokenOrExpect)
+    }
+
+    @Test func parserParseThrowingReportsGrammarError() {
+        class BadGrammar: Grammar {
+            func begin() -> RuleFunction { BAD }
+            func BAD() -> Rule { Rule() }
+        }
+        let parser = Parser(grammar: BadGrammar())
+        do {
+            _ = try parser.parseThrowing("anything")
+            #expect(Bool(false))
+        } catch {
+            #expect(error is ParserParseError)
+        }
+    }
+
     @Test func matchStringValue() {
         let m: Match = .string("hello")
         #expect(m.stringValue == "hello")
@@ -464,6 +489,16 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(score.defaults.clef == .treble)
     }
 
+    @Test func factoryDrawWithoutContextThrows() {
+        let factory = Factory()
+        do {
+            try factory.draw()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? FactoryError == .missingRenderContext)
+        }
+    }
+
     // ============================================================
     // MARK: - EasyScore Tests
     // ============================================================
@@ -474,6 +509,15 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         let score = factory.EasyScore()
         let notes = score.notes("C4/q")
         #expect(notes.count == 1)
+    }
+
+    @Test func easyScoreDirectInitWithoutFactoryThrows() {
+        do {
+            _ = try EasyScore()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? EasyScoreInitError == .missingFactory)
+        }
     }
 
     @Test func easyScoreMultipleNotes() {
@@ -637,6 +681,15 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(system.getY() == 10)
     }
 
+    @Test func systemDirectInitWithoutFactoryThrows() {
+        do {
+            _ = try System()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? SystemError == .missingFactory)
+        }
+    }
+
     @Test func systemSetPosition() {
         let factory = Factory()
         let system = factory.System()
@@ -685,6 +738,17 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         system.format()
         // format should set the bounding box
         #expect(system.boundingBox != nil)
+    }
+
+    @Test func systemDrawBeforeFormatThrows() {
+        let factory = Factory()
+        let system = factory.System()
+        do {
+            try system.draw()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? SystemError == .drawRequiresFormat)
+        }
     }
 
     @Test func systemAddConnector() {

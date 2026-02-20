@@ -80,6 +80,17 @@ public enum EasyScoreParseError: Error, LocalizedError, Sendable {
     }
 }
 
+public enum EasyScoreInitError: Error, LocalizedError, Equatable, Sendable {
+    case missingFactory
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingFactory:
+            return "EasyScore requires a factory."
+        }
+    }
+}
+
 // MARK: - EasyScore Grammar
 
 /// The grammar for parsing EasyScore notation strings.
@@ -487,10 +498,17 @@ public final class EasyScore {
     public var parser: Parser
     public private(set) var lastParseError: EasyScoreBuilderError?
 
-    public init(options: EasyScoreOptions = EasyScoreOptions()) {
-        let factory = options.factory!
+    public convenience init(options: EasyScoreOptions = EasyScoreOptions()) throws {
+        guard let factory = options.factory else {
+            throw EasyScoreInitError.missingFactory
+        }
         let runtimeContext = options.runtimeContext ?? factory.getRuntimeContext()
         let builder = options.builder ?? Builder(factory: factory)
+        self.init(factory: factory, runtimeContext: runtimeContext, builder: builder, options: options)
+    }
+
+    init(factory: Factory, runtimeContext: VexRuntimeContext, builder: Builder, options: EasyScoreOptions) {
+        builder.factory = factory
 
         self.options = options
         self.options.factory = factory

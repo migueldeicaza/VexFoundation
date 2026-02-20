@@ -37,17 +37,19 @@ struct CompatibilityLayerTests {
     }
 
     @Test func flowMusicFontTypedAndStringConvenience() throws {
-        let typedFonts = Flow.setMusicFont(.petaluma, .custom)
-        #expect(typedFonts.map(\.name) == ["Petaluma", "Custom"])
-        #expect(Flow.getMusicFont() == ["Petaluma", "Custom"])
+        try Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
+            let typedFonts = Flow.setMusicFont(.petaluma, .custom)
+            #expect(typedFonts.map(\.name) == ["Petaluma", "Custom"])
+            #expect(Flow.getMusicFont() == ["Petaluma", "Custom"])
 
-        let parsedFonts = try Flow.setMusicFont(parsing: ["Bravura", "Custom"])
-        #expect(parsedFonts.map(\.name) == ["Bravura", "Custom"])
-        #expect(Flow.getMusicFont() == ["Bravura", "Custom"])
+            let parsedFonts = try Flow.setMusicFont(parsing: ["Bravura", "Custom"])
+            #expect(parsedFonts.map(\.name) == ["Bravura", "Custom"])
+            #expect(Flow.getMusicFont() == ["Bravura", "Custom"])
 
-        let maybeFonts = Flow.setMusicFont(parsingOrNil: ["Gonville", "Custom"])
-        #expect(maybeFonts?.map(\.name) == ["Gonville", "Custom"])
-        #expect(Flow.setMusicFont(parsingOrNil: ["UnknownFont"]) == nil)
+            let maybeFonts = Flow.setMusicFont(parsingOrNil: ["Gonville", "Custom"])
+            #expect(maybeFonts?.map(\.name) == ["Gonville", "Custom"])
+            #expect(Flow.setMusicFont(parsingOrNil: ["UnknownFont"]) == nil)
+        }
     }
 
     @Test func vexUtilityHelpersSmokeTest() {

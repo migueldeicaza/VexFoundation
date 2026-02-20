@@ -18,6 +18,17 @@ public struct FactoryOptions {
     }
 }
 
+public enum FactoryError: Error, LocalizedError, Equatable, Sendable {
+    case missingRenderContext
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingRenderContext:
+            return "Factory requires a RenderContext to draw."
+        }
+    }
+}
+
 // MARK: - Factory
 
 /// High-level API for creating VexFlow objects.
@@ -528,8 +539,11 @@ public final class Factory {
     public func System(options: SystemOptions = SystemOptions()) -> VexFoundation.System {
         var opts = options
         opts.factory = self
-        opts.runtimeContext = opts.runtimeContext ?? runtimeContext
-        let system = inRuntimeContext { VexFoundation.System(options: opts) }
+        let resolvedRuntimeContext = opts.runtimeContext ?? runtimeContext
+        opts.runtimeContext = resolvedRuntimeContext
+        let system = inRuntimeContext {
+            VexFoundation.System(factory: self, runtimeContext: resolvedRuntimeContext, options: opts)
+        }
         if let ctx = context { _ = system.setContext(ctx) }
         systems.append(system)
         return system
@@ -540,8 +554,18 @@ public final class Factory {
     public func EasyScore(options: EasyScoreOptions = EasyScoreOptions()) -> VexFoundation.EasyScore {
         var opts = options
         opts.factory = self
-        opts.runtimeContext = opts.runtimeContext ?? runtimeContext
-        return inRuntimeContext { VexFoundation.EasyScore(options: opts) }
+        let resolvedRuntimeContext = opts.runtimeContext ?? runtimeContext
+        let builder = opts.builder ?? Builder(factory: self)
+        opts.runtimeContext = resolvedRuntimeContext
+        opts.builder = builder
+        return inRuntimeContext {
+            VexFoundation.EasyScore(
+                factory: self,
+                runtimeContext: resolvedRuntimeContext,
+                builder: builder,
+                options: opts
+            )
+        }
     }
 
     // MARK: - Pedal Marking
@@ -572,7 +596,7 @@ public final class Factory {
     /// Render the complete score.
     public func draw() throws {
         guard let ctx = context else {
-            fatalError("[VexError] NoContext: Factory requires a RenderContext to draw.")
+            throw FactoryError.missingRenderContext
         }
 
         for system in systems {

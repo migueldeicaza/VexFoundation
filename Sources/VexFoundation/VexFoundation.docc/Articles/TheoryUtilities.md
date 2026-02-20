@@ -6,8 +6,8 @@ Use theory helpers to preprocess notation input.
 
 ```swift
 let music = Music()
-let noteParts = music.getNoteParts("F#")
-let keyParts = music.getKeyParts("Dm")
+let noteParts = try music.getNoteParts("F#")
+let keyParts = try music.getKeyParts("Dm")
 ```
 
 ## 2. Key-Aware Accidental Selection with ``KeyManager``
@@ -21,7 +21,7 @@ let result = try manager.selectNote(parsing: "f")
 ## 3. Scale/Interval Logic in App Layer
 
 ```swift
-let rootValue = music.getNoteValue("c")
+let rootValue = try music.getNoteValue("c")
 let majorScale = music.getScaleTones(rootValue, intervals: Music.scales["major"]!)
 ```
 

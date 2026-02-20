@@ -62,9 +62,34 @@ public struct ParseResult {
     public var numMatches: Int?
     public var results: [ParseResultItem] = []
     public var errorPos: Int?
+    public var parserError: ParserError?
 
     public init(success: Bool) {
         self.success = success
+    }
+}
+
+public enum ParserError: Error, LocalizedError, Equatable, Sendable {
+    case invalidGrammarRuleMissingTokenOrExpect
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidGrammarRuleMissingTokenOrExpect:
+            return "Bad grammar rule: expected either `token` or `expect`."
+        }
+    }
+}
+
+public enum ParserParseError: Error, LocalizedError, Sendable {
+    case parseFailed(line: String, errorPos: Int?, parserError: ParserError?)
+
+    public var errorDescription: String? {
+        switch self {
+        case .parseFailed(let line, let errorPos, let parserError):
+            let pos = errorPos.map(String.init) ?? "nil"
+            let parserErrorText = parserError?.localizedDescription ?? "none"
+            return "Parse failed for line '\(line)' (errorPos: \(pos), parserError: \(parserErrorText))"
+        }
     }
 }
 
@@ -119,6 +144,7 @@ public final class Parser {
     private var line: String = ""
     private var pos: Int = 0
     private var errorPos: Int = NO_ERROR_POS
+    public private(set) var lastError: ParserError?
 
     public init(grammar: Grammar) {
         self.grammar = grammar
@@ -132,9 +158,22 @@ public final class Parser {
         self.line = line
         self.pos = 0
         self.errorPos = NO_ERROR_POS
+        self.lastError = nil
         var result = expect(grammar.begin())
+        if lastError != nil {
+            result.success = false
+        }
         result.errorPos = errorPos
+        result.parserError = lastError
         return result
+    }
+
+    public func parseThrowing(_ line: String) throws -> ParseResult {
+        let result = parse(line)
+        if result.success {
+            return result
+        }
+        throw ParserParseError.parseFailed(line: line, errorPos: result.errorPos, parserError: result.parserError)
     }
 
     // MARK: - Match Helpers
@@ -264,6 +303,14 @@ public final class Parser {
 
     /// Execute the rule produced by the provided rule function.
     private func expect(_ ruleFunc: RuleFunction) -> ParseResult {
+        if lastError != nil {
+            var failed = ParseResult(success: false)
+            failed.pos = pos
+            failed.errorPos = errorPos
+            failed.parserError = lastError
+            return failed
+        }
+
         let rule = ruleFunc()
         var result: ParseResult
 
@@ -283,7 +330,13 @@ public final class Parser {
                 result = expectOne(rule)
             }
         } else {
-            fatalError("[VexError] BadGrammar: No `token` or `expect` property in rule")
+            if errorPos == NO_ERROR_POS { errorPos = pos }
+            lastError = .invalidGrammarRuleMissingTokenOrExpect
+            var failed = ParseResult(success: false)
+            failed.pos = pos
+            failed.errorPos = errorPos
+            failed.parserError = lastError
+            return failed
         }
 
         // Build matches from results
@@ -296,6 +349,11 @@ public final class Parser {
         // Execute trigger
         if let run = rule.run, result.success {
             run(matches)
+        }
+
+        if lastError != nil {
+            result.success = false
+            result.parserError = lastError
         }
 
         return result

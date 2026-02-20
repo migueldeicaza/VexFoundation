@@ -3,6 +3,20 @@
 
 import Foundation
 
+public enum SystemError: Error, LocalizedError, Equatable, Sendable {
+    case missingFactory
+    case drawRequiresFormat
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingFactory:
+            return "System requires a factory."
+        case .drawRequiresFormat:
+            return "format() must be called before draw()."
+        }
+    }
+}
+
 // MARK: - System Types
 
 /// Formatter options extended with alpha for tuning.
@@ -111,11 +125,15 @@ public final class System: VexElement {
 
     // MARK: - Init
 
-    public init(options: SystemOptions = SystemOptions()) {
+    public convenience init(options: SystemOptions = SystemOptions()) throws {
         guard let factory = options.factory else {
-            fatalError("[VexError] NoFactory: System requires a factory.")
+            throw SystemError.missingFactory
         }
         let runtimeContext = options.runtimeContext ?? factory.getRuntimeContext()
+        self.init(factory: factory, runtimeContext: runtimeContext, options: options)
+    }
+
+    init(factory: Factory, runtimeContext: VexRuntimeContext, options: SystemOptions) {
         var resolvedOptions = options
         resolvedOptions.runtimeContext = runtimeContext
         self.factory = factory
@@ -289,9 +307,9 @@ public final class System: VexElement {
     // MARK: - Draw
 
     override public func draw() throws {
-        VexRuntime.withContext(runtimeContext) {
+        try VexRuntime.withContext(runtimeContext) {
             guard formatter != nil, startX != nil, lastY != nil else {
-                fatalError("[VexError] NoFormatter: format() must be called before draw()")
+                throw SystemError.drawRequiresFormat
             }
             setRendered()
         }

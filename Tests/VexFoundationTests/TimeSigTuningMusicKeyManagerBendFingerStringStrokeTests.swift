@@ -150,79 +150,79 @@ struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
         #expect(Music.scales["major"]! == [2, 2, 1, 2, 2, 2, 1])
     }
 
-    @Test func musicGetNoteParts() {
+    @Test func musicGetNoteParts() throws {
         let music = Music()
-        let parts = music.getNoteParts("c#")
+        let parts = try music.getNoteParts("c#")
         #expect(parts.root == "c")
         #expect(parts.accidental == "#")
     }
 
-    @Test func musicGetNotePartsNatural() {
+    @Test func musicGetNotePartsNatural() throws {
         let music = Music()
-        let parts = music.getNoteParts("d")
+        let parts = try music.getNoteParts("d")
         #expect(parts.root == "d")
         #expect(parts.accidental == nil)
     }
 
-    @Test func musicGetNotePartsDoubleFlat() {
+    @Test func musicGetNotePartsDoubleFlat() throws {
         let music = Music()
-        let parts = music.getNoteParts("ebb")
+        let parts = try music.getNoteParts("ebb")
         #expect(parts.root == "e")
         #expect(parts.accidental == "bb")
     }
 
-    @Test func musicGetKeyParts() {
+    @Test func musicGetKeyParts() throws {
         let music = Music()
-        let parts = music.getKeyParts("cm")
+        let parts = try music.getKeyParts("cm")
         #expect(parts.root == "c")
         #expect(parts.type == "m")
     }
 
-    @Test func musicGetKeyPartsMajor() {
+    @Test func musicGetKeyPartsMajor() throws {
         let music = Music()
-        let parts = music.getKeyParts("g")
+        let parts = try music.getKeyParts("g")
         #expect(parts.root == "g")
         #expect(parts.type == "M")
     }
 
-    @Test func musicGetNoteValue() {
+    @Test func musicGetNoteValue() throws {
         let music = Music()
-        #expect(music.getNoteValue("c") == 0)
-        #expect(music.getNoteValue("d") == 2)
-        #expect(music.getNoteValue("b") == 11)
+        #expect(try music.getNoteValue("c") == 0)
+        #expect(try music.getNoteValue("d") == 2)
+        #expect(try music.getNoteValue("b") == 11)
     }
 
-    @Test func musicGetIntervalValue() {
+    @Test func musicGetIntervalValue() throws {
         let music = Music()
-        #expect(music.getIntervalValue("p5") == 7)
-        #expect(music.getIntervalValue("M3") == 4)
+        #expect(try music.getIntervalValue("p5") == 7)
+        #expect(try music.getIntervalValue("M3") == 4)
     }
 
-    @Test func musicGetCanonicalNoteName() {
+    @Test func musicGetCanonicalNoteName() throws {
         let music = Music()
-        #expect(music.getCanonicalNoteName(0) == "c")
-        #expect(music.getCanonicalNoteName(7) == "g")
+        #expect(try music.getCanonicalNoteName(0) == "c")
+        #expect(try music.getCanonicalNoteName(7) == "g")
     }
 
-    @Test func musicGetCanonicalIntervalName() {
+    @Test func musicGetCanonicalIntervalName() throws {
         let music = Music()
-        #expect(music.getCanonicalIntervalName(0) == "unison")
-        #expect(music.getCanonicalIntervalName(7) == "p5")
+        #expect(try music.getCanonicalIntervalName(0) == "unison")
+        #expect(try music.getCanonicalIntervalName(7) == "p5")
     }
 
-    @Test func musicGetRelativeNoteValue() {
+    @Test func musicGetRelativeNoteValue() throws {
         let music = Music()
         // C + perfect 5th = G (7)
-        #expect(music.getRelativeNoteValue(0, intervalValue: 7) == 7)
+        #expect(try music.getRelativeNoteValue(0, intervalValue: 7) == 7)
         // G + perfect 5th = D (2)
-        #expect(music.getRelativeNoteValue(7, intervalValue: 7) == 2)
+        #expect(try music.getRelativeNoteValue(7, intervalValue: 7) == 2)
     }
 
-    @Test func musicGetRelativeNoteName() {
+    @Test func musicGetRelativeNoteName() throws {
         let music = Music()
-        #expect(music.getRelativeNoteName("c", noteValue: 0) == "c")
-        #expect(music.getRelativeNoteName("c", noteValue: 1) == "c#")
-        #expect(music.getRelativeNoteName("d", noteValue: 1) == "db")
+        #expect(try music.getRelativeNoteName("c", noteValue: 0) == "c")
+        #expect(try music.getRelativeNoteName("c", noteValue: 1) == "c#")
+        #expect(try music.getRelativeNoteName("d", noteValue: 1) == "db")
     }
 
     @Test func musicGetScaleTones() {
@@ -236,17 +236,27 @@ struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
         #expect(cMajor[4] == 7)  // G
     }
 
-    @Test func musicGetIntervalBetween() {
+    @Test func musicGetIntervalBetween() throws {
         let music = Music()
         // C to G ascending = 7
-        #expect(music.getIntervalBetween(0, 7) == 7)
+        #expect(try music.getIntervalBetween(0, 7) == 7)
         // G to C ascending = 5
-        #expect(music.getIntervalBetween(7, 0) == 5)
+        #expect(try music.getIntervalBetween(7, 0) == 5)
     }
 
-    @Test func musicCreateScaleMap() {
+    @Test func musicInvalidDirectionThrows() {
         let music = Music()
-        let map = music.createScaleMap("C")
+        do {
+            _ = try music.getRelativeNoteValue(0, intervalValue: 7, direction: 0)
+            #expect(Bool(false))
+        } catch {
+            #expect(error is MusicError)
+        }
+    }
+
+    @Test func musicCreateScaleMap() throws {
+        let music = Music()
+        let map = try music.createScaleMap("C")
         #expect(map["c"] == "cn")
         #expect(map["d"] == "dn")
         #expect(map["e"] == "en")
@@ -254,9 +264,9 @@ struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
         #expect(map["g"] == "gn")
     }
 
-    @Test func musicCreateScaleMapGMajor() {
+    @Test func musicCreateScaleMapGMajor() throws {
         let music = Music()
-        let map = music.createScaleMap("G")
+        let map = try music.createScaleMap("G")
         #expect(map["f"] == "f#")
     }
 

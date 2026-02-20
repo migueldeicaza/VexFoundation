@@ -54,6 +54,7 @@ public enum MusicError: Error, LocalizedError, Sendable {
     case invalidNoteValue(Int)
     case invalidIntervalValue(Int)
     case invalidDirection(Int)
+    case invalidNotes(Int, Int)
     case notesNotRelated(root: String, noteValue: Int)
     case unsupportedKeyType(String)
 
@@ -71,6 +72,8 @@ public enum MusicError: Error, LocalizedError, Sendable {
             return "Invalid interval value: \(value)"
         case .invalidDirection(let direction):
             return "Invalid direction: \(direction)"
+        case .invalidNotes(let note1, let note2):
+            return "Invalid notes: \(note1), \(note2)"
         case .notesNotRelated(let root, let noteValue):
             return "Notes not related: \(root), \(noteValue)"
         case .unsupportedKeyType(let key):
@@ -218,11 +221,8 @@ public class Music {
 
     // MARK: - Note Parts
 
-    public func getNoteParts(_ noteString: String) -> NoteParts {
-        guard let parsed = try? noteParts(parsing: noteString) else {
-            fatalError("[VexError] BadArguments: Invalid note name: \(noteString)")
-        }
-        return parsed
+    public func getNoteParts(_ noteString: String) throws -> NoteParts {
+        try noteParts(parsing: noteString)
     }
 
     public func noteParts(parsing noteString: String) throws -> NoteParts {
@@ -254,11 +254,8 @@ public class Music {
 
     // MARK: - Key Parts
 
-    public func getKeyParts(_ keyString: String) -> KeyParts {
-        guard let parsed = try? keyParts(parsing: keyString) else {
-            fatalError("[VexError] BadArguments: Invalid key: \(keyString)")
-        }
-        return parsed
+    public func getKeyParts(_ keyString: String) throws -> KeyParts {
+        try keyParts(parsing: keyString)
     }
 
     public func keyParts(parsing keyString: String) throws -> KeyParts {
@@ -296,11 +293,8 @@ public class Music {
 
     // MARK: - Note/Interval Values
 
-    public func getNoteValue(_ noteString: String) -> Int {
-        guard let parsed = try? noteValue(parsing: noteString) else {
-            fatalError("[VexError] BadArguments: Invalid note name: \(noteString)")
-        }
-        return parsed
+    public func getNoteValue(_ noteString: String) throws -> Int {
+        try noteValue(parsing: noteString)
     }
 
     public func noteValue(parsing noteString: String) throws -> Int {
@@ -314,11 +308,8 @@ public class Music {
         try? noteValue(parsing: noteString)
     }
 
-    public func getIntervalValue(_ intervalString: String) -> Int {
-        guard let parsed = try? intervalValue(parsing: intervalString) else {
-            fatalError("[VexError] BadArguments: Invalid interval name: \(intervalString)")
-        }
-        return parsed
+    public func getIntervalValue(_ intervalString: String) throws -> Int {
+        try intervalValue(parsing: intervalString)
     }
 
     public func intervalValue(parsing intervalString: String) throws -> Int {
@@ -334,36 +325,33 @@ public class Music {
 
     // MARK: - Canonical Names
 
-    public func getCanonicalNoteName(_ noteValue: Int) -> String {
+    public func getCanonicalNoteName(_ noteValue: Int) throws -> String {
         guard isValidNoteValue(noteValue) else {
-            fatalError("[VexError] BadArguments: Invalid note value: \(noteValue)")
+            throw MusicError.invalidNoteValue(noteValue)
         }
         return Music.canonicalNotes[noteValue]
     }
 
-    public func getCanonicalIntervalName(_ intervalValue: Int) -> String {
+    public func getCanonicalIntervalName(_ intervalValue: Int) throws -> String {
         guard isValidIntervalValue(intervalValue) else {
-            fatalError("[VexError] BadArguments: Invalid interval value: \(intervalValue)")
+            throw MusicError.invalidIntervalValue(intervalValue)
         }
         return Music.diatonicIntervals[intervalValue]
     }
 
     // MARK: - Relative Notes
 
-    public func getRelativeNoteValue(_ noteValue: Int, intervalValue: Int, direction: Int = 1) -> Int {
+    public func getRelativeNoteValue(_ noteValue: Int, intervalValue: Int, direction: Int = 1) throws -> Int {
         guard direction == 1 || direction == -1 else {
-            fatalError("[VexError] BadArguments: Invalid direction: \(direction)")
+            throw MusicError.invalidDirection(direction)
         }
         var sum = (noteValue + direction * intervalValue) % Music.NUM_TONES
         if sum < 0 { sum += Music.NUM_TONES }
         return sum
     }
 
-    public func getRelativeNoteName(_ root: String, noteValue: Int) -> String {
-        guard let parsed = try? relativeNoteName(parsingRoot: root, noteValue: noteValue) else {
-            fatalError("[VexError] BadArguments: Notes not related: \(root), \(noteValue))")
-        }
-        return parsed
+    public func getRelativeNoteName(_ root: String, noteValue: Int) throws -> String {
+        try relativeNoteName(parsingRoot: root, noteValue: noteValue)
     }
 
     public func relativeNoteName(parsingRoot root: String, noteValue: Int) throws -> String {
@@ -410,7 +398,10 @@ public class Music {
         var tones = [key]
         var nextNote = key
         for i in 0..<intervals.count {
-            nextNote = getRelativeNoteValue(nextNote, intervalValue: intervals[i])
+            // Internal calls always use ascending direction and do not require throwing validation.
+            var sum = (nextNote + intervals[i]) % Music.NUM_TONES
+            if sum < 0 { sum += Music.NUM_TONES }
+            nextNote = sum
             if nextNote != key { tones.append(nextNote) }
         }
         return tones
@@ -418,12 +409,12 @@ public class Music {
 
     // MARK: - Interval Between Notes
 
-    public func getIntervalBetween(_ note1: Int, _ note2: Int, direction: Int = 1) -> Int {
+    public func getIntervalBetween(_ note1: Int, _ note2: Int, direction: Int = 1) throws -> Int {
         guard direction == 1 || direction == -1 else {
-            fatalError("[VexError] BadArguments: Invalid direction: \(direction)")
+            throw MusicError.invalidDirection(direction)
         }
         guard isValidNoteValue(note1) && isValidNoteValue(note2) else {
-            fatalError("[VexError] BadArguments: Invalid notes: \(note1), \(note2)")
+            throw MusicError.invalidNotes(note1, note2)
         }
         var difference = direction == 1 ? note2 - note1 : note1 - note2
         if difference < 0 { difference += Music.NUM_TONES }
@@ -432,11 +423,8 @@ public class Music {
 
     // MARK: - Scale Map
 
-    public func createScaleMap(_ keySignature: String) -> [String: String] {
-        guard let parsed = try? createScaleMap(parsing: keySignature) else {
-            fatalError("[VexError] BadArguments: Unsupported key type: \(keySignature)")
-        }
-        return parsed
+    public func createScaleMap(_ keySignature: String) throws -> [String: String] {
+        try createScaleMap(parsing: keySignature)
     }
 
     public func createScaleMap(parsing keySignature: String) throws -> [String: String] {
