@@ -451,6 +451,22 @@ struct NoteTests {
         #expect(nh.getLine() == 4)
     }
 
+    @Test func noteHeadStructParsingDurationConvenience() {
+        let parsed = NoteHeadStruct(parsingDuration: "8dr", line: 2)
+        #expect(parsed != nil)
+
+        if let parsed {
+            #expect(parsed.duration == .eighth)
+            #expect(parsed.noteType == .rest)
+            #expect(parsed.dots == 1)
+            #expect(parsed.line == 2)
+
+            let nh = NoteHead(noteHeadStruct: parsed)
+            #expect(nh.getDuration() == "8")
+            #expect(nh.getNoteType() == "r")
+        }
+    }
+
     // MARK: - StemmableNote (via TestStemmableNote)
 
     @Test func stemmableNoteStemDirection() {

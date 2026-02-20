@@ -8,7 +8,7 @@ import Foundation
 /// Input structure for creating a GraceNote (extends StaveNoteStruct).
 public struct GraceNoteStruct {
     public var keys: NonEmptyArray<StaffKeySpec>
-    public var duration: NoteValue
+    public var duration: NoteDurationSpec
     public var slash: Bool
     public var stemDirection: StemDirection?
     public var autoStem: Bool?
@@ -19,7 +19,7 @@ public struct GraceNoteStruct {
 
     public init(
         keys: NonEmptyArray<StaffKeySpec>,
-        duration: NoteValue = .eighth,
+        duration: NoteDurationSpec = .eighth,
         slash: Bool = false,
         stemDirection: StemDirection? = nil,
         autoStem: Bool? = nil,
@@ -59,20 +59,18 @@ public struct GraceNoteStruct {
                 throw NoteDurationParseError.invalidType(type)
             }
             parsedType = explicitType
-        } else if parsedDuration.type == .note {
-            parsedType = nil
         } else {
-            parsedType = parsedDuration.type
+            parsedType = nil
         }
 
         self.init(
             keys: parsedKeys,
-            duration: parsedDuration.value,
+            duration: parsedDuration,
             slash: slash,
             stemDirection: stemDirection,
             autoStem: autoStem,
             clef: clef,
-            dots: dots ?? parsedDuration.dots,
+            dots: dots,
             type: parsedType,
             octaveShift: octaveShift
         )
@@ -104,10 +102,36 @@ public struct GraceNoteStruct {
         self = parsed
     }
 
+    /// Failable string parser convenience matching the throwing parser shape.
+    public init?(
+        parsingKeysOrNil keys: [String],
+        duration: String,
+        slash: Bool = false,
+        stemDirection: StemDirection? = nil,
+        autoStem: Bool? = nil,
+        clef: ClefName? = nil,
+        dots: Int? = nil,
+        type: String? = nil,
+        octaveShift: Int? = nil
+    ) {
+        guard let parsed = try? GraceNoteStruct(
+            parsingKeys: keys,
+            duration: duration,
+            slash: slash,
+            stemDirection: stemDirection,
+            autoStem: autoStem,
+            clef: clef,
+            dots: dots,
+            type: type,
+            octaveShift: octaveShift
+        ) else { return nil }
+        self = parsed
+    }
+
     /// String-key parser for typed duration inputs.
     public init(
         parsingKeys keys: [String],
-        duration: NoteValue = .eighth,
+        duration: NoteDurationSpec = .eighth,
         slash: Bool = false,
         stemDirection: StemDirection? = nil,
         autoStem: Bool? = nil,
@@ -132,7 +156,7 @@ public struct GraceNoteStruct {
     /// Failable string-key parser for typed duration inputs.
     public init?(
         parsingKeysOrNil keys: [String],
-        duration: NoteValue = .eighth,
+        duration: NoteDurationSpec = .eighth,
         slash: Bool = false,
         stemDirection: StemDirection? = nil,
         autoStem: Bool? = nil,

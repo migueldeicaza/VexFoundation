@@ -12,7 +12,7 @@ struct Phase9Tests {
 
     // MARK: - Helper
 
-    private func makeNote(keys: NonEmptyArray<StaffKeySpec> = NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: NoteValue = .quarter) -> StaveNote {
+    private func makeNote(keys: NonEmptyArray<StaffKeySpec> = NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: NoteDurationSpec = .quarter) -> StaveNote {
         let note = StaveNote(StaveNoteStruct(keys: keys, duration: duration))
         let stave = Stave(x: 10, y: 40, width: 300)
         _ = note.setStave(stave)
@@ -183,6 +183,28 @@ struct Phase9Tests {
         let note = TextNote(TextNoteStruct(text: "Hello"))
         #expect(TextNote.category == "TextNote")
         #expect(note.getText() == "Hello")
+    }
+
+    @Test func textNoteStructParsingKeysOrNil() {
+        let parsed = TextNoteStruct(
+            parsingKeysOrNil: ["b/4"],
+            duration: "q",
+            text: "rit.",
+            superscript: "molto"
+        )
+        #expect(parsed != nil)
+
+        if let parsed {
+            #expect(parsed.keys.count == 1)
+            #expect(parsed.keys[0].rawValue == "b/4")
+            #expect(parsed.duration.value == .quarter)
+            #expect(parsed.text == "rit.")
+            #expect(parsed.superscript == "molto")
+
+            let note = TextNote(parsed)
+            #expect(note.getDuration() == "4")
+            #expect(note.getText() == "rit.")
+        }
     }
 
     @Test func textNoteWithGlyph() {

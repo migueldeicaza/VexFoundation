@@ -116,6 +116,48 @@ public struct NoteHeadStruct {
             dots: dots ?? parsedDuration.dots
         )
     }
+
+    /// Failable parser convenience for string-based duration / type inputs.
+    public init?(
+        parsingDuration duration: String,
+        line: Double = 0,
+        glyphFontScale: Double? = nil,
+        slashed: Bool = false,
+        style: ElementStyle? = nil,
+        stemDownXOffset: Double = 0,
+        stemUpXOffset: Double = 0,
+        customGlyphCode: String? = nil,
+        xShift: Double = 0,
+        stemDirection: StemDirection = .up,
+        displaced: Bool = false,
+        noteType: String? = nil,
+        x: Double = 0,
+        y: Double = 0,
+        index: Int? = nil,
+        keys: [String] = [],
+        dots: Int? = nil
+    ) {
+        guard let parsed = try? NoteHeadStruct(
+            duration: duration,
+            line: line,
+            glyphFontScale: glyphFontScale,
+            slashed: slashed,
+            style: style,
+            stemDownXOffset: stemDownXOffset,
+            stemUpXOffset: stemUpXOffset,
+            customGlyphCode: customGlyphCode,
+            xShift: xShift,
+            stemDirection: stemDirection,
+            displaced: displaced,
+            noteType: noteType,
+            x: x,
+            y: y,
+            index: index,
+            keys: keys,
+            dots: dots
+        ) else { return nil }
+        self = parsed
+    }
 }
 
 // MARK: - NoteHead

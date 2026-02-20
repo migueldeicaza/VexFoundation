@@ -281,6 +281,14 @@ struct Phase15Tests {
         #expect(ghost.getDuration() == "4")
     }
 
+    @Test func factoryGhostNoteParsingDuration() {
+        let factory = Factory()
+        let ghost = factory.GhostNote(parsingDuration: "8")
+        #expect(ghost != nil)
+        #expect(ghost?.getDuration() == "8")
+        #expect(ghost?.isRest() == true)
+    }
+
     @Test func factoryAccidental() {
         let factory = Factory()
         let accid = factory.Accidental(type: "#")

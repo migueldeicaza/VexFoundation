@@ -15,7 +15,7 @@ public enum TextJustification: Int {
 
 public struct TextNoteStruct {
     public var keys: [StaffKeySpec]
-    public var duration: NoteValue
+    public var duration: NoteDurationSpec
     public var text: String?
     public var glyph: String?
     public var ignoreTicks: Bool?
@@ -26,7 +26,7 @@ public struct TextNoteStruct {
 
     public init(
         keys: [StaffKeySpec] = [StaffKeySpec(letter: .b, octave: 4)],
-        duration: NoteValue = .quarter,
+        duration: NoteDurationSpec = .quarter,
         text: String? = nil,
         glyph: String? = nil,
         ignoreTicks: Bool? = nil,
@@ -62,7 +62,7 @@ public struct TextNoteStruct {
         let parsedKeys = try StaffKeySpec.parseMany(keys)
         self.init(
             keys: parsedKeys,
-            duration: parsedDuration.value,
+            duration: parsedDuration,
             text: text,
             glyph: glyph,
             ignoreTicks: ignoreTicks,
@@ -99,10 +99,36 @@ public struct TextNoteStruct {
         self = parsed
     }
 
+    /// Failable string parser convenience matching the throwing parser shape.
+    public init?(
+        parsingKeysOrNil keys: [String] = ["b/4"],
+        duration: String,
+        text: String? = nil,
+        glyph: String? = nil,
+        ignoreTicks: Bool? = nil,
+        smooth: Bool? = nil,
+        line: Double? = nil,
+        superscript: String? = nil,
+        subscriptText: String? = nil
+    ) {
+        guard let parsed = try? TextNoteStruct(
+            parsingKeys: keys,
+            duration: duration,
+            text: text,
+            glyph: glyph,
+            ignoreTicks: ignoreTicks,
+            smooth: smooth,
+            line: line,
+            superscript: superscript,
+            subscriptText: subscriptText
+        ) else { return nil }
+        self = parsed
+    }
+
     /// String-key parser for typed duration inputs.
     public init(
         parsingKeys keys: [String],
-        duration: NoteValue = .quarter,
+        duration: NoteDurationSpec = .quarter,
         text: String? = nil,
         glyph: String? = nil,
         ignoreTicks: Bool? = nil,
@@ -127,7 +153,7 @@ public struct TextNoteStruct {
     /// Failable string-key parser for typed duration inputs.
     public init?(
         parsingKeysOrNil keys: [String],
-        duration: NoteValue = .quarter,
+        duration: NoteDurationSpec = .quarter,
         text: String? = nil,
         glyph: String? = nil,
         ignoreTicks: Bool? = nil,
@@ -213,7 +239,7 @@ public final class TextNote: Note {
 
         let ns = NoteStruct(
             keys: noteStruct.keys.map(\.rawValue),
-            duration: NoteDurationSpec(uncheckedValue: noteStruct.duration)
+            duration: noteStruct.duration
         )
         super.init(ns)
 

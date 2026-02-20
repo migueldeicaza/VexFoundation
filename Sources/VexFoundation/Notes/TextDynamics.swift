@@ -37,7 +37,7 @@ public final class TextDynamics: Note {
 
         super.init(NoteStruct(
             keys: noteStruct.keys.map(\.rawValue),
-            duration: NoteDurationSpec(uncheckedValue: noteStruct.duration)
+            duration: noteStruct.duration
         ))
 
         renderOptions.glyphFontScale = Tables.NOTATION_FONT_SCALE

@@ -12,7 +12,7 @@ struct Phase8Tests {
 
     // MARK: - Helper
 
-    private func makeNote(keys: NonEmptyArray<StaffKeySpec>, duration: NoteValue) -> StaveNote {
+    private func makeNote(keys: NonEmptyArray<StaffKeySpec>, duration: NoteDurationSpec) -> StaveNote {
         let note = StaveNote(StaveNoteStruct(keys: keys, duration: duration))
         let stave = Stave(x: 10, y: 40, width: 300)
         _ = note.setStave(stave)

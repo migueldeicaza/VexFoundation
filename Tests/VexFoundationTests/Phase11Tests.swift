@@ -13,7 +13,7 @@ struct Phase11Tests {
 
     // MARK: - Helper
 
-    private func makeNote(keys: NonEmptyArray<StaffKeySpec> = NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: NoteValue = .quarter) -> StaveNote {
+    private func makeNote(keys: NonEmptyArray<StaffKeySpec> = NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: NoteDurationSpec = .quarter) -> StaveNote {
         let note = StaveNote(StaveNoteStruct(keys: keys, duration: duration))
         let stave = Stave(x: 10, y: 40, width: 300)
         _ = note.setStave(stave)
@@ -22,7 +22,7 @@ struct Phase11Tests {
         return note
     }
 
-    private func makeFormattedNote(keys: NonEmptyArray<StaffKeySpec> = NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: NoteValue = .quarter) -> StaveNote {
+    private func makeFormattedNote(keys: NonEmptyArray<StaffKeySpec> = NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: NoteDurationSpec = .quarter) -> StaveNote {
         let note = makeNote(keys: keys, duration: duration)
         note.preFormat()
         return note
@@ -43,6 +43,26 @@ struct Phase11Tests {
         #expect(gn.slash == false)
         #expect(gn.slur == true)
         #expect(gn.tickableWidth == 3)
+    }
+
+    @Test func graceNoteStructParsingKeysOrNil() {
+        let parsed = GraceNoteStruct(
+            parsingKeysOrNil: ["d/5"],
+            duration: "16",
+            slash: true,
+            dots: 1,
+            type: "s"
+        )
+        #expect(parsed != nil)
+
+        if let parsed {
+            #expect(parsed.keys.count == 1)
+            #expect(parsed.keys[0].rawValue == "d/5")
+            #expect(parsed.duration.value == .sixteenth)
+            #expect(parsed.slash == true)
+            #expect(parsed.dots == 1)
+            #expect(parsed.type == .slash)
+        }
     }
 
     @Test func graceNoteWithSlash() {

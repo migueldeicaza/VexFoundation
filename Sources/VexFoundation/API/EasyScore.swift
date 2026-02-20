@@ -26,12 +26,12 @@ public struct NotePiece {
 /// A parsed note piece with duration, dots, type, and options.
 public class Piece {
     public var chord: [NotePiece] = []
-    public var duration: NoteValue
+    public var duration: NoteDurationSpec
     public var dots: Int = 0
     public var type: NoteType?
     public var options: [String: String] = [:]
 
-    public init(duration: NoteValue) {
+    public init(duration: NoteDurationSpec) {
         self.duration = duration
     }
 }
@@ -175,7 +175,7 @@ public final class Builder {
     public var options: [String: String] = [:]
     public var piece: Piece
     public var commitHooks: [CommitHook] = []
-    public var rollingDuration: NoteValue = .eighth
+    public var rollingDuration: NoteDurationSpec = .eighth
 
     public init(factory: Factory) {
         self.factory = factory
@@ -215,7 +215,7 @@ public final class Builder {
 
     public func setNoteDuration(_ duration: String?) {
         if let duration {
-            guard let parsed = NoteValue(parsing: duration) else {
+            guard let parsed = try? NoteDurationSpec(parsing: duration) else {
                 fatalError("[VexError] BadArguments: Invalid note duration: \(duration)")
             }
             rollingDuration = parsed
@@ -299,7 +299,7 @@ public final class Builder {
         // Build note
         let note: StemmableNote
         if type == .ghost {
-            note = factory.GhostNote(duration: duration, dots: dots)
+            note = factory.GhostNote(duration: duration.value, dots: dots)
         } else {
             guard let noteStruct = StaveNoteStruct(
                 parsingKeysOrNil: keys,

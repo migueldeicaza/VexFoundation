@@ -22,6 +22,27 @@ struct StaveNoteTests {
         #expect(note.hasStem())
     }
 
+    @Test func staveNoteStructParsingKeysOrNil() {
+        let parsed = StaveNoteStruct(
+            parsingKeysOrNil: ["c#/4", "e/4"],
+            duration: "8",
+            dots: 1,
+            type: "r",
+            autoStem: true
+        )
+        #expect(parsed != nil)
+
+        if let parsed {
+            #expect(parsed.keys.count == 2)
+            #expect(parsed.keys[0].rawValue == "c#/4")
+            #expect(parsed.keys[1].rawValue == "e/4")
+            #expect(parsed.duration.value == .eighth)
+            #expect(parsed.dots == 1)
+            #expect(parsed.type == .rest)
+            #expect(parsed.autoStem == true)
+        }
+    }
+
     @Test func staveNoteRest() {
         let note = StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .b, octave: 4)), duration: .quarter, type: .rest))
         #expect(note.isRest())
