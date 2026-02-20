@@ -205,6 +205,23 @@ struct StaveTests {
         #expect(ts.getTimeSpec() == .meter(4, 4))
     }
 
+    @Test func timeSigGlyphAliasAndMetrics() {
+        let ts = TimeSignature(timeSpec: .meter(12, 8))
+        let glyph = TimeSigGlyph(
+            timeSignature: ts,
+            topDigits: "12",
+            botDigits: "8",
+            code: "timeSig0",
+            point: ts.tsPoint
+        )
+        let alias: TimeSignatureGlyph = glyph
+        let metrics = alias.getMetrics()
+
+        #expect(metrics.width > 0)
+        #expect(metrics.xMax >= metrics.xMin)
+        #expect(alias.width == glyph.width)
+    }
+
     @Test func timeSignatureCommon() {
         let ts = TimeSignature(timeSpec: .commonTime)
         #expect(ts.getIsNumeric() == false)

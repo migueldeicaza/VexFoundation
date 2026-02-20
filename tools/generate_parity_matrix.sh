@@ -71,10 +71,6 @@ module_status_for() {
       printf 'omitted|Intentional out-of-core browser runtime module'
       return
       ;;
-    timesigglyph)
-      printf 'partial|Integrated into `Sources/VexFoundation/Stave/TimeSignature.swift`'
-      return
-      ;;
   esac
 
   mapped_module=''
@@ -100,11 +96,6 @@ module_status_for() {
     fi
   fi
 
-  if [ "$module" = "typeguard" ]; then
-    printf 'partial|Replaced by Swift typed models and compile-time checks'
-    return
-  fi
-
   printf 'missing|No first-class counterpart in current core package'
 }
 
@@ -119,17 +110,118 @@ topic_status_for() {
   esac
 
   case "$topic" in
-    accidental|annotation|articulation|auto_beam_formatting|barline|beam|bend|boundingbox|boundingboxcomputation|chordsymbol|clef|crossbeam|curve|dot|easyscore|factory|font|formatter|fraction|ghostnote|glyphnote|gracenote|gracetabnote|keymanager|keysignature|modifier|multimeasurerest|music|notehead|notesubgroup|ornament|parser|pedalmarking|percussion|registry|rests|rhythm|stave|staveconnector|stavehairpin|staveline|stavemodifier|stavenote|stavetie|stringnumber|strokes|tabnote|tabslide|tabstave|tabtie|textbracket|textformatter|textnote|threevoice|tickcontext|timesignature|tremolo|tuning|tuplet|unison|vibrato|vibratobracket|voice)
+    accidental|annotation|articulation|auto_beam_formatting|bach|barline|beam|bend|boundingbox|boundingboxcomputation|chordsymbol|clef|crossbeam|curve|dot|easyscore|factory|font|formatter|fraction|ghostnote|glyphnote|gracenote|gracetabnote|key_clef|keymanager|keysignature|modifier|multimeasurerest|music|notehead|notesubgroup|ornament|parser|pedalmarking|percussion|registry|rests|rhythm|stave|staveconnector|stavehairpin|staveline|stavemodifier|stavenote|stavetie|stringnumber|strokes|style|tabnote|tabslide|tabstave|tabtie|textbracket|textformatter|textnote|threevoice|tickcontext|timesignature|tremolo|tuning|tuplet|typeguard|unison|vf_prefix|vibrato|vibratobracket|voice)
       printf 'covered|Covered by category-based suites in `Tests/VexFoundationTests`'
-      return
-      ;;
-    key_clef|style)
-      printf 'partial|Behavior covered indirectly but no dedicated counterpart suite'
       return
       ;;
   esac
 
   printf 'missing|No dedicated counterpart suite currently tracked'
+}
+
+topic_correspondence_for() {
+  local topic="$1"
+
+  case "$topic" in
+    accidental|articulation|beam|auto_beam_formatting|crossbeam)
+      printf 'Accidental, Beam & Articulation|`AccidentalBeamArticulationTests.swift`'
+      return
+      ;;
+    annotation|ghostnote)
+      printf 'Note Types & Annotation|`NoteTypesAnnotationTests.swift`'
+      return
+      ;;
+    bach)
+      printf 'Bach Demo|`BachDemoParityTests.swift`'
+      return
+      ;;
+    barline|clef|keysignature|stave|stavemodifier|timesignature)
+      printf 'Stave System|`StaveTests.swift`'
+      return
+      ;;
+    bend|keymanager|music|stringnumber|strokes|tuning)
+      printf 'TimeSigNote, Tuning, Music, KeyManager, Bend, FretHandFinger, StringNumber, Stroke|`TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests.swift`'
+      return
+      ;;
+    boundingbox|boundingboxcomputation)
+      printf 'BoundingBox|`BoundingBoxTests.swift`'
+      return
+      ;;
+    chordsymbol|gracetabnote|tabnote|tabslide|tabstave|tabtie)
+      printf 'TabStave, TabNote, TabTie, TabSlide, GraceTabNote, ChordSymbol|`TablatureAndChordSymbolTests.swift`'
+      return
+      ;;
+    curve|stavetie|tuplet)
+      printf 'StaveTie, Curve & Tuplet|`StaveTieCurveTupletTests.swift`'
+      return
+      ;;
+    dot|stavenote)
+      printf 'StaveNote System|`StaveNoteTests.swift`'
+      return
+      ;;
+    easyscore|factory|formatter|parser|registry|system|tickcontext|voice)
+      printf 'Registry, Parser, Factory, EasyScore, System|`RegistryParserFactoryEasyScoreSystemTests.swift`'
+      return
+      ;;
+    font)
+      printf 'VexFont|`VexFontTests.swift`'
+      return
+      ;;
+    frethandfinger|timesignature)
+      printf 'TimeSigNote, Tuning, Music, KeyManager, Bend, FretHandFinger, StringNumber, Stroke|`TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests.swift`'
+      return
+      ;;
+    glyphnote)
+      printf 'Glyph System|`GlyphTests.swift`'
+      return
+      ;;
+    gracenote|pedalmarking|staveline|textbracket|textdynamics)
+      printf 'GraceNote, Dynamics, Brackets & Lines|`GraceNoteDynamicsBracketsLinesTests.swift`'
+      return
+      ;;
+    key_clef)
+      printf 'Key & Clef|`KeyClefParityTests.swift`'
+      return
+      ;;
+    modifier|multimeasurerest|notesubgroup|parenthesis|vibrato|vibratobracket)
+      printf 'NoteSubGroup, BarNote, Vibrato, VibratoBracket, Parenthesis, Crescendo, MultiMeasureRest|`NoteSubGroupBarNoteVibratoParenthesisMMRTests.swift`'
+      return
+      ;;
+    notehead)
+      printf 'Note System|`NoteTests.swift`'
+      return
+      ;;
+    offscreencanvas|renderer)
+      printf '%s' '-|-'
+      return
+      ;;
+    ornament|staveconnector|stavehairpin|tremolo)
+      printf 'Ornament, Tremolo, Hairpin & Connector|`OrnamentTremoloHairpinConnectorTests.swift`'
+      return
+      ;;
+    percussion)
+      printf 'Percussion|`PercussionParityTests.swift`'
+      return
+      ;;
+    rests|rhythm|threevoice|unison)
+      printf 'Rests, Rhythm, Three-Voice & Unison|`RestsRhythmThreeVoiceUnisonTests.swift`'
+      return
+      ;;
+    style)
+      printf 'Style|`StyleParityTests.swift`'
+      return
+      ;;
+    textformatter|textnote)
+      printf 'Text Formatter|`TextFormatterParityTests.swift`'
+      return
+      ;;
+    typeguard|vf_prefix)
+      printf 'TypeGuard & vf_prefix|`TypeGuardVfPrefixParityTests.swift`'
+      return
+      ;;
+  esac
+
+  printf '%s' '-|-'
 }
 
 module_total="$(wc -l < "$TMP_MODULES" | tr -d ' ')"
@@ -202,13 +294,16 @@ missing_topics=0
   echo
   echo "## Test Topic Parity"
   echo
-  echo "| Upstream Topic | Status | Evidence / Note |"
-  echo "|---|---|---|"
+  echo "| Upstream Topic | Status | Local Suite | Test File | Evidence / Note |"
+  echo "|---|---|---|---|---|"
 
   while IFS= read -r topic; do
     status_note="$(topic_status_for "$topic")"
     status="$(printf '%s' "$status_note" | cut -d'|' -f1)"
     note="$(printf '%s' "$status_note" | cut -d'|' -f2-)"
+    mapping="$(topic_correspondence_for "$topic")"
+    local_suite="$(printf '%s' "$mapping" | cut -d'|' -f1)"
+    test_file="$(printf '%s' "$mapping" | cut -d'|' -f2-)"
 
     case "$status" in
       covered) covered_topics=$((covered_topics + 1)) ;;
@@ -225,7 +320,7 @@ missing_topics=0
       *) status_label="$status" ;;
     esac
 
-    printf '| `%s` | %s | %s |\n' "$topic" "$status_label" "$note"
+    printf '| `%s` | %s | %s | %s | %s |\n' "$topic" "$status_label" "$local_suite" "$test_file" "$note"
   done < "$TMP_TOPICS"
 
   echo

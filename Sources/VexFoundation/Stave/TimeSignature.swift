@@ -3,105 +3,6 @@
 
 import Foundation
 
-// MARK: - TimeSignatureGlyph
-
-/// A composite glyph for numeric time signatures (e.g. "3/4", "6/8").
-/// Uses composition: wraps a base Glyph and manages top/bottom digit glyphs.
-public final class TimeSignatureGlyph {
-
-    public var topGlyphs: [Glyph] = []
-    public var botGlyphs: [Glyph] = []
-    public var topStartX: Double = 0
-    public var botStartX: Double = 0
-    public var tsWidth: Double = 0
-    public var lineShift: Double = 0
-    public var tsXMin: Double = 0
-
-    /// The underlying glyph (for metrics/width compatibility).
-    public var glyph: Glyph
-
-    private weak var timeSignature: TimeSignature?
-
-    public init(timeSignature: TimeSignature, topDigits: String, botDigits: String, code: String, point: Double) {
-        self.timeSignature = timeSignature
-        self.glyph = Glyph(code: code, point: point)
-
-        var topWidth: Double = 0
-        var height: Double = 0
-
-        for ch in topDigits {
-            let timeSigType: String
-            switch ch {
-            case "-": timeSigType = "Minus"
-            case "+": timeSigType = botDigits.isEmpty ? "Plus" : "PlusSmall"
-            case "(": timeSigType = botDigits.isEmpty ? "ParensLeft" : "ParensLeftSmall"
-            case ")": timeSigType = botDigits.isEmpty ? "ParensRight" : "ParensRightSmall"
-            default: timeSigType = String(ch)
-            }
-            let topGlyph = Glyph(code: "timeSig\(timeSigType)", point: timeSignature.tsPoint)
-            topGlyphs.append(topGlyph)
-            topWidth += topGlyph.getMetrics().width
-            height = max(height, topGlyph.getMetrics().height)
-        }
-
-        var botWidth: Double = 0
-        for ch in botDigits {
-            let timeSigType: String
-            switch ch {
-            case "+": timeSigType = "PlusSmall"
-            case "(": timeSigType = "ParensLeftSmall"
-            case ")": timeSigType = "ParensRightSmall"
-            default: timeSigType = String(ch)
-            }
-            let botGlyph = Glyph(code: "timeSig\(timeSigType)", point: timeSignature.tsPoint)
-            botGlyphs.append(botGlyph)
-            botWidth += botGlyph.getMetrics().width
-            height = max(height, botGlyph.getMetrics().height)
-        }
-
-        lineShift = height > 22 ? 1 : 0
-        tsWidth = max(topWidth, botWidth)
-        tsXMin = glyph.getMetrics().xMin
-        topStartX = (tsWidth - topWidth) / 2.0
-        botStartX = (tsWidth - botWidth) / 2.0
-    }
-
-    public func getMetrics() -> GlyphMetrics {
-        var m = glyph.getMetrics()
-        m.xMin = tsXMin
-        m.xMax = tsXMin + tsWidth
-        m.width = tsWidth
-        return m
-    }
-
-    /// Render top and bottom digit glyphs to the stave.
-    public func renderToStave(ctx: RenderContext, x: Double, stave: Stave) {
-        guard let ts = timeSignature else { return }
-
-        var startX = x + topStartX
-        var y: Double
-        if !botGlyphs.isEmpty {
-            y = stave.getYForLine(ts.topLine - lineShift)
-        } else {
-            y = (stave.getYForLine(ts.topLine) + stave.getYForLine(ts.bottomLine)) / 2
-        }
-
-        for glyph in topGlyphs {
-            let m = glyph.getMetrics()
-            Glyph.renderOutline(ctx: ctx, outline: m.outline, scale: m.scale, xPos: startX, yPos: y)
-            startX += m.width
-        }
-
-        startX = x + botStartX
-        y = stave.getYForLine(ts.bottomLine + lineShift)
-        for glyph in botGlyphs {
-            let m = glyph.getMetrics()
-            Glyph.renderOutline(ctx: ctx, outline: m.outline, scale: m.scale, xPos: startX, yPos: y)
-            startX += m.width
-        }
-    }
-}
-
 // MARK: - TimeSignature
 
 /// Renders time signatures on a stave.
@@ -126,9 +27,9 @@ public final class TimeSignature: StaveModifier {
 
     /// The glyph used to render this time signature.
     /// For symbol time (C, C|), this is a regular Glyph.
-    /// For numeric time, we store a TimeSignatureGlyph alongside.
+    /// For numeric time, we store a TimeSigGlyph alongside.
     private var tsGlyph: Glyph!
-    private var tsGlyphComposite: TimeSignatureGlyph?
+    private var tsGlyphComposite: TimeSigGlyph?
 
     // MARK: - Init
 
@@ -174,7 +75,7 @@ public final class TimeSignature: StaveModifier {
 
     private struct ParseResult {
         var glyph: Glyph
-        var composite: TimeSignatureGlyph?
+        var composite: TimeSigGlyph?
         var line: Double
         var num: Bool
     }
@@ -190,7 +91,7 @@ public final class TimeSignature: StaveModifier {
                 num: false
             )
         case .numeric(let top, let bottom):
-            let composite = TimeSignatureGlyph(
+            let composite = TimeSigGlyph(
                 timeSignature: self,
                 topDigits: top.rawValue,
                 botDigits: bottom.rawValue,
@@ -204,7 +105,7 @@ public final class TimeSignature: StaveModifier {
                 num: true
             )
         case .topOnly(let top):
-            let composite = TimeSignatureGlyph(
+            let composite = TimeSigGlyph(
                 timeSignature: self,
                 topDigits: top.rawValue,
                 botDigits: "",

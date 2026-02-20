@@ -23,19 +23,17 @@ public final class Registry {
 
     // MARK: - Default Registry
 
-    nonisolated(unsafe) private static var _defaultRegistry: Registry?
-
     public static func getDefaultRegistry() -> Registry? {
-        _defaultRegistry
+        VexRuntime.getCurrentContext().getDefaultRegistry()
     }
 
     /// Enable auto-registration of new elements with this registry.
     public static func enableDefaultRegistry(_ registry: Registry) {
-        _defaultRegistry = registry
+        VexRuntime.getCurrentContext().setDefaultRegistry(registry)
     }
 
     public static func disableDefaultRegistry() {
-        _defaultRegistry = nil
+        VexRuntime.getCurrentContext().setDefaultRegistry(nil)
     }
 
     // MARK: - Index
@@ -46,6 +44,7 @@ public final class Registry {
         "type": [:],
         "class": [:],
     ]
+    private let indexLock = NSRecursiveLock()
 
     // MARK: - Init
 
@@ -55,6 +54,8 @@ public final class Registry {
 
     @discardableResult
     public func clear() -> Self {
+        indexLock.lock()
+        defer { indexLock.unlock() }
         index = ["id": [:], "type": [:], "class": [:]]
         return self
     }
@@ -62,13 +63,21 @@ public final class Registry {
     // MARK: - Index Management
 
     public func setIndexValue(name: String, value: String, id: String, elem: VexElement) {
-        if index[name] == nil { index[name] = [:] }
-        if index[name]![value] == nil { index[name]![value] = [:] }
-        index[name]![value]![id] = elem
+        indexLock.lock()
+        defer { indexLock.unlock() }
+
+        var byValue = index[name] ?? [:]
+        var byID = byValue[value] ?? [:]
+        byID[id] = elem
+        byValue[value] = byID
+        index[name] = byValue
     }
 
     /// Update the index when an element's attribute changes.
     public func updateIndex(_ info: RegistryUpdate) {
+        indexLock.lock()
+        defer { indexLock.unlock() }
+
         let elem = getElementById(info.id)
         if let oldValue = info.oldValue, index[info.name]?[oldValue] != nil {
             index[info.name]?[oldValue]?.removeValue(forKey: info.id)
@@ -84,6 +93,9 @@ public final class Registry {
     /// Register an element with this registry.
     @discardableResult
     public func register(_ elem: VexElement, id: String? = nil) -> Self {
+        indexLock.lock()
+        defer { indexLock.unlock() }
+
         let elemId = id ?? elem.getAttribute("id") ?? ""
         guard !elemId.isEmpty else {
             fatalError("[VexError] MissingId: Can't add element without `id` attribute to registry")
@@ -102,10 +114,15 @@ public final class Registry {
     // MARK: - Query
 
     public func getElementById(_ id: String) -> VexElement? {
-        index["id"]?[id]?[id]
+        indexLock.lock()
+        defer { indexLock.unlock() }
+        return index["id"]?[id]?[id]
     }
 
     public func getElementsByAttribute(_ attribute: String, value: String) -> [VexElement] {
+        indexLock.lock()
+        defer { indexLock.unlock() }
+
         guard let attrIndex = index[attribute],
               let valueIndex = attrIndex[value] else {
             return []
@@ -126,6 +143,9 @@ public final class Registry {
     /// Called by elements when an indexed attribute changes.
     @discardableResult
     public func onUpdate(_ info: RegistryUpdate) -> Self {
+        indexLock.lock()
+        defer { indexLock.unlock() }
+
         let allowedNames = ["id", "type", "class"]
         if allowedNames.contains(info.name) {
             updateIndex(info)

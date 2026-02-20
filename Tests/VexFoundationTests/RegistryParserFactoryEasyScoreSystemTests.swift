@@ -59,21 +59,25 @@ struct RegistryParserFactoryEasyScoreSystemTests {
     }
 
     @Test func registryDefaultRegistry() {
-        let reg = Registry()
-        Registry.enableDefaultRegistry(reg)
-        #expect(Registry.getDefaultRegistry() != nil)
-        Registry.disableDefaultRegistry()
-        #expect(Registry.getDefaultRegistry() == nil)
+        Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
+            let reg = Registry()
+            Registry.enableDefaultRegistry(reg)
+            #expect(Registry.getDefaultRegistry() != nil)
+            Registry.disableDefaultRegistry()
+            #expect(Registry.getDefaultRegistry() == nil)
+        }
     }
 
     @Test func registryDefaultRegistryAutoRegistersElements() {
-        let reg = Registry()
-        Registry.enableDefaultRegistry(reg)
-        defer { Registry.disableDefaultRegistry() }
+        Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
+            let reg = Registry()
+            Registry.enableDefaultRegistry(reg)
+            defer { Registry.disableDefaultRegistry() }
 
-        let elem = VexElement()
-        let id = elem.getAttribute("id")!
-        #expect(reg.getElementById(id) != nil)
+            let elem = VexElement()
+            let id = elem.getAttribute("id")!
+            #expect(reg.getElementById(id) != nil)
+        }
     }
 
     @Test func registryUpdateIndex() {

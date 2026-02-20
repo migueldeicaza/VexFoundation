@@ -273,51 +273,53 @@ struct RestsRhythmThreeVoiceUnisonTests {
     }
 
     @Test func unisonToggleControlsHorizontalShiftForSameLineVoices() {
-        let originalUnison = Tables.UNISON
-        defer { Tables.UNISON = originalUnison }
+        Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
+            FontLoader.loadDefaultFonts()
 
-        let stave = Stave(x: 10, y: 40, width: 420)
+            let stave = Stave(x: 10, y: 40, width: 420)
 
-        Tables.UNISON = true
-        do {
-            let (_, lower, upperVoice, lowerVoice) = makeUnisonVoices()
-            let formatter = Formatter()
-            _ = formatter.joinVoices([upperVoice, lowerVoice])
-            _ = formatter.formatToStave([upperVoice, lowerVoice], stave: stave)
-            #expect(lower.getXShift() == 0)
-        }
+            Tables.UNISON = true
+            do {
+                let (_, lower, upperVoice, lowerVoice) = makeUnisonVoices()
+                let formatter = Formatter()
+                _ = formatter.joinVoices([upperVoice, lowerVoice])
+                _ = formatter.formatToStave([upperVoice, lowerVoice], stave: stave)
+                #expect(lower.getXShift() == 0)
+            }
 
-        Tables.UNISON = false
-        do {
-            let (_, lower, upperVoice, lowerVoice) = makeUnisonVoices()
-            let formatter = Formatter()
-            _ = formatter.joinVoices([upperVoice, lowerVoice])
-            _ = formatter.formatToStave([upperVoice, lowerVoice], stave: stave)
-            #expect(lower.getXShift() > 0)
+            Tables.UNISON = false
+            do {
+                let (_, lower, upperVoice, lowerVoice) = makeUnisonVoices()
+                let formatter = Formatter()
+                _ = formatter.joinVoices([upperVoice, lowerVoice])
+                _ = formatter.formatToStave([upperVoice, lowerVoice], stave: stave)
+                #expect(lower.getXShift() > 0)
+            }
         }
     }
 
     @Test func unisonModeStillShiftsForStyleOrDotDifferences() {
-        let originalUnison = Tables.UNISON
-        defer { Tables.UNISON = originalUnison }
-        Tables.UNISON = true
+        Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
+            FontLoader.loadDefaultFonts()
+            Tables.UNISON = true
 
-        let stave = Stave(x: 10, y: 40, width: 420)
+            let stave = Stave(x: 10, y: 40, width: 420)
 
-        do {
-            let (_, lower, upperVoice, lowerVoice) = makeUnisonVoices(styleMismatch: true)
-            let formatter = Formatter()
-            _ = formatter.joinVoices([upperVoice, lowerVoice])
-            _ = formatter.formatToStave([upperVoice, lowerVoice], stave: stave)
-            #expect(lower.getXShift() > 0)
-        }
+            do {
+                let (_, lower, upperVoice, lowerVoice) = makeUnisonVoices(styleMismatch: true)
+                let formatter = Formatter()
+                _ = formatter.joinVoices([upperVoice, lowerVoice])
+                _ = formatter.formatToStave([upperVoice, lowerVoice], stave: stave)
+                #expect(lower.getXShift() > 0)
+            }
 
-        do {
-            let (_, lower, upperVoice, lowerVoice) = makeUnisonVoices(addUpperDot: true)
-            let formatter = Formatter()
-            _ = formatter.joinVoices([upperVoice, lowerVoice])
-            _ = formatter.formatToStave([upperVoice, lowerVoice], stave: stave)
-            #expect(lower.getXShift() > 0)
+            do {
+                let (_, lower, upperVoice, lowerVoice) = makeUnisonVoices(addUpperDot: true)
+                let formatter = Formatter()
+                _ = formatter.joinVoices([upperVoice, lowerVoice])
+                _ = formatter.formatToStave([upperVoice, lowerVoice], stave: stave)
+                #expect(lower.getXShift() > 0)
+            }
         }
     }
 

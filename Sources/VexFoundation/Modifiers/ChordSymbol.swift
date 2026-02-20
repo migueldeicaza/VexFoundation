@@ -82,15 +82,20 @@ public final class ChordSymbol: Modifier {
 
     // MARK: - Static Metrics
 
-    nonisolated(unsafe) private static var cachedMetrics: [String: Any]?
-
     private static func getMetricsGlobal() -> [String: Any] {
-        if let cached = cachedMetrics { return cached }
+        let runtime = VexRuntime.getCurrentContext()
+        let cacheKey = Glyph.CURRENT_CACHE_KEY
+
+        if let cached = runtime.getChordSymbolGlobalMetrics(cacheKey: cacheKey) {
+            return cached
+        }
+
         guard let font = Glyph.MUSIC_FONT_STACK.first,
               let csGlobal = font.lookupMetric("chordSymbol.global") as? [String: Any] else {
             return [:]
         }
-        cachedMetrics = csGlobal
+
+        runtime.setChordSymbolGlobalMetrics(cacheKey: cacheKey, value: csGlobal)
         return csGlobal
     }
 

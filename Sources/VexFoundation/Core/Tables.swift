@@ -95,7 +95,10 @@ public enum Tables {
     /// Hack value for text height offset.
     public static let TEXT_HEIGHT_OFFSET_HACK: Double = 1
     /// Whether same-line unisons should share head placement when possible.
-    nonisolated(unsafe) public static var UNISON: Bool = true
+    public static var UNISON: Bool {
+        get { VexRuntime.getCurrentContext().getUnisonEnabled() }
+        set { VexRuntime.getCurrentContext().setUnisonEnabled(newValue) }
+    }
     /// Softmax factor for formatter.
     public static let SOFTMAX_FACTOR: Double = 10
 

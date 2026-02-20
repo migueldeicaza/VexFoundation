@@ -66,4 +66,46 @@ struct CompatibilityLayerTests {
         #expect(benchmark.result == 6)
         #expect(benchmark.elapsedMs >= 0)
     }
+
+    @Test func runtimeContextIsolatesRegistryAndUnisonFlag() {
+        let contextA = Flow.makeRuntimeContext()
+        let contextB = Flow.makeRuntimeContext()
+
+        Flow.withRuntimeContext(contextA) {
+            let reg = Registry()
+            Registry.enableDefaultRegistry(reg)
+            Tables.UNISON = false
+
+            #expect(Registry.getDefaultRegistry() != nil)
+            #expect(Tables.UNISON == false)
+        }
+
+        Flow.withRuntimeContext(contextB) {
+            #expect(Registry.getDefaultRegistry() == nil)
+            #expect(Tables.UNISON == true)
+        }
+    }
+
+    @Test func runtimeContextIsolatesElementIDsAndFontStacks() {
+        let contextA = Flow.makeRuntimeContext()
+        let contextB = Flow.makeRuntimeContext()
+
+        let idA1 = Flow.withRuntimeContext(contextA) {
+            _ = Flow.setMusicFont(.petaluma, .custom)
+            return VexElement().getAttribute("id")
+        }
+        let idA2 = Flow.withRuntimeContext(contextA) {
+            VexElement().getAttribute("id")
+        }
+
+        let idB1 = Flow.withRuntimeContext(contextB) {
+            FontLoader.loadDefaultFonts()
+            #expect(Flow.getMusicFont() == ["Bravura", "Custom"])
+            return VexElement().getAttribute("id")
+        }
+
+        #expect(idA1 == "auto1000")
+        #expect(idA2 == "auto1001")
+        #expect(idB1 == "auto1000")
+    }
 }

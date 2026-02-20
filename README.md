@@ -9,7 +9,7 @@ The project keeps VexFlow concepts (`Factory`, `EasyScore`, `System`, notes, mod
 - Swift Package (`swift-tools-version: 6.0`)
 - Platforms: iOS 16+, macOS 13+
 - Active port: API parity with VexFlow is in progress and APIs may evolve
-- Current test suite: `731` passing tests
+- Current test suite: `743` passing tests
 
 ## Installation
 
@@ -171,6 +171,34 @@ import VexFoundation
 
 _ = try Flow.setMusicFont(parsing: ["Bravura", "Custom"])
 let maybeFonts = Flow.setMusicFont(parsingOrNil: ["Petaluma", "Custom"])
+```
+
+## Runtime Context (State Isolation)
+
+Mutable runtime state is now scoped through `VexRuntimeContext`:
+
+- Default registry (`Registry.enableDefaultRegistry`)
+- Music font stack and glyph cache
+- Auto-generated element IDs
+- Runtime flags such as `Tables.UNISON`
+
+Use isolated contexts to avoid cross-test or cross-session leakage:
+
+```swift
+import VexFoundation
+
+let context = Flow.makeRuntimeContext()
+
+Flow.withRuntimeContext(context) {
+    FontLoader.loadDefaultFonts()
+    Tables.UNISON = false
+
+    let reg = Registry()
+    Registry.enableDefaultRegistry(reg)
+
+    let e = VexElement()
+    print(e.getAttribute("id") ?? "")
+}
 ```
 
 ## Key Differences from VexFlow

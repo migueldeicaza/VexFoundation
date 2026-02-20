@@ -35,16 +35,6 @@ open class VexElement {
         )
     }
 
-    // MARK: - Static ID Generator
-
-    nonisolated(unsafe) private static var nextID: Int = 1000
-
-    private static func newID() -> String {
-        let id = "auto\(nextID)"
-        nextID += 1
-        return id
-    }
-
     // MARK: - Properties
 
     private var context: RenderContext?
@@ -60,13 +50,13 @@ open class VexElement {
 
     public init() {
         self.attrs = ElementAttributes(
-            id: VexElement.newID(),
+            id: VexRuntime.getCurrentContext().generateElementID(),
             type: type(of: self).category
         )
 
         // Match VexFlow behavior: newly created elements register automatically
         // when a default registry has been enabled.
-        Registry.getDefaultRegistry()?.register(self)
+        VexRuntime.getCurrentContext().getDefaultRegistry()?.register(self)
     }
 
     // MARK: - Children

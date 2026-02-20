@@ -172,18 +172,23 @@ public final class Glyph: VexElement {
 
     override public class var category: String { "Glyph" }
 
-    nonisolated(unsafe) static var glyphCache = GlyphCache()
+    static var glyphCache: GlyphCache {
+        VexRuntime.getCurrentContext().getGlyphCache()
+    }
 
     /// The current cache key, computed from the font stack names.
-    nonisolated(unsafe) public static var CURRENT_CACHE_KEY: String = ""
+    public static var CURRENT_CACHE_KEY: String {
+        VexRuntime.getCurrentContext().getGlyphCacheKey()
+    }
 
     /// The music font stack used for glyph lookup. Set via setMusicFont().
-    nonisolated(unsafe) public static var MUSIC_FONT_STACK: [VexFont] = []
+    public static var MUSIC_FONT_STACK: [VexFont] {
+        VexRuntime.getCurrentContext().getMusicFontStack()
+    }
 
     /// Configure the music font stack. Call this before rendering any glyphs.
     public static func setMusicFont(_ fonts: [VexFont]) {
-        MUSIC_FONT_STACK = fonts
-        CURRENT_CACHE_KEY = fonts.map { $0.name }.joined(separator: ",")
+        VexRuntime.getCurrentContext().setMusicFontStack(fonts)
     }
 
     // MARK: - Static Font Metric Lookup
@@ -204,7 +209,15 @@ public final class Glyph: VexElement {
 
     /// Look up a glyph in the font stack, returning the first font that contains it.
     public static func lookupGlyph(fontStack: [VexFont], code: String) throws -> (font: VexFont, glyph: FontGlyph) {
-        for font in fontStack {
+        var effectiveStack = fontStack
+        if effectiveStack.isEmpty {
+            // Some call sites (especially in tests) may construct glyphs before
+            // explicit font initialization. Bootstrap default fonts lazily.
+            FontLoader.loadDefaultFonts()
+            effectiveStack = MUSIC_FONT_STACK
+        }
+
+        for font in effectiveStack {
             if let glyphs = try? font.getGlyphs(), let glyph = glyphs[code] {
                 return (font, glyph)
             }

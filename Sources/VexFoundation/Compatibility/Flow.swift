@@ -72,6 +72,29 @@ public enum Flow {
 
     public static var RENDER_PRECISION_PLACES: Int { Tables.RENDER_PRECISION_PLACES }
 
+    // MARK: Runtime Context
+
+    /// Create a new isolated runtime context.
+    public static func makeRuntimeContext() -> VexRuntimeContext {
+        VexRuntimeContext()
+    }
+
+    /// Get the currently active runtime context.
+    public static func getRuntimeContext() -> VexRuntimeContext {
+        VexRuntime.getCurrentContext()
+    }
+
+    /// Replace the active runtime context.
+    public static func setRuntimeContext(_ context: VexRuntimeContext) {
+        VexRuntime.setCurrentContext(context)
+    }
+
+    /// Run a closure with a temporary runtime context, then restore the previous one.
+    @discardableResult
+    public static func withRuntimeContext<T>(_ context: VexRuntimeContext, _ body: () throws -> T) rethrows -> T {
+        try VexRuntime.withContext(context, body)
+    }
+
     // MARK: Duration utilities
 
     /// Convert a typed duration into total ticks, including dotted augmentation.
