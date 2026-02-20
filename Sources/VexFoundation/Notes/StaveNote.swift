@@ -930,27 +930,74 @@ public class StaveNote: StemmableNote {
             ))
         }
 
-        // Determine visible notes
+        func shiftRestVertical(rest: inout FormatSettings, dir: Double) {
+            rest.line += dir
+            rest.maxLine += dir
+            rest.minLine += dir
+            rest.note.setKeyLine(0, line: rest.note.getKeyLine(0) + dir)
+        }
+
+        func centerRest(rest: inout FormatSettings, upper: FormatSettings, lower: FormatSettings) {
+            let delta = rest.line - midLine(upper.minLine, lower.maxLine)
+            rest.note.setKeyLine(0, line: rest.note.getKeyLine(0) - delta)
+            rest.line -= delta
+            rest.maxLine -= delta
+            rest.minLine -= delta
+        }
+
+        func isStyleEqual(_ lhs: ElementStyle?, _ rhs: ElementStyle?) -> Bool {
+            switch (lhs, rhs) {
+            case (nil, nil):
+                return true
+            case let (lhs?, rhs?):
+                return lhs.shadowColor == rhs.shadowColor
+                    && lhs.shadowBlur == rhs.shadowBlur
+                    && lhs.fillStyle == rhs.fillStyle
+                    && lhs.strokeStyle == rhs.strokeStyle
+                    && lhs.lineWidth == rhs.lineWidth
+            default:
+                return false
+            }
+        }
+
+        func dotCountAtIndexZero(_ note: StaveNote) -> Int {
+            note.getModifiers().reduce(0) { count, modifier in
+                guard modifier is Dot, modifier.getIndex() == 0 else { return count }
+                return count + 1
+            }
+        }
+
+        // Determine visible notes at this tick context.
         var voices = 0
         var noteU: FormatSettings?
+        var noteM: FormatSettings?
         var noteL: FormatSettings?
         let draw = notesList.map { $0.note.renderOptions.draw }
 
         if notesList.count >= 3 && draw[0] && draw[1] && draw[2] {
             voices = 3
             noteU = notesList[0]
+            noteM = notesList[1]
             noteL = notesList[2]
         } else if draw.count >= 2 && draw[0] && draw[1] {
             voices = 2
             noteU = notesList[0]
             noteL = notesList[1]
+        } else if notesList.count >= 3 && draw[0] && draw[2] {
+            voices = 2
+            noteU = notesList[0]
+            noteL = notesList[2]
+        } else if notesList.count >= 3 && draw[1] && draw[2] {
+            voices = 2
+            noteU = notesList[1]
+            noteL = notesList[2]
         } else {
             return true
         }
 
         guard var u = noteU, var l = noteL else { return true }
 
-        // Ensure upper voice has stems up for 2-voice
+        // For two voices, ensure upper voice has stems up.
         if voices == 2 && u.stemDirection == .down && l.stemDirection == .up {
             swap(&u, &l)
         }
@@ -962,23 +1009,140 @@ public class StaveNote: StemmableNote {
             let lineSpacing: Double =
                 u.note.hasStem() && l.note.hasStem() && u.stemDirection == l.stemDirection ? 0.0 : 0.5
 
-            if u.minLine <= l.maxLine + lineSpacing {
+            if l.isRest && u.isRest && u.note.noteDuration == l.note.noteDuration {
+                l.note.renderOptions.draw = false
+            } else if u.minLine <= l.maxLine + lineSpacing {
                 if u.isRest {
-                    // shift rest up
-                    u.line += 1; u.maxLine += 1; u.minLine += 1
-                    u.note.setKeyLine(0, line: u.note.getKeyLine(0) + 1)
+                    shiftRestVertical(rest: &u, dir: 1)
                 } else if l.isRest {
-                    // shift rest down
-                    l.line -= 1; l.maxLine -= 1; l.minLine -= 1
-                    l.note.setKeyLine(0, line: l.note.getKeyLine(0) - 1)
+                    shiftRestVertical(rest: &l, dir: -1)
                 } else {
-                    xShift = voiceXShift + 2
-                    if u.stemDirection == l.stemDirection {
-                        u.note.setXShift(xShift)
-                    } else {
-                        l.note.setXShift(xShift)
+                    let lineDiff = abs(u.line - l.line)
+                    if u.note.hasStem() && l.note.hasStem() {
+                        let uHeadCode = Tables.codeNoteHead(
+                            (u.note.sortedKeyProps.first?.keyProps.code ?? "N").uppercased(),
+                            duration: u.note.noteDuration
+                        )
+                        let lHeadCode = Tables.codeNoteHead(
+                            (l.note.sortedKeyProps.last?.keyProps.code ?? "N").uppercased(),
+                            duration: l.note.noteDuration
+                        )
+
+                        if !Tables.UNISON
+                            || uHeadCode != lHeadCode
+                            || dotCountAtIndexZero(u.note) != dotCountAtIndexZero(l.note)
+                            || (lineDiff > 0 && lineDiff < 1)
+                            || !isStyleEqual(u.note.getStyle(), l.note.getStyle())
+                        {
+                            xShift = voiceXShift + 2
+                            if u.stemDirection == l.stemDirection {
+                                u.note.setXShift(xShift)
+                            } else {
+                                l.note.setXShift(xShift)
+                            }
+                        } else {
+                            let sameVoice: Bool = {
+                                guard let uVoice = u.note.voice, let lVoice = l.note.voice else { return false }
+                                return uVoice === lVoice
+                            }()
+
+                            if !sameVoice && u.stemDirection == l.stemDirection {
+                                if u.line != l.line {
+                                    xShift = voiceXShift + 2
+                                    u.note.setXShift(xShift)
+                                } else if l.stemDirection == .up {
+                                    l.stemDirection = .down
+                                    _ = l.note.setStemDirection(.down)
+                                }
+                            }
+                        }
+                    } else if lineDiff < 1 {
+                        xShift = voiceXShift + 2
+                        if u.note.getTicks().value() < l.note.getTicks().value() {
+                            u.note.setXShift(xShift)
+                        } else {
+                            l.note.setXShift(xShift)
+                        }
+                    } else if u.note.hasStem() {
+                        let flipped: StemDirection = u.note.getStemDirection() == .up ? .down : .up
+                        u.stemDirection = flipped
+                        _ = u.note.setStemDirection(flipped)
+                    } else if l.note.hasStem() {
+                        let flipped: StemDirection = l.note.getStemDirection() == .up ? .down : .up
+                        l.stemDirection = flipped
+                        _ = l.note.setStemDirection(flipped)
                     }
                 }
+            }
+
+            state.rightShift += xShift
+            return true
+        }
+
+        guard voices == 3, var m = noteM else {
+            state.rightShift += xShift
+            return true
+        }
+
+        // Special case: middle rest between two notes.
+        if m.isRest && !u.isRest && !l.isRest {
+            if u.minLine <= m.maxLine || m.minLine <= l.maxLine {
+                let restHeight = m.maxLine - m.minLine
+                let space = u.minLine - l.maxLine
+
+                if restHeight < space {
+                    centerRest(rest: &m, upper: u, lower: l)
+                } else {
+                    xShift = voiceXShift + 2
+                    m.note.setXShift(xShift)
+
+                    if !l.note.hasBeam() {
+                        l.stemDirection = .down
+                        _ = l.note.setStemDirection(.down)
+                    }
+                    if u.minLine <= l.maxLine && !u.note.hasBeam() {
+                        u.stemDirection = .up
+                        _ = u.note.setStemDirection(.up)
+                    }
+                }
+
+                state.rightShift += xShift
+                return true
+            }
+        }
+
+        // Special case: all three voices are rests.
+        if u.isRest && m.isRest && l.isRest {
+            u.note.renderOptions.draw = false
+            l.note.renderOptions.draw = false
+            state.rightShift += xShift
+            return true
+        }
+
+        if m.isRest && u.isRest && m.minLine <= l.maxLine {
+            m.note.renderOptions.draw = false
+        }
+        if m.isRest && l.isRest && u.minLine <= m.maxLine {
+            m.note.renderOptions.draw = false
+        }
+        if u.isRest && u.minLine <= m.maxLine {
+            shiftRestVertical(rest: &u, dir: 1)
+        }
+        if l.isRest && m.minLine <= l.maxLine {
+            shiftRestVertical(rest: &l, dir: -1)
+        }
+
+        if u.minLine <= m.maxLine + 0.5 || m.minLine <= l.maxLine {
+            xShift = voiceXShift + 2
+            m.note.setXShift(xShift)
+
+            if !l.note.hasBeam() {
+                l.stemDirection = .down
+                _ = l.note.setStemDirection(.down)
+            }
+            if u.minLine <= l.maxLine && !u.note.hasBeam() {
+                u.stemDirection = .up
+                _ = u.note.setStemDirection(.up)
             }
         }
 

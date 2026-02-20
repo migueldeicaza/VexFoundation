@@ -518,6 +518,96 @@ public final class Formatter {
         return self
     }
 
+    // MARK: - Rest Alignment
+
+    private static func getRestLineForNextNoteGroup(
+        _ tickables: [Tickable],
+        currRestLine: Double,
+        currNoteIndex: Int,
+        compare: Bool
+    ) -> Double {
+        var nextRestLine = currRestLine
+
+        if currNoteIndex + 1 < tickables.count {
+            for noteIndex in (currNoteIndex + 1)..<tickables.count {
+                let tickable = tickables[noteIndex]
+                guard let note = tickable as? Note else { continue }
+                if !note.isRest() && !note.shouldIgnoreTicks() {
+                    nextRestLine = note.getLineForRest()
+                    break
+                }
+            }
+        }
+
+        if compare, currRestLine != nextRestLine {
+            let top = max(currRestLine, nextRestLine)
+            let bot = min(currRestLine, nextRestLine)
+            nextRestLine = midLine(top, bot)
+        }
+
+        return nextRestLine
+    }
+
+    /// Align rest note positions with neighboring notes.
+    ///
+    /// When `alignAllNotes` is false, only rests inside beamed groups are aligned.
+    /// Tuplet rests are skipped unless `alignTuplets` is true.
+    public static func AlignRestsToNotes(
+        _ tickables: [Tickable],
+        alignAllNotes: Bool,
+        alignTuplets: Bool = false
+    ) {
+        for (index, tickable) in tickables.enumerated() {
+            guard let curr = tickable as? StaveNote, curr.isRest() else { continue }
+
+            if curr.getTuplet() != nil, !alignTuplets {
+                continue
+            }
+
+            let position = curr.getGlyphProps().position?.uppercased() ?? ""
+            if position != "R/4" && position != "B/4" {
+                continue
+            }
+
+            if alignAllNotes || curr.hasBeam() {
+                var restLine = curr.getKeyProps()[0].line
+
+                if index == 0 {
+                    restLine = getRestLineForNextNoteGroup(
+                        tickables,
+                        currRestLine: restLine,
+                        currNoteIndex: index,
+                        compare: false
+                    )
+                } else {
+                    let prevTickable = tickables[index - 1]
+                    if let prev = prevTickable as? StaveNote {
+                        if prev.isRest() {
+                            restLine = prev.getKeyProps()[0].line
+                        } else {
+                            let prevRestLine = prev.getLineForRest()
+                            restLine = getRestLineForNextNoteGroup(
+                                tickables,
+                                currRestLine: prevRestLine,
+                                currNoteIndex: index,
+                                compare: true
+                            )
+                        }
+                    }
+                }
+
+                _ = curr.setKeyLine(0, line: restLine)
+            }
+        }
+    }
+
+    /// Align rests in each voice to nearby notes.
+    public func alignRests(_ voices: [Voice], alignAllNotes: Bool) {
+        for voice in voices {
+            Formatter.AlignRestsToNotes(voice.getTickables(), alignAllNotes: alignAllNotes)
+        }
+    }
+
     // MARK: - Format
 
     /// Main public method: format voices and justify to width.
@@ -530,6 +620,7 @@ public final class Formatter {
             _ = voice.setSoftmaxFactor(factor)
         }
 
+        alignRests(voices, alignAllNotes: options.alignRests)
         createTickContexts(voices)
         preFormat(justifyWidth: justifyWidth ?? 0, renderingContext: options.context, voices: voices, stave: options.stave)
 

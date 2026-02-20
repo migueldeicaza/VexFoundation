@@ -94,6 +94,8 @@ public enum Tables {
     public static let STAVE_LINE_DISTANCE: Double = 10
     /// Hack value for text height offset.
     public static let TEXT_HEIGHT_OFFSET_HACK: Double = 1
+    /// Whether same-line unisons should share head placement when possible.
+    nonisolated(unsafe) public static var UNISON: Bool = true
     /// Softmax factor for formatter.
     public static let SOFTMAX_FACTOR: Double = 10
 
