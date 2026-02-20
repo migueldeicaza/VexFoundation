@@ -170,6 +170,27 @@ swift build
 swift test
 ```
 
+## Documentation (DocC)
+
+Generate local documentation:
+
+```bash
+swift package \
+  --allow-writing-to-directory docs-site \
+  generate-documentation \
+  --target VexFoundation \
+  --disable-indexing \
+  --transform-for-static-hosting \
+  --hosting-base-path VexFoundation \
+  --output-path docs-site
+```
+
+The package includes `swift-docc-plugin` support in `Package.swift`.
+
+### GitHub Pages publishing
+
+Docs are published by `.github/workflows/docs.yml` on pushes to `main` (and manually via `workflow_dispatch`).
+
 ## Attribution
 
 VexFoundation is derived from VexFlow and preserves original attribution:

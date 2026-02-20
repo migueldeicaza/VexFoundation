@@ -1,8 +1,8 @@
+# ``VexFoundation``
+
 @Metadata {
     @DisplayName("VexFoundation")
 }
-
-# ``VexFoundation``
 
 Typed music notation rendering in Swift, based on VexFlow concepts.
 
