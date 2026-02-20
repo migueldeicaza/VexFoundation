@@ -325,7 +325,10 @@ open class Note: Tickable {
     public func getGlyphProps() -> GlyphProps { glyphProps }
 
     public func getGlyphWidth() -> Double {
-        Glyph.getWidth(code: glyphProps.codeHead, point: renderOptions.glyphFontScale)
+        if noteTypeValue == .slash {
+            return Tables.SLASH_NOTEHEAD_WIDTH
+        }
+        return Glyph.getWidth(code: glyphProps.codeHead, point: renderOptions.glyphFontScale)
     }
 
     // MARK: - Y Values

@@ -364,6 +364,7 @@ public enum Tables {
         let dur = noteValue.rawValue
         guard let common = durationCodes[dur] else { return nil }
         let typeProps = durationTypeOverrides[dur]?[type]
+        let isSlash = type == NoteType.slash.rawValue
 
         // Resolve codeHead: try custom note head lookup first, then type override, then common
         var codeHead = typeProps?.codeHead ?? common.codeHead
@@ -377,7 +378,7 @@ public enum Tables {
             stem: typeProps?.stem ?? common.stem,
             flag: typeProps?.flag ?? common.flag,
             rest: typeProps?.rest ?? false,
-            position: typeProps?.position ?? common.position,
+            position: isSlash ? (typeProps?.position ?? "B/4") : (typeProps?.position ?? common.position),
             dotShiftY: typeProps?.dotShiftY ?? common.dotShiftY,
             lineAbove: typeProps?.lineAbove ?? common.lineAbove,
             lineBelow: typeProps?.lineBelow ?? common.lineBelow,

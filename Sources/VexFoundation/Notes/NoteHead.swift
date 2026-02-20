@@ -3,6 +3,48 @@
 
 import Foundation
 
+private func drawSlashNoteHead(
+    ctx: RenderContext,
+    duration: String,
+    x: Double,
+    y: Double,
+    stemDirection: StemDirection,
+    staveSpace: Double
+) {
+    let width = Tables.SLASH_NOTEHEAD_WIDTH
+    _ = ctx.save()
+    _ = ctx.setLineWidth(Tables.STEM_WIDTH)
+
+    let fill = Tables.durationToNumber(duration) > 2
+    let drawX: Double = fill ? x : x - (Tables.STEM_WIDTH / 2) * stemDirection.signDouble
+
+    _ = ctx.beginPath()
+    _ = ctx.moveTo(drawX, y + staveSpace)
+    _ = ctx.lineTo(drawX, y + 1)
+    _ = ctx.lineTo(drawX + width, y - staveSpace)
+    _ = ctx.lineTo(drawX + width, y)
+    _ = ctx.lineTo(drawX, y + staveSpace)
+    _ = ctx.closePath()
+
+    if fill {
+        _ = ctx.fill()
+    } else {
+        _ = ctx.stroke()
+    }
+
+    if duration == NoteValue.doubleWhole.rawValue {
+        let breveLines: [Double] = [-3, -1, width + 1, width + 3]
+        for offset in breveLines {
+            _ = ctx.beginPath()
+            _ = ctx.moveTo(drawX + offset, y - 10)
+            _ = ctx.lineTo(drawX + offset, y + 11)
+            _ = ctx.stroke()
+        }
+    }
+
+    _ = ctx.restore()
+}
+
 // MARK: - NoteHead Struct
 
 /// Input structure for creating a NoteHead.
@@ -223,7 +265,9 @@ public final class NoteHead: Note {
         renderOptions.glyphFontScale = noteHeadStruct.glyphFontScale ?? Tables.NOTATION_FONT_SCALE
 
         let w: Double
-        if customGlyph && !glyphCode.hasPrefix("noteheadSlashed") && !glyphCode.hasPrefix("noteheadCircled") {
+        if noteTypeValue == .slash {
+            w = Tables.SLASH_NOTEHEAD_WIDTH
+        } else if customGlyph && !glyphCode.hasPrefix("noteheadSlashed") && !glyphCode.hasPrefix("noteheadCircled") {
             w = Glyph.getWidth(code: glyphCode, point: renderOptions.glyphFontScale)
         } else {
             w = Glyph.getWidth(code: glyphProps.codeHead, point: renderOptions.glyphFontScale)
@@ -314,15 +358,25 @@ public final class NoteHead: Note {
         if customGlyph {
             drawX += headStemDirection == Stem.UP
                 ? stemUpXOffset + (glyphProps.stem
-                    ? Glyph.getWidth(code: glyphProps.codeHead, point: renderOptions.glyphFontScale) - tickableWidth
+                    ? (noteTypeValue == .slash
+                        ? Tables.SLASH_NOTEHEAD_WIDTH
+                        : Glyph.getWidth(code: glyphProps.codeHead, point: renderOptions.glyphFontScale)) - tickableWidth
                     : 0)
                 : stemDownXOffset
         }
 
         let categorySuffix = "\(glyphCode)Stem\(headStemDirection == Stem.UP ? "Up" : "Down")"
 
-        if noteType == "s" {
-            // Slash noteheads would be drawn here
+        if noteType == NoteType.slash.rawValue {
+            let staveSpace = checkStave().getSpacingBetweenLines()
+            drawSlashNoteHead(
+                ctx: ctx,
+                duration: noteDuration,
+                x: drawX,
+                y: headY,
+                stemDirection: headStemDirection,
+                staveSpace: staveSpace
+            )
         } else {
             Glyph.renderGlyph(
                 ctx: ctx,

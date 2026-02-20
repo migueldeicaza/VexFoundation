@@ -10,6 +10,19 @@ struct Phase7Tests {
         FontLoader.loadDefaultFonts()
     }
 
+    private func makeNote(
+        _ letter: NoteLetter,
+        octave: Int = 4,
+        duration: NoteDurationSpec = .sixteenth,
+        type: NoteType = .note
+    ) -> StaveNote {
+        StaveNote(StaveNoteStruct(
+            keys: NonEmptyArray(StaffKeySpec(letter: letter, octave: octave)),
+            duration: duration,
+            type: type
+        ))
+    }
+
     // MARK: - Accidental Creation
 
     @Test func accidentalCreation() {
@@ -268,6 +281,157 @@ struct Phase7Tests {
         let beams = Beam.generateBeams(notes, config: BeamConfig(stemDirection: Stem.DOWN))
         #expect(beams.count == 1)
         #expect(notes[0].getStemDirection() == Stem.DOWN)
+    }
+
+    @Test func beamGenerateBeamRestsIncludesInteriorRests() {
+        func makeSequence() -> ([StemmableNote], StaveNote) {
+            let n1 = makeNote(.c)
+            let rest = makeNote(.b, type: .rest)
+            let n3 = makeNote(.d)
+            let n4 = makeNote(.e)
+            return ([n1, rest, n3, n4], rest)
+        }
+
+        let (notesAcrossRests, interiorRestAcross) = makeSequence()
+        let acrossRests = Beam.generateBeams(
+            notesAcrossRests,
+            config: BeamConfig(groups: [Fraction(1, 4)], beamRests: true)
+        )
+        #expect(acrossRests.count == 1)
+        #expect(acrossRests[0].getNotes().count == 4)
+        #expect(interiorRestAcross.hasBeam())
+
+        let (notesBreakOnRests, interiorRestBreak) = makeSequence()
+        let breakOnRests = Beam.generateBeams(
+            notesBreakOnRests,
+            config: BeamConfig(groups: [Fraction(1, 4)], beamRests: false)
+        )
+        #expect(breakOnRests.count == 1)
+        #expect(breakOnRests[0].getNotes().count == 2)
+        #expect(!interiorRestBreak.hasBeam())
+    }
+
+    @Test func beamGenerateMiddleOnlyRestsBreakAtGroupEdges() {
+        func makeEdgeRestSequence() -> ([StemmableNote], StaveNote, StaveNote) {
+            let firstRest = makeNote(.b, type: .rest)
+            let n2 = makeNote(.c)
+            let n3 = makeNote(.d)
+            let lastRest = makeNote(.b, type: .rest)
+            return ([firstRest, n2, n3, lastRest], firstRest, lastRest)
+        }
+
+        let (middleOnlyNotes, middleOnlyFirstRest, middleOnlyLastRest) = makeEdgeRestSequence()
+        let middleOnlyBeams = Beam.generateBeams(
+            middleOnlyNotes,
+            config: BeamConfig(groups: [Fraction(1, 4)], beamRests: true, beamMiddleOnly: true)
+        )
+        #expect(middleOnlyBeams.count == 1)
+        #expect(middleOnlyBeams[0].getNotes().count == 2)
+        #expect(!middleOnlyFirstRest.hasBeam())
+        #expect(!middleOnlyLastRest.hasBeam())
+
+        let (allRestsNotes, allRestsFirstRest, allRestsLastRest) = makeEdgeRestSequence()
+        let allRestsBeams = Beam.generateBeams(
+            allRestsNotes,
+            config: BeamConfig(groups: [Fraction(1, 4)], beamRests: true, beamMiddleOnly: false)
+        )
+        #expect(allRestsBeams.count == 1)
+        #expect(allRestsBeams[0].getNotes().count == 4)
+        #expect(allRestsFirstRest.hasBeam())
+        #expect(allRestsLastRest.hasBeam())
+    }
+
+    @Test func beamGenerateMaintainStemDirectionsSplitsOnStemChanges() {
+        func makeStemPattern() -> [StemmableNote] {
+            let n1 = makeNote(.c)
+            let n2 = makeNote(.c)
+            let n3 = makeNote(.c)
+            let n4 = makeNote(.c)
+            _ = n1.setStemDirection(.up)
+            _ = n2.setStemDirection(.down)
+            _ = n3.setStemDirection(.down)
+            _ = n4.setStemDirection(.up)
+            return [n1, n2, n3, n4]
+        }
+
+        let maintained = makeStemPattern()
+        let maintainedBeams = Beam.generateBeams(
+            maintained,
+            config: BeamConfig(groups: [Fraction(1, 4)], maintainStemDirections: true)
+        )
+        #expect(maintainedBeams.count == 1)
+        #expect(maintainedBeams[0].getNotes().count == 2)
+        #expect(maintained[0].getStemDirection() == .up)
+        #expect(maintained[1].getStemDirection() == .down)
+        #expect(maintained[2].getStemDirection() == .down)
+        #expect(maintained[3].getStemDirection() == .up)
+
+        let normalized = makeStemPattern()
+        let normalizedBeams = Beam.generateBeams(
+            normalized,
+            config: BeamConfig(groups: [Fraction(1, 4)], maintainStemDirections: false)
+        )
+        #expect(normalizedBeams.count == 1)
+        #expect(normalizedBeams[0].getNotes().count == 4)
+        #expect(Set(normalized.map { $0.getStemDirection() }).count == 1)
+    }
+
+    @Test func beamGenerateShowStemletsOnRestWhenBeamingAcrossRests() {
+        let stave = Stave(x: 10, y: 40, width: 320)
+        let n1 = makeNote(.c)
+        let rest = makeNote(.b, type: .rest)
+        let n3 = makeNote(.d)
+        let n4 = makeNote(.e)
+        let notes = [n1, rest, n3, n4]
+        for note in notes {
+            _ = note.setStave(stave)
+        }
+        Formatter.SimpleFormat(notes)
+
+        let beams = Beam.generateBeams(
+            notes,
+            config: BeamConfig(groups: [Fraction(1, 4)], beamRests: true, showStemlets: true)
+        )
+        #expect(beams.count == 1)
+        beams[0].postFormat()
+
+        let stem = rest.getStem()
+        #expect(stem != nil)
+        #expect(stem?.isStemlet == true)
+        #expect(stem?.hide == false)
+    }
+
+    @Test func crossStaveStyleBeamKeepsMixedStavesAndStemDirections() {
+        let topStave = Stave(x: 10, y: 40, width: 320)
+        let bottomStave = Stave(x: 10, y: 140, width: 320)
+
+        let n1 = makeNote(.a, octave: 4, duration: .eighth)
+        let n2 = makeNote(.g, octave: 4, duration: .eighth)
+        let n3 = makeNote(.c, octave: 4, duration: .eighth)
+        let n4 = makeNote(.d, octave: 4, duration: .eighth)
+        let notes = [n1, n2, n3, n4]
+
+        _ = n1.setStave(topStave)
+        _ = n2.setStave(topStave)
+        _ = n3.setStave(bottomStave)
+        _ = n4.setStave(bottomStave)
+
+        _ = n1.setStemDirection(.down)
+        _ = n2.setStemDirection(.down)
+        _ = n3.setStemDirection(.up)
+        _ = n4.setStemDirection(.up)
+
+        Formatter.SimpleFormat(notes)
+
+        let beam = Beam(notes)
+        beam.postFormat()
+
+        #expect(beam.getNotes().count == 4)
+        #expect(beam.getStemDirection() == .down)
+        #expect(notes.allSatisfy { $0.hasBeam() })
+        #expect(n1.getStemDirection() == .down)
+        #expect(n3.getStemDirection() == .up)
+        #expect(n1.getYs()[0] != n3.getYs()[0])
     }
 
     // MARK: - Beam Slope Calculation
