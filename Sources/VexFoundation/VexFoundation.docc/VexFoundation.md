@@ -8,16 +8,20 @@ Typed music notation rendering in Swift, based on VexFlow concepts.
 
 VexFoundation keeps familiar concepts like ``Factory``, ``System``, ``Voice``, notes, modifiers, and connectors, while preferring typed models such as ``StaffKeySpec``, ``NoteDurationSpec``, and ``TimeSignatureSpec``.
 
+Original project:
+
+- [VexFlow (original upstream project)](https://github.com/vexflow/vexflow)
+
+Original author:
+
+- Mohit Muthanna Cheppudira
+
 ## Start Here
 
 1. <doc:GettingStarted>
 2. <doc:TypedAPIBasics>
 3. <doc:EasyScoreBasics>
 4. <doc:AdvancedNotation>
-
-## Coverage
-
-- <doc:CoverageLedger>
 
 ## Topics
 
