@@ -33,7 +33,7 @@ let note = f.StaveNote(StaveNoteStruct(
     keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 5)),
     duration: .quarter
 ))
-_ = note.addModifier(f.Accidental(type: "#"), index: 0)
+_ = note.addModifier(f.Accidental(type: .sharp), index: 0)
 _ = note.addModifier(f.Ornament(type: "tr")!, index: 0)
 ```
 

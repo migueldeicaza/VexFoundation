@@ -44,6 +44,42 @@ public struct BuilderElements {
     public var accidentals: [[Accidental?]] = []
 }
 
+public enum EasyScoreBuilderError: Error, LocalizedError, Equatable, Sendable {
+    case invalidDuration(String)
+    case invalidType(String)
+    case invalidClef(String)
+    case invalidStemDirection(String)
+    case invalidStaveNoteKeys([String])
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidDuration(let raw):
+            return "Invalid note duration: \(raw)"
+        case .invalidType(let raw):
+            return "Invalid note type: \(raw)"
+        case .invalidClef(let raw):
+            return "Invalid clef: \(raw)"
+        case .invalidStemDirection(let raw):
+            return "Invalid stem direction: \(raw)"
+        case .invalidStaveNoteKeys(let keys):
+            return "Invalid stave note keys: \(keys)"
+        }
+    }
+}
+
+public enum EasyScoreParseError: Error, LocalizedError, Sendable {
+    case parseFailed(line: String, errorPos: Int?, builderError: EasyScoreBuilderError?)
+
+    public var errorDescription: String? {
+        switch self {
+        case .parseFailed(let line, let errorPos, let builderError):
+            let semantic = builderError?.localizedDescription ?? "none"
+            let pos = errorPos.map(String.init) ?? "nil"
+            return "EasyScore parse failed for line '\(line)' (errorPos: \(pos), semantic: \(semantic))"
+        }
+    }
+}
+
 // MARK: - EasyScore Grammar
 
 /// The grammar for parsing EasyScore notation strings.
@@ -176,6 +212,7 @@ public final class Builder {
     public var piece: Piece
     public var commitHooks: [CommitHook] = []
     public var rollingDuration: NoteDurationSpec = .eighth
+    public private(set) var lastError: EasyScoreBuilderError?
 
     public init(factory: Factory) {
         self.factory = factory
@@ -195,6 +232,7 @@ public final class Builder {
         }
         elements = BuilderElements()
         rollingDuration = .eighth
+        lastError = nil
         resetPiece()
     }
 
@@ -216,7 +254,8 @@ public final class Builder {
     public func setNoteDuration(_ duration: String?) {
         if let duration {
             guard let parsed = try? NoteDurationSpec(parsing: duration) else {
-                fatalError("[VexError] BadArguments: Invalid note duration: \(duration)")
+                setError(.invalidDuration(duration))
+                return
             }
             rollingDuration = parsed
         }
@@ -226,7 +265,8 @@ public final class Builder {
     public func setNoteType(_ type: String?) {
         if let type {
             guard let parsed = NoteType(parsing: type) else {
-                fatalError("[VexError] BadArguments: Invalid note type: \(type)")
+                setError(.invalidType(type))
+                return
             }
             piece.type = parsed
         }
@@ -268,11 +308,18 @@ public final class Builder {
     }
 
     public func commitPiece() {
+        guard lastError == nil else {
+            resetPiece()
+            return
+        }
+
         let mergedOptions = options.merging(piece.options) { _, new in new }
         let stem = (mergedOptions["stem"] ?? "auto").lowercased()
         let clefString = (mergedOptions["clef"] ?? ClefName.treble.rawValue).lowercased()
         guard let clef = ClefName(parsing: clefString) else {
-            fatalError("[VexError] BadArguments: Invalid clef: \(clefString)")
+            setError(.invalidClef(clefString))
+            resetPiece()
+            return
         }
         let chord = piece.chord
         let duration = piece.duration
@@ -293,7 +340,9 @@ public final class Builder {
         } else if let parsed = StemDirection(parsing: stem) {
             explicitStemDirection = parsed
         } else {
-            fatalError("[VexError] BadArguments: Invalid stem direction: \(stem)")
+            setError(.invalidStemDirection(stem))
+            resetPiece()
+            return
         }
 
         // Build note
@@ -309,7 +358,9 @@ public final class Builder {
                 autoStem: autoStem,
                 clef: clef
             ) else {
-                fatalError("[VexError] BadArguments: Invalid stave note keys: \(keys)")
+                setError(.invalidStaveNoteKeys(keys))
+                resetPiece()
+                return
             }
             note = factory.StaveNote(noteStruct)
         }
@@ -320,8 +371,8 @@ public final class Builder {
         // Attach accidentals
         var accidentals: [Accidental?] = []
         for (index, notePiece) in chord.enumerated() {
-            if let accid = notePiece.accid {
-                let accidental = factory.Accidental(type: accid)
+            if let accid = notePiece.accid,
+               let accidental = factory.Accidental(parsingOrNil: accid) {
                 _ = note.addModifier(accidental, index: index)
                 accidentals.append(accidental)
             } else {
@@ -343,6 +394,12 @@ public final class Builder {
         elements.accidentals.append(accidentals)
         resetPiece()
     }
+
+    private func setError(_ error: EasyScoreBuilderError) {
+        if lastError == nil {
+            lastError = error
+        }
+    }
 }
 
 // MARK: - EasyScore Options
@@ -350,13 +407,15 @@ public final class Builder {
 /// Options for EasyScore initialization.
 public struct EasyScoreOptions {
     public var factory: Factory?
+    public var runtimeContext: VexRuntimeContext?
     public var builder: Builder?
     public var commitHooks: [CommitHook]?
     public var throwOnError: Bool = false
 
-    public init(factory: Factory? = nil, builder: Builder? = nil,
+    public init(factory: Factory? = nil, runtimeContext: VexRuntimeContext? = nil, builder: Builder? = nil,
                 commitHooks: [CommitHook]? = nil, throwOnError: Bool = false) {
         self.factory = factory
+        self.runtimeContext = runtimeContext
         self.builder = builder
         self.commitHooks = commitHooks
         self.throwOnError = throwOnError
@@ -421,18 +480,23 @@ public final class EasyScore {
 
     public var defaults = EasyScoreDefaults()
     public var options: EasyScoreOptions
+    public let runtimeContext: VexRuntimeContext
     public var factory: Factory
     public var builder: Builder
     public var grammar: EasyScoreGrammar
     public var parser: Parser
+    public private(set) var lastParseError: EasyScoreBuilderError?
 
     public init(options: EasyScoreOptions = EasyScoreOptions()) {
         let factory = options.factory!
+        let runtimeContext = options.runtimeContext ?? factory.getRuntimeContext()
         let builder = options.builder ?? Builder(factory: factory)
 
         self.options = options
         self.options.factory = factory
+        self.options.runtimeContext = runtimeContext
         self.options.builder = builder
+        self.runtimeContext = runtimeContext
         self.factory = factory
         self.builder = builder
         self.grammar = EasyScoreGrammar(builder: builder)
@@ -466,12 +530,24 @@ public final class EasyScore {
 
     /// Parse a notation string and return the result.
     public func parse(_ line: String, options: [String: String] = [:]) -> ParseResult {
-        builder.reset(options: options)
-        let result = parser.parse(line)
-        if !result.success && self.options.throwOnError {
-            fatalError("[VexError] ParseError: Error parsing line: \(line)")
+        VexRuntime.withContext(runtimeContext) {
+            builder.reset(options: options)
+            var result = parser.parse(line)
+            self.lastParseError = builder.lastError
+            if builder.lastError != nil {
+                result.success = false
+            }
+            return result
         }
-        return result
+    }
+
+    /// Parse and throw on failure (lex/syntax or semantic builder failures).
+    public func parseThrowing(_ line: String, options: [String: String] = [:]) throws -> ParseResult {
+        let result = parse(line, options: options)
+        if result.success {
+            return result
+        }
+        throw EasyScoreParseError.parseFailed(line: line, errorPos: result.errorPos, builderError: lastParseError)
     }
 
     /// Create beamed notes.
@@ -482,35 +558,53 @@ public final class EasyScore {
         secondaryBeamBreaks: [Int] = [],
         partialBeamDirections: [Int: PartialBeamDirection] = [:]
     ) -> [StemmableNote] {
-        _ = factory.Beam(
-            notes: notes, autoStem: autoStem,
-            secondaryBeamBreaks: secondaryBeamBreaks,
-            partialBeamDirections: partialBeamDirections
-        )
-        return notes
+        VexRuntime.withContext(runtimeContext) {
+            _ = factory.Beam(
+                notes: notes, autoStem: autoStem,
+                secondaryBeamBreaks: secondaryBeamBreaks,
+                partialBeamDirections: partialBeamDirections
+            )
+            return notes
+        }
     }
 
     /// Create a tuplet from notes.
     @discardableResult
     public func tuplet(_ notes: [StemmableNote], options: TupletOptions = TupletOptions()) -> [StemmableNote] {
-        _ = factory.Tuplet(notes: notes.map { $0 as Note }, options: options)
-        return notes
+        VexRuntime.withContext(runtimeContext) {
+            _ = factory.Tuplet(notes: notes.map { $0 as Note }, options: options)
+            return notes
+        }
     }
 
     /// Parse a notation string and return the notes.
     public func notes(_ line: String, options: [String: String] = [:]) -> [StemmableNote] {
-        var mergedOptions = ["clef": defaults.clef.rawValue, "stem": defaults.stem]
-        for (k, v) in options { mergedOptions[k] = v }
-        _ = parse(line, options: mergedOptions)
-        return builder.getElements().notes
+        VexRuntime.withContext(runtimeContext) {
+            var mergedOptions = ["clef": defaults.clef.rawValue, "stem": defaults.stem]
+            for (k, v) in options { mergedOptions[k] = v }
+            _ = parse(line, options: mergedOptions)
+            return builder.getElements().notes
+        }
+    }
+
+    /// Parse notes and throw if parsing fails.
+    public func notesThrowing(_ line: String, options: [String: String] = [:]) throws -> [StemmableNote] {
+        try VexRuntime.withContext(runtimeContext) {
+            var mergedOptions = ["clef": defaults.clef.rawValue, "stem": defaults.stem]
+            for (k, v) in options { mergedOptions[k] = v }
+            _ = try parseThrowing(line, options: mergedOptions)
+            return builder.getElements().notes
+        }
     }
 
     /// Create a voice with the given notes.
     public func voice(_ notes: [Note], time: TimeSignatureSpec? = nil) -> Voice {
-        let t = time ?? defaults.time
-        let voice = factory.Voice(timeSignature: t)
-        _ = voice.addTickables(notes)
-        return voice
+        VexRuntime.withContext(runtimeContext) {
+            let t = time ?? defaults.time
+            let voice = factory.Voice(timeSignature: t)
+            _ = voice.addTickables(notes)
+            return voice
+        }
     }
 
     /// Add a commit hook.

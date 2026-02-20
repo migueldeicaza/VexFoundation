@@ -50,6 +50,7 @@ private struct StaveInfo {
 /// Options for System creation.
 public struct SystemOptions {
     public var factory: Factory?
+    public var runtimeContext: VexRuntimeContext?
     public var noPadding: Bool = false
     public var debugFormatter: Bool = false
     public var spaceBetweenStaves: Double = 12
@@ -64,7 +65,7 @@ public struct SystemOptions {
 
     /// When width is not provided (nil), autoWidth is enabled and the system
     /// auto-sizes to fit content — matching JS VexFlow's behavior.
-    public init(factory: Factory? = nil, noPadding: Bool = false,
+    public init(factory: Factory? = nil, runtimeContext: VexRuntimeContext? = nil, noPadding: Bool = false,
                 debugFormatter: Bool = false, spaceBetweenStaves: Double = 12,
                 formatIterations: Int = 0, autoWidth: Bool = false,
                 x: Double = 10, width: Double? = nil, y: Double = 10,
@@ -72,6 +73,7 @@ public struct SystemOptions {
                 formatOptions: FormatParams = FormatParams(),
                 noJustification: Bool = false) {
         self.factory = factory
+        self.runtimeContext = runtimeContext
         self.noPadding = noPadding
         self.debugFormatter = debugFormatter
         self.spaceBetweenStaves = spaceBetweenStaves
@@ -98,6 +100,7 @@ public final class System: VexElement {
 
     private var options: SystemOptions
     private var factory: Factory
+    private let runtimeContext: VexRuntimeContext
     private var formatter: Formatter?
     private var startX: Double?
     private var lastY: Double?
@@ -112,9 +115,13 @@ public final class System: VexElement {
         guard let factory = options.factory else {
             fatalError("[VexError] NoFactory: System requires a factory.")
         }
+        let runtimeContext = options.runtimeContext ?? factory.getRuntimeContext()
+        var resolvedOptions = options
+        resolvedOptions.runtimeContext = runtimeContext
         self.factory = factory
-        self.options = options
-        super.init()
+        self.options = resolvedOptions
+        self.runtimeContext = runtimeContext
+        super.init(runtimeContext: runtimeContext)
     }
 
     // MARK: - Accessors
@@ -127,6 +134,8 @@ public final class System: VexElement {
     }
 
     public func getY() -> Double { options.y }
+
+    public func getRuntimeContext() -> VexRuntimeContext { runtimeContext }
 
     public func setY(_ y: Double) {
         options.y = y
@@ -206,82 +215,86 @@ public final class System: VexElement {
 
     /// Format the system: layout all staves and voices.
     public func format() {
-        let alpha = options.details.alpha
-        let fmtOptions = FormatterOptions(softmaxFactor: Tables.SOFTMAX_FACTOR)
-        let formatter = Formatter(options: fmtOptions)
-        self.formatter = formatter
+        VexRuntime.withContext(runtimeContext) {
+            let alpha = options.details.alpha
+            let fmtOptions = FormatterOptions(softmaxFactor: Tables.SOFTMAX_FACTOR)
+            let formatter = Formatter(options: fmtOptions)
+            self.formatter = formatter
 
-        var y = options.y
-        var startX: Double = 0
+            var y = options.y
+            var startX: Double = 0
 
-        for (index, part) in partStaves.enumerated() {
-            y += part.space(partStaveInfos[index].spaceAbove)
-            _ = part.setStaveY(y)
-            y += part.space(partStaveInfos[index].spaceBelow)
-            y += part.space(options.spaceBetweenStaves)
-            startX = max(startX, part.getNoteStartX())
-        }
+            for (index, part) in partStaves.enumerated() {
+                y += part.space(partStaveInfos[index].spaceAbove)
+                _ = part.setStaveY(y)
+                y += part.space(partStaveInfos[index].spaceBelow)
+                y += part.space(options.spaceBetweenStaves)
+                startX = max(startX, part.getNoteStartX())
+            }
 
-        // Re-assign stave for Y position update
-        for voice in partVoices {
-            for tickable in voice.getTickables() {
-                if let stave = tickable.getStave() {
-                    _ = tickable.setStave(stave)
+            // Re-assign stave for Y position update
+            for voice in partVoices {
+                for tickable in voice.getTickables() {
+                    if let stave = tickable.getStave() {
+                        _ = tickable.setStave(stave)
+                    }
                 }
             }
-        }
 
-        _ = formatter.joinVoices(partVoices)
+            _ = formatter.joinVoices(partVoices)
 
-        // Update start position of all staves
-        for part in partStaves {
-            _ = part.setNoteStartX(startX)
-        }
-
-        var justifyWidth: Double
-        if options.autoWidth && !partVoices.isEmpty {
-            justifyWidth = formatter.preCalculateMinTotalWidth(partVoices)
-            options.width = justifyWidth + Stave.rightPadding + (startX - options.x)
+            // Update start position of all staves
             for part in partStaves {
-                _ = part.setStaveWidth(options.width)
+                _ = part.setNoteStartX(startX)
             }
-        } else {
-            if options.noPadding {
-                justifyWidth = options.width - (startX - options.x)
+
+            var justifyWidth: Double
+            if options.autoWidth && !partVoices.isEmpty {
+                justifyWidth = formatter.preCalculateMinTotalWidth(partVoices)
+                options.width = justifyWidth + Stave.rightPadding + (startX - options.x)
+                for part in partStaves {
+                    _ = part.setStaveWidth(options.width)
+                }
             } else {
-                justifyWidth = options.width - (startX - options.x) - Stave.defaultPadding
+                if options.noPadding {
+                    justifyWidth = options.width - (startX - options.x)
+                } else {
+                    justifyWidth = options.width - (startX - options.x) - Stave.defaultPadding
+                }
             }
-        }
 
-        if !partVoices.isEmpty {
-            _ = formatter.format(
-                partVoices,
-                justifyWidth: options.noJustification ? 0 : justifyWidth,
-                options: options.formatOptions
+            if !partVoices.isEmpty {
+                _ = formatter.format(
+                    partVoices,
+                    justifyWidth: options.noJustification ? 0 : justifyWidth,
+                    options: options.formatOptions
+                )
+            }
+            _ = formatter.postFormat()
+
+            for _ in 0..<options.formatIterations {
+                _ = formatter.tune(options: (alpha: alpha, ()))
+            }
+
+            self.startX = startX
+            self.lastY = y
+            self.boundingBox = BoundingBox(
+                x: options.x, y: options.y,
+                w: options.width, h: y - options.y
             )
+            Stave.formatBegModifiers(partStaves)
         }
-        _ = formatter.postFormat()
-
-        for _ in 0..<options.formatIterations {
-            _ = formatter.tune(options: (alpha: alpha, ()))
-        }
-
-        self.startX = startX
-        self.lastY = y
-        self.boundingBox = BoundingBox(
-            x: options.x, y: options.y,
-            w: options.width, h: y - options.y
-        )
-        Stave.formatBegModifiers(partStaves)
     }
 
     // MARK: - Draw
 
     override public func draw() throws {
-        guard formatter != nil, startX != nil, lastY != nil else {
-            fatalError("[VexError] NoFormatter: format() must be called before draw()")
+        VexRuntime.withContext(runtimeContext) {
+            guard formatter != nil, startX != nil, lastY != nil else {
+                fatalError("[VexError] NoFormatter: format() must be called before draw()")
+            }
+            setRendered()
         }
-        setRendered()
     }
 }
 

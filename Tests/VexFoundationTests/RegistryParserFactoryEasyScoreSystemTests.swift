@@ -330,8 +330,19 @@ struct RegistryParserFactoryEasyScoreSystemTests {
 
     @Test func factoryAccidental() {
         let factory = Factory()
-        let accid = factory.Accidental(type: "#")
+        let accid = factory.Accidental(type: .sharp)
         #expect(accid.getCategory() == "Accidental")
+    }
+
+    @Test func factoryAccidentalParsing() throws {
+        let factory = Factory()
+        let accid = try factory.Accidental(parsing: "#")
+        #expect(accid.accidentalType == .sharp)
+    }
+
+    @Test func factoryAccidentalParsingOrNil() {
+        let factory = Factory()
+        #expect(factory.Accidental(parsingOrNil: "invalid") == nil)
     }
 
     @Test func factoryAnnotation() {
@@ -537,6 +548,51 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         let score = factory.EasyScore()
         let result = score.parse("C4/q")
         #expect(result.success == true)
+    }
+
+    @Test func easyScoreParseInvalidDurationFailsSemantically() {
+        let factory = Factory()
+        _ = factory.Stave(x: 0, y: 0, width: 400)
+        let score = factory.EasyScore()
+        let result = score.parse("C4/3")
+        #expect(result.success == false)
+        #expect(score.lastParseError == .invalidDuration("3"))
+        #expect(score.notes("C4/3").isEmpty)
+    }
+
+    @Test func easyScoreParseInvalidClefOptionFailsSemantically() {
+        let factory = Factory()
+        _ = factory.Stave(x: 0, y: 0, width: 400)
+        let score = factory.EasyScore()
+        let result = score.parse("C4/q", options: ["clef": "badclef"])
+        #expect(result.success == false)
+        #expect(score.lastParseError == .invalidClef("badclef"))
+    }
+
+    @Test func easyScoreParseInvalidStemOptionFailsSemantically() {
+        let factory = Factory()
+        _ = factory.Stave(x: 0, y: 0, width: 400)
+        let score = factory.EasyScore()
+        let result = score.parse("C4/q", options: ["stem": "sideways"])
+        #expect(result.success == false)
+        #expect(score.lastParseError == .invalidStemDirection("sideways"))
+    }
+
+    @Test func easyScoreParseThrowingHelpers() throws {
+        let factory = Factory()
+        _ = factory.Stave(x: 0, y: 0, width: 400)
+        let score = factory.EasyScore()
+
+        let ok = try score.parseThrowing("C4/q")
+        #expect(ok.success == true)
+        #expect(try score.notesThrowing("C4/q").count == 1)
+
+        do {
+            _ = try score.parseThrowing("C4/3")
+            #expect(Bool(false))
+        } catch {
+            #expect(error is EasyScoreParseError)
+        }
     }
 
     @Test func easyScoreGhostNote() {
@@ -749,7 +805,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let sn = factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter))
         let ghost = factory.GhostNote(duration: .quarter)
-        let accid = factory.Accidental(type: "#")
+        let accid = factory.Accidental(type: .sharp)
         #expect(sn.getCategory() == "StaveNote")
         #expect(ghost.getCategory() == "GhostNote")
         #expect(accid.getCategory() == "Accidental")

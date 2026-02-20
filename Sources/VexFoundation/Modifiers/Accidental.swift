@@ -15,6 +15,47 @@ struct AccidentalLineMetrics {
     var width: Double
 }
 
+// MARK: - Accidental Type
+
+/// Typed accidental kinds supported by the core notation tables.
+public enum AccidentalType: String, CaseIterable, Sendable, Codable {
+    case sharp = "#"
+    case doubleSharp = "##"
+    case flat = "b"
+    case doubleFlat = "bb"
+    case natural = "n"
+    case parenLeft = "{"
+    case parenRight = "}"
+    case threeQuarterFlat = "db"
+    case quarterFlat = "d"
+    case threeQuarterSharp = "++"
+    case quarterSharp = "+"
+    case kucukMucennebSharp = "+-"
+    case bakiyeFlat = "bs"
+    case buyukMucennebFlat = "bss"
+    case sori = "o"
+    case koron = "k"
+    case buyukMucennebSharp = "++-"
+
+    /// Parse from a string token.
+    public init?(parsing raw: String) {
+        let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        self.init(rawValue: normalized)
+    }
+}
+
+/// Errors for string accidental parsing.
+public enum AccidentalParseError: Error, LocalizedError, Sendable {
+    case invalidType(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidType(let value):
+            return "Unknown accidental type: '\(value)'."
+        }
+    }
+}
+
 // MARK: - Accidental
 
 /// Modifier that adds accidentals (sharps, flats, naturals, etc.) to notes.
@@ -25,7 +66,8 @@ public final class Accidental: Modifier {
 
     // MARK: - Properties
 
-    public let type: String
+    public let accidentalType: AccidentalType
+    public var type: String { accidentalType.rawValue }
     public var accidentalData: AccidentalCode
     public var cautionary: Bool = false
     public var fontScale: Double = Tables.NOTATION_FONT_SCALE
@@ -38,15 +80,29 @@ public final class Accidental: Modifier {
 
     // MARK: - Init
 
-    public init(_ type: String) {
-        guard let accData = Tables.accidentalCode(type) else {
-            fatalError("[VexError] ArgumentError: Unknown accidental type: \(type)")
+    public init(_ accidentalType: AccidentalType) {
+        guard let accData = Tables.accidentalCode(accidentalType.rawValue) else {
+            fatalError("[VexError] BadRuntimeState: Missing accidental table mapping for type: \(accidentalType.rawValue)")
         }
-        self.type = type
+        self.accidentalType = accidentalType
         self.accidentalData = accData
         super.init()
         position = .left
         reset()
+    }
+
+    /// String convenience initializer that throws on invalid accidental type.
+    public convenience init(parsing type: String) throws {
+        guard let parsed = AccidentalType(parsing: type) else {
+            throw AccidentalParseError.invalidType(type)
+        }
+        self.init(parsed)
+    }
+
+    /// String convenience initializer that returns nil on invalid accidental type.
+    public convenience init?(parsingOrNil type: String) {
+        guard let parsed = AccidentalType(parsing: type) else { return nil }
+        self.init(parsed)
     }
 
     // MARK: - Reset

@@ -9,7 +9,7 @@ The project keeps VexFlow concepts (`Factory`, `EasyScore`, `System`, notes, mod
 - Swift Package (`swift-tools-version: 6.0`)
 - Platforms: iOS 16+, macOS 13+
 - Active port: API parity with VexFlow is in progress and APIs may evolve
-- Current test suite: `743` passing tests
+- Current test suite: `753` passing tests
 
 ## Installation
 
@@ -154,6 +154,11 @@ let maybeParsed = StaveNoteStruct(
 // Duration-only parse examples
 let ghost = try GhostNote("8r")
 let maybeGhost = GhostNote(parsingDuration: "8r")
+
+// Factory string convenience (throwing / failable)
+let f = Factory()
+let sharp = try f.Accidental(parsing: "#")
+let maybeAccidental = f.Accidental(parsingOrNil: "invalid")
 ```
 
 ## Compatibility Layer (Optional)
@@ -199,6 +204,17 @@ Flow.withRuntimeContext(context) {
     let e = VexElement()
     print(e.getAttribute("id") ?? "")
 }
+```
+
+Constructor-level runtime threading is also available:
+
+```swift
+import VexFoundation
+
+let runtime = Flow.makeRuntimeContext()
+let factory = Factory(runtimeContext: runtime)
+let score = factory.EasyScore(options: EasyScoreOptions(runtimeContext: runtime))
+let system = factory.System(options: SystemOptions(runtimeContext: runtime, x: 10, width: 480, y: 20))
 ```
 
 ## Key Differences from VexFlow

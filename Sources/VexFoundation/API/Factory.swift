@@ -27,6 +27,7 @@ public final class Factory {
     // MARK: - Properties
 
     private var options: FactoryOptions
+    private let runtimeContext: VexRuntimeContext
     private var context: RenderContext?
     private var currentStave: Stave?
     private var staves: [Stave] = []
@@ -36,8 +37,12 @@ public final class Factory {
 
     // MARK: - Init
 
-    public init(options: FactoryOptions = FactoryOptions()) {
+    public init(
+        options: FactoryOptions = FactoryOptions(),
+        runtimeContext: VexRuntimeContext = VexRuntime.getCurrentContext()
+    ) {
         self.options = options
+        self.runtimeContext = runtimeContext
     }
 
     // MARK: - Reset
@@ -51,6 +56,8 @@ public final class Factory {
     }
 
     // MARK: - Context
+
+    public func getRuntimeContext() -> VexRuntimeContext { runtimeContext }
 
     public func getContext() -> RenderContext? { context }
 
@@ -66,6 +73,14 @@ public final class Factory {
 
     public func getVoices() -> [Voice] { voices }
 
+    private func inRuntimeContext<T>(_ body: () -> T) -> T {
+        VexRuntime.withContext(runtimeContext, body)
+    }
+
+    private func inRuntimeContext<T>(_ body: () throws -> T) rethrows -> T {
+        try VexRuntime.withContext(runtimeContext, body)
+    }
+
     // MARK: - Stave Factory Methods
 
     @discardableResult
@@ -79,7 +94,9 @@ public final class Factory {
         if options?.spacingBetweenLinesPx == nil {
             opts.spacingBetweenLinesPx = self.options.staveSpace
         }
-        let stave = VexFoundation.Stave(x: x, y: y, width: w, options: opts)
+        let stave = inRuntimeContext {
+            VexFoundation.Stave(x: x, y: y, width: w, options: opts)
+        }
         staves.append(stave)
         if let ctx = context { _ = stave.setContext(ctx) }
         currentStave = stave
@@ -97,7 +114,9 @@ public final class Factory {
         if options?.spacingBetweenLinesPx == nil {
             opts.spacingBetweenLinesPx = self.options.staveSpace * 1.3
         }
-        let stave = VexFoundation.TabStave(x: x, y: y, width: w, options: opts)
+        let stave = inRuntimeContext {
+            VexFoundation.TabStave(x: x, y: y, width: w, options: opts)
+        }
         staves.append(stave)
         if let ctx = context { _ = stave.setContext(ctx) }
         currentStave = stave
@@ -108,7 +127,7 @@ public final class Factory {
 
     @discardableResult
     public func StaveNote(_ noteStruct: StaveNoteStruct) -> VexFoundation.StaveNote {
-        let note = VexFoundation.StaveNote(noteStruct)
+        let note = inRuntimeContext { VexFoundation.StaveNote(noteStruct) }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
@@ -120,7 +139,9 @@ public final class Factory {
         glyph: Glyph, noteStruct: NoteStruct,
         options: GlyphNoteOptions = GlyphNoteOptions()
     ) -> VexFoundation.GlyphNote {
-        let note = VexFoundation.GlyphNote(glyph: glyph, noteStruct: noteStruct, options: options)
+        let note = inRuntimeContext {
+            VexFoundation.GlyphNote(glyph: glyph, noteStruct: noteStruct, options: options)
+        }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
@@ -130,7 +151,9 @@ public final class Factory {
     @discardableResult
     public func RepeatNote(type: String, noteStruct: NoteStruct? = nil,
                            options: GlyphNoteOptions? = nil) -> VexFoundation.RepeatNote {
-        let note = VexFoundation.RepeatNote(type: type, noteStruct: noteStruct, options: options)
+        let note = inRuntimeContext {
+            VexFoundation.RepeatNote(type: type, noteStruct: noteStruct, options: options)
+        }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
@@ -139,7 +162,7 @@ public final class Factory {
 
     @discardableResult
     public func GhostNote(_ noteStruct: NoteStruct) -> VexFoundation.GhostNote {
-        let note = VexFoundation.GhostNote(noteStruct)
+        let note = inRuntimeContext { VexFoundation.GhostNote(noteStruct) }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
@@ -169,7 +192,7 @@ public final class Factory {
 
     @discardableResult
     public func TextNote(_ noteStruct: TextNoteStruct) -> VexFoundation.TextNote {
-        let note = VexFoundation.TextNote(noteStruct)
+        let note = inRuntimeContext { VexFoundation.TextNote(noteStruct) }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
@@ -178,7 +201,7 @@ public final class Factory {
 
     @discardableResult
     public func BarNote(type: BarlineType = .single) -> VexFoundation.BarNote {
-        let note = VexFoundation.BarNote(type: type)
+        let note = inRuntimeContext { VexFoundation.BarNote(type: type) }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
@@ -191,7 +214,9 @@ public final class Factory {
         size: ClefSize = .default,
         annotation: ClefAnnotation? = nil
     ) -> VexFoundation.ClefNote {
-        let note = VexFoundation.ClefNote(type: type, size: size, annotation: annotation)
+        let note = inRuntimeContext {
+            VexFoundation.ClefNote(type: type, size: size, annotation: annotation)
+        }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
@@ -200,7 +225,7 @@ public final class Factory {
 
     @discardableResult
     public func TimeSigNote(time: TimeSignatureSpec = .default) -> VexFoundation.TimeSigNote {
-        let note = VexFoundation.TimeSigNote(timeSpec: time)
+        let note = inRuntimeContext { VexFoundation.TimeSigNote(timeSpec: time) }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
@@ -211,7 +236,9 @@ public final class Factory {
     public func KeySigNote(
         key: String, cancelKey: String? = nil, alterKey: [String]? = nil
     ) -> VexFoundation.KeySigNote {
-        let note = VexFoundation.KeySigNote(keySpec: key, cancelKeySpec: cancelKey, alterKeySpec: alterKey)
+        let note = inRuntimeContext {
+            VexFoundation.KeySigNote(keySpec: key, cancelKeySpec: cancelKey, alterKeySpec: alterKey)
+        }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
@@ -220,7 +247,7 @@ public final class Factory {
 
     @discardableResult
     public func TabNote(_ noteStruct: TabNoteStruct) -> VexFoundation.TabNote {
-        let note = VexFoundation.TabNote(noteStruct)
+        let note = inRuntimeContext { VexFoundation.TabNote(noteStruct) }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
@@ -229,7 +256,7 @@ public final class Factory {
 
     @discardableResult
     public func GraceNote(_ noteStruct: GraceNoteStruct) -> VexFoundation.GraceNote {
-        let note = VexFoundation.GraceNote(noteStruct)
+        let note = inRuntimeContext { VexFoundation.GraceNote(noteStruct) }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         return note
@@ -239,7 +266,9 @@ public final class Factory {
     public func GraceNoteGroup(
         notes: [StemmableNote], slur: Bool = false
     ) -> VexFoundation.GraceNoteGroup {
-        let group = VexFoundation.GraceNoteGroup(graceNotes: notes, showSlur: slur)
+        let group = inRuntimeContext {
+            VexFoundation.GraceNoteGroup(graceNotes: notes, showSlur: slur)
+        }
         if let ctx = context { _ = group.setContext(ctx) }
         return group
     }
@@ -247,8 +276,25 @@ public final class Factory {
     // MARK: - Modifier Factory Methods
 
     @discardableResult
-    public func Accidental(type: String) -> VexFoundation.Accidental {
-        let accid = VexFoundation.Accidental(type)
+    public func Accidental(type: AccidentalType) -> VexFoundation.Accidental {
+        let accid = inRuntimeContext { VexFoundation.Accidental(type) }
+        if let ctx = context { _ = accid.setContext(ctx) }
+        return accid
+    }
+
+    /// String convenience API that throws on invalid accidental input.
+    @discardableResult
+    public func Accidental(parsing type: String) throws -> VexFoundation.Accidental {
+        let accid = try inRuntimeContext { try VexFoundation.Accidental(parsing: type) }
+        if let ctx = context { _ = accid.setContext(ctx) }
+        return accid
+    }
+
+    /// String convenience API that returns nil on invalid accidental input.
+    @discardableResult
+    public func Accidental(parsingOrNil type: String) -> VexFoundation.Accidental? {
+        let accid = inRuntimeContext { VexFoundation.Accidental(parsingOrNil: type) }
+        guard let accid else { return nil }
         if let ctx = context { _ = accid.setContext(ctx) }
         return accid
     }
@@ -260,7 +306,7 @@ public final class Factory {
         vJustify: AnnotationVerticalJustify = .bottom,
         font: FontInfo? = nil
     ) -> VexFoundation.Annotation {
-        let annotation = VexFoundation.Annotation(text)
+        let annotation = inRuntimeContext { VexFoundation.Annotation(text) }
         _ = annotation.setJustification(hJustify)
         _ = annotation.setVerticalJustification(vJustify)
         if let font { _ = annotation.setFont(font) }
@@ -275,7 +321,7 @@ public final class Factory {
         kerning: Bool = true,
         reportWidth: Bool = true
     ) -> VexFoundation.ChordSymbol {
-        let cs = VexFoundation.ChordSymbol()
+        let cs = inRuntimeContext { VexFoundation.ChordSymbol() }
         _ = cs.setHorizontal(hJustify)
         _ = cs.setVertical(vJustify)
         _ = cs.setEnableKerning(kerning)
@@ -286,21 +332,21 @@ public final class Factory {
 
     @discardableResult
     public func Articulation(type: String = "a.") -> VexFoundation.Articulation {
-        let artic = VexFoundation.Articulation(type)
+        let artic = inRuntimeContext { VexFoundation.Articulation(type) }
         if let ctx = context { _ = artic.setContext(ctx) }
         return artic
     }
 
     @discardableResult
     public func Ornament(_ type: String) -> VexFoundation.Ornament {
-        let ornament = VexFoundation.Ornament(type)
+        let ornament = inRuntimeContext { VexFoundation.Ornament(type) }
         if let ctx = context { _ = ornament.setContext(ctx) }
         return ornament
     }
 
     @discardableResult
     public func TextDynamics(_ noteStruct: TextNoteStruct) -> VexFoundation.TextDynamics {
-        let td = VexFoundation.TextDynamics(noteStruct)
+        let td = inRuntimeContext { VexFoundation.TextDynamics(noteStruct) }
         if let stave = currentStave { _ = td.setStave(stave) }
         if let ctx = context { _ = td.setContext(ctx) }
         renderQ.append(td)
@@ -309,7 +355,7 @@ public final class Factory {
 
     @discardableResult
     public func Fingering(number: String = "0", position: ModifierPosition = .left) -> FretHandFinger {
-        let fingering = FretHandFinger(number)
+        let fingering = inRuntimeContext { FretHandFinger(number) }
         _ = fingering.setPosition(position)
         if let ctx = context { _ = fingering.setContext(ctx) }
         return fingering
@@ -318,7 +364,7 @@ public final class Factory {
     @discardableResult
     public func StringNumber(number: String, position: ModifierPosition = .above,
                              drawCircle: Bool = true) -> VexFoundation.StringNumber {
-        let sn = VexFoundation.StringNumber(number)
+        let sn = inRuntimeContext { VexFoundation.StringNumber(number) }
         _ = sn.setPosition(position)
         _ = sn.setDrawCircle(drawCircle)
         if let ctx = context { _ = sn.setContext(ctx) }
@@ -328,11 +374,11 @@ public final class Factory {
     // MARK: - Context Factory Methods
 
     public func TickContext() -> VexFoundation.TickContext {
-        VexFoundation.TickContext()
+        inRuntimeContext { VexFoundation.TickContext() }
     }
 
     public func ModifierContext() -> VexFoundation.ModifierContext {
-        VexFoundation.ModifierContext()
+        inRuntimeContext { VexFoundation.ModifierContext() }
     }
 
     // MARK: - Multi-Measure Rest
@@ -342,7 +388,9 @@ public final class Factory {
         numberOfMeasures: Int,
         options: MultiMeasureRestRenderOptions
     ) -> VexFoundation.MultiMeasureRest {
-        let mmr = VexFoundation.MultiMeasureRest(numberOfMeasures: numberOfMeasures, options: options)
+        let mmr = inRuntimeContext {
+            VexFoundation.MultiMeasureRest(numberOfMeasures: numberOfMeasures, options: options)
+        }
         if let ctx = context { _ = mmr.setContext(ctx) }
         renderQ.append(mmr)
         return mmr
@@ -352,14 +400,14 @@ public final class Factory {
 
     @discardableResult
     public func Voice(time: VoiceTime? = nil) -> VexFoundation.Voice {
-        let voice = VexFoundation.Voice(time: time)
+        let voice = inRuntimeContext { VexFoundation.Voice(time: time) }
         voices.append(voice)
         return voice
     }
 
     @discardableResult
     public func Voice(timeSignature: TimeSignatureSpec) -> VexFoundation.Voice {
-        let voice = VexFoundation.Voice(timeSignature: timeSignature)
+        let voice = inRuntimeContext { VexFoundation.Voice(timeSignature: timeSignature) }
         voices.append(voice)
         return voice
     }
@@ -372,7 +420,9 @@ public final class Factory {
         bottomStave: VexFoundation.Stave,
         type: ConnectorType = .double
     ) -> VexFoundation.StaveConnector {
-        let connector = VexFoundation.StaveConnector(topStave: topStave, bottomStave: bottomStave)
+        let connector = inRuntimeContext {
+            VexFoundation.StaveConnector(topStave: topStave, bottomStave: bottomStave)
+        }
         _ = connector.setType(type)
         if let ctx = context { _ = connector.setContext(ctx) }
         renderQ.append(connector)
@@ -380,14 +430,14 @@ public final class Factory {
     }
 
     public func Formatter(options: FormatterOptions = FormatterOptions()) -> VexFoundation.Formatter {
-        VexFoundation.Formatter(options: options)
+        inRuntimeContext { VexFoundation.Formatter(options: options) }
     }
 
     // MARK: - Tuplet, Beam
 
     @discardableResult
     public func Tuplet(notes: [Note] = [], options: TupletOptions = TupletOptions()) -> VexFoundation.Tuplet {
-        let tuplet = VexFoundation.Tuplet(notes: notes, options: options)
+        let tuplet = inRuntimeContext { VexFoundation.Tuplet(notes: notes, options: options) }
         if let ctx = context { _ = tuplet.setContext(ctx) }
         renderQ.append(tuplet)
         return tuplet
@@ -400,7 +450,7 @@ public final class Factory {
         secondaryBeamBreaks: [Int] = [],
         partialBeamDirections: [Int: PartialBeamDirection] = [:]
     ) -> VexFoundation.Beam {
-        let beam = VexFoundation.Beam(notes, autoStem: autoStem)
+        let beam = inRuntimeContext { VexFoundation.Beam(notes, autoStem: autoStem) }
         if let ctx = context { _ = beam.setContext(ctx) }
         _ = beam.breakSecondaryAt(secondaryBeamBreaks)
         for (noteIndex, direction) in partialBeamDirections {
@@ -414,7 +464,7 @@ public final class Factory {
 
     @discardableResult
     public func Curve(from: Note, to: Note, options: CurveOptions = CurveOptions()) -> VexFoundation.Curve {
-        let curve = VexFoundation.Curve(from: from, to: to, options: options)
+        let curve = inRuntimeContext { VexFoundation.Curve(from: from, to: to, options: options) }
         if let ctx = context { _ = curve.setContext(ctx) }
         renderQ.append(curve)
         return curve
@@ -423,7 +473,7 @@ public final class Factory {
     @discardableResult
     public func StaveTie(notes: TieNotes, text: String? = nil,
                          direction: TieDirection? = nil) -> VexFoundation.StaveTie {
-        let tie = VexFoundation.StaveTie(notes: notes, text: text)
+        let tie = inRuntimeContext { VexFoundation.StaveTie(notes: notes, text: text) }
         if let direction { _ = tie.setDirection(direction) }
         if let ctx = context { _ = tie.setContext(ctx) }
         renderQ.append(tie)
@@ -433,7 +483,7 @@ public final class Factory {
     @discardableResult
     public func StaveLine(notes: StaveLineNotes, text: String? = nil,
                           font: FontInfo? = nil) -> VexFoundation.StaveLine {
-        let line = VexFoundation.StaveLine(notes: notes)
+        let line = inRuntimeContext { VexFoundation.StaveLine(notes: notes) }
         if let text { _ = line.setText(text) }
         if let font { _ = line.setFont(font) }
         if let ctx = context { _ = line.setContext(ctx) }
@@ -445,7 +495,7 @@ public final class Factory {
     public func VibratoBracket(
         from: Note?, to: Note?, line: Double? = nil, harsh: Bool? = nil
     ) -> VexFoundation.VibratoBracket {
-        let vb = VexFoundation.VibratoBracket(start: from, stop: to)
+        let vb = inRuntimeContext { VexFoundation.VibratoBracket(start: from, stop: to) }
         if let line { _ = vb.setLine(line) }
         if let harsh { _ = vb.setHarsh(harsh) }
         if let ctx = context { _ = vb.setContext(ctx) }
@@ -459,10 +509,12 @@ public final class Factory {
         superscript: String = "", position: TextBracketPosition = .top,
         line: Double? = nil, font: FontInfo? = nil
     ) -> VexFoundation.TextBracket {
-        let tb = VexFoundation.TextBracket(
-            start: from, stop: to, text: text,
-            superscript: superscript, position: position
-        )
+        let tb = inRuntimeContext {
+            VexFoundation.TextBracket(
+                start: from, stop: to, text: text,
+                superscript: superscript, position: position
+            )
+        }
         if let line { _ = tb.setLine(line) }
         if let font { _ = tb.setFont(font) }
         if let ctx = context { _ = tb.setContext(ctx) }
@@ -476,7 +528,8 @@ public final class Factory {
     public func System(options: SystemOptions = SystemOptions()) -> VexFoundation.System {
         var opts = options
         opts.factory = self
-        let system = VexFoundation.System(options: opts)
+        opts.runtimeContext = opts.runtimeContext ?? runtimeContext
+        let system = inRuntimeContext { VexFoundation.System(options: opts) }
         if let ctx = context { _ = system.setContext(ctx) }
         systems.append(system)
         return system
@@ -487,7 +540,8 @@ public final class Factory {
     public func EasyScore(options: EasyScoreOptions = EasyScoreOptions()) -> VexFoundation.EasyScore {
         var opts = options
         opts.factory = self
-        return VexFoundation.EasyScore(options: opts)
+        opts.runtimeContext = opts.runtimeContext ?? runtimeContext
+        return inRuntimeContext { VexFoundation.EasyScore(options: opts) }
     }
 
     // MARK: - Pedal Marking
@@ -497,7 +551,7 @@ public final class Factory {
         notes: [VexFoundation.StaveNote] = [],
         type: PedalMarkingType = .mixed
     ) -> VexFoundation.PedalMarking {
-        let pedal = VexFoundation.PedalMarking(notes: notes)
+        let pedal = inRuntimeContext { VexFoundation.PedalMarking(notes: notes) }
         _ = pedal.setType(type)
         if let ctx = context { _ = pedal.setContext(ctx) }
         renderQ.append(pedal)
@@ -508,7 +562,7 @@ public final class Factory {
 
     @discardableResult
     public func NoteSubGroup(notes: [Note] = []) -> VexFoundation.NoteSubGroup {
-        let group = VexFoundation.NoteSubGroup(subNotes: notes)
+        let group = inRuntimeContext { VexFoundation.NoteSubGroup(subNotes: notes) }
         if let ctx = context { _ = group.setContext(ctx) }
         return group
     }

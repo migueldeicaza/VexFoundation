@@ -26,49 +26,59 @@ struct AccidentalBeamArticulationTests {
     // MARK: - Accidental Creation
 
     @Test func accidentalCreation() {
-        let acc = Accidental("#")
+        let acc = Accidental(.sharp)
         #expect(acc.type == "#")
         #expect(acc.getPosition() == .left)
         #expect(acc.getWidth() > 0)
     }
 
+    @Test func accidentalStringParsingThrowing() throws {
+        let acc = try Accidental(parsing: " # ")
+        #expect(acc.accidentalType == .sharp)
+    }
+
+    @Test func accidentalStringParsingOrNil() {
+        let acc = Accidental(parsingOrNil: "invalid")
+        #expect(acc == nil)
+    }
+
     @Test func accidentalFlat() {
-        let acc = Accidental("b")
+        let acc = Accidental(.flat)
         #expect(acc.type == "b")
         #expect(acc.accidentalData.code == "accidentalFlat")
     }
 
     @Test func accidentalNatural() {
-        let acc = Accidental("n")
+        let acc = Accidental(.natural)
         #expect(acc.type == "n")
         #expect(acc.accidentalData.code == "accidentalNatural")
     }
 
     @Test func accidentalDoubleSharp() {
-        let acc = Accidental("##")
+        let acc = Accidental(.doubleSharp)
         #expect(acc.type == "##")
         #expect(acc.accidentalData.code == "accidentalDoubleSharp")
     }
 
     @Test func accidentalDoubleFlat() {
-        let acc = Accidental("bb")
+        let acc = Accidental(.doubleFlat)
         #expect(acc.type == "bb")
         #expect(acc.accidentalData.code == "accidentalDoubleFlat")
     }
 
     @Test func accidentalCautionary() {
-        let acc = Accidental("#")
+        let acc = Accidental(.sharp)
         _ = acc.setAsCautionary()
         #expect(acc.cautionary == true)
         // Cautionary accidentals are wider (include parens)
-        let normalAcc = Accidental("#")
+        let normalAcc = Accidental(.sharp)
         #expect(acc.getWidth() > normalAcc.getWidth())
     }
 
     @Test func accidentalWidths() {
-        let sharp = Accidental("#")
-        let flat = Accidental("b")
-        let natural = Accidental("n")
+        let sharp = Accidental(.sharp)
+        let flat = Accidental(.flat)
+        let natural = Accidental(.natural)
         // All should have positive width
         #expect(sharp.getWidth() > 0)
         #expect(flat.getWidth() > 0)
@@ -82,7 +92,7 @@ struct AccidentalBeamArticulationTests {
         let note = StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, accidental: .sharp, octave: 4)), duration: .quarter))
         _ = note.setStave(stave)
 
-        let acc = Accidental("#")
+        let acc = Accidental(.sharp)
         _ = note.addModifier(acc, index: 0)
 
         var state = ModifierContextState()
@@ -95,8 +105,8 @@ struct AccidentalBeamArticulationTests {
         let note = StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, accidental: .sharp, octave: 4), StaffKeySpec(letter: .e, octave: 4), StaffKeySpec(letter: .g, accidental: .sharp, octave: 4)), duration: .quarter))
         _ = note.setStave(stave)
 
-        let acc1 = Accidental("#")
-        let acc2 = Accidental("#")
+        let acc1 = Accidental(.sharp)
+        let acc2 = Accidental(.sharp)
         _ = note.addModifier(acc1, index: 0)
         _ = note.addModifier(acc2, index: 2)
 
@@ -134,7 +144,7 @@ struct AccidentalBeamArticulationTests {
         let stave = Stave(x: 10, y: 40, width: 300)
         let note = StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, accidental: .sharp, octave: 4)), duration: .quarter))
         _ = note.setStave(stave)
-        let acc = Accidental("#")
+        let acc = Accidental(.sharp)
         _ = note.addModifier(acc, index: 0)
 
         let mc = ModifierContext()
@@ -603,7 +613,7 @@ struct AccidentalBeamArticulationTests {
         let note = StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, accidental: .sharp, octave: 4)), duration: .quarter))
         _ = note.setStave(stave)
 
-        let acc = Accidental("#")
+        let acc = Accidental(.sharp)
         let artic = Articulation("a.")
         _ = note.addModifier(acc, index: 0)
         _ = note.addModifier(artic, index: 0)

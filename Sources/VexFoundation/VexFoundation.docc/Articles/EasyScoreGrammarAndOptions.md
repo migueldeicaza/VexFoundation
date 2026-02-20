@@ -55,13 +55,19 @@ score.addCommitHook { options, note, _ in
 
 ## 6. Error Mode
 
-``EasyScoreOptions/throwOnError`` switches parse failures into fatal behavior. For user-input flows, keep this off and inspect parse success.
+For explicit error handling, prefer throwing helpers:
+
+```swift
+let parsed = try score.parseThrowing("C4/q, D4/q")
+let notes = try score.notesThrowing("C4/q, D4/q")
+```
 
 ## Related
 
 - <doc:EasyScoreBasics>
 - ``EasyScoreOptions``
-- ``EasyScoreOptions/throwOnError``
 - ``EasyScore/notes(_:options:)``
+- ``EasyScore/notesThrowing(_:options:)``
 - ``EasyScore/voice(_:time:)``
+- ``EasyScore/parseThrowing(_:options:)``
 - ``Parser``

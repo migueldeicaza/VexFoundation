@@ -49,14 +49,27 @@ open class VexElement {
     // MARK: - Init
 
     public init() {
+        let runtime = VexRuntime.getCurrentContext()
         self.attrs = ElementAttributes(
-            id: VexRuntime.getCurrentContext().generateElementID(),
+            id: runtime.generateElementID(),
             type: type(of: self).category
         )
 
         // Match VexFlow behavior: newly created elements register automatically
         // when a default registry has been enabled.
-        VexRuntime.getCurrentContext().getDefaultRegistry()?.register(self)
+        runtime.getDefaultRegistry()?.register(self)
+    }
+
+    public init(runtimeContext: VexRuntimeContext) {
+        let runtime = runtimeContext
+        self.attrs = ElementAttributes(
+            id: runtime.generateElementID(),
+            type: type(of: self).category
+        )
+
+        // Match VexFlow behavior: newly created elements register automatically
+        // when a default registry has been enabled.
+        runtime.getDefaultRegistry()?.register(self)
     }
 
     // MARK: - Children

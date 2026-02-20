@@ -13,8 +13,8 @@ let keyParts = music.getKeyParts("Dm")
 ## 2. Key-Aware Accidental Selection with ``KeyManager``
 
 ```swift
-let manager = KeyManager("G")
-let result = manager.selectNote("f")
+let manager = try KeyManager(parsing: "G")
+let result = try manager.selectNote(parsing: "f")
 // result.note, result.accidental, result.change
 ```
 
@@ -37,6 +37,6 @@ let note = StaveNoteStruct(keys: NonEmptyArray(typed), duration: duration)
 
 - <doc:TypedModels>
 - <doc:VexFlowParityAndMigration>
-- ``Music/getNoteParts(_:)``
-- ``Music/getKeyParts(_:)``
-- ``KeyManager/selectNote(_:)``
+- ``Music/noteParts(parsing:)``
+- ``Music/keyParts(parsing:)``
+- ``KeyManager/selectNote(parsing:)``

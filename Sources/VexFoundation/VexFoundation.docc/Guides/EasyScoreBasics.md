@@ -57,17 +57,18 @@ score.addCommitHook { options, note, _ in
 
 ## Notes
 
-``EasyScoreOptions/throwOnError`` enables fatal parse handling. For user-entered data, prefer validating parse success before draw.
+Use ``EasyScore/parseThrowing(_:options:)`` or ``EasyScore/notesThrowing(_:options:)`` when you prefer exception-style handling.
 
 ## Key Symbols
 
 - ``Factory/EasyScore(options:)``
 - ``EasyScore/set(defaults:)``
 - ``EasyScore/notes(_:options:)``
+- ``EasyScore/notesThrowing(_:options:)``
 - ``EasyScore/voice(_:time:)``
 - ``EasyScore/parse(_:options:)``
+- ``EasyScore/parseThrowing(_:options:)``
 - ``EasyScore/addCommitHook(_:)``
-- ``EasyScoreOptions/throwOnError``
 
 ## Next
 

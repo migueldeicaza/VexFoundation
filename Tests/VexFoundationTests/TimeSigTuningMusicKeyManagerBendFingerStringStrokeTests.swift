@@ -264,42 +264,46 @@ struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
     // MARK: - KeyManager Tests
     // ============================================================
 
-    @Test func keyManagerCreation() {
-        let km = KeyManager("C")
+    @Test func keyManagerCreation() throws {
+        let km = try KeyManager(parsing: "C")
         #expect(km.getKey() == "C")
     }
 
-    @Test func keyManagerSetKey() {
-        let km = KeyManager("C")
-        _ = km.setKey("G")
+    @Test func keyManagerSetKey() throws {
+        let km = try KeyManager(parsing: "C")
+        _ = try km.setKey(parsing: "G")
         #expect(km.getKey() == "G")
     }
 
-    @Test func keyManagerGetAccidental() {
-        let km = KeyManager("G")
-        let result = km.getAccidental("f")
+    @Test func keyManagerGetAccidental() throws {
+        let km = try KeyManager(parsing: "G")
+        let result = try km.getAccidental(parsing: "f")
         #expect(result.note == "f#")
         #expect(result.accidental == "#")
     }
 
-    @Test func keyManagerGetAccidentalNatural() {
-        let km = KeyManager("C")
-        let result = km.getAccidental("c")
+    @Test func keyManagerGetAccidentalNatural() throws {
+        let km = try KeyManager(parsing: "C")
+        let result = try km.getAccidental(parsing: "c")
         #expect(result.note == "c")
         #expect(result.accidental == nil)
     }
 
-    @Test func keyManagerSelectNote() {
-        let km = KeyManager("C")
-        let result = km.selectNote("c")
+    @Test func keyManagerSelectNote() throws {
+        let km = try KeyManager(parsing: "C")
+        let result = try km.selectNote(parsing: "c")
         #expect(result.note == "c")
         #expect(result.change == false)
     }
 
-    @Test func keyManagerSelectNoteAccidental() {
-        let km = KeyManager("G")
-        let result = km.selectNote("f#")
+    @Test func keyManagerSelectNoteAccidental() throws {
+        let km = try KeyManager(parsing: "G")
+        let result = try km.selectNote(parsing: "f#")
         #expect(result.change == false)
+    }
+
+    @Test func keyManagerStringConvenienceOrNil() {
+        #expect(KeyManager(parsingOrNil: "invalid") == nil)
     }
 
     // ============================================================

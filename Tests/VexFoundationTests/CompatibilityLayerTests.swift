@@ -108,4 +108,46 @@ struct CompatibilityLayerTests {
         #expect(idA2 == "auto1001")
         #expect(idB1 == "auto1000")
     }
+
+    @Test func factoryConstructorThreadsRuntimeContextWithoutScopedWrapper() {
+        let contextA = Flow.makeRuntimeContext()
+        let contextB = Flow.makeRuntimeContext()
+
+        // Configure distinct state in each context.
+        let regA = Registry()
+        Flow.withRuntimeContext(contextA) {
+            Registry.enableDefaultRegistry(regA)
+            FontLoader.loadDefaultFonts()
+            Tables.UNISON = false
+        }
+
+        let factoryA = Factory(runtimeContext: contextA)
+        let factoryB = Factory(runtimeContext: contextB)
+
+        let noteA = factoryA.StaveNote(StaveNoteStruct(
+            keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)),
+            duration: .quarter
+        ))
+        let noteB = factoryB.StaveNote(StaveNoteStruct(
+            keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)),
+            duration: .quarter
+        ))
+
+        #expect(noteA.getAttribute("id") == "auto1000")
+        #expect(noteB.getAttribute("id") == "auto1000")
+        #expect(regA.getElementById("auto1000") === noteA)
+        #expect(regA.getElementById("auto1000") !== noteB)
+
+        let scoreA = factoryA.EasyScore(options: EasyScoreOptions(throwOnError: true))
+        let scoreB = factoryB.EasyScore(options: EasyScoreOptions(throwOnError: true))
+
+        #expect(scoreA.runtimeContext === contextA)
+        #expect(scoreB.runtimeContext === contextB)
+
+        let systemA = factoryA.System(options: SystemOptions(x: 10, width: 200, y: 10))
+        let systemB = factoryB.System(options: SystemOptions(x: 10, width: 200, y: 10))
+
+        #expect(systemA.getRuntimeContext() === contextA)
+        #expect(systemB.getRuntimeContext() === contextB)
+    }
 }

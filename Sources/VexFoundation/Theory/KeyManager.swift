@@ -17,6 +17,26 @@ public struct KeyManagerResult {
     }
 }
 
+public enum KeyManagerError: Error, LocalizedError, Sendable {
+    case unsupportedKeyType(String)
+    case invalidKey(String)
+    case invalidNote(String)
+    case internalInvariant(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .unsupportedKeyType(let key):
+            return "Unsupported key type: \(key)"
+        case .invalidKey(let key):
+            return "Invalid key: \(key)"
+        case .invalidNote(let note):
+            return "Invalid note: \(note)"
+        case .internalInvariant(let message):
+            return "KeyManager invariant failed: \(message)"
+        }
+    }
+}
+
 // MARK: - KeyManager
 
 /// Manages diatonic keys, resolving accidentals for notes in a given key.
@@ -24,9 +44,9 @@ public class KeyManager {
 
     // MARK: - Properties
 
-    public let music = Music()
-    public var key: String
-    public var keyParts: KeyParts!
+    public let music: Music
+    public private(set) var key: String
+    public private(set) var keyParts: KeyParts
     public var keyString: String = ""
     public var scale: [Int] = []
     public var scaleMap: [String: String] = [:]
@@ -35,45 +55,70 @@ public class KeyManager {
 
     // MARK: - Init
 
-    public init(_ key: String) {
+    public init(parsing key: String, music: Music = Music()) throws {
+        self.music = music
         self.key = key
-        reset()
+        self.keyParts = KeyParts(root: "c", accidental: nil, type: "M")
+        try reset()
+    }
+
+    /// Failable string convenience initializer.
+    public convenience init?(parsingOrNil key: String, music: Music = Music()) {
+        try? self.init(parsing: key, music: music)
+    }
+
+    /// Backward-compatible failable convenience initializer.
+    public convenience init?(_ key: String) {
+        self.init(parsingOrNil: key)
     }
 
     // MARK: - Methods
 
     @discardableResult
-    public func setKey(_ key: String) -> Self {
+    public func setKey(parsing key: String) throws -> Self {
         self.key = key
-        reset()
+        try reset()
         return self
+    }
+
+    @discardableResult
+    public func setKey(parsingOrNil key: String) -> Self? {
+        try? setKey(parsing: key)
+    }
+
+    /// Backward-compatible failable convenience setter.
+    @discardableResult
+    public func setKey(_ key: String) -> Self? {
+        setKey(parsingOrNil: key)
     }
 
     public func getKey() -> String { key }
 
     @discardableResult
-    public func reset() -> Self {
-        keyParts = music.getKeyParts(key)
+    public func reset() throws -> Self {
+        keyParts = try music.keyParts(parsing: key)
 
         keyString = keyParts.root
         if let acc = keyParts.accidental { keyString += acc }
 
         guard let scaleType = Music.scaleTypes[keyParts.type] else {
-            fatalError("[VexError] BadArguments: Unsupported key type: \(key)")
+            throw KeyManagerError.unsupportedKeyType(key)
         }
 
-        scale = music.getScaleTones(music.getNoteValue(keyString), intervals: scaleType)
+        scale = music.getScaleTones(try music.noteValue(parsing: keyString), intervals: scaleType)
 
         scaleMap = [:]
         scaleMapByValue = [:]
         originalScaleMapByValue = [:]
 
-        let noteLocation = Music.rootIndices[keyParts.root]!
+        guard let noteLocation = Music.rootIndices[keyParts.root] else {
+            throw KeyManagerError.invalidKey(key)
+        }
 
         for i in 0..<Music.roots.count {
             let index = (noteLocation + i) % Music.roots.count
             let rootName = Music.roots[index]
-            let noteName = music.getRelativeNoteName(rootName, noteValue: scale[i])
+            let noteName = try music.relativeNoteName(parsingRoot: rootName, noteValue: scale[i])
             scaleMap[rootName] = noteName
             scaleMapByValue[scale[i]] = noteName
             originalScaleMapByValue[scale[i]] = noteName
@@ -82,22 +127,37 @@ public class KeyManager {
         return self
     }
 
-    public func getAccidental(_ key: String) -> KeyManagerResult {
-        let root = music.getKeyParts(key).root
-        let parts = music.getNoteParts(scaleMap[root]!)
+    public func getAccidental(parsing key: String) throws -> KeyManagerResult {
+        let root = try music.keyParts(parsing: key).root
+        guard let mapped = scaleMap[root] else {
+            throw KeyManagerError.internalInvariant("Missing mapped scale note for root '\(root)'")
+        }
+        let parts = try music.noteParts(parsing: mapped)
 
         return KeyManagerResult(
-            note: scaleMap[root]!,
+            note: mapped,
             accidental: parts.accidental
         )
     }
 
-    public func selectNote(_ note: String) -> KeyManagerResult {
-        let noteLower = note.lowercased()
-        let parts = music.getNoteParts(noteLower)
+    public func getAccidental(parsingOrNil key: String) -> KeyManagerResult? {
+        try? getAccidental(parsing: key)
+    }
 
-        let scaleNote = scaleMap[parts.root]!
-        let modparts = music.getNoteParts(scaleNote)
+    /// Backward-compatible failable convenience API.
+    public func getAccidental(_ key: String) -> KeyManagerResult? {
+        getAccidental(parsingOrNil: key)
+    }
+
+    public func selectNote(parsing note: String) throws -> KeyManagerResult {
+        let noteLower = note.lowercased()
+        let parts = try music.noteParts(parsing: noteLower)
+
+        guard let scaleNote = scaleMap[parts.root] else {
+            throw KeyManagerError.internalInvariant("Missing mapped scale note for root '\(parts.root)'")
+        }
+        let modparts = try music.noteParts(parsing: scaleNote)
+        let noteValue = try music.noteValue(parsing: noteLower)
 
         if scaleNote == noteLower {
             return KeyManagerResult(
@@ -107,28 +167,31 @@ public class KeyManager {
             )
         }
 
-        if let valueNote = scaleMapByValue[music.getNoteValue(noteLower)] {
+        if let valueNote = scaleMapByValue[noteValue] {
             return KeyManagerResult(
                 note: valueNote,
-                accidental: music.getNoteParts(valueNote).accidental,
+                accidental: try music.noteParts(parsing: valueNote).accidental,
                 change: false
             )
         }
 
-        if let originalValueNote = originalScaleMapByValue[music.getNoteValue(noteLower)] {
+        if let originalValueNote = originalScaleMapByValue[noteValue] {
             scaleMap[modparts.root] = originalValueNote
-            scaleMapByValue.removeValue(forKey: music.getNoteValue(scaleNote))
-            scaleMapByValue[music.getNoteValue(noteLower)] = originalValueNote
+            scaleMapByValue.removeValue(forKey: try music.noteValue(parsing: scaleNote))
+            scaleMapByValue[noteValue] = originalValueNote
             return KeyManagerResult(
                 note: originalValueNote,
-                accidental: music.getNoteParts(originalValueNote).accidental,
+                accidental: try music.noteParts(parsing: originalValueNote).accidental,
                 change: true
             )
         }
 
         if modparts.root == noteLower {
-            scaleMapByValue.removeValue(forKey: music.getNoteValue(scaleMap[parts.root]!))
-            scaleMapByValue[music.getNoteValue(modparts.root)] = modparts.root
+            guard let priorMapped = scaleMap[parts.root] else {
+                throw KeyManagerError.internalInvariant("Missing prior mapped note for root '\(parts.root)'")
+            }
+            scaleMapByValue.removeValue(forKey: try music.noteValue(parsing: priorMapped))
+            scaleMapByValue[try music.noteValue(parsing: modparts.root)] = modparts.root
             scaleMap[modparts.root] = modparts.root
             return KeyManagerResult(
                 note: modparts.root,
@@ -138,8 +201,11 @@ public class KeyManager {
         }
 
         // Last resort
-        scaleMapByValue.removeValue(forKey: music.getNoteValue(scaleMap[parts.root]!))
-        scaleMapByValue[music.getNoteValue(noteLower)] = noteLower
+        guard let priorMapped = scaleMap[parts.root] else {
+            throw KeyManagerError.internalInvariant("Missing prior mapped note for root '\(parts.root)'")
+        }
+        scaleMapByValue.removeValue(forKey: try music.noteValue(parsing: priorMapped))
+        scaleMapByValue[noteValue] = noteLower
 
         scaleMap[modparts.root] = noteLower
 
@@ -148,5 +214,14 @@ public class KeyManager {
             accidental: parts.accidental,
             change: true
         )
+    }
+
+    public func selectNote(parsingOrNil note: String) -> KeyManagerResult? {
+        try? selectNote(parsing: note)
+    }
+
+    /// Backward-compatible failable convenience API.
+    public func selectNote(_ note: String) -> KeyManagerResult? {
+        selectNote(parsingOrNil: note)
     }
 }

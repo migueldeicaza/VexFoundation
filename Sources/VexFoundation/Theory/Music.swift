@@ -47,6 +47,38 @@ public struct MusicKey: Sendable {
     }
 }
 
+public enum MusicError: Error, LocalizedError, Sendable {
+    case invalidNoteName(String)
+    case invalidKey(String)
+    case invalidIntervalName(String)
+    case invalidNoteValue(Int)
+    case invalidIntervalValue(Int)
+    case invalidDirection(Int)
+    case notesNotRelated(root: String, noteValue: Int)
+    case unsupportedKeyType(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidNoteName(let note):
+            return "Invalid note name: \(note)"
+        case .invalidKey(let key):
+            return "Invalid key: \(key)"
+        case .invalidIntervalName(let interval):
+            return "Invalid interval name: \(interval)"
+        case .invalidNoteValue(let value):
+            return "Invalid note value: \(value)"
+        case .invalidIntervalValue(let value):
+            return "Invalid interval value: \(value)"
+        case .invalidDirection(let direction):
+            return "Invalid direction: \(direction)"
+        case .notesNotRelated(let root, let noteValue):
+            return "Notes not related: \(root), \(noteValue)"
+        case .unsupportedKeyType(let key):
+            return "Unsupported key type: \(key)"
+        }
+    }
+}
+
 // MARK: - Music
 
 /// Music theory routines: note values, intervals, scales, and key management.
@@ -187,15 +219,22 @@ public class Music {
     // MARK: - Note Parts
 
     public func getNoteParts(_ noteString: String) -> NoteParts {
+        guard let parsed = try? noteParts(parsing: noteString) else {
+            fatalError("[VexError] BadArguments: Invalid note name: \(noteString)")
+        }
+        return parsed
+    }
+
+    public func noteParts(parsing noteString: String) throws -> NoteParts {
         let note = noteString.lowercased()
         guard note.count >= 1 && note.count <= 3 else {
-            fatalError("[VexError] BadArguments: Invalid note name: \(noteString)")
+            throw MusicError.invalidNoteName(noteString)
         }
 
         let pattern = #"^([cdefgab])(b|bb|n|#|##)?$"#
         guard let regex = try? NSRegularExpression(pattern: pattern),
               let match = regex.firstMatch(in: note, range: NSRange(note.startIndex..., in: note)) else {
-            fatalError("[VexError] BadArguments: Invalid note name: \(noteString)")
+            throw MusicError.invalidNoteName(noteString)
         }
 
         let root = String(note[Range(match.range(at: 1), in: note)!])
@@ -209,18 +248,29 @@ public class Music {
         return NoteParts(root: root, accidental: accidental)
     }
 
+    public func noteParts(parsingOrNil noteString: String) -> NoteParts? {
+        try? noteParts(parsing: noteString)
+    }
+
     // MARK: - Key Parts
 
     public func getKeyParts(_ keyString: String) -> KeyParts {
+        guard let parsed = try? keyParts(parsing: keyString) else {
+            fatalError("[VexError] BadArguments: Invalid key: \(keyString)")
+        }
+        return parsed
+    }
+
+    public func keyParts(parsing keyString: String) throws -> KeyParts {
         let key = keyString.lowercased()
         guard !key.isEmpty else {
-            fatalError("[VexError] BadArguments: Invalid key: \(keyString)")
+            throw MusicError.invalidKey(keyString)
         }
 
         let pattern = #"^([cdefgab])(b|#)?(mel|harm|m|M)?$"#
         guard let regex = try? NSRegularExpression(pattern: pattern),
               let match = regex.firstMatch(in: key, range: NSRange(key.startIndex..., in: key)) else {
-            fatalError("[VexError] BadArguments: Invalid key: \(keyString)")
+            throw MusicError.invalidKey(keyString)
         }
 
         let root = String(key[Range(match.range(at: 1), in: key)!])
@@ -240,20 +290,46 @@ public class Music {
         return KeyParts(root: root, accidental: accidental, type: type)
     }
 
+    public func keyParts(parsingOrNil keyString: String) -> KeyParts? {
+        try? keyParts(parsing: keyString)
+    }
+
     // MARK: - Note/Interval Values
 
     public func getNoteValue(_ noteString: String) -> Int {
-        guard let value = Music.noteValues[noteString.lowercased()] else {
+        guard let parsed = try? noteValue(parsing: noteString) else {
             fatalError("[VexError] BadArguments: Invalid note name: \(noteString)")
+        }
+        return parsed
+    }
+
+    public func noteValue(parsing noteString: String) throws -> Int {
+        guard let value = Music.noteValues[noteString.lowercased()] else {
+            throw MusicError.invalidNoteName(noteString)
         }
         return value.intVal
     }
 
+    public func noteValue(parsingOrNil noteString: String) -> Int? {
+        try? noteValue(parsing: noteString)
+    }
+
     public func getIntervalValue(_ intervalString: String) -> Int {
-        guard let value = Music.intervals[intervalString] else {
+        guard let parsed = try? intervalValue(parsing: intervalString) else {
             fatalError("[VexError] BadArguments: Invalid interval name: \(intervalString)")
         }
+        return parsed
+    }
+
+    public func intervalValue(parsing intervalString: String) throws -> Int {
+        guard let value = Music.intervals[intervalString] else {
+            throw MusicError.invalidIntervalName(intervalString)
+        }
         return value
+    }
+
+    public func intervalValue(parsingOrNil intervalString: String) -> Int? {
+        try? intervalValue(parsing: intervalString)
     }
 
     // MARK: - Canonical Names
@@ -284,8 +360,15 @@ public class Music {
     }
 
     public func getRelativeNoteName(_ root: String, noteValue: Int) -> String {
-        let parts = getNoteParts(root)
-        let rootValue = getNoteValue(parts.root)
+        guard let parsed = try? relativeNoteName(parsingRoot: root, noteValue: noteValue) else {
+            fatalError("[VexError] BadArguments: Notes not related: \(root), \(noteValue))")
+        }
+        return parsed
+    }
+
+    public func relativeNoteName(parsingRoot root: String, noteValue: Int) throws -> String {
+        let parts = try noteParts(parsing: root)
+        let rootValue = try self.noteValue(parsing: parts.root)
         var interval = noteValue - rootValue
 
         if abs(interval) > Music.NUM_TONES - 3 {
@@ -293,14 +376,14 @@ public class Music {
             if interval > 0 { multiplier = -1 }
             let reverseInterval = ((noteValue + 1 + (rootValue + 1)) % Music.NUM_TONES) * multiplier
             if abs(reverseInterval) > 2 {
-                fatalError("[VexError] BadArguments: Notes not related: \(root), \(noteValue))")
+                throw MusicError.notesNotRelated(root: root, noteValue: noteValue)
             } else {
                 interval = reverseInterval
             }
         }
 
         if abs(interval) > 2 {
-            fatalError("[VexError] BadArguments: Notes not related: \(root), \(noteValue))")
+            throw MusicError.notesNotRelated(root: root, noteValue: noteValue)
         }
 
         var relativeNoteName = parts.root
@@ -315,6 +398,10 @@ public class Music {
         }
 
         return relativeNoteName
+    }
+
+    public func relativeNoteName(parsingRootOrNil root: String, noteValue: Int) -> String? {
+        try? relativeNoteName(parsingRoot: root, noteValue: noteValue)
     }
 
     // MARK: - Scale Tones
@@ -346,22 +433,31 @@ public class Music {
     // MARK: - Scale Map
 
     public func createScaleMap(_ keySignature: String) -> [String: String] {
-        let keySigParts = getKeyParts(keySignature)
-        guard let scaleName = Music.scaleTypes[keySigParts.type] else {
+        guard let parsed = try? createScaleMap(parsing: keySignature) else {
             fatalError("[VexError] BadArguments: Unsupported key type: \(keySignature)")
+        }
+        return parsed
+    }
+
+    public func createScaleMap(parsing keySignature: String) throws -> [String: String] {
+        let keySigParts = try keyParts(parsing: keySignature)
+        guard let scaleName = Music.scaleTypes[keySigParts.type] else {
+            throw MusicError.unsupportedKeyType(keySignature)
         }
 
         var keySigString = keySigParts.root
         if let acc = keySigParts.accidental { keySigString += acc }
 
-        let scale = getScaleTones(getNoteValue(keySigString), intervals: scaleName)
-        let noteLocation = Music.rootIndices[keySigParts.root]!
+        let scale = getScaleTones(try noteValue(parsing: keySigString), intervals: scaleName)
+        guard let noteLocation = Music.rootIndices[keySigParts.root] else {
+            throw MusicError.invalidKey(keySignature)
+        }
 
         var scaleMap: [String: String] = [:]
         for i in 0..<Music.roots.count {
             let index = (noteLocation + i) % Music.roots.count
             let rootName = Music.roots[index]
-            var noteName = getRelativeNoteName(rootName, noteValue: scale[i])
+            var noteName = try relativeNoteName(parsingRoot: rootName, noteValue: scale[i])
             if noteName.count == 1 {
                 noteName += "n"
             }
@@ -369,5 +465,9 @@ public class Music {
         }
 
         return scaleMap
+    }
+
+    public func createScaleMap(parsingOrNil keySignature: String) -> [String: String]? {
+        try? createScaleMap(parsing: keySignature)
     }
 }
