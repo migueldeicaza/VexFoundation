@@ -581,16 +581,23 @@ public enum Tables {
     public static func keyProperties(
         _ key: StaffKeySpec,
         clef: ClefName = .treble,
-        octaveShift: Int = 0
+        octaveShift: Int = 0,
+        duration: NoteValue = .quarter
     ) throws -> KeyProps {
-        try keyProperties(key.rawValue, clef: clef, octaveShift: octaveShift)
+        try keyProperties(
+            key.rawValue,
+            clef: clef,
+            octaveShift: octaveShift,
+            duration: duration.rawValue
+        )
     }
 
     /// Get properties for a key/octave string (e.g., "c/4", "g/5/x2").
     public static func keyProperties(
         _ keyOctaveGlyph: String,
         clef: ClefName = .treble,
-        octaveShift: Int = 0
+        octaveShift: Int = 0,
+        duration: String = NoteValue.quarter.rawValue
     ) throws -> KeyProps {
         let pieces = keyOctaveGlyph.split(separator: "/").map(String.init)
         guard pieces.count >= 2 else {
@@ -622,7 +629,7 @@ public enum Tables {
 
         var code = value.code
         if pieces.count > 2 && !pieces[2].isEmpty {
-            code = codeNoteHead(pieces[2].uppercased(), duration: .quarter)
+            code = codeNoteHead(pieces[2].uppercased(), duration: duration)
         }
 
         return KeyProps(

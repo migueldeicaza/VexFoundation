@@ -448,7 +448,12 @@ public class StaveNote: StemmableNote {
 
             var props: KeyProps
             do {
-                props = try Tables.keyProperties(key, clef: clef, octaveShift: octaveShift)
+                props = try Tables.keyProperties(
+                    key,
+                    clef: clef,
+                    octaveShift: octaveShift,
+                    duration: noteDuration
+                )
             } catch {
                 fatalError("[VexError] BadArguments: Invalid key for note properties: \(key)")
             }

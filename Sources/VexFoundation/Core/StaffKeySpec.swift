@@ -145,7 +145,19 @@ public struct StaffKeySpec: Hashable, Sendable, Codable {
             : nil
 
         let root = try Self.parseRoot(rootTokenRaw)
-        guard let octave = Int(octaveTokenRaw) else {
+
+        let octave: Int
+        if octaveTokenRaw.isEmpty {
+            switch root {
+            case .nonNote(.x):
+                // VexFlow compatibility: allow "x/" shorthand and default to octave 4.
+                octave = 4
+            default:
+                throw StaffKeyParseError.invalidOctave(octaveTokenRaw)
+            }
+        } else if let parsedOctave = Int(octaveTokenRaw) {
+            octave = parsedOctave
+        } else {
             throw StaffKeyParseError.invalidOctave(octaveTokenRaw)
         }
 

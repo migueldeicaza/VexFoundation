@@ -162,6 +162,7 @@ let maybeGhost = GhostNote(parsingDuration: "8r")
 - Invalid states are reduced via typed enums/specs and non-empty collections.
 - Parsing is explicit at boundaries, not implicit throughout the API.
 - SwiftUI rendering backend (`VexCanvas` / `SwiftUICanvasContext`) is provided for app integration.
+- Core scope is Swift-native rendering abstractions (`RenderContext`) rather than 1:1 browser modules (`renderer`, `canvascontext`, `svgcontext`, `web`).
 
 ## Development
 
