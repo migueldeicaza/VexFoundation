@@ -27,6 +27,57 @@ extension UpstreamSVGParityTests {
         }
     }
 
+    @Test("Dot.Multi_Voice")
+    func dotMultiVoiceMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Dot", test: "Multi_Voice", width: 750, height: 300) { _, context in
+            let stave = Stave(x: 30, y: 45, width: 700)
+            _ = stave.setContext(context)
+            try stave.draw()
+
+            let notes1: [StaveNote] = [
+                try StaveNote(validating: StaveNoteStruct(parsingKeys: ["c/4", "e/4", "a/4"], duration: "2", stemDirection: .down)),
+                try StaveNote(validating: StaveNoteStruct(parsingKeys: ["c/4", "e/4", "c/5"], duration: "2", stemDirection: .down)),
+                try StaveNote(validating: StaveNoteStruct(parsingKeys: ["d/4", "c/5", "d/5"], duration: "2", stemDirection: .down)),
+                try StaveNote(validating: StaveNoteStruct(parsingKeys: ["d/4", "c/5", "d/5"], duration: "8", stemDirection: .down)),
+                try StaveNote(validating: StaveNoteStruct(parsingKeys: ["d/4", "c/5", "d/5"], duration: "8", stemDirection: .down)),
+            ]
+
+            Dot.buildAndAttach([notes1[0], notes1[2], notes1[3], notes1[4]].map { $0 as Note }, all: true)
+            Dot.buildAndAttach([notes1[0], notes1[2], notes1[3], notes1[4]].map { $0 as Note }, all: true)
+            Dot.buildAndAttach([notes1[1]].map { $0 as Note }, index: 0)
+            Dot.buildAndAttach([notes1[1]].map { $0 as Note }, index: 0)
+            Dot.buildAndAttach([notes1[1]].map { $0 as Note }, index: 1)
+            Dot.buildAndAttach([notes1[1]].map { $0 as Note }, index: 1)
+            Dot.buildAndAttach([notes1[1]].map { $0 as Note }, index: 2)
+            Dot.buildAndAttach([notes1[1]].map { $0 as Note }, index: 2)
+            Dot.buildAndAttach([notes1[1]].map { $0 as Note }, index: 2)
+            Dot.buildAndAttach([notes1[2], notes1[3], notes1[4]].map { $0 as Note })
+
+            let notes2: [StaveNote] = [
+                try StaveNote(validating: StaveNoteStruct(parsingKeys: ["d/5", "a/5", "b/5"], duration: "2", stemDirection: .up)),
+                try StaveNote(validating: StaveNoteStruct(parsingKeys: ["d/5", "a/5", "b/5"], duration: "4", stemDirection: .up)),
+                try StaveNote(validating: StaveNoteStruct(parsingKeys: ["d/5", "a/5", "b/5"], duration: "4", stemDirection: .up)),
+                try StaveNote(validating: StaveNoteStruct(parsingKeys: ["d/5", "g/5", "a/5", "b/5"], duration: "8", stemDirection: .up)),
+                try StaveNote(validating: StaveNoteStruct(parsingKeys: ["d/5", "a/5", "b/5"], duration: "8", stemDirection: .up)),
+            ]
+
+            Dot.buildAndAttach(notes2.map { $0 as Note }, all: true)
+            Dot.buildAndAttach([notes2[1]].map { $0 as Note }, all: true)
+
+            let voice1 = Voice().setMode(.soft).addTickables(notes1.map { $0 as Tickable })
+            let voice2 = Voice().setMode(.soft).addTickables(notes2.map { $0 as Tickable })
+            _ = Formatter().joinVoices([voice1, voice2]).format([voice1, voice2], justifyWidth: 700)
+
+            try voice1.draw(context: context, stave: stave)
+            try voice2.draw(context: context, stave: stave)
+
+            notes1.forEach { drawUpstreamNoteMetrics(context: context, note: $0, yPos: 190) }
+            notes2.forEach { drawUpstreamNoteMetrics(context: context, note: $0, yPos: 20) }
+
+            drawUpstreamNoteWidthLegend(context: context, x: 620, y: 220)
+        }
+    }
+
     private func makeDotBasicNotes() throws -> [StaveNote] {
         [
             try StaveNote(validating: StaveNoteStruct(parsingKeys: ["c/4", "e/4", "a/4", "b/4"], duration: "w")),
