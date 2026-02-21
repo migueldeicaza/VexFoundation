@@ -135,8 +135,12 @@ topic_correspondence_for() {
       printf 'Bach Demo|`BachDemoParityTests.swift`'
       return
       ;;
-    barline|clef|keysignature|stave|stavemodifier|timesignature)
+    barline|stave|stavemodifier|timesignature)
       printf 'Stave System|`StaveTests.swift`'
+      return
+      ;;
+    clef|keysignature)
+      printf 'Key Signature & Clef Parity|`KeyClefParityTests.swift`'
       return
       ;;
     bend|stringnumber|strokes)
@@ -175,6 +179,10 @@ topic_correspondence_for() {
       printf 'VexFont|`VexFontTests.swift`'
       return
       ;;
+    fraction)
+      printf 'Fraction Parity|`FractionParityTests.swift`'
+      return
+      ;;
     frethandfinger)
       printf 'FretHandFinger Parity|`FretHandFingerParityTests.swift`'
       return
@@ -188,7 +196,7 @@ topic_correspondence_for() {
       return
       ;;
     key_clef)
-      printf 'Key & Clef|`KeyClefParityTests.swift`'
+      printf 'Key Signature & Clef Parity|`KeyClefParityTests.swift`'
       return
       ;;
     modifier|multimeasurerest|notesubgroup|parenthesis|vibrato|vibratobracket)
