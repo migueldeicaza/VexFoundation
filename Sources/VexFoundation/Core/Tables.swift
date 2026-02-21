@@ -69,6 +69,26 @@ public struct KeyProps {
     public var stemUpXOffset: Double = 0
 }
 
+public enum TablesError: Error, LocalizedError, Equatable, Sendable {
+    case missingDurationTickMapping(String)
+    case invalidClef(ClefName)
+    case invalidDuration(String)
+    case integerToNoteOutOfRange(Int)
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingDurationTickMapping(let duration):
+            return "Missing tick mapping for duration \(duration)."
+        case .invalidClef(let clef):
+            return "Invalid clef: \(clef.rawValue)."
+        case .invalidDuration(let duration):
+            return "The provided duration is not valid: \(duration)."
+        case .integerToNoteOutOfRange(let integer):
+            return "integerToNote requires integer [0, 11]: \(integer)."
+        }
+    }
+}
+
 /// Central constants and lookup tables for VexFlow music notation.
 public enum Tables {
 
@@ -133,11 +153,19 @@ public enum Tables {
     }
 
     /// Convert a strongly typed duration to ticks.
-    public static func durationToTicks(_ duration: NoteValue) -> Int {
-        guard let ticks = durations[duration.rawValue] else {
-            fatalError("[VexError] BadArguments: Missing tick mapping for duration \(duration.rawValue).")
+    public static func durationToTicksThrowing(_ duration: NoteValue) throws -> Int {
+        if let ticks = durations[duration.rawValue] {
+            return ticks
         }
-        return ticks
+        if let ticks = computedTicks(for: duration.rawValue) {
+            return ticks
+        }
+        throw TablesError.missingDurationTickMapping(duration.rawValue)
+    }
+
+    /// Convert a strongly typed duration to ticks.
+    public static func durationToTicks(_ duration: NoteValue) -> Int {
+        (try? durationToTicksThrowing(duration)) ?? (RESOLUTION / 4)
     }
 
     // MARK: - Key Signatures
@@ -354,6 +382,7 @@ public enum Tables {
         .baritoneF: 5,
         .subbass: 7,
         .french: -1,
+        .tab: 0,
     ]
 
     // MARK: - Duration Codes (Glyph Properties)
@@ -540,24 +569,40 @@ public enum Tables {
 
     /// Clef line shift for note line calculation.
     /// Get clef properties (line_shift).
-    public static func clefProperties(_ clef: ClefName) -> Int {
+    public static func clefPropertiesThrowing(_ clef: ClefName) throws -> Int {
         guard let shift = clefLineShifts[clef] else {
-            fatalError("[VexError] BadArgument: Invalid clef: \(clef.rawValue)")
+            throw TablesError.invalidClef(clef)
         }
         return shift
     }
 
+    /// Clef line shift for note line calculation.
+    /// Get clef properties (line_shift).
+    public static func clefProperties(_ clef: ClefName) -> Int {
+        (try? clefPropertiesThrowing(clef)) ?? 0
+    }
+
     /// Sanitize duration: resolve aliases and validate.
-    public static func sanitizeDuration(_ duration: String) -> String {
+    public static func sanitizeDurationThrowing(_ duration: String) throws -> String {
         guard let value = NoteValue(parsing: duration) else {
-            fatalError("[VexError] BadArguments: The provided duration is not valid: \(duration)")
+            throw TablesError.invalidDuration(duration)
         }
         return value.rawValue
+    }
+
+    /// Sanitize duration: resolve aliases and validate.
+    public static func sanitizeDuration(_ duration: String) -> String {
+        (try? sanitizeDurationThrowing(duration)) ?? NoteValue.quarter.rawValue
     }
 
     /// Sanitize duration for typed APIs.
     public static func sanitizeDuration(_ duration: NoteValue) -> String {
         duration.rawValue
+    }
+
+    /// Convert duration to a Fraction.
+    public static func durationToFractionThrowing(_ duration: String) throws -> Fraction {
+        Fraction().parse(try sanitizeDurationThrowing(duration))
     }
 
     /// Convert duration to a Fraction.
@@ -568,6 +613,11 @@ public enum Tables {
     /// Convert duration to a Fraction.
     public static func durationToFraction(_ duration: NoteValue) -> Fraction {
         Fraction().parse(duration.rawValue)
+    }
+
+    /// Convert duration to a number.
+    public static func durationToNumberThrowing(_ duration: String) throws -> Double {
+        try durationToFractionThrowing(duration).value()
     }
 
     /// Convert duration to a number.
@@ -622,7 +672,7 @@ public enum Tables {
 
         let baseIndex = octave * 7 - 4 * 7
         var line = Double(baseIndex + value.index) / 2.0
-        line += Double(clefProperties(clef))
+        line += Double(try clefPropertiesThrowing(clef))
 
         var stroke = 0
         if line <= 0 && Int(line * 2) % 2 == 0 { stroke = 1 }
@@ -644,15 +694,37 @@ public enum Tables {
     }
 
     /// Convert an integer (0-11) to a note name.
-    public static func integerToNote(_ integer: Int) -> String {
+    public static func integerToNoteThrowing(_ integer: Int) throws -> String {
         let table: [Int: String] = [
             0: "C", 1: "C#", 2: "D", 3: "D#", 4: "E", 5: "F",
             6: "F#", 7: "G", 8: "G#", 9: "A", 10: "A#", 11: "B",
         ]
         guard integer >= 0 && integer <= 11, let note = table[integer] else {
-            fatalError("[VexError] BadArguments: integerToNote requires integer [0, 11]: \(integer)")
+            throw TablesError.integerToNoteOutOfRange(integer)
         }
         return note
+    }
+
+    /// Convert an integer (0-11) to a note name.
+    public static func integerToNote(_ integer: Int) -> String {
+        (try? integerToNoteThrowing(integer)) ?? "C"
+    }
+
+    private static func computedTicks(for duration: String) -> Int? {
+        let parts = duration.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false)
+        if parts.count == 1, let denominator = Int(parts[0]), denominator > 0 {
+            return RESOLUTION / denominator
+        }
+        guard
+            parts.count == 2,
+            let numerator = Int(parts[0]),
+            let denominator = Int(parts[1]),
+            numerator > 0,
+            denominator > 0
+        else {
+            return nil
+        }
+        return (RESOLUTION * denominator) / numerator
     }
 
     /// Get the notehead glyph code for a custom type and duration.

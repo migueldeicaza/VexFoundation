@@ -296,26 +296,36 @@ public final class Builder {
     }
 
     public func addChord(_ match: Match) {
+        if let note = notePiece(from: match) {
+            addNote(key: note.key, accid: note.accid, octave: note.octave)
+            return
+        }
+
         switch match {
-        case .array(let notes):
-            for n in notes {
-                switch n {
-                case .array(let parts):
-                    let key = parts.count > 0 ? parts[0].stringValue ?? "" : ""
-                    let accid = parts.count > 1 ? parts[1].stringValue : nil
-                    let octave = parts.count > 2 ? parts[2].stringValue : nil
-                    addNote(key: key, accid: accid, octave: octave)
-                case .string(let s):
-                    addSingleNote(key: s)
-                case .null:
-                    break
-                }
+        case .array(let items):
+            for item in items {
+                addChord(item)
             }
         case .string(let s):
             addSingleNote(key: s)
         case .null:
             break
         }
+    }
+
+    private func notePiece(from match: Match) -> NotePiece? {
+        guard case .array(let parts) = match else { return nil }
+        guard let key = parts.first?.stringValue,
+              key.count == 1,
+              let keyChar = key.first,
+              "abcdefgABCDEFG".contains(keyChar)
+        else {
+            return nil
+        }
+
+        let accid = parts.count > 1 ? parts[1].stringValue : nil
+        let octave = parts.count > 2 ? parts[2].stringValue : nil
+        return NotePiece(key: key, accid: accid, octave: octave)
     }
 
     public func commitPiece() {

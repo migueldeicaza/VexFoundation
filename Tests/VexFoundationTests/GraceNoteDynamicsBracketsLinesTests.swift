@@ -238,6 +238,28 @@ struct GraceNoteDynamicsBracketsLinesTests {
         #expect(dyn.preFormatted == true)
     }
 
+    @Test func textDynamicsValidatingAndFailableConvenience() {
+        let valid = try? TextDynamics(validating: TextNoteStruct(text: "rfz"))
+        #expect(valid != nil)
+
+        do {
+            _ = try TextDynamics(validating: TextNoteStruct(text: "p!"))
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? TextDynamicsError == .invalidDynamicsCharacter("!"))
+        }
+
+        #expect(TextDynamics(parsingOrNil: TextNoteStruct(text: "fff")) != nil)
+        #expect(TextDynamics(parsingOrNil: TextNoteStruct(text: "f?")) == nil)
+    }
+
+    @Test func textDynamicsPreFormatThrowing() throws {
+        let dyn = try TextDynamics(validating: TextNoteStruct(text: "sfz"))
+        try dyn.preFormatThrowing()
+        #expect(dyn.preFormatted == true)
+        #expect(dyn.getTickableWidth() > 0)
+    }
+
     // MARK: - TextBracket Position
 
     @Test func textBracketPositionEnum() {

@@ -9,7 +9,7 @@ The project keeps VexFlow concepts (`Factory`, `EasyScore`, `System`, notes, mod
 - Swift Package (`swift-tools-version: 6.0`)
 - Platforms: iOS 16+, macOS 13+
 - Active port: API parity with VexFlow is in progress and APIs may evolve
-- Current test suite: `786` passing tests
+- Current test suite: `824` passing tests
 
 ## Installation
 
@@ -216,6 +216,36 @@ let factory = Factory(runtimeContext: runtime)
 let score = factory.EasyScore(options: EasyScoreOptions(runtimeContext: runtime))
 let system = factory.System(options: SystemOptions(runtimeContext: runtime, x: 10, width: 480, y: 20))
 ```
+
+## SVG Snapshot Validation
+
+VexFoundation now includes a deterministic SVG backend for parity validation:
+
+- `SVGRenderContext`
+- `SVGRenderOptions`
+- Golden snapshot test fixtures under `Tests/VexFoundationTests/Fixtures/svg`
+
+Use the helper script:
+
+```bash
+tools/svg_snapshot.sh --check
+tools/svg_snapshot.sh --regen
+```
+
+### Upstream SVG parity (opt-in)
+
+Compare Swift-rendered drawing output against upstream `pptr-*.svg` files:
+
+```bash
+tools/upstream_svg_parity.sh
+tools/upstream_svg_parity.sh --font Bravura
+tools/upstream_svg_parity.sh --reference-dir ../vexmotion/build/images/reference
+```
+
+This workflow also writes a manifest to:
+
+- `.build/upstream-svg-parity/upstream_svg_manifest.json`
+- mismatch artifacts under `.build/upstream-svg-parity/artifacts`
 
 ## Key Differences from VexFlow
 

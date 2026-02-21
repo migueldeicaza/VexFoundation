@@ -3,6 +3,17 @@
 
 import Foundation
 
+public enum ElementError: Error, LocalizedError, Equatable, Sendable {
+    case notImplemented(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .notImplemented(let typeName):
+            return "\(typeName) must override draw()."
+        }
+    }
+}
+
 /// Element attributes (id, type, class).
 public struct ElementAttributes {
     public var id: String
@@ -147,7 +158,7 @@ open class VexElement {
 
     /// Override in subclasses to perform drawing.
     open func draw() throws {
-        fatalError("\(type(of: self)) must override draw()")
+        throw ElementError.notImplemented(String(describing: type(of: self)))
     }
 
     // MARK: - Class Labels

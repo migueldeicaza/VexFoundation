@@ -139,8 +139,12 @@ topic_correspondence_for() {
       printf 'Stave System|`StaveTests.swift`'
       return
       ;;
-    bend|keymanager|music|stringnumber|strokes|tuning)
-      printf 'TimeSigNote, Tuning, Music, KeyManager, Bend, FretHandFinger, StringNumber, Stroke|`TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests.swift`'
+    bend|stringnumber|strokes)
+      printf 'Bend, StringNumber, Stroke Parity|`BendStringNumberStrokeParityTests.swift`'
+      return
+      ;;
+    keymanager|music|tuning)
+      printf 'Music, KeyManager, Tuning Parity|`MusicKeyManagerTuningParityTests.swift`'
       return
       ;;
     boundingbox|boundingboxcomputation)
@@ -159,16 +163,20 @@ topic_correspondence_for() {
       printf 'StaveNote System|`StaveNoteTests.swift`'
       return
       ;;
-    easyscore|factory|formatter|parser|registry|system|tickcontext|voice)
-      printf 'Registry, Parser, Factory, EasyScore, System|`RegistryParserFactoryEasyScoreSystemTests.swift`'
+    formatter|tickcontext|voice)
+      printf 'Voice, Formatter, TickContext Parity|`VoiceFormatterTickContextParityTests.swift`'
+      return
+      ;;
+    easyscore|factory|parser|registry|system)
+      printf 'Parser, Factory, EasyScore, Registry, System Parity|`ParserFactoryEasyScoreRegistrySystemParityTests.swift`'
       return
       ;;
     font)
       printf 'VexFont|`VexFontTests.swift`'
       return
       ;;
-    frethandfinger|timesignature)
-      printf 'TimeSigNote, Tuning, Music, KeyManager, Bend, FretHandFinger, StringNumber, Stroke|`TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests.swift`'
+    frethandfinger)
+      printf 'FretHandFinger Parity|`FretHandFingerParityTests.swift`'
       return
       ;;
     glyphnote)

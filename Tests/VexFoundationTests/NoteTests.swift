@@ -34,6 +34,21 @@ struct NoteTests {
         #expect(Tables.durationToNumber("1") == 1.0)
     }
 
+    @Test func tablesThrowingAndFallbackConvenience() throws {
+        #expect(try Tables.durationToTicksThrowing(.quarter) == 4096)
+        #expect(try Tables.durationToNumberThrowing("4") == 4.0)
+        #expect(try Tables.sanitizeDurationThrowing("q") == "4")
+        #expect(Tables.sanitizeDuration("invalid-duration") == "4")
+        #expect(try Tables.clefPropertiesThrowing(.tab) == 0)
+
+        do {
+            _ = try Tables.integerToNoteThrowing(99)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? TablesError == .integerToNoteOutOfRange(99))
+        }
+    }
+
     @Test func clefPropertiesLookup() {
         #expect(Tables.clefProperties(.treble) == 0)
         #expect(Tables.clefProperties(.bass) == 6)

@@ -144,6 +144,22 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(reg.getElementById("c") == nil)
     }
 
+    @Test func registryRegisterThrowingRequiresElementID() {
+        let reg = Registry()
+        let elem = VexElement()
+        _ = elem.setAttribute("id", "")
+
+        do {
+            _ = try reg.registerThrowing(elem)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? RegistryError == .missingElementID)
+        }
+
+        _ = reg.register(elem)
+        #expect(reg.getElementById("") == nil)
+    }
+
     // ============================================================
     // MARK: - Parser Tests
     // ============================================================

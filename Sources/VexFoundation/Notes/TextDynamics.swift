@@ -3,6 +3,17 @@
 
 import Foundation
 
+public enum TextDynamicsError: Error, LocalizedError, Equatable, Sendable {
+    case invalidDynamicsCharacter(Character)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidDynamicsCharacter(let char):
+            return "Invalid dynamics character: \(char)"
+        }
+    }
+}
+
 // MARK: - TextDynamics
 
 /// Renders traditional text dynamics markings (p, f, sfz, rfz, ppp, etc.).
@@ -28,6 +39,7 @@ public final class TextDynamics: Note {
     public let sequence: String
     private var dynamicsLine: Double
     private var glyphs: [Glyph] = []
+    public private(set) var textDynamicsInitError: TextDynamicsError?
 
     // MARK: - Init
 
@@ -40,7 +52,23 @@ public final class TextDynamics: Note {
             duration: noteStruct.duration
         ))
 
+        if let invalid = sequence.first(where: { TextDynamics.GLYPHS[$0] == nil }) {
+            textDynamicsInitError = .invalidDynamicsCharacter(invalid)
+        }
+
         renderOptions.glyphFontScale = Tables.NOTATION_FONT_SCALE
+    }
+
+    public convenience init(validating noteStruct: TextNoteStruct) throws {
+        self.init(noteStruct)
+        if let textDynamicsInitError {
+            throw textDynamicsInitError
+        }
+    }
+
+    public convenience init?(parsingOrNil noteStruct: TextNoteStruct) {
+        guard (try? TextDynamics(validating: noteStruct)) != nil else { return nil }
+        self.init(noteStruct)
     }
 
     // MARK: - Line
@@ -55,13 +83,13 @@ public final class TextDynamics: Note {
 
     // MARK: - PreFormat
 
-    override public func preFormat() {
+    public func preFormatThrowing() throws {
         var totalWidth: Double = 0
         glyphs = []
 
         for letter in sequence {
             guard let glyphData = TextDynamics.GLYPHS[letter] else {
-                fatalError("[VexError] InvalidDynamics: Invalid dynamics character: \(letter)")
+                throw TextDynamicsError.invalidDynamicsCharacter(letter)
             }
 
             let glyph = Glyph(code: glyphData.code, point: renderOptions.glyphFontScale)
@@ -73,9 +101,19 @@ public final class TextDynamics: Note {
         preFormatted = true
     }
 
+    override public func preFormat() {
+        _ = try? preFormatThrowing()
+    }
+
     // MARK: - Draw
 
     override public func draw() throws {
+        if let textDynamicsInitError {
+            throw textDynamicsInitError
+        }
+        if !preFormatted {
+            try preFormatThrowing()
+        }
         setRendered()
         let x = getAbsoluteX()
         let stave = checkStave()

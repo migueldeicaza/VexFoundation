@@ -3,6 +3,17 @@
 
 import Foundation
 
+public enum RegistryError: Error, LocalizedError, Equatable, Sendable {
+    case missingElementID
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingElementID:
+            return "Cannot add an element without an `id` attribute to the registry."
+        }
+    }
+}
+
 // MARK: - Registry Update
 
 /// Information about an attribute change for index updating.
@@ -93,12 +104,19 @@ public final class Registry {
     /// Register an element with this registry.
     @discardableResult
     public func register(_ elem: VexElement, id: String? = nil) -> Self {
+        _ = try? registerThrowing(elem, id: id)
+        return self
+    }
+
+    /// Register an element with this registry.
+    @discardableResult
+    public func registerThrowing(_ elem: VexElement, id: String? = nil) throws -> Self {
         indexLock.lock()
         defer { indexLock.unlock() }
 
         let elemId = id ?? elem.getAttribute("id") ?? ""
         guard !elemId.isEmpty else {
-            fatalError("[VexError] MissingId: Can't add element without `id` attribute to registry")
+            throw RegistryError.missingElementID
         }
 
         _ = elem.setAttribute("id", elemId)

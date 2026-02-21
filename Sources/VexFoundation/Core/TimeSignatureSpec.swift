@@ -3,6 +3,20 @@
 
 import Foundation
 
+public enum TimeSignatureSpecError: Error, LocalizedError, Equatable, Sendable {
+    case invalidMeterValues(numerator: Int, denominator: Int)
+    case failedToConstructDigits(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidMeterValues(let numerator, let denominator):
+            return "Meter values must be positive. Got \(numerator)/\(denominator)."
+        case .failedToConstructDigits(let raw):
+            return "Failed to construct meter digits from \(raw)."
+        }
+    }
+}
+
 /// Symbolic time signatures supported by notation fonts.
 public enum TimeSignatureSymbol: String, CaseIterable, Sendable, Codable {
     case common = "C"
@@ -39,11 +53,26 @@ public struct TimeSignatureMeter: Equatable, Sendable, Codable {
     public let denominator: Int
 
     public init(numerator: Int, denominator: Int) {
+        self.numerator = max(1, numerator)
+        self.denominator = max(1, denominator)
+    }
+
+    public init(validating numerator: Int, denominator: Int) throws {
         guard numerator > 0, denominator > 0 else {
-            fatalError("[VexError] BadArguments: Meter values must be positive. Got \(numerator)/\(denominator).")
+            throw TimeSignatureSpecError.invalidMeterValues(
+                numerator: numerator,
+                denominator: denominator
+            )
         }
         self.numerator = numerator
         self.denominator = denominator
+    }
+
+    public init?(validatingOrNil numerator: Int, denominator: Int) {
+        guard let meter = try? TimeSignatureMeter(validating: numerator, denominator: denominator) else {
+            return nil
+        }
+        self = meter
     }
 
     public var rawValue: String { "\(numerator)/\(denominator)" }
@@ -58,18 +87,28 @@ public enum TimeSignatureSpec: Hashable, Sendable, Codable {
 
     public static let commonTime: TimeSignatureSpec = .symbol(.common)
     public static let cutTime: TimeSignatureSpec = .symbol(.cutCommon)
-    public static let `default`: TimeSignatureSpec = .meter(4, 4)
+    public static let `default`: TimeSignatureSpec = (try? .meter(validating: 4, 4)) ?? .symbol(.common)
 
-    /// Construct a standard numeric meter.
-    public static func meter(_ numerator: Int, _ denominator: Int) -> TimeSignatureSpec {
-        let meter = TimeSignatureMeter(numerator: numerator, denominator: denominator)
+    /// Construct a standard numeric meter using typed validation.
+    public static func meter(validating numerator: Int, _ denominator: Int) throws -> TimeSignatureSpec {
+        let meter = try TimeSignatureMeter(validating: numerator, denominator: denominator)
         guard
             let top = TimeSignatureDigits(rawValue: String(meter.numerator)),
             let bottom = TimeSignatureDigits(rawValue: String(meter.denominator))
         else {
-            fatalError("[VexError] BadArguments: Failed to construct meter digits from \(meter.rawValue).")
+            throw TimeSignatureSpecError.failedToConstructDigits(meter.rawValue)
         }
         return .numeric(top: top, bottom: bottom)
+    }
+
+    /// Construct a standard numeric meter using typed validation.
+    public static func meterOrNil(validating numerator: Int, _ denominator: Int) -> TimeSignatureSpec? {
+        try? meter(validating: numerator, denominator)
+    }
+
+    /// Construct a standard numeric meter.
+    public static func meter(_ numerator: Int, _ denominator: Int) -> TimeSignatureSpec {
+        meterOrNil(validating: numerator, denominator) ?? .default
     }
 
     public var isNumeric: Bool {
@@ -97,9 +136,9 @@ public enum TimeSignatureSpec: Hashable, Sendable, Codable {
     public var meter: TimeSignatureMeter? {
         switch self {
         case .symbol(.common):
-            return TimeSignatureMeter(numerator: 4, denominator: 4)
+            return TimeSignatureMeter(validatingOrNil: 4, denominator: 4)
         case .symbol(.cutCommon):
-            return TimeSignatureMeter(numerator: 2, denominator: 2)
+            return TimeSignatureMeter(validatingOrNil: 2, denominator: 2)
         case .numeric(let top, let bottom):
             guard
                 let numerator = Self.parseIntegerComponent(top),
@@ -109,7 +148,7 @@ public enum TimeSignatureSpec: Hashable, Sendable, Codable {
             else {
                 return nil
             }
-            return TimeSignatureMeter(numerator: numerator, denominator: denominator)
+            return TimeSignatureMeter(validatingOrNil: numerator, denominator: denominator)
         case .topOnly:
             return nil
         }

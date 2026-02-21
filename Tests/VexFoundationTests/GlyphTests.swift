@@ -24,6 +24,26 @@ struct GlyphTests {
         #expect(glyphs["noteheadBlack"] != nil, "Should have black notehead glyph")
     }
 
+    @Test func fontLoaderThrowingAndFallbackConvenience() {
+        do {
+            _ = try FontLoader.loadFontThrowing(
+                name: "MissingFont",
+                resourceName: "__definitely_missing_font_resource__"
+            )
+            #expect(Bool(false))
+        } catch {
+            #expect(
+                error as? FontLoaderError == .missingFontResource("__definitely_missing_font_resource__")
+            )
+        }
+
+        let fallback = FontLoader.loadFont(
+            name: "MissingFontFallback",
+            resourceName: "__definitely_missing_font_resource__"
+        )
+        #expect(fallback.name == "MissingFontFallback")
+    }
+
     @Test func outlineParsing() {
         // Simple outline: "m 0 0 l 100 200"
         let outline = GlyphOutline.parse("m 0 0 l 100 200")

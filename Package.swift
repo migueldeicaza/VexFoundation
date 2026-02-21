@@ -26,7 +26,8 @@ let package = Package(
         ),
         .testTarget(
             name: "VexFoundationTests",
-            dependencies: ["VexFoundation"]
+            dependencies: ["VexFoundation"],
+            exclude: ["Fixtures"]
         ),
     ]
 )

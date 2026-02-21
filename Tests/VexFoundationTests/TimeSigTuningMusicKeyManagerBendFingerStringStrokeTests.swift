@@ -1,10 +1,10 @@
 // VexFoundation - Tests for Phase 13: TimeSigNote, Tuning, Music, KeyManager,
-// Bend, FretHandFinger, StringNumber, Stroke
+// Bend, StringNumber, Stroke
 
 import Testing
 @testable import VexFoundation
 
-@Suite("TimeSigNote, Tuning, Music, KeyManager, Bend, FretHandFinger, StringNumber, Stroke")
+@Suite("TimeSigNote, Tuning, Music, KeyManager, Bend, StringNumber, Stroke")
 struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
 
     init() {
@@ -81,7 +81,7 @@ struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
     @Test func tuningNoteToInteger() {
         let tuning = Tuning()
         let value = tuning.noteToInteger("C/4")
-        #expect(value >= 0)
+        #expect((value ?? -1) >= 0)
     }
 
     @Test func tuningGetValueForString() {
@@ -108,6 +108,25 @@ struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
         #expect(Tuning.names.count == 8)
         #expect(Tuning.names["standard"] != nil)
         #expect(Tuning.names["dagdad"] != nil)
+    }
+
+    @Test func tuningThrowingAndFailableConvenience() throws {
+        let tuning = Tuning("standard")
+        let high = try tuning.getValueForStringThrowing(1)
+        let low = try tuning.getValueForStringThrowing(6)
+        let fret5 = try tuning.getValueForFretThrowing(5, stringNum: 1)
+        let lowENote = try tuning.getNoteForFretThrowing(0, stringNum: 6)
+        #expect(high > low)
+        #expect(fret5 == high + 5)
+        #expect(lowENote.contains("/"))
+        #expect(Tuning(parsingOrNil: "E/5,B/4,G/4") != nil)
+        #expect(Tuning(parsingOrNil: "not-a-real-note") == nil)
+    }
+
+    @Test func timeSignatureSpecValidatingMeter() {
+        let sevenEight = try? TimeSignatureSpec.meter(validating: 7, 8)
+        #expect(sevenEight?.rawValue == "7/8")
+        #expect(TimeSignatureSpec.meterOrNil(validating: 0, 4) == nil)
     }
 
     // ============================================================
@@ -381,50 +400,6 @@ struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
     }
 
     // ============================================================
-    // MARK: - FretHandFinger Tests
-    // ============================================================
-
-    @Test func fretHandFingerCategory() {
-        #expect(FretHandFinger.category == "FretHandFinger")
-    }
-
-    @Test func fretHandFingerCreation() {
-        let finger = FretHandFinger("1")
-        #expect(finger.getFretHandFinger() == "1")
-        #expect(finger.position == .left)
-        #expect(finger.getWidth() == 7)
-    }
-
-    @Test func fretHandFingerSetFinger() {
-        let finger = FretHandFinger("1")
-        _ = finger.setFretHandFinger("3")
-        #expect(finger.getFretHandFinger() == "3")
-    }
-
-    @Test func fretHandFingerSetOffsets() {
-        let finger = FretHandFinger("1")
-        _ = finger.setOffsetX(5)
-        _ = finger.setOffsetY(10)
-        #expect(finger.xOffset == 5)
-        #expect(finger.yOffset == 10)
-    }
-
-    @Test func fretHandFingerStaticFormat() {
-        let finger = FretHandFinger("1")
-        let note = makeNote()
-        _ = note.addModifier(finger, index: 0)
-        var state = ModifierContextState()
-        let result = FretHandFinger.format([finger], state: &state)
-        #expect(result == true)
-    }
-
-    @Test func fretHandFingerFormatEmpty() {
-        var state = ModifierContextState()
-        let result = FretHandFinger.format([], state: &state)
-        #expect(result == false)
-    }
-
-    // ============================================================
     // MARK: - StringNumber Tests
     // ============================================================
 
@@ -559,15 +534,6 @@ struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
     // MARK: - ModifierContext Integration
     // ============================================================
 
-    @Test func modifierContextIncludesFretHandFinger() {
-        let finger = FretHandFinger("1")
-        let note = makeNote()
-        _ = note.addModifier(finger, index: 0)
-        let mc = ModifierContext()
-        _ = mc.addMember(finger)
-        mc.preFormat()
-    }
-
     @Test func modifierContextIncludesStroke() {
         let stroke = Stroke(type: .brushDown)
         let note = makeNote()
@@ -591,11 +557,6 @@ struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
     @Test func bendIsModifier() {
         let bend = Bend("Full")
         #expect(bend is Modifier)
-    }
-
-    @Test func fretHandFingerIsModifier() {
-        let finger = FretHandFinger("1")
-        #expect(finger is Modifier)
     }
 
     @Test func stringNumberIsModifier() {
