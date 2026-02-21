@@ -17,7 +17,11 @@ public final class KeySigNote: Note {
     // MARK: - Init
 
     public init(keySpec: String, cancelKeySpec: String? = nil, alterKeySpec: [String]? = nil) {
-        self.keySignature = KeySignature(keySpec: keySpec)
+        self.keySignature = KeySignature(
+            keySpec: keySpec,
+            cancelKeySpec: cancelKeySpec,
+            alterKeySpec: alterKeySpec
+        )
         super.init(NoteStruct(duration: .twoFiftySixth))
         ignoreTicks = true
     }

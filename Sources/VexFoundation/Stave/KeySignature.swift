@@ -74,6 +74,15 @@ public final class KeySignature: StaveModifier {
         return self
     }
 
+    /// Mirror VexFlow's `addToStave` behavior where key signatures always
+    /// include inter-modifier padding (used by certain upstream tests).
+    @discardableResult
+    public func addToStave(_ stave: Stave) -> Self {
+        paddingForced = true
+        _ = stave.addModifier(self)
+        return self
+    }
+
     // MARK: - Formatting
 
     override public func getPadding(_ index: Int) -> Double {
@@ -119,6 +128,8 @@ public final class KeySignature: StaveModifier {
                 clef = stave.getClef()
             }
 
+            let cancelCount = cancelResult?.accList.count ?? 0
+
             if let cancelResult {
                 var cancelAccs = cancelResult.accList
                 convertAccLines(clef: clef, type: cancelResult.type, accList: &cancelAccs)
@@ -127,9 +138,14 @@ public final class KeySignature: StaveModifier {
                     accList[i] = cancelAccs[i]
                 }
             }
-            var mainAccs = accList
+
+            // VexFlow formats cancel accidentals separately from the main list.
+            // Only the main segment should receive the second clef conversion.
+            var mainAccs = Array(accList.dropFirst(cancelCount))
             convertAccLines(clef: clef, type: firstAccType, accList: &mainAccs)
-            accList = mainAccs
+            for i in 0..<mainAccs.count {
+                accList[cancelCount + i] = mainAccs[i]
+            }
 
             for i in 0..<accList.count {
                 let nextAcc = i + 1 < accList.count ? accList[i + 1] : nil
@@ -244,7 +260,9 @@ public final class KeySignature: StaveModifier {
         for i in 0..<glyphs.count {
             let glyph = glyphs[i]
             let x = modifierX + xPositions[i]
-            glyph.render(ctx: ctx, x: x, y: stave.getYForGlyphs())
+            glyph.setStave(stave)
+            glyph.setContext(ctx)
+            glyph.renderToStave(x: x)
         }
 
         ctx.closeGroup()

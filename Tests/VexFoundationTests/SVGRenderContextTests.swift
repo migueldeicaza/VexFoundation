@@ -33,6 +33,21 @@ struct SVGRenderContextTests {
         #expect(svg.contains("stroke=\"#0000ff\""))
     }
 
+    @Test func svgContextScaleUsesViewBoxWithoutScalingGeometry() {
+        let ctx = SVGRenderContext(width: 100, height: 50)
+        _ = ctx.scale(0.5, 0.25)
+        _ = ctx.setLineWidth(2)
+        _ = ctx.beginPath()
+            .moveTo(10, 10)
+            .lineTo(20, 20)
+            .stroke()
+
+        let svg = ctx.getSVG()
+        #expect(svg.contains("viewBox=\"0 0 200 200\""))
+        #expect(svg.contains("d=\"M 10 10 L 20 20\""))
+        #expect(svg.contains("stroke-width=\"2\""))
+    }
+
     @Test func svgSnapshotSimpleScore() throws {
         try Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
             FontLoader.loadDefaultFonts()

@@ -148,8 +148,9 @@ public final class Clef: StaveModifier {
 
         if let ann = annotation, let attach = attachment {
             placeGlyphOnLine(attach, stave: stave, line: ann.line)
+            attach.setStave(stave)
             attach.setContext(ctx)
-            attach.render(ctx: ctx, x: modifierX, y: stave.getYForGlyphs())
+            attach.renderToStave(x: modifierX)
         }
 
         ctx.closeGroup()

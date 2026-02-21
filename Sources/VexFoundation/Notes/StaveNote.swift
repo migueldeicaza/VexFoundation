@@ -746,7 +746,14 @@ public class StaveNote: StemmableNote {
 
     // MARK: - Modifier Start XY
 
-    public func getModifierStartXY(position: ModifierPosition, index: Int, forceFlagRight: Bool = false) -> (x: Double, y: Double) {
+    override public func getModifierStartXY(position: ModifierPosition, index: Int) -> (x: Double, y: Double) {
+        (try? getModifierStartXYThrowing(position: position, index: index, forceFlagRight: false)) ?? (
+            x: getAbsoluteX(),
+            y: ys.first ?? 0
+        )
+    }
+
+    public func getModifierStartXY(position: ModifierPosition, index: Int, forceFlagRight: Bool) -> (x: Double, y: Double) {
         (try? getModifierStartXYThrowing(position: position, index: index, forceFlagRight: forceFlagRight)) ?? (
             x: getAbsoluteX(),
             y: ys.first ?? 0

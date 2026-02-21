@@ -136,7 +136,9 @@ public final class TimeSignature: StaveModifier {
             // Symbol glyph (C or C|)
             let glyphToRender = tsGlyph!
             placeGlyphOnLine(glyphToRender, stave: stave, line: tsLine)
-            glyphToRender.render(ctx: ctx, x: modifierX, y: stave.getYForGlyphs())
+            glyphToRender.setStave(stave)
+            glyphToRender.setContext(ctx)
+            glyphToRender.renderToStave(x: modifierX)
         }
 
         ctx.closeGroup()

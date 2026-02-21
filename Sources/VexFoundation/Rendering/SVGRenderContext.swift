@@ -275,10 +275,10 @@ public final class SVGRenderContext: RenderContext {
         _ startAngle: Double, _ endAngle: Double,
         _ counterclockwise: Bool
     ) -> Self {
-        let cx = x * currentScaleX
-        let cy = y * currentScaleY
-        let rx = abs(radius * currentScaleX)
-        let ry = abs(radius * currentScaleY)
+        let cx = x
+        let cy = y
+        let rx = abs(radius)
+        let ry = abs(radius)
         guard rx > 0, ry > 0 else { return self }
 
         let delta = normalizedArcDelta(startAngle: startAngle, endAngle: endAngle, counterclockwise: counterclockwise)
@@ -311,11 +311,13 @@ public final class SVGRenderContext: RenderContext {
                 x: cx + rx * cos(midAngle),
                 y: cy + ry * sin(midAngle)
             )
+            // Match VexFlow's SVGContext behavior for full circles.
+            let fullCircleSweepFlag = 0
             currentPathCommands.append(
-                "A \(fmt(rx)) \(fmt(ry)) 0 0 \(sweepFlag) \(fmt(midPoint.x)) \(fmt(midPoint.y))"
+                "A \(fmt(rx)) \(fmt(ry)) 0 0 \(fullCircleSweepFlag) \(fmt(midPoint.x)) \(fmt(midPoint.y))"
             )
             currentPathCommands.append(
-                "A \(fmt(rx)) \(fmt(ry)) 0 0 \(sweepFlag) \(fmt(endPoint.x)) \(fmt(endPoint.y))"
+                "A \(fmt(rx)) \(fmt(ry)) 0 0 \(fullCircleSweepFlag) \(fmt(endPoint.x)) \(fmt(endPoint.y))"
             )
         } else {
             let largeArcFlag = abs(delta) > .pi ? 1 : 0
@@ -471,7 +473,9 @@ public final class SVGRenderContext: RenderContext {
         let height = fmt(canvasHeight)
         var header = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"\(width)\" height=\"\(height)\""
         if options.includeViewBox {
-            header += " viewBox=\"0 0 \(width) \(height)\""
+            let visibleWidth = fmt(effectiveVisibleWidth())
+            let visibleHeight = fmt(effectiveVisibleHeight())
+            header += " viewBox=\"0 0 \(visibleWidth) \(visibleHeight)\""
         }
         header += ">"
 
@@ -488,15 +492,15 @@ public final class SVGRenderContext: RenderContext {
     // MARK: - Private helpers
 
     private func scaled(_ x: Double, _ y: Double) -> (x: Double, y: Double) {
-        (x * currentScaleX, y * currentScaleY)
+        (x, y)
     }
 
     private func scaledRect(_ x: Double, _ y: Double, _ width: Double, _ height: Double) -> (x: Double, y: Double, width: Double, height: Double) {
         (
-            x: x * currentScaleX,
-            y: y * currentScaleY,
-            width: width * currentScaleX,
-            height: height * currentScaleY
+            x: x,
+            y: y,
+            width: width,
+            height: height
         )
     }
 
@@ -514,7 +518,7 @@ public final class SVGRenderContext: RenderContext {
             attrs += " stroke=\"\(escape(stroke))\""
         }
         if includeStrokeAttrs {
-            attrs += " stroke-width=\"\(fmt(currentLineWidth * currentScaleX))\""
+            attrs += " stroke-width=\"\(fmt(currentLineWidth))\""
             attrs += " stroke-linecap=\"\(currentLineCap.rawValue)\""
             if !currentLineDash.isEmpty {
                 attrs += " stroke-dasharray=\"\(currentLineDash.map(fmt).joined(separator: ","))\""
@@ -563,6 +567,16 @@ public final class SVGRenderContext: RenderContext {
         }
 
         return delta
+    }
+
+    private func effectiveVisibleWidth() -> Double {
+        guard currentScaleX.isFinite, abs(currentScaleX) > 1e-10 else { return canvasWidth }
+        return canvasWidth / currentScaleX
+    }
+
+    private func effectiveVisibleHeight() -> Double {
+        guard currentScaleY.isFinite, abs(currentScaleY) > 1e-10 else { return canvasHeight }
+        return canvasHeight / currentScaleY
     }
 
     private func fmt(_ value: Double) -> String {
