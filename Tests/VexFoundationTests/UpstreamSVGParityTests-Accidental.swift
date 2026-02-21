@@ -253,6 +253,365 @@ extension UpstreamSVGParityTests {
         }
     }
 
+    @Test("Accidental.Automatic_Accidentals")
+    func accidentalAutomaticAccidentalsMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Accidental", test: "Automatic_Accidentals", width: 700, height: 200) { factory, _ in
+            let stave = factory.Stave()
+
+            let notes = try makeAutomaticAccidentalNotes(factory: factory, specs: [
+                .init(keys: ["c/4", "c/5"], duration: "4"),
+                .init(keys: ["c#/4", "c#/5"], duration: "4"),
+                .init(keys: ["c#/4", "c#/5"], duration: "4"),
+                .init(keys: ["c##/4", "c##/5"], duration: "4"),
+                .init(keys: ["c##/4", "c##/5"], duration: "4"),
+                .init(keys: ["c/4", "c/5"], duration: "4"),
+                .init(keys: ["cn/4", "cn/5"], duration: "4"),
+                .init(keys: ["cbb/4", "cbb/5"], duration: "4"),
+                .init(keys: ["cbb/4", "cbb/5"], duration: "4"),
+                .init(keys: ["cb/4", "cb/5"], duration: "4"),
+                .init(keys: ["cb/4", "cb/5"], duration: "4"),
+                .init(keys: ["c/4", "c/5"], duration: "4"),
+            ])
+
+            let grace = try factory.GraceNote(GraceNoteStruct(parsingKeys: ["d#/4"], duration: "16", slash: true))
+            _ = notes[0].addModifier(factory.GraceNoteGroup(notes: [grace]).beamNotes(), index: 0)
+
+            let voice = factory.Voice().setMode(.soft)
+            _ = voice.addTickable(factory.TimeSigNote(time: .meter(12, 4)).setStave(stave))
+            _ = voice.addTickables(notes.map { $0 as Tickable })
+
+            try Accidental.applyAccidentals([voice], keySignature: "C")
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("Accidental.Automatic_Accidentals___C_major_scale_in_Ab")
+    func accidentalAutomaticAccidentalsCMajorScaleInAbMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Accidental",
+            test: "Automatic_Accidentals___C_major_scale_in_Ab",
+            width: 700,
+            height: 150
+        ) { factory, _ in
+            let stave = factory.Stave().addKeySignature("Ab")
+            let notes = try makeAutomaticAccidentalNotes(factory: factory, specs: [
+                .init(keys: ["c/4"], duration: "4"),
+                .init(keys: ["d/4"], duration: "4"),
+                .init(keys: ["e/4"], duration: "4"),
+                .init(keys: ["f/4"], duration: "4"),
+                .init(keys: ["g/4"], duration: "4"),
+                .init(keys: ["a/4"], duration: "4"),
+                .init(keys: ["b/4"], duration: "4"),
+                .init(keys: ["c/5"], duration: "4"),
+            ])
+            let voice = factory.Voice().setMode(.soft).addTickables(notes.map { $0 as Tickable })
+
+            try Accidental.applyAccidentals([voice], keySignature: "Ab")
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("Accidental.Automatic_Accidentals___No_Accidentals_Necessary")
+    func accidentalAutomaticAccidentalsNoAccidentalsNecessaryMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Accidental",
+            test: "Automatic_Accidentals___No_Accidentals_Necessary",
+            width: 700,
+            height: 150
+        ) { factory, _ in
+            let stave = factory.Stave().addKeySignature("A")
+            let notes = try makeAutomaticAccidentalNotes(factory: factory, specs: [
+                .init(keys: ["a/4"], duration: "4"),
+                .init(keys: ["b/4"], duration: "4"),
+                .init(keys: ["c#/5"], duration: "4"),
+                .init(keys: ["d/5"], duration: "4"),
+                .init(keys: ["e/5"], duration: "4"),
+                .init(keys: ["f#/5"], duration: "4"),
+                .init(keys: ["g#/5"], duration: "4"),
+                .init(keys: ["a/5"], duration: "4"),
+            ])
+            let voice = factory.Voice().setMode(.soft).addTickables(notes.map { $0 as Tickable })
+
+            try Accidental.applyAccidentals([voice], keySignature: "A")
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("Accidental.Automatic_Accidentals___No_Accidentals_Necessary__EasyScore_")
+    func accidentalAutomaticAccidentalsNoAccidentalsNecessaryEasyScoreMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Accidental",
+            test: "Automatic_Accidentals___No_Accidentals_Necessary__EasyScore_",
+            width: 700,
+            height: 150
+        ) { factory, _ in
+            let stave = factory.Stave().addKeySignature("A")
+            let score = factory.EasyScore()
+            _ = score.set(defaults: EasyScoreDefaults(time: .meter(8, 4)))
+            let notes = score.notes(
+                "A4/q, B4/q, C#5/q, D5/q, E5/q,F#5/q, G#5/q, A5/q",
+                options: ["stem": "up"]
+            )
+            let voice = factory.Voice().setMode(.soft).addTickables(notes.map { $0 as Tickable })
+
+            try Accidental.applyAccidentals([voice], keySignature: "A")
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("Accidental.Automatic_Accidentals___Multi_Voice_Inline")
+    func accidentalAutomaticAccidentalsMultiVoiceInlineMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Accidental",
+            test: "Automatic_Accidentals___Multi_Voice_Inline",
+            width: 700,
+            height: 150
+        ) { factory, _ in
+            let stave = factory.Stave().addKeySignature("Ab")
+            let notes0 = try makeAutomaticAccidentalNotes(factory: factory, specs: [
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["d/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["e/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["f/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["g/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["a/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["b/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/5"], duration: "4", stemDirection: .down),
+            ])
+            let notes1 = try makeAutomaticAccidentalNotes(factory: factory, specs: [
+                .init(keys: ["c/5"], duration: "4"),
+                .init(keys: ["d/5"], duration: "4"),
+                .init(keys: ["e/5"], duration: "4"),
+                .init(keys: ["f/5"], duration: "4"),
+                .init(keys: ["g/5"], duration: "4"),
+                .init(keys: ["a/5"], duration: "4"),
+                .init(keys: ["b/5"], duration: "4"),
+                .init(keys: ["c/6"], duration: "4"),
+            ])
+            let voice0 = factory.Voice().setMode(.soft).addTickables(notes0.map { $0 as Tickable })
+            let voice1 = factory.Voice().setMode(.soft).addTickables(notes1.map { $0 as Tickable })
+
+            try Accidental.applyAccidentals([voice0, voice1], keySignature: "Ab")
+
+            expectAccidentalPresence(notes0, expected: [false, true, true, false, false, true, true, false])
+            expectAccidentalPresence(notes1, expected: [false, true, true, false, false, true, true, false])
+
+            _ = factory.Formatter().joinVoices([voice0, voice1]).formatToStave([voice0, voice1], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("Accidental.Automatic_Accidentals___Multi_Voice_Offset")
+    func accidentalAutomaticAccidentalsMultiVoiceOffsetMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Accidental",
+            test: "Automatic_Accidentals___Multi_Voice_Offset",
+            width: 700,
+            height: 150
+        ) { factory, _ in
+            let stave = factory.Stave().addKeySignature("Cb")
+            let notes0 = try makeAutomaticAccidentalNotes(factory: factory, specs: [
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["d/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["e/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["f/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["g/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["a/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["b/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/5"], duration: "4", stemDirection: .down),
+            ])
+            let notes1 = try makeAutomaticAccidentalNotes(factory: factory, specs: [
+                .init(keys: ["c/5"], duration: "8"),
+                .init(keys: ["c/5"], duration: "4"),
+                .init(keys: ["d/5"], duration: "4"),
+                .init(keys: ["e/5"], duration: "4"),
+                .init(keys: ["f/5"], duration: "4"),
+                .init(keys: ["g/5"], duration: "4"),
+                .init(keys: ["a/5"], duration: "4"),
+                .init(keys: ["b/5"], duration: "4"),
+                .init(keys: ["c/6"], duration: "4"),
+            ])
+            let voice0 = factory.Voice().setMode(.soft).addTickables(notes0.map { $0 as Tickable })
+            let voice1 = factory.Voice().setMode(.soft).addTickables(notes1.map { $0 as Tickable })
+
+            try Accidental.applyAccidentals([voice0, voice1], keySignature: "Cb")
+
+            expectAccidentalPresence(notes0, expected: [true, true, true, true, true, true, true, false])
+            expectAccidentalPresence(notes1, expected: [true, false, true, true, true, true, true, true, true])
+
+            _ = factory.Formatter().joinVoices([voice0, voice1]).formatToStave([voice0, voice1], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("Accidental.Automatic_Accidentals___Key_C__Single_Octave")
+    func accidentalAutomaticAccidentalsKeyCSingleOctaveMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Accidental",
+            test: "Automatic_Accidentals___Key_C__Single_Octave",
+            width: 700,
+            height: 150
+        ) { factory, _ in
+            let stave = factory.Stave().addKeySignature("C")
+            let notes = try makeAutomaticAccidentalNotes(factory: factory, specs: [
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c#/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c#/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["cb/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["cb/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+            ])
+            let voice = factory.Voice().setMode(.soft).addTickables(notes.map { $0 as Tickable })
+
+            try Accidental.applyAccidentals([voice], keySignature: "C")
+            expectAccidentalPresence(notes, expected: [false, true, false, true, false, true, false, true, false])
+
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("Accidental.Automatic_Accidentals___Key_C__Two_Octaves")
+    func accidentalAutomaticAccidentalsKeyCTwoOctavesMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Accidental",
+            test: "Automatic_Accidentals___Key_C__Two_Octaves",
+            width: 700,
+            height: 150
+        ) { factory, _ in
+            let stave = factory.Stave().addKeySignature("C")
+            let notes = try makeAutomaticAccidentalNotes(factory: factory, specs: [
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["c#/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c#/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["c#/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c#/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["cb/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["cb/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["cb/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["cb/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/5"], duration: "4", stemDirection: .down),
+            ])
+            let voice = factory.Voice().setMode(.soft).addTickables(notes.map { $0 as Tickable })
+
+            try Accidental.applyAccidentals([voice], keySignature: "C")
+            expectAccidentalPresence(
+                notes,
+                expected: [
+                    false, false,
+                    true, true,
+                    false, false,
+                    true, true,
+                    false, false,
+                    true, true,
+                    false, false,
+                    true, true,
+                    false, false,
+                ]
+            )
+
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("Accidental.Automatic_Accidentals___Key_C___Single_Octave")
+    func accidentalAutomaticAccidentalsKeyCSharpSingleOctaveMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Accidental",
+            test: "Automatic_Accidentals___Key_C___Single_Octave",
+            width: 700,
+            height: 150
+        ) { factory, _ in
+            let stave = factory.Stave().addKeySignature("C#")
+            let notes = try makeAutomaticAccidentalNotes(factory: factory, specs: [
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c#/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c#/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["cb/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["cb/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+            ])
+            let voice = factory.Voice().setMode(.soft).addTickables(notes.map { $0 as Tickable })
+
+            try Accidental.applyAccidentals([voice], keySignature: "C#")
+            expectAccidentalPresence(notes, expected: [true, true, false, true, false, true, false, true, false])
+
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("Accidental.Automatic_Accidentals___Key_C___Two_Octaves")
+    func accidentalAutomaticAccidentalsKeyCSharpTwoOctavesMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Accidental",
+            test: "Automatic_Accidentals___Key_C___Two_Octaves",
+            width: 700,
+            height: 150
+        ) { factory, _ in
+            let stave = factory.Stave().addKeySignature("C#")
+            let notes = try makeAutomaticAccidentalNotes(factory: factory, specs: [
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["c#/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c#/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["c#/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c#/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["cb/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["cb/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["cb/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["cb/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/5"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/4"], duration: "4", stemDirection: .down),
+                .init(keys: ["c/5"], duration: "4", stemDirection: .down),
+            ])
+            let voice = factory.Voice().setMode(.soft).addTickables(notes.map { $0 as Tickable })
+
+            try Accidental.applyAccidentals([voice], keySignature: "C#")
+            expectAccidentalPresence(
+                notes,
+                expected: [
+                    true, true,
+                    true, true,
+                    false, false,
+                    true, true,
+                    false, false,
+                    true, true,
+                    false, false,
+                    true, true,
+                    false, false,
+                ]
+            )
+
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
     private func makeAccidentalBasicNotes(stemDown: Bool) throws -> [StaveNote] {
         let stem: StemDirection = stemDown ? .down : .up
 
@@ -457,6 +816,36 @@ extension UpstreamSVGParityTests {
         _ = note4.addModifier(try makeUpstreamAccidental("k"), index: 3)
 
         return [note0, note1, note2, note3, note4]
+    }
+
+    private struct AutomaticAccidentalNoteSpec {
+        var keys: [String]
+        var duration: String
+        var stemDirection: StemDirection? = nil
+    }
+
+    private func makeAutomaticAccidentalNotes(
+        factory: Factory,
+        specs: [AutomaticAccidentalNoteSpec]
+    ) throws -> [StaveNote] {
+        try specs.map { spec in
+            try factory.StaveNote(StaveNoteStruct(
+                parsingKeys: spec.keys,
+                duration: spec.duration,
+                stemDirection: spec.stemDirection
+            ))
+        }
+    }
+
+    private func hasAccidental(_ note: StaveNote) -> Bool {
+        note.getModifiers().contains { $0 is Accidental }
+    }
+
+    private func expectAccidentalPresence(_ notes: [StaveNote], expected: [Bool]) {
+        #expect(notes.count == expected.count)
+        for index in notes.indices {
+            #expect(hasAccidental(notes[index]) == expected[index])
+        }
     }
 
     private func upstreamCautionaryAccidentalTypes() -> [String] {
