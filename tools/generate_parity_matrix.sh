@@ -135,8 +135,12 @@ topic_correspondence_for() {
       printf 'Bach Demo|`BachDemoParityTests.swift`'
       return
       ;;
-    barline|stave|stavemodifier)
+    barline)
       printf 'Stave System|`StaveTests.swift`'
+      return
+      ;;
+    stave|stavemodifier)
+      printf 'Stave & StaveModifier Parity|`StaveModifierParityTests.swift`'
       return
       ;;
     clef|keysignature)
