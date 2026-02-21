@@ -31,20 +31,20 @@ struct PercussionParityTests {
         return voice
     }
 
-    @Test func percussionClefUsesUnpitchedGlyph() {
+    @Test func percussionClefUsesUnpitchedGlyph() throws {
         let clef = Clef(type: .percussion)
         #expect(clef.clefDef.code == "unpitchedPercussionClef1")
         #expect(clef.clefDef.line == 2)
     }
 
-    @Test func staffKeyParserAcceptsXSlashShorthand() {
+    @Test func staffKeyParserAcceptsXSlashShorthand() throws {
         let parsed = StaffKeySpec(parsingOrNil: "x/")
         #expect(parsed != nil)
         #expect(parsed?.octave == 4)
         #expect(parsed?.rawValue == "x/4")
     }
 
-    @Test func staveNoteParserAcceptsXSlashShorthand() {
+    @Test func staveNoteParserAcceptsXSlashShorthand() throws {
         let parsed = StaveNoteStruct(parsingKeysOrNil: ["x/"], duration: "1")
         #expect(parsed != nil)
         #expect(parsed?.keys.array.first?.rawValue == "x/4")
@@ -57,7 +57,7 @@ struct PercussionParityTests {
         }
     }
 
-    @Test func percussionCustomNoteheadsResolveExpectedGlyphCodes() {
+    @Test func percussionCustomNoteheadsResolveExpectedGlyphCodes() throws {
         let cases: [(key: String, duration: String, expected: String)] = [
             ("g/5/d0", "4", "noteheadDiamondWhole"),
             ("g/5/d1", "4", "noteheadDiamondHalf"),
@@ -80,7 +80,7 @@ struct PercussionParityTests {
         }
     }
 
-    @Test func abstractCustomGlyphUsesActualDuration() {
+    @Test func abstractCustomGlyphUsesActualDuration() throws {
         let wholeDiamond = makePercussionNote(key: "g/5/d", duration: "1")
         let quarterDiamond = makePercussionNote(key: "g/5/d", duration: "4")
         #expect(wholeDiamond != nil)
@@ -94,7 +94,7 @@ struct PercussionParityTests {
         #expect(quarterX?.noteHeads.first?.glyphCode == "noteheadXBlack")
     }
 
-    @Test func percussionTwoVoiceFormattingAndBeamingBaseline() {
+    @Test func percussionTwoVoiceFormattingAndBeamingBaseline() throws {
         let voice0Notes: [StemmableNote] = [
             makePercussionNote(key: "g/5/x2", duration: "8", stem: .up),
             makePercussionNote(key: "g/5/x2", duration: "8", stem: .up),
@@ -123,8 +123,8 @@ struct PercussionParityTests {
 
         let voice1 = makeVoice(voice1Notes)
 
-        let beams0 = Beam.generateBeams(voice0Notes, config: BeamConfig(groups: [Fraction(1, 4)]))
-        let beams1 = Beam.generateBeams(Array(voice1Notes[0...1]), config: BeamConfig(groups: [Fraction(1, 4)]))
+        let beams0 = try Beam.generateBeams(voice0Notes, config: BeamConfig(groups: [Fraction(1, 4)]))
+        let beams1 = try Beam.generateBeams(Array(voice1Notes[0...1]), config: BeamConfig(groups: [Fraction(1, 4)]))
 
         let stave = Stave(x: 10, y: 40, width: 420)
         _ = stave.addClef(.percussion)

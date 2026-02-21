@@ -576,8 +576,23 @@ public final class EasyScore {
         secondaryBeamBreaks: [Int] = [],
         partialBeamDirections: [Int: PartialBeamDirection] = [:]
     ) -> [StemmableNote] {
-        VexRuntime.withContext(runtimeContext) {
-            _ = factory.Beam(
+        (try? beamThrowing(
+            notes,
+            autoStem: autoStem,
+            secondaryBeamBreaks: secondaryBeamBreaks,
+            partialBeamDirections: partialBeamDirections
+        )) ?? notes
+    }
+
+    @discardableResult
+    public func beamThrowing(
+        _ notes: [StemmableNote],
+        autoStem: Bool = false,
+        secondaryBeamBreaks: [Int] = [],
+        partialBeamDirections: [Int: PartialBeamDirection] = [:]
+    ) throws -> [StemmableNote] {
+        try VexRuntime.withContext(runtimeContext) {
+            _ = try factory.BeamThrowing(
                 notes: notes, autoStem: autoStem,
                 secondaryBeamBreaks: secondaryBeamBreaks,
                 partialBeamDirections: partialBeamDirections
@@ -588,9 +603,16 @@ public final class EasyScore {
 
     /// Create a tuplet from notes.
     @discardableResult
-    public func tuplet(_ notes: [StemmableNote], options: TupletOptions = TupletOptions()) -> [StemmableNote] {
-        VexRuntime.withContext(runtimeContext) {
-            _ = factory.Tuplet(notes: notes.map { $0 as Note }, options: options)
+    public func tuplet(_ notes: [StemmableNote],
+                       options: TupletOptions = TupletOptions()) -> [StemmableNote] {
+        (try? tupletThrowing(notes, options: options)) ?? notes
+    }
+
+    @discardableResult
+    public func tupletThrowing(_ notes: [StemmableNote],
+                               options: TupletOptions = TupletOptions()) throws -> [StemmableNote] {
+        try VexRuntime.withContext(runtimeContext) {
+            _ = try factory.TupletThrowing(notes: notes.map { $0 as Note }, options: options)
             return notes
         }
     }
@@ -617,10 +639,14 @@ public final class EasyScore {
 
     /// Create a voice with the given notes.
     public func voice(_ notes: [Note], time: TimeSignatureSpec? = nil) -> Voice {
-        VexRuntime.withContext(runtimeContext) {
+        (try? voiceThrowing(notes, time: time)) ?? factory.Voice()
+    }
+
+    public func voiceThrowing(_ notes: [Note], time: TimeSignatureSpec? = nil) throws -> Voice {
+        try VexRuntime.withContext(runtimeContext) {
             let t = time ?? defaults.time
-            let voice = factory.Voice(timeSignature: t)
-            _ = voice.addTickables(notes)
+            let voice = try factory.VoiceThrowing(timeSignature: t)
+            _ = try voice.addTickablesThrowing(notes)
             return voice
         }
     }

@@ -211,6 +211,38 @@ struct NoteTests {
         #expect(t.getTicks().numerator == 4096)
     }
 
+    @Test func tickableThrowingPreconditions() throws {
+        let t = Tickable()
+
+        do {
+            _ = try t.getTickableWidthThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? TickableError == .unformattedWidth)
+        }
+
+        do {
+            _ = try t.getVoiceThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? TickableError == .noVoice)
+        }
+
+        do {
+            _ = try t.checkTickContextThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? TickableError == .noTickContext("Tickable has no tick context."))
+        }
+
+        do {
+            _ = try t.checkModifierContextThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? TickableError == .noModifierContext)
+        }
+    }
+
     // MARK: - Note Parsing
 
     @Test func parseDuration() {
@@ -264,6 +296,28 @@ struct NoteTests {
         #expect(ns == nil, "Invalid type 'z' should fail")
     }
 
+    @Test func parseNoteStructThrowingValidation() throws {
+        let invalid = NoteStruct(keys: ["c/4"], duration: .sixtyFourth, dots: 12)
+
+        do {
+            _ = try Note.parseNoteStructThrowing(invalid)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? NoteError == .invalidInitializationData("64"))
+        }
+
+        let fallbackNote = TestNote(invalid)
+        #expect(fallbackNote.initError == .invalidInitializationData("64"))
+        #expect(fallbackNote.getTicks().numerator > 0)
+
+        do {
+            _ = try TestNote(validating: invalid)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? NoteError == .invalidInitializationData("64"))
+        }
+    }
+
     // MARK: - Note Creation
 
     @Test func noteCreation() {
@@ -298,6 +352,38 @@ struct NoteTests {
     @Test func noteIsRest() {
         let note = TestNote(NoteStruct(keys: ["c/4"], duration: .quarter))
         #expect(note.isRest() == false)
+    }
+
+    @Test func noteThrowingPreconditions() throws {
+        let note = TestNote(NoteStruct(keys: ["c/4"], duration: .quarter))
+
+        do {
+            _ = try note.checkStaveThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? NoteError == .noStave)
+        }
+
+        do {
+            _ = try note.getYsThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? NoteError == .noYValues)
+        }
+
+        do {
+            _ = try note.getMetricsThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? NoteError == .unformattedMetrics)
+        }
+
+        do {
+            _ = try note.getStemDirectionThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? NoteError == .noStem)
+        }
     }
 
     // MARK: - Voice
@@ -508,6 +594,72 @@ struct NoteTests {
         q.buildStem()
         q.setStemDirection(Stem.UP)
         #expect(q.hasFlag() == false)
+    }
+
+    @Test func stemmableNoteThrowingPreconditions() throws {
+        let note = TestStemmableNote(NoteStruct(keys: ["c/4"], duration: .quarter))
+
+        do {
+            _ = try note.checkStemThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StemmableNoteError == .noStem)
+        }
+
+        do {
+            _ = try note.getStemDirectionThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StemmableNoteError == .noStem)
+        }
+
+        note.buildStem()
+
+        do {
+            _ = try note.getStemDirectionThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StemmableNoteError == .noStemDirection)
+        }
+    }
+
+    @Test func staveNoteThrowingPreconditions() throws {
+        let staveNote = StaveNote(StaveNoteStruct(
+            keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)),
+            duration: .quarter
+        ))
+
+        do {
+            _ = try staveNote.getModifierStartXYThrowing(position: .left, index: 0)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveNoteError == .unformattedNoteForModifierStart)
+        }
+
+        staveNote.preFormatted = true
+
+        do {
+            _ = try staveNote.getModifierStartXYThrowing(position: .left, index: 0)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveNoteError == .noYValues)
+        }
+
+        _ = staveNote.setYs([100])
+        do {
+            _ = try staveNote.getModifierStartXYThrowing(position: .left, index: 2)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveNoteError == .invalidModifierIndex(2))
+        }
+
+        staveNote.preFormatted = false
+        do {
+            _ = try staveNote.getBoundingBoxThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveNoteError == .unformattedNoteForBoundingBox)
+        }
     }
 }
 

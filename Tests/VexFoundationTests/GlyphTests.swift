@@ -58,6 +58,19 @@ struct GlyphTests {
         #expect(metrics.ha > 0, "Notehead should have positive advance")
     }
 
+    @Test func glyphMetricsThrowingValidation() {
+        do {
+            _ = try Glyph.loadMetricsThrowing(
+                fontStack: Glyph.MUSIC_FONT_STACK,
+                code: "__missing_glyph__",
+                category: nil
+            )
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? GlyphError == .missingGlyph("__missing_glyph__"))
+        }
+    }
+
     @Test func glyphBoundingBox() {
         let metrics = Glyph.loadMetrics(
             fontStack: Glyph.MUSIC_FONT_STACK,
@@ -86,6 +99,19 @@ struct GlyphTests {
 
         let metrics = glyph.getMetrics()
         #expect(metrics.width > 0)
+    }
+
+    @Test func glyphThrowingPreconditions() {
+        let glyph = Glyph(code: "noteheadBlack", point: Tables.NOTATION_FONT_SCALE)
+        do {
+            _ = try glyph.checkStaveThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? GlyphError == .noStave)
+        }
+
+        // Non-throwing API should be safe and non-crashing.
+        glyph.renderToStave(x: 10)
     }
 
     @Test func boundingBoxComputation() {

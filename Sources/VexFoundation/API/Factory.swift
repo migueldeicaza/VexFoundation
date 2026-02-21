@@ -418,7 +418,12 @@ public final class Factory {
 
     @discardableResult
     public func Voice(timeSignature: TimeSignatureSpec) -> VexFoundation.Voice {
-        let voice = inRuntimeContext { VexFoundation.Voice(timeSignature: timeSignature) }
+        (try? VoiceThrowing(timeSignature: timeSignature)) ?? Voice()
+    }
+
+    @discardableResult
+    public func VoiceThrowing(timeSignature: TimeSignatureSpec) throws -> VexFoundation.Voice {
+        let voice = try inRuntimeContext { try VexFoundation.Voice(validatingTimeSignature: timeSignature) }
         voices.append(voice)
         return voice
     }
@@ -447,8 +452,13 @@ public final class Factory {
     // MARK: - Tuplet, Beam
 
     @discardableResult
-    public func Tuplet(notes: [Note] = [], options: TupletOptions = TupletOptions()) -> VexFoundation.Tuplet {
-        let tuplet = inRuntimeContext { VexFoundation.Tuplet(notes: notes, options: options) }
+    public func Tuplet(notes: [Note] = [], options: TupletOptions = TupletOptions()) -> VexFoundation.Tuplet? {
+        try? TupletThrowing(notes: notes, options: options)
+    }
+
+    @discardableResult
+    public func TupletThrowing(notes: [Note] = [], options: TupletOptions = TupletOptions()) throws -> VexFoundation.Tuplet {
+        let tuplet = try inRuntimeContext { try VexFoundation.Tuplet(notes: notes, options: options) }
         if let ctx = context { _ = tuplet.setContext(ctx) }
         renderQ.append(tuplet)
         return tuplet
@@ -460,8 +470,23 @@ public final class Factory {
         autoStem: Bool = false,
         secondaryBeamBreaks: [Int] = [],
         partialBeamDirections: [Int: PartialBeamDirection] = [:]
-    ) -> VexFoundation.Beam {
-        let beam = inRuntimeContext { VexFoundation.Beam(notes, autoStem: autoStem) }
+    ) -> VexFoundation.Beam? {
+        try? BeamThrowing(
+            notes: notes,
+            autoStem: autoStem,
+            secondaryBeamBreaks: secondaryBeamBreaks,
+            partialBeamDirections: partialBeamDirections
+        )
+    }
+
+    @discardableResult
+    public func BeamThrowing(
+        notes: [StemmableNote],
+        autoStem: Bool = false,
+        secondaryBeamBreaks: [Int] = [],
+        partialBeamDirections: [Int: PartialBeamDirection] = [:]
+    ) throws -> VexFoundation.Beam {
+        let beam = try inRuntimeContext { try VexFoundation.Beam(notes, autoStem: autoStem) }
         if let ctx = context { _ = beam.setContext(ctx) }
         _ = beam.breakSecondaryAt(secondaryBeamBreaks)
         for (noteIndex, direction) in partialBeamDirections {

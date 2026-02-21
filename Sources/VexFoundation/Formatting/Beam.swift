@@ -5,6 +5,23 @@ import Foundation
 
 // MARK: - Partial Beam Direction
 
+public enum BeamError: Error, LocalizedError, Equatable, Sendable {
+    case tooFewNotes
+    case notesNotShorterThanQuarter
+    case nonMetricalTimeSignature(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .tooFewNotes:
+            return "Too few notes for beam."
+        case .notesNotShorterThanQuarter:
+            return "Beams can only be applied to notes shorter than a quarter note."
+        case .nonMetricalTimeSignature(let raw):
+            return "Cannot derive beam groups from \(raw)."
+        }
+    }
+}
+
 public enum PartialBeamDirection: String {
     case left = "L"
     case right = "R"
@@ -107,15 +124,15 @@ public final class Beam: VexElement {
 
     // MARK: - Init
 
-    public init(_ notes: [StemmableNote], autoStem: Bool = false) {
+    public init(_ notes: [StemmableNote], autoStem: Bool = false) throws {
         guard notes.count >= 2 else {
-            fatalError("[VexError] BadArguments: Too few notes for beam.")
+            throw BeamError.tooFewNotes
         }
 
         self.ticks = notes[0].getIntrinsicTicks()
 
         if let quarterTicks = Tables.durationToTicks("4"), ticks >= Double(quarterTicks) {
-            fatalError("[VexError] BadArguments: Beams can only be applied to notes shorter than a quarter note.")
+            throw BeamError.notesNotShorterThanQuarter
         }
 
         self.notes = notes
@@ -504,9 +521,9 @@ public final class Beam: VexElement {
     // MARK: - Static Helpers
 
     /// Get default beam groups for a time signature.
-    public static func getDefaultBeamGroups(_ timeSignature: TimeSignatureSpec) -> [Fraction] {
+    public static func getDefaultBeamGroups(_ timeSignature: TimeSignatureSpec) throws -> [Fraction] {
         guard let meter = timeSignature.meter else {
-            fatalError("[VexError] BadTimeSignature: Cannot derive beam groups from \(timeSignature.rawValue).")
+            throw BeamError.nonMetricalTimeSignature(timeSignature.rawValue)
         }
 
         let sig = meter.rawValue
@@ -534,7 +551,7 @@ public final class Beam: VexElement {
     public static func generateBeams(
         _ notes: [StemmableNote],
         config: BeamConfig = BeamConfig()
-    ) -> [Beam] {
+    ) throws -> [Beam] {
         let groups = config.groups ?? [Fraction(2, 8)]
 
         // Convert beat groups to ticks
@@ -663,7 +680,7 @@ public final class Beam: VexElement {
         // Create Beam objects
         var beams: [Beam] = []
         for group in beamedGroups {
-            let beam = Beam(group)
+            let beam = try Beam(group)
             if config.showStemlets {
                 beam.renderOptions.showStemlets = true
             }
@@ -686,9 +703,9 @@ public final class Beam: VexElement {
         _ voice: Voice,
         stemDirection: StemDirection? = nil,
         groups: [Fraction]? = nil
-    ) -> [Beam] {
+    ) throws -> [Beam] {
         let notes = voice.getTickables().compactMap { $0 as? StemmableNote }
-        return generateBeams(notes, config: BeamConfig(groups: groups, stemDirection: stemDirection))
+        return try generateBeams(notes, config: BeamConfig(groups: groups, stemDirection: stemDirection))
     }
 }
 

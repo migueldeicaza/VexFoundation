@@ -282,6 +282,38 @@ public struct StaveNoteHeadBounds {
     public var lowestNonDisplacedLine: Double
 }
 
+public enum StaveNoteError: Error, LocalizedError, Equatable, Sendable {
+    case missingGlyph(duration: String, type: String)
+    case invalidKeyProperties(String)
+    case noKeyProps
+    case invalidKeyIndex(Int)
+    case unformattedNoteForModifierStart
+    case invalidModifierIndex(Int)
+    case noYValues
+    case unformattedNoteForBoundingBox
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingGlyph(let duration, let type):
+            return "No glyph found for duration '\(duration)' and type '\(type)'."
+        case .invalidKeyProperties(let key):
+            return "Invalid key for note properties: \(key)"
+        case .noKeyProps:
+            return "Can't get line number without key properties."
+        case .invalidKeyIndex(let index):
+            return "Key index out of range: \(index)"
+        case .unformattedNoteForModifierStart:
+            return "Can't call getModifierStartXY on an unformatted note."
+        case .invalidModifierIndex(let index):
+            return "Modifier index out of range: \(index)"
+        case .noYValues:
+            return "No Y-values calculated for this note."
+        case .unformattedNoteForBoundingBox:
+            return "Can't call getBoundingBox on an unformatted note."
+        }
+    }
+}
+
 // MARK: - StaveNote
 
 /// The main class for rendering standard notes on a stave.
@@ -293,8 +325,8 @@ public class StaveNote: StemmableNote {
     public static let LEDGER_LINE_OFFSET: Double = 3
 
     public static var minNoteheadPadding: Double {
-        let musicFont = Glyph.MUSIC_FONT_STACK.first!
-        return (musicFont.lookupMetric("noteHead.minPadding") as? Double) ?? 2
+        let musicFont = Glyph.MUSIC_FONT_STACK.first
+        return (musicFont?.lookupMetric("noteHead.minPadding") as? Double) ?? 2
     }
 
     // MARK: - Properties
@@ -309,6 +341,34 @@ public class StaveNote: StemmableNote {
     public var ledgerLineStyle: ElementStyle?
     public var noteHeads: [NoteHead] = []
     public var sortedKeyProps: [(keyProps: KeyProps, index: Int)] = []
+    public private(set) var staveInitError: StaveNoteError?
+
+    private static func fallbackGlyphProps() -> GlyphProps {
+        Tables.getGlyphProps(duration: .quarter, type: .note) ?? GlyphProps(
+            codeHead: "noteheadBlack",
+            stem: true,
+            flag: false,
+            rest: false,
+            position: "B/4",
+            dotShiftY: 0,
+            lineAbove: 0,
+            lineBelow: 0,
+            beamCount: 0,
+            codeFlagUpstem: nil,
+            codeFlagDownstem: nil,
+            stemUpExtension: 0,
+            stemDownExtension: 0,
+            stemBeamExtension: 0,
+            tabnoteStemUpExtension: 0,
+            tabnoteStemDownExtension: 0
+        )
+    }
+
+    private func setInitErrorIfNeeded(_ error: StaveNoteError) {
+        if staveInitError == nil {
+            staveInitError = error
+        }
+    }
 
     // MARK: - Init
 
@@ -319,9 +379,11 @@ public class StaveNote: StemmableNote {
         super.init(noteStruct.toNoteStruct())
 
         // Refresh glyph props with resolved duration/type
-        glyphProps = Tables.getGlyphProps(duration: noteDuration, type: noteType)
-        guard glyphProps != nil else {
-            fatalError("[VexError] BadArguments: No glyph found for duration '\(noteDuration)' and type '\(noteType)'")
+        if let resolvedGlyphProps = Tables.getGlyphProps(duration: noteDuration, type: noteType) {
+            glyphProps = resolvedGlyphProps
+        } else {
+            glyphProps = Self.fallbackGlyphProps()
+            setInitErrorIfNeeded(.missingGlyph(duration: noteDuration, type: noteType))
         }
 
         renderOptions.glyphFontScale = noteStruct.glyphFontScale ?? Tables.NOTATION_FONT_SCALE
@@ -340,6 +402,13 @@ public class StaveNote: StemmableNote {
 
         reset()
         buildFlag()
+    }
+
+    public convenience init(validating noteStruct: StaveNoteStruct) throws {
+        self.init(noteStruct)
+        if let error = staveInitError {
+            throw error
+        }
     }
 
     // MARK: - Reset
@@ -373,6 +442,7 @@ public class StaveNote: StemmableNote {
     @discardableResult
     public func buildNoteHeads() -> Self {
         noteHeads = []
+        guard !sortedKeyProps.isEmpty else { return self }
         let dir = getStemDirection()
         let keyCount = keys.count
 
@@ -393,10 +463,8 @@ public class StaveNote: StemmableNote {
             let noteProps = sortedKeyProps[i].keyProps
             let line = noteProps.line
 
-            if lastLine == nil {
-                lastLine = line
-            } else {
-                let lineDiff = abs(lastLine! - line)
+            if let lastLine {
+                let lineDiff = abs(lastLine - line)
                 if lineDiff == 0 || lineDiff == 0.5 {
                     isDisplaced = !isDisplaced
                 } else {
@@ -435,6 +503,21 @@ public class StaveNote: StemmableNote {
     // MARK: - Calculate Key Props
 
     public func calculateKeyProps() {
+        do {
+            try calculateKeyPropsThrowing()
+        } catch let error as StaveNoteError {
+            setInitErrorIfNeeded(error)
+            let fallback = fallbackKeyProps()
+            keyProps = [fallback]
+            sortedKeyProps = [(keyProps: fallback, index: 0)]
+        } catch {
+            let fallback = fallbackKeyProps()
+            keyProps = [fallback]
+            sortedKeyProps = [(keyProps: fallback, index: 0)]
+        }
+    }
+
+    public func calculateKeyPropsThrowing() throws {
         keyProps = []
         sortedKeyProps = []
 
@@ -455,7 +538,7 @@ public class StaveNote: StemmableNote {
                     duration: noteDuration
                 )
             } catch {
-                fatalError("[VexError] BadArguments: Invalid key for note properties: \(key)")
+                throw StaveNoteError.invalidKeyProperties(key)
             }
 
             // Override line placement for default rests
@@ -478,7 +561,31 @@ public class StaveNote: StemmableNote {
             keyProps.append(props)
         }
 
-        // Sort by line (ascending)
+        guard !keyProps.isEmpty else {
+            throw StaveNoteError.noKeyProps
+        }
+        sortKeyProps()
+    }
+
+    private func fallbackKeyProps() -> KeyProps {
+        if let props = try? Tables.keyProperties("b/4", clef: clef, octaveShift: octaveShift, duration: noteDuration) {
+            return props
+        }
+        return KeyProps(
+            key: "b/4",
+            octave: 4,
+            line: 3,
+            intValue: 59,
+            accidental: nil,
+            code: nil,
+            stroke: 0,
+            shiftRight: 0,
+            displaced: false
+        )
+    }
+
+    private func sortKeyProps() {
+        sortedKeyProps = []
         for (index, kp) in keyProps.enumerated() {
             sortedKeyProps.append((keyProps: kp, index: index))
         }
@@ -492,6 +599,9 @@ public class StaveNote: StemmableNote {
     }
 
     public func calculateOptimalStemDirection() -> StemDirection {
+        guard !sortedKeyProps.isEmpty, !keyProps.isEmpty else {
+            return .up
+        }
         minLine = sortedKeyProps[0].keyProps.line
         maxLine = sortedKeyProps[keyProps.count - 1].keyProps.line
 
@@ -524,7 +634,8 @@ public class StaveNote: StemmableNote {
         if noteType == "r" {
             return getCenterGlyphX()
         }
-        return super.getStemX() + (stemDirection != nil ? Stem.WIDTH / (2 * -stemDirection!.signDouble) : 0)
+        let direction = getStemDirection()
+        return super.getStemX() + Stem.WIDTH / (2 * -direction.signDouble)
     }
 
     // MARK: - Displaced
@@ -560,8 +671,12 @@ public class StaveNote: StemmableNote {
     // MARK: - Line Numbers
 
     override public func getLineNumber(isTopNote: Bool = false) -> Double {
+        (try? getLineNumberThrowing(isTopNote: isTopNote)) ?? 0
+    }
+
+    public func getLineNumberThrowing(isTopNote: Bool = false) throws -> Double {
         guard !keyProps.isEmpty else {
-            fatalError("[VexError] NoKeyProps: Can't get line number without key properties.")
+            throw StaveNoteError.noKeyProps
         }
         var resultLine = keyProps[0].line
         for kp in keyProps {
@@ -575,6 +690,7 @@ public class StaveNote: StemmableNote {
     }
 
     override public func getLineForRest() -> Double {
+        guard !keyProps.isEmpty else { return 0 }
         var restLine = keyProps[0].line
         if keyProps.count > 1 {
             let lastLine = keyProps[keyProps.count - 1].line
@@ -589,13 +705,30 @@ public class StaveNote: StemmableNote {
 
     @discardableResult
     public func setKeyLine(_ index: Int, line: Double) -> Self {
-        keyProps[index].line = line
-        reset()
+        _ = try? setKeyLineThrowing(index, line: line)
         return self
     }
 
     public func getKeyLine(_ index: Int) -> Double {
-        keyProps[index].line
+        (try? getKeyLineThrowing(index)) ?? 0
+    }
+
+    @discardableResult
+    public func setKeyLineThrowing(_ index: Int, line: Double) throws -> Self {
+        guard index >= 0 && index < keyProps.count else {
+            throw StaveNoteError.invalidKeyIndex(index)
+        }
+        keyProps[index].line = line
+        sortKeyProps()
+        reset()
+        return self
+    }
+
+    public func getKeyLineThrowing(_ index: Int) throws -> Double {
+        guard index >= 0 && index < keyProps.count else {
+            throw StaveNoteError.invalidKeyIndex(index)
+        }
+        return keyProps[index].line
     }
 
     // MARK: - Voice Shift Width
@@ -614,11 +747,25 @@ public class StaveNote: StemmableNote {
     // MARK: - Modifier Start XY
 
     public func getModifierStartXY(position: ModifierPosition, index: Int, forceFlagRight: Bool = false) -> (x: Double, y: Double) {
+        (try? getModifierStartXYThrowing(position: position, index: index, forceFlagRight: forceFlagRight)) ?? (
+            x: getAbsoluteX(),
+            y: ys.first ?? 0
+        )
+    }
+
+    public func getModifierStartXYThrowing(
+        position: ModifierPosition,
+        index: Int,
+        forceFlagRight: Bool = false
+    ) throws -> (x: Double, y: Double) {
         guard preFormatted else {
-            fatalError("[VexError] UnformattedNote: Can't call getModifierStartXY on an unformatted note.")
+            throw StaveNoteError.unformattedNoteForModifierStart
         }
         guard !ys.isEmpty else {
-            fatalError("[VexError] NoYValues: No Y-values calculated for this note.")
+            throw StaveNoteError.noYValues
+        }
+        guard index >= 0 && index < ys.count else {
+            throw StaveNoteError.invalidModifierIndex(index)
         }
 
         var x: Double = 0
@@ -691,6 +838,15 @@ public class StaveNote: StemmableNote {
 
     @discardableResult
     public func setKeyStyle(_ index: Int, style: ElementStyle) -> Self {
+        _ = try? setKeyStyleThrowing(index, style: style)
+        return self
+    }
+
+    @discardableResult
+    public func setKeyStyleThrowing(_ index: Int, style: ElementStyle) throws -> Self {
+        guard index >= 0 && index < noteHeads.count else {
+            throw StaveNoteError.invalidKeyIndex(index)
+        }
         noteHeads[index].setStyle(style)
         return self
     }
@@ -698,6 +854,22 @@ public class StaveNote: StemmableNote {
     // MARK: - NoteHead Bounds
 
     public func getNoteHeadBounds() -> StaveNoteHeadBounds {
+        if noteHeads.isEmpty {
+            let line = getLineNumber()
+            return StaveNoteHeadBounds(
+                yTop: 0,
+                yBottom: 0,
+                displacedX: nil,
+                nonDisplacedX: getAbsoluteX(),
+                highestLine: line,
+                lowestLine: line,
+                highestDisplacedLine: nil,
+                lowestDisplacedLine: nil,
+                highestNonDisplacedLine: line,
+                lowestNonDisplacedLine: line
+            )
+        }
+
         var yTop = Double.infinity
         var yBottom = -Double.infinity
         var displacedX: Double?
@@ -729,8 +901,8 @@ public class StaveNote: StemmableNote {
             lowestLine = min(line, lowestLine)
 
             if notehead.isDisplaced() {
-                highestDisplacedLine = highestDisplacedLine == nil ? line : max(line, highestDisplacedLine!)
-                lowestDisplacedLine = lowestDisplacedLine == nil ? line : min(line, lowestDisplacedLine!)
+                highestDisplacedLine = max(line, highestDisplacedLine ?? line)
+                lowestDisplacedLine = min(line, lowestDisplacedLine ?? line)
             } else {
                 highestNonDisplacedLine = max(line, highestNonDisplacedLine)
                 lowestNonDisplacedLine = min(line, lowestNonDisplacedLine)
@@ -837,11 +1009,18 @@ public class StaveNote: StemmableNote {
     // MARK: - Bounding Box
 
     override public func getBoundingBox() -> BoundingBox? {
+        try? getBoundingBoxThrowing()
+    }
+
+    public func getBoundingBoxThrowing() throws -> BoundingBox? {
         guard preFormatted else {
-            fatalError("[VexError] UnformattedNote: Can't call getBoundingBox on an unformatted note.")
+            throw StaveNoteError.unformattedNoteForBoundingBox
+        }
+        guard !ys.isEmpty else {
+            throw StaveNoteError.noYValues
         }
 
-        let metrics = getMetrics()
+        let metrics = try getMetricsThrowing()
         let x = getAbsoluteX() - metrics.modLeftPx - metrics.leftDisplacedHeadPx
         let halfLineSpacing = (noteStave?.getSpacingBetweenLines() ?? 0) / 2
         let lineSpacing = halfLineSpacing * 2
@@ -860,7 +1039,7 @@ public class StaveNote: StemmableNote {
                 maxY = y + glyphProps.lineBelow * lineSpacing
             }
         } else if glyphProps.stem {
-            var extents = getStemExtents()
+            var extents = try getStemExtentsThrowing()
             extents.baseY += halfLineSpacing * getStemDirection().signDouble
             minY = min(extents.topY, extents.baseY)
             maxY = max(extents.topY, extents.baseY)
@@ -1168,7 +1347,7 @@ public class StaveNote: StemmableNote {
     override public func draw() throws {
         guard renderOptions.draw else { return }
         guard !ys.isEmpty else {
-            fatalError("[VexError] NoYValues: Can't draw note without Y values.")
+            throw StaveNoteError.noYValues
         }
 
         let ctx = try checkContext()
@@ -1301,11 +1480,12 @@ public class StaveNote: StemmableNote {
     // MARK: - Draw Flag
 
     public func drawFlag() throws {
-        _ = try checkContext()
+        let context = try checkContext()
 
         if shouldDrawFlag() {
+            guard let stem else { return }
             let bounds = getNoteHeadBounds()
-            let noteStemHeight = stem!.getHeight()
+            let noteStemHeight = stem.getHeight()
             let flagX = getStemX()
             let scale = getStaveNoteScale()
 
@@ -1320,7 +1500,7 @@ public class StaveNote: StemmableNote {
                     - (flag?.getMetrics().yShift ?? 0) * (1 - scale)
             }
 
-            flag?.render(ctx: getContext()!, x: flagX, y: flagY)
+            flag?.render(ctx: context, x: flagX, y: flagY)
         }
     }
 }

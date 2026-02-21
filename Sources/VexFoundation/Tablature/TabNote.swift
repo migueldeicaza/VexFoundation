@@ -165,6 +165,29 @@ private func getPartialStemLines(
     return stemLines
 }
 
+public enum TabNoteError: Error, LocalizedError, Equatable, Sendable {
+    case emptyPositions
+    case missingGlyph(duration: String, type: String)
+    case unformattedNoteForModifierStart
+    case invalidModifierIndex(Int)
+    case noYValues
+
+    public var errorDescription: String? {
+        switch self {
+        case .emptyPositions:
+            return "TabNote requires at least one position."
+        case .missingGlyph(let duration, let type):
+            return "No glyph found for duration '\(duration)' and type '\(type)'."
+        case .unformattedNoteForModifierStart:
+            return "Can't call getModifierStartXY on an unformatted note."
+        case .invalidModifierIndex(let index):
+            return "Modifier index out of range: \(index)"
+        case .noYValues:
+            return "No Y-values calculated for this note."
+        }
+    }
+}
+
 // MARK: - TabNote
 
 /// Renders notes for tablature notation. Consists of one or more fret positions,
@@ -178,6 +201,34 @@ open class TabNote: StemmableNote {
     public var ghost: Bool = false
     public var glyphPropsArr: [TabGlyphProps] = []
     public var positions: [TabNotePosition]
+    public private(set) var tabInitError: TabNoteError?
+
+    private static func fallbackGlyphProps() -> GlyphProps {
+        Tables.getGlyphProps(duration: .quarter, type: .note) ?? GlyphProps(
+            codeHead: "noteheadBlack",
+            stem: true,
+            flag: false,
+            rest: false,
+            position: "B/4",
+            dotShiftY: 0,
+            lineAbove: 0,
+            lineBelow: 0,
+            beamCount: 0,
+            codeFlagUpstem: nil,
+            codeFlagDownstem: nil,
+            stemUpExtension: 0,
+            stemDownExtension: 0,
+            stemBeamExtension: 0,
+            tabnoteStemUpExtension: 0,
+            tabnoteStemDownExtension: 0
+        )
+    }
+
+    private func setInitErrorIfNeeded(_ error: TabNoteError) {
+        if tabInitError == nil {
+            tabInitError = error
+        }
+    }
 
     // MARK: - Init
 
@@ -201,10 +252,15 @@ open class TabNote: StemmableNote {
         renderOptions.scale = 1.0
         renderOptions.font = "\(VexFont.SIZE)pt \(VexFont.SANS_SERIF)"
 
-        guard let gp = Tables.getGlyphProps(duration: noteDuration, type: noteType) else {
-            fatalError("[VexError] BadArguments: No glyph found for duration '\(noteDuration)' and type '\(noteType)'")
+        if noteStruct.positions.isEmpty {
+            setInitErrorIfNeeded(.emptyPositions)
         }
-        glyphProps = gp
+        if let gp = Tables.getGlyphProps(duration: noteDuration, type: noteType) {
+            glyphProps = gp
+        } else {
+            glyphProps = Self.fallbackGlyphProps()
+            setInitErrorIfNeeded(.missingGlyph(duration: noteDuration, type: noteType))
+        }
 
         buildStem()
 
@@ -215,6 +271,13 @@ open class TabNote: StemmableNote {
         }
 
         updateWidth()
+    }
+
+    public convenience init(validating noteStruct: TabNoteStruct, drawStem: Bool = false) throws {
+        self.init(noteStruct, drawStem: drawStem)
+        if let error = tabInitError {
+            throw error
+        }
     }
 
     // MARK: - String Accessors
@@ -285,17 +348,17 @@ open class TabNote: StemmableNote {
         if let ctx { setContext(ctx) }
 
         // Recalculate widths based on the context's font
-        if ctx != nil {
+        if let context = ctx {
             var w: Double = 0
             for i in 0..<glyphPropsArr.count {
                 var gp = glyphPropsArr[i]
                 let text = gp.text
                 if text.uppercased() != "X" {
                     if let font = renderOptions.font {
-                        ctx!.save()
-                        ctx!.setFont(font)
-                        gp.width = ctx!.measureText(text).width
-                        ctx!.restore()
+                        context.save()
+                        context.setFont(font)
+                        gp.width = context.measureText(text).width
+                        context.restore()
                     }
                 }
                 glyphPropsArr[i] = gp
@@ -324,11 +387,21 @@ open class TabNote: StemmableNote {
     // MARK: - Modifier Start XY
 
     override public func getModifierStartXY(position: ModifierPosition, index: Int) -> (x: Double, y: Double) {
+        (try? getModifierStartXYThrowing(position: position, index: index)) ?? (
+            x: getAbsoluteX(),
+            y: ys.first ?? 0
+        )
+    }
+
+    public func getModifierStartXYThrowing(position: ModifierPosition, index: Int) throws -> (x: Double, y: Double) {
         guard preFormatted else {
-            fatalError("[VexError] UnformattedNote: Can't call GetModifierStartXY on an unformatted note")
+            throw TabNoteError.unformattedNoteForModifierStart
         }
         guard !ys.isEmpty else {
-            fatalError("[VexError] NoYValues: No Y-Values calculated for this note.")
+            throw TabNoteError.noYValues
+        }
+        guard index >= 0 && index < ys.count else {
+            throw TabNoteError.invalidModifierIndex(index)
         }
 
         var x: Double = 0
@@ -346,7 +419,7 @@ open class TabNote: StemmableNote {
     // MARK: - Rest Line
 
     override public func getLineForRest() -> Double {
-        Double(positions[0].str)
+        Double(positions.first?.str ?? 0)
     }
 
     // MARK: - Pre Format
@@ -364,11 +437,16 @@ open class TabNote: StemmableNote {
     }
 
     public func getStemY() -> Double {
-        let numLines = checkStave().getNumLines()
+        (try? getStemYThrowing()) ?? 0
+    }
+
+    public func getStemYThrowing() throws -> Double {
+        let stave = try checkStaveThrowing()
+        let numLines = stave.getNumLines()
         let stemUpLine = -0.5
         let stemDownLine = Double(numLines) - 0.5
         let stemStartLine = Stem.UP == getStemDirection() ? stemUpLine : stemDownLine
-        return checkStave().getYForLine(stemStartLine)
+        return stave.getYForLine(stemStartLine)
     }
 
     override public func getStemExtents() -> (topY: Double, baseY: Double) {
@@ -443,7 +521,8 @@ open class TabNote: StemmableNote {
         guard let ctx = getContext() else { return }
         let x = getAbsoluteX()
         let ys = self.ys
-        for i in 0..<positions.count {
+        let count = min(positions.count, ys.count, glyphPropsArr.count)
+        for i in 0..<count {
             let y = ys[i] + renderOptions.yShift
             let glyphProps = glyphPropsArr[i]
 
@@ -475,7 +554,7 @@ open class TabNote: StemmableNote {
     override public func draw() throws {
         let ctx = try checkContext()
         guard !ys.isEmpty else {
-            fatalError("[VexError] NoYValues: Can't draw note without Y values.")
+            throw TabNoteError.noYValues
         }
 
         setRendered()

@@ -5,6 +5,29 @@ import Foundation
 
 // MARK: - Note Metrics
 
+public enum NoteError: Error, LocalizedError, Equatable, Sendable {
+    case invalidInitializationData(String)
+    case noStave
+    case noYValues
+    case unformattedMetrics
+    case noStem
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidInitializationData(let duration):
+            return "Invalid note initialization data: \(duration)"
+        case .noStave:
+            return "No stave attached to note."
+        case .noYValues:
+            return "No Y-values calculated for note."
+        case .unformattedMetrics:
+            return "Can't call getMetrics on an unformatted note."
+        case .noStem:
+            return "No stem attached to this note."
+        }
+    }
+}
+
 /// Metrics for a rendered note.
 public struct NoteMetrics {
     public var width: Double = 0
@@ -193,6 +216,26 @@ open class Note: Tickable {
         )
     }
 
+    /// Strict parse variant that throws when the input is invalid.
+    public static func parseNoteStructThrowing(_ noteStruct: NoteStruct) throws -> ParsedNote {
+        guard let parsed = parseNoteStruct(noteStruct) else {
+            throw NoteError.invalidInitializationData(noteStruct.duration.rawValue)
+        }
+        return parsed
+    }
+
+    private static func fallbackParsedNote(for noteStruct: NoteStruct) -> ParsedNote {
+        let resolvedType = noteStruct.type ?? noteStruct.duration.type
+        let tickBase = Tables.durationToTicks(noteStruct.duration.value)
+        return ParsedNote(
+            duration: noteStruct.duration.value,
+            type: resolvedType,
+            customTypes: Array(repeating: resolvedType.rawValue, count: noteStruct.keys.count),
+            dots: 0,
+            ticks: tickBase
+        )
+    }
+
     // MARK: - Instance Properties
 
     public var glyphProps: GlyphProps!
@@ -211,12 +254,19 @@ open class Note: Tickable {
     public var customTypes: [String] = []
     public weak var playNote: Note?
     public weak var beam: Beam?
+    public private(set) var initError: NoteError?
 
     // MARK: - Init
 
     public init(_ noteStruct: NoteStruct) {
-        guard let parsed = Note.parseNoteStruct(noteStruct) else {
-            fatalError("[VexError] BadArguments: Invalid note initialization data: \(noteStruct.duration.rawValue)")
+        let parsed: ParsedNote
+        let parsedError: NoteError?
+        if let strict = try? Note.parseNoteStructThrowing(noteStruct) {
+            parsed = strict
+            parsedError = nil
+        } else {
+            parsed = Note.fallbackParsedNote(for: noteStruct)
+            parsedError = .invalidInitializationData(noteStruct.duration.rawValue)
         }
 
         self.keys = noteStruct.keys
@@ -225,6 +275,7 @@ open class Note: Tickable {
         self.noteDuration = parsed.duration.rawValue
         self.noteType = parsed.type.rawValue
         self.customTypes = parsed.customTypes
+        self.initError = parsedError
 
         super.init()
 
@@ -250,6 +301,12 @@ open class Note: Tickable {
         }
     }
 
+    /// Strict validation initializer for call sites that require parse failures as errors.
+    public convenience init(validating noteStruct: NoteStruct) throws {
+        _ = try Note.parseNoteStructThrowing(noteStruct)
+        self.init(noteStruct)
+    }
+
     // MARK: - Play Note
 
     public func getPlayNote() -> Note? { playNote }
@@ -269,8 +326,12 @@ open class Note: Tickable {
     override public func getStave() -> Stave? { noteStave }
 
     public func checkStave() -> Stave {
+        (try? checkStaveThrowing()) ?? Stave(x: 0, y: 0, width: 0)
+    }
+
+    public func checkStaveThrowing() throws -> Stave {
         guard let noteStave else {
-            fatalError("[VexError] NoStave: No stave attached to instance.")
+            throw NoteError.noStave
         }
         return noteStave
     }
@@ -340,8 +401,12 @@ open class Note: Tickable {
     }
 
     public func getYs() -> [Double] {
+        (try? getYsThrowing()) ?? [0]
+    }
+
+    public func getYsThrowing() throws -> [Double] {
         guard !ys.isEmpty else {
-            fatalError("[VexError] NoYValues: No Y-values calculated for this note.")
+            throw NoteError.noYValues
         }
         return ys
     }
@@ -387,13 +452,26 @@ open class Note: Tickable {
     // MARK: - Metrics
 
     override open func getMetrics() -> NoteMetrics {
+        (try? getMetricsThrowing()) ?? NoteMetrics(
+            width: tickableWidth,
+            glyphWidth: getGlyphWidth(),
+            notePx: tickableWidth,
+            modLeftPx: 0,
+            modRightPx: 0,
+            leftDisplacedHeadPx: leftDisplacedHeadPx,
+            rightDisplacedHeadPx: rightDisplacedHeadPx,
+            glyphPx: 0
+        )
+    }
+
+    open func getMetricsThrowing() throws -> NoteMetrics {
         guard preFormatted else {
-            fatalError("[VexError] UnformattedNote: Can't call getMetrics on an unformatted note.")
+            throw NoteError.unformattedMetrics
         }
 
         let modLeftPx = modifierContext?.getState().leftShift ?? 0
         let modRightPx = modifierContext?.getState().rightShift ?? 0
-        let width = getTickableWidth()
+        let width = try getTickableWidthThrowing()
         let glyphWidth = getGlyphWidth()
         let notePx = width - modLeftPx - modRightPx - leftDisplacedHeadPx - rightDisplacedHeadPx
 
@@ -415,8 +493,7 @@ open class Note: Tickable {
         let tc = checkTickContext("Can't getAbsoluteX() without a TickContext.")
         var x = tc.getX()
         if let stave = noteStave {
-            let musicFont = Glyph.MUSIC_FONT_STACK.first!
-            let padding = (musicFont.lookupMetric("stave.padding") as? Double) ?? 0
+            let padding = (Glyph.MUSIC_FONT_STACK.first?.lookupMetric("stave.padding") as? Double) ?? 0
             x += stave.getNoteStartX() + padding
         }
         if isCenterAligned() {
@@ -433,11 +510,19 @@ open class Note: Tickable {
     // MARK: - Stem (default - overridden by StemmableNote)
 
     open func getStemDirection() -> StemDirection {
-        fatalError("[VexError] NoStem: No stem attached to this note.")
+        (try? getStemDirectionThrowing()) ?? Stem.UP
+    }
+
+    open func getStemDirectionThrowing() throws -> StemDirection {
+        throw NoteError.noStem
     }
 
     open func getStemExtents() -> (topY: Double, baseY: Double) {
-        fatalError("[VexError] NoStem: No stem attached to this note.")
+        (try? getStemExtentsThrowing()) ?? (topY: 0, baseY: 0)
+    }
+
+    open func getStemExtentsThrowing() throws -> (topY: Double, baseY: Double) {
+        throw NoteError.noStem
     }
 
     // MARK: - Modifier Start Position

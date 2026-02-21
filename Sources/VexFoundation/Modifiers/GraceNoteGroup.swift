@@ -118,10 +118,11 @@ public final class GraceNoteGroup: Modifier {
     public func beamNotes(_ notes: [StemmableNote]? = nil) -> Self {
         let notesToBeam = notes ?? graceNotes
         if notesToBeam.count > 1 {
-            let beam = Beam(notesToBeam)
-            beam.renderOptions.beamWidth = 3
-            beam.renderOptions.partialBeamLength = 4
-            beams.append(beam)
+            if let beam = try? Beam(notesToBeam) {
+                beam.renderOptions.beamWidth = 3
+                beam.renderOptions.partialBeamLength = 4
+                beams.append(beam)
+            }
         }
         return self
     }

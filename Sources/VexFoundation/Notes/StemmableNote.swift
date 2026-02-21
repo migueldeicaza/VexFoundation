@@ -3,6 +3,20 @@
 
 import Foundation
 
+public enum StemmableNoteError: Error, LocalizedError, Equatable, Sendable {
+    case noStem
+    case noStemDirection
+
+    public var errorDescription: String? {
+        switch self {
+        case .noStem:
+            return "No stem attached to this note."
+        case .noStemDirection:
+            return "No stem direction set on this note."
+        }
+    }
+}
+
 // MARK: - StemmableNote
 
 /// Abstract interface for notes with optional stems.
@@ -21,8 +35,12 @@ open class StemmableNote: Note {
     public func getStem() -> Stem? { stem }
 
     public func checkStem() -> Stem {
+        (try? checkStemThrowing()) ?? Stem()
+    }
+
+    public func checkStemThrowing() throws -> Stem {
         guard let stem else {
-            fatalError("[VexError] NoStem: No stem attached to instance")
+            throw StemmableNoteError.noStem
         }
         return stem
     }
@@ -84,8 +102,15 @@ open class StemmableNote: Note {
     // MARK: - Stem Direction
 
     override public func getStemDirection() -> StemDirection {
+        (try? getStemDirectionThrowing()) ?? Stem.UP
+    }
+
+    override public func getStemDirectionThrowing() throws -> StemDirection {
+        guard stem != nil else {
+            throw StemmableNoteError.noStem
+        }
         guard let stemDirection else {
-            fatalError("[VexError] NoStem: No stem attached to this note.")
+            throw StemmableNoteError.noStemDirection
         }
         return stemDirection
     }
@@ -104,21 +129,22 @@ open class StemmableNote: Note {
             stem.setDirection(dir)
             stem.setExtension(getStemExtension())
 
-            let glyphP = getBaseCustomNoteHeadGlyphProps() ?? glyphProps!
-            guard let musicFont = Glyph.MUSIC_FONT_STACK.first else { return self }
-            let key = "stem.noteHead.\(glyphP.codeHead)"
-            let offsets = musicFont.lookupMetric(key)
-            let offsetYBaseStemUp = (offsets as? [String: Any])?["offsetYBaseStemUp"] as? Double ?? 0
-            let offsetYTopStemUp = (offsets as? [String: Any])?["offsetYTopStemUp"] as? Double ?? 0
-            let offsetYBaseStemDown = (offsets as? [String: Any])?["offsetYBaseStemDown"] as? Double ?? 0
-            let offsetYTopStemDown = (offsets as? [String: Any])?["offsetYTopStemDown"] as? Double ?? 0
+            if let glyphP = getBaseCustomNoteHeadGlyphProps() ?? glyphProps,
+               let musicFont = Glyph.MUSIC_FONT_STACK.first {
+                let key = "stem.noteHead.\(glyphP.codeHead)"
+                let offsets = musicFont.lookupMetric(key)
+                let offsetYBaseStemUp = (offsets as? [String: Any])?["offsetYBaseStemUp"] as? Double ?? 0
+                let offsetYTopStemUp = (offsets as? [String: Any])?["offsetYTopStemUp"] as? Double ?? 0
+                let offsetYBaseStemDown = (offsets as? [String: Any])?["offsetYBaseStemDown"] as? Double ?? 0
+                let offsetYTopStemDown = (offsets as? [String: Any])?["offsetYTopStemDown"] as? Double ?? 0
 
-            stem.setOptions(StemOptions(
-                stemDownYBaseOffset: offsetYBaseStemDown,
-                stemUpYBaseOffset: offsetYBaseStemUp,
-                stemDownYOffset: offsetYTopStemDown,
-                stemUpYOffset: offsetYTopStemUp
-            ))
+                stem.setOptions(StemOptions(
+                    stemDownYBaseOffset: offsetYBaseStemDown,
+                    stemUpYBaseOffset: offsetYBaseStemUp,
+                    stemDownYOffset: offsetYTopStemDown,
+                    stemUpYOffset: offsetYTopStemUp
+                ))
+            }
         }
 
         if preFormatted {
@@ -162,10 +188,11 @@ open class StemmableNote: Note {
     // MARK: - Stem Extents
 
     override public func getStemExtents() -> (topY: Double, baseY: Double) {
-        guard let stem else {
-            fatalError("[VexError] NoStem: No stem attached to this note.")
-        }
-        return stem.getExtents()
+        (try? getStemExtentsThrowing()) ?? (topY: 0, baseY: 0)
+    }
+
+    override public func getStemExtentsThrowing() throws -> (topY: Double, baseY: Double) {
+        try checkStemThrowing().getExtents()
     }
 
     // MARK: - Y for Text

@@ -5,6 +5,26 @@ import Foundation
 
 // MARK: - Formatter Options
 
+public enum FormatterError: Error, LocalizedError, Equatable, Sendable {
+    case noVoicesToFormat
+    case tickMismatch
+    case incompleteVoice
+    case minTotalWidthUnavailable
+
+    public var errorDescription: String? {
+        switch self {
+        case .noVoicesToFormat:
+            return "No voices to format."
+        case .tickMismatch:
+            return "Voices should have same total note duration in ticks."
+        case .incompleteVoice:
+            return "Voice does not have enough notes."
+        case .minTotalWidthUnavailable:
+            return "Call preFormat before calling getMinTotalWidth."
+        }
+    }
+}
+
 /// Options for the Formatter layout engine.
 public struct FormatterOptions {
     public var softmaxFactor: Double = Tables.SOFTMAX_FACTOR
@@ -65,6 +85,7 @@ public final class Formatter {
     public var voices: [Voice] = []
     public var lossHistory: [Double] = []
     public var contextGaps: (total: Double, gaps: [(x1: Double, x2: Double)]) = (0, [])
+    public private(set) var lastError: FormatterError?
 
     // MARK: - Init
 
@@ -99,11 +120,11 @@ public final class Formatter {
     ) throws -> BoundingBox? {
         let voice = Voice(time: VoiceTime(numBeats: 4, beatValue: 4))
         _ = voice.setMode(.soft)
-        _ = voice.addTickables(notes)
+        _ = try voice.addTickablesThrowing(notes)
 
         let formatter = Formatter()
-        _ = formatter.joinVoices([voice])
-        _ = formatter.formatToStave([voice], stave: stave, options: params)
+        _ = try formatter.joinVoicesThrowing([voice])
+        _ = try formatter.formatToStaveThrowing([voice], stave: stave, options: params)
 
         try voice.draw(context: ctx, stave: stave)
         return voice.boundingBox
@@ -113,18 +134,22 @@ public final class Formatter {
 
     /// Calculate the resolution multiplier for voices.
     public static func getResolutionMultiplier(_ voices: [Voice]) -> Int {
+        (try? getResolutionMultiplierThrowing(voices)) ?? 1
+    }
+
+    public static func getResolutionMultiplierThrowing(_ voices: [Voice]) throws -> Int {
         guard !voices.isEmpty else {
-            fatalError("[VexError] BadArgument: No voices to format.")
+            throw FormatterError.noVoicesToFormat
         }
 
         let totalTicks = voices[0].getTotalTicks()
         var resolutionMultiplier = 1
         for voice in voices {
             guard voice.getTotalTicks() == totalTicks else {
-                fatalError("[VexError] TickMismatch: Voices should have same total note duration in ticks.")
+                throw FormatterError.tickMismatch
             }
             if voice.getMode() == .strict && !voice.isComplete() {
-                fatalError("[VexError] IncompleteVoice: Voice does not have enough notes.")
+                throw FormatterError.incompleteVoice
             }
             resolutionMultiplier = Fraction.lcm(resolutionMultiplier, voice.getResolutionMultiplier())
         }
@@ -136,8 +161,21 @@ public final class Formatter {
     /// Create modifier contexts for voices. Must be called before format().
     @discardableResult
     public func joinVoices(_ voices: [Voice]) -> Self {
-        createModifierContexts(voices)
+        do {
+            return try joinVoicesThrowing(voices)
+        } catch let error as FormatterError {
+            lastError = error
+            return self
+        } catch {
+            return self
+        }
+    }
+
+    @discardableResult
+    public func joinVoicesThrowing(_ voices: [Voice]) throws -> Self {
+        try createModifierContextsThrowing(voices)
         hasMinTotalWidth = false
+        lastError = nil
         return self
     }
 
@@ -145,8 +183,12 @@ public final class Formatter {
 
     /// Create a ModifierContext for each tick in voices.
     public func createModifierContexts(_ voices: [Voice]) {
+        _ = try? createModifierContextsThrowing(voices)
+    }
+
+    public func createModifierContextsThrowing(_ voices: [Voice]) throws {
         if voices.isEmpty { return }
-        let resolutionMultiplier = Formatter.getResolutionMultiplier(voices)
+        let resolutionMultiplier = try Formatter.getResolutionMultiplierThrowing(voices)
 
         var staveTickMap: [ObjectIdentifier?: [Int: ModifierContext]] = [:]
         var contexts: [ModifierContext] = []
@@ -179,6 +221,11 @@ public final class Formatter {
     /// Create a TickContext for each tick in voices.
     @discardableResult
     public func createTickContexts(_ voices: [Voice]) -> AlignmentContexts {
+        (try? createTickContextsThrowing(voices)) ?? tickContexts
+    }
+
+    @discardableResult
+    public func createTickContextsThrowing(_ voices: [Voice]) throws -> AlignmentContexts {
         if voices.isEmpty {
             tickContexts = AlignmentContexts()
             return tickContexts
@@ -187,7 +234,7 @@ public final class Formatter {
         var tickToContextMap: [Int: TickContext] = [:]
         var tickList: [Int] = []
         var contexts: [TickContext] = []
-        let resolutionMultiplier = Formatter.getResolutionMultiplier(voices)
+        let resolutionMultiplier = try Formatter.getResolutionMultiplierThrowing(voices)
 
         for (voiceIndex, voice) in voices.enumerated() {
             let ticksUsed = Fraction(0, resolutionMultiplier)
@@ -231,6 +278,19 @@ public final class Formatter {
                           renderingContext: RenderContext? = nil,
                           voices: [Voice]? = nil,
                           stave: Stave? = nil) -> Double {
+        (try? preFormatThrowing(
+            justifyWidth: justifyWidth,
+            renderingContext: renderingContext,
+            voices: voices,
+            stave: stave
+        )) ?? 0
+    }
+
+    @discardableResult
+    public func preFormatThrowing(justifyWidth: Double = 0,
+                                  renderingContext: RenderContext? = nil,
+                                  voices: [Voice]? = nil,
+                                  stave: Stave? = nil) throws -> Double {
         let contextList = tickContexts.list
         let contextMap = tickContexts.map
 
@@ -239,7 +299,7 @@ public final class Formatter {
         // Set stave and preFormat voices
         if let voices, let stave {
             for voice in voices {
-                _ = voice.setStave(stave).preFormat()
+                _ = try voice.setStave(stave).preFormatThrowing()
             }
         }
 
@@ -340,7 +400,11 @@ public final class Formatter {
                             if globalSoftmax {
                                 expectedDistance = (pow(softmaxFactor, maxTicksVal / max(totalTicks, 1)) / max(expTicksUsed, 1)) * targetWidth
                             } else if let bt = backTickable {
-                                expectedDistance = bt.getVoice().softmax(maxTicksVal) * targetWidth
+                                if let voice = bt.voice {
+                                    expectedDistance = voice.softmax(maxTicksVal) * targetWidth
+                                } else {
+                                    expectedDistance = 0
+                                }
                             } else {
                                 expectedDistance = 0
                             }
@@ -385,10 +449,10 @@ public final class Formatter {
             return lastContext.getX() - firstContext.getX()
         }
 
-        let musicFont = Glyph.MUSIC_FONT_STACK.first!
-        let configMinPadding = (musicFont.lookupMetric("stave.endPaddingMin") as? Double) ?? 8
-        let configMaxPadding = (musicFont.lookupMetric("stave.endPaddingMax") as? Double) ?? 20
-        let leftPadding = (musicFont.lookupMetric("stave.padding") as? Double) ?? 12
+        let musicFont = Glyph.MUSIC_FONT_STACK.first
+        let configMinPadding = (musicFont?.lookupMetric("stave.endPaddingMin") as? Double) ?? 8
+        let configMaxPadding = (musicFont?.lookupMetric("stave.endPaddingMax") as? Double) ?? 20
+        let leftPadding = (musicFont?.lookupMetric("stave.padding") as? Double) ?? 12
 
         var targetWidth = adjustedJustifyWidth
         var distances = calculateIdealDistances(targetWidth)
@@ -407,7 +471,7 @@ public final class Formatter {
         func paddingMaxCalc(_ curTargetWidth: Double) -> Double {
             var lastTickablePadding: Double = 0
             if let lastTickable = lastContext.getMaxTickable() {
-                let voice = lastTickable.getVoice()
+                guard let voice = lastTickable.voice else { return configMaxPadding }
                 if voice.getTicksUsed().value() > voice.getTotalTicks().value() {
                     return configMaxPadding * 2 < minDistance ? minDistance : configMaxPadding
                 }
@@ -612,7 +676,21 @@ public final class Formatter {
 
     /// Main public method: format voices and justify to width.
     @discardableResult
-    public func format(_ voices: [Voice], justifyWidth: Double? = nil, options: FormatParams = FormatParams()) -> Self {
+    public func format(_ voices: [Voice], justifyWidth: Double? = nil,
+                       options: FormatParams = FormatParams()) -> Self {
+        do {
+            return try formatThrowing(voices, justifyWidth: justifyWidth, options: options)
+        } catch let error as FormatterError {
+            lastError = error
+            return self
+        } catch {
+            return self
+        }
+    }
+
+    @discardableResult
+    public func formatThrowing(_ voices: [Voice], justifyWidth: Double? = nil,
+                               options: FormatParams = FormatParams()) throws -> Self {
         self.voices = voices
 
         let factor = formatterOptions.softmaxFactor
@@ -621,13 +699,19 @@ public final class Formatter {
         }
 
         alignRests(voices, alignAllNotes: options.alignRests)
-        createTickContexts(voices)
-        preFormat(justifyWidth: justifyWidth ?? 0, renderingContext: options.context, voices: voices, stave: options.stave)
+        _ = try createTickContextsThrowing(voices)
+        _ = try preFormatThrowing(
+            justifyWidth: justifyWidth ?? 0,
+            renderingContext: options.context,
+            voices: voices,
+            stave: options.stave
+        )
 
         if options.stave != nil {
             _ = postFormat()
         }
 
+        lastError = nil
         return self
     }
 
@@ -635,12 +719,26 @@ public final class Formatter {
 
     /// Like format(), but infers justifyWidth from the stave.
     @discardableResult
-    public func formatToStave(_ voices: [Voice], stave: Stave, options: FormatParams = FormatParams()) -> Self {
+    public func formatToStave(_ voices: [Voice], stave: Stave,
+                              options: FormatParams = FormatParams()) -> Self {
+        do {
+            return try formatToStaveThrowing(voices, stave: stave, options: options)
+        } catch let error as FormatterError {
+            lastError = error
+            return self
+        } catch {
+            return self
+        }
+    }
+
+    @discardableResult
+    public func formatToStaveThrowing(_ voices: [Voice], stave: Stave,
+                                      options: FormatParams = FormatParams()) throws -> Self {
         var opts = options
         opts.context = opts.context ?? stave.getContext()
         opts.stave = stave
         let jw = stave.getNoteEndX() - stave.getNoteStartX() - Stave.defaultPadding
-        return format(voices, justifyWidth: jw, options: opts)
+        return try formatThrowing(voices, justifyWidth: jw, options: opts)
     }
 
     // MARK: - Pre-Calculate Min Total Width
@@ -648,7 +746,11 @@ public final class Formatter {
     /// Pre-calculate the minimum total width needed for all voices.
     /// `joinVoices` must be called before this method.
     public func preCalculateMinTotalWidth(_ voices: [Voice]) -> Double {
-        let unalignedPadding = (Glyph.MUSIC_FONT_STACK.first!
+        (try? preCalculateMinTotalWidthThrowing(voices)) ?? minTotalWidth
+    }
+
+    public func preCalculateMinTotalWidthThrowing(_ voices: [Voice]) throws -> Double {
+        let unalignedPadding = (Glyph.MUSIC_FONT_STACK.first?
             .lookupMetric("stave.unalignedNotePadding") as? Double) ?? 10
 
         var unalignedCtxCount = 0
@@ -659,7 +761,7 @@ public final class Formatter {
 
         if hasMinTotalWidth { return minTotalWidth }
 
-        createTickContexts(voices)
+        _ = try createTickContextsThrowing(voices)
 
         let contextList = tickContexts.list
         let contextMap = tickContexts.map
@@ -757,8 +859,12 @@ public final class Formatter {
     // MARK: - Accessors
 
     public func getMinTotalWidth() -> Double {
+        (try? getMinTotalWidthThrowing()) ?? minTotalWidth
+    }
+
+    public func getMinTotalWidthThrowing() throws -> Double {
         guard hasMinTotalWidth else {
-            fatalError("[VexError] NoMinTotalWidth: Call preFormat before calling getMinTotalWidth.")
+            throw FormatterError.minTotalWidthUnavailable
         }
         return minTotalWidth
     }

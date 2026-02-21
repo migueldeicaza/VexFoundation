@@ -71,7 +71,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
         return (upperLead, lowerLead, makeVoice(upperNotes), makeVoice(lowerNotes))
     }
 
-    @Test func dottedRestsAcrossDurationsAttachDots() {
+    @Test func dottedRestsAcrossDurationsAttachDots() throws {
         let durations: [NoteDurationSpec] = [
             .whole, .half, .quarter, .eighth, .sixteenth, .thirtySecond, .sixtyFourth,
         ]
@@ -88,7 +88,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
         }
     }
 
-    @Test func rhythmSlashNoteheadsCanBeamedInQuarterGroups() {
+    @Test func rhythmSlashNoteheadsCanBeamedInQuarterGroups() throws {
         let slashNotes: [StemmableNote] = [
             makeNote(.b, duration: .eighth, type: .slash, stem: .down),
             makeNote(.b, duration: .eighth, type: .slash, stem: .down),
@@ -100,7 +100,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
             makeNote(.b, duration: .eighth, type: .slash, stem: .down),
         ]
 
-        let beams = Beam.generateBeams(slashNotes, config: BeamConfig(groups: [Fraction(1, 4)]))
+        let beams = try Beam.generateBeams(slashNotes, config: BeamConfig(groups: [Fraction(1, 4)]))
 
         #expect(beams.count == 4)
         #expect(beams.allSatisfy { $0.getNotes().count == 2 })
@@ -109,7 +109,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
         #expect((slashNotes[0] as! StaveNote).getGlyphWidth() == Tables.SLASH_NOTEHEAD_WIDTH)
     }
 
-    @Test func rhythmSlashParserConvenienceParsesSlashDuration() {
+    @Test func rhythmSlashParserConvenienceParsesSlashDuration() throws {
         let parsed = StaveNoteStruct(
             parsingKeysOrNil: ["b/4"],
             duration: "8s"
@@ -127,7 +127,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
         }
     }
 
-    @Test func formatterAlignRestsOptionRepositionsUnbeamedRests() {
+    @Test func formatterAlignRestsOptionRepositionsUnbeamedRests() throws {
         let stave = Stave(x: 10, y: 40, width: 360)
 
         let (notesOff, voiceOff) = makeRestAlignmentVoice()
@@ -151,7 +151,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
         #expect(afterOn[1] == expectedRestLine)
     }
 
-    @Test func formatterAlignsBeamedRestsWhenAlignRestsDisabled() {
+    @Test func formatterAlignsBeamedRestsWhenAlignRestsDisabled() throws {
         let stave = Stave(x: 10, y: 40, width: 360)
 
         let n1 = makeNote(.a, octave: 5, duration: .eighth, stem: .up)
@@ -161,7 +161,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
         let notes: [StemmableNote] = [n1, r1, n2, r2]
 
         let initial = [r1.getKeyLine(0), r2.getKeyLine(0)]
-        let beam = Beam(notes)
+        let beam = try Beam(notes)
         let voice = makeVoice(notes)
 
         let formatter = Formatter()
@@ -176,13 +176,13 @@ struct RestsRhythmThreeVoiceUnisonTests {
         _ = beam // keep strong reference for weak note.beam links
     }
 
-    @Test func alignRestsSkipsTupletRestsUnlessExplicitlyEnabled() {
+    @Test func alignRestsSkipsTupletRestsUnlessExplicitlyEnabled() throws {
         let n1 = makeNote(.a, octave: 5, duration: .eighth, stem: .up)
         let rest = makeNote(.b, octave: 4, duration: .eighth, type: .rest, stem: .up)
         let n3 = makeNote(.a, octave: 5, duration: .eighth, stem: .up)
         let notes: [Note] = [n1, rest, n3]
 
-        _ = Tuplet(notes: notes)
+        _ = try Tuplet(notes: notes)
         let initial = rest.getKeyLine(0)
 
         Formatter.AlignRestsToNotes(notes.map { $0 as Tickable }, alignAllNotes: true)
@@ -194,7 +194,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
         #expect(aligned == n1.getLineForRest())
     }
 
-    @Test func threeVoiceFormattingSharesTickContexts() {
+    @Test func threeVoiceFormattingSharesTickContexts() throws {
         let stave = Stave(x: 10, y: 40, width: 520)
 
         let voice1 = makeVoice([
@@ -221,7 +221,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
             makeNote(.b, octave: 3, duration: .quarter, stem: .down),
         ])
 
-        let beams = Beam.applyAndGetBeams(voice2, stemDirection: .down)
+        let beams = try Beam.applyAndGetBeams(voice2, stemDirection: .down)
 
         let formatter = Formatter()
         _ = formatter.joinVoices([voice1, voice2, voice3])
@@ -241,7 +241,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
         #expect(formatter.getTickContext(halfTicks)?.getTickables().count == 3)
     }
 
-    @Test func unisonLikeVoicesProduceExpectedTickGrid() {
+    @Test func unisonLikeVoicesProduceExpectedTickGrid() throws {
         let voice1 = Voice(time: VoiceTime(numBeats: 4, beatValue: 4))
         _ = voice1.setMode(.soft)
         _ = voice1.addTickables([
@@ -272,7 +272,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
         #expect(contexts.map[halfTicks]?.getTickables().count == 2)
     }
 
-    @Test func unisonToggleControlsHorizontalShiftForSameLineVoices() {
+    @Test func unisonToggleControlsHorizontalShiftForSameLineVoices() throws {
         Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
             FontLoader.loadDefaultFonts()
 
@@ -298,7 +298,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
         }
     }
 
-    @Test func unisonModeStillShiftsForStyleOrDotDifferences() {
+    @Test func unisonModeStillShiftsForStyleOrDotDifferences() throws {
         Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
             FontLoader.loadDefaultFonts()
             Tables.UNISON = true
@@ -323,7 +323,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
         }
     }
 
-    @Test func twoVoiceSameDurationRestsHideLowerRest() {
+    @Test func twoVoiceSameDurationRestsHideLowerRest() throws {
         let upperRests: [StaveNote] = [
             makeNote(.b, duration: .quarter, type: .rest, stem: .up),
             makeNote(.b, duration: .quarter, type: .rest, stem: .up),
@@ -347,7 +347,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
         #expect(!lowerRests[0].renderOptions.draw)
     }
 
-    @Test func threeVoiceAllRestsHideOuterVoicesAtCollisionTicks() {
+    @Test func threeVoiceAllRestsHideOuterVoicesAtCollisionTicks() throws {
         let upperRests: [StaveNote] = [
             makeNote(.b, duration: .quarter, type: .rest, stem: .up),
             makeNote(.b, duration: .quarter, type: .rest, stem: .up),

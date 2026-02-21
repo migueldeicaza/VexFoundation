@@ -14,19 +14,19 @@ struct RegistryParserFactoryEasyScoreSystemTests {
     // MARK: - Registry Tests
     // ============================================================
 
-    @Test func registryCreation() {
+    @Test func registryCreation() throws {
         let reg = Registry()
         #expect(reg.getElementById("test") == nil)
     }
 
-    @Test func registryRegisterElement() {
+    @Test func registryRegisterElement() throws {
         let reg = Registry()
         let elem = VexElement()
         _ = reg.register(elem, id: "e1")
         #expect(reg.getElementById("e1") != nil)
     }
 
-    @Test func registryAutoId() {
+    @Test func registryAutoId() throws {
         let reg = Registry()
         let elem = VexElement()
         _ = reg.register(elem)
@@ -34,7 +34,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(reg.getElementById(id) != nil)
     }
 
-    @Test func registryClear() {
+    @Test func registryClear() throws {
         let reg = Registry()
         let elem = VexElement()
         _ = reg.register(elem, id: "e1")
@@ -42,7 +42,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(reg.getElementById("e1") == nil)
     }
 
-    @Test func registryGetElementsByType() {
+    @Test func registryGetElementsByType() throws {
         let reg = Registry()
         let elem = VexElement()
         _ = reg.register(elem, id: "e1")
@@ -50,7 +50,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(elements.count == 1)
     }
 
-    @Test func registryGetElementsByAttribute() {
+    @Test func registryGetElementsByAttribute() throws {
         let reg = Registry()
         let elem = VexElement()
         _ = reg.register(elem, id: "e1")
@@ -58,7 +58,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(found.count == 1)
     }
 
-    @Test func registryDefaultRegistry() {
+    @Test func registryDefaultRegistry() throws {
         Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
             let reg = Registry()
             Registry.enableDefaultRegistry(reg)
@@ -68,7 +68,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         }
     }
 
-    @Test func registryDefaultRegistryAutoRegistersElements() {
+    @Test func registryDefaultRegistryAutoRegistersElements() throws {
         Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
             let reg = Registry()
             Registry.enableDefaultRegistry(reg)
@@ -80,7 +80,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         }
     }
 
-    @Test func registryUpdateIndex() {
+    @Test func registryUpdateIndex() throws {
         let reg = Registry()
         let elem = VexElement()
         _ = reg.register(elem, id: "e1")
@@ -89,7 +89,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(notes.count == 1)
     }
 
-    @Test func registryOnUpdate() {
+    @Test func registryOnUpdate() throws {
         let reg = Registry()
         let elem = VexElement()
         _ = reg.register(elem, id: "e1")
@@ -98,7 +98,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(changed.count == 1)
     }
 
-    @Test func registryGetElementsByClass() {
+    @Test func registryGetElementsByClass() throws {
         let reg = Registry()
         let elem = VexElement()
         _ = reg.register(elem, id: "e1")
@@ -107,7 +107,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(found.count == 1)
     }
 
-    @Test func registryTracksIdMutation() {
+    @Test func registryTracksIdMutation() throws {
         let reg = Registry()
         let elem = VexElement()
         _ = reg.register(elem, id: "e1")
@@ -117,7 +117,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(reg.getElementById("e2") != nil)
     }
 
-    @Test func registryTracksClassMutation() {
+    @Test func registryTracksClassMutation() throws {
         let reg = Registry()
         let elem = VexElement()
         _ = reg.register(elem, id: "e1")
@@ -133,7 +133,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(reg.getElementsByClass("bar").count == 1)
     }
 
-    @Test func registryMultipleElements() {
+    @Test func registryMultipleElements() throws {
         let reg = Registry()
         let e1 = VexElement()
         let e2 = VexElement()
@@ -148,7 +148,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
     // MARK: - Parser Tests
     // ============================================================
 
-    @Test func parserMatchSuccess() {
+    @Test func parserMatchSuccess() throws {
         // Simple grammar: matches a single word
         class SimpleGrammar: Grammar {
             func begin() -> RuleFunction { WORD }
@@ -159,7 +159,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(result.success == true)
     }
 
-    @Test func parserMatchFailure() {
+    @Test func parserMatchFailure() throws {
         class SimpleGrammar: Grammar {
             func begin() -> RuleFunction { WORD }
             func WORD() -> Rule { Rule(token: "[a-z]+") }
@@ -169,7 +169,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(result.success == false)
     }
 
-    @Test func parserSequence() {
+    @Test func parserSequence() throws {
         class SeqGrammar: Grammar {
             func begin() -> RuleFunction { LINE }
             func LINE() -> Rule { Rule(expect: [WORD, NUMBER]) }
@@ -181,7 +181,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(result.success == true)
     }
 
-    @Test func parserOr() {
+    @Test func parserOr() throws {
         class OrGrammar: Grammar {
             func begin() -> RuleFunction { LINE }
             func LINE() -> Rule { Rule(expect: [NUMBER, WORD], or: true) }
@@ -195,7 +195,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(r2.success == true)
     }
 
-    @Test func parserMaybe() {
+    @Test func parserMaybe() throws {
         class MaybeGrammar: Grammar {
             func begin() -> RuleFunction { LINE }
             func LINE() -> Rule { Rule(expect: [WORD, OPTNUM]) }
@@ -210,7 +210,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(r2.success == true)
     }
 
-    @Test func parserZeroOrMore() {
+    @Test func parserZeroOrMore() throws {
         class RepeatGrammar: Grammar {
             func begin() -> RuleFunction { LINE }
             func LINE() -> Rule { Rule(expect: [WORD, NUMBERS]) }
@@ -225,7 +225,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(r2.success == true)
     }
 
-    @Test func parserOneOrMore() {
+    @Test func parserOneOrMore() throws {
         class RepeatGrammar: Grammar {
             func begin() -> RuleFunction { LINE }
             func LINE() -> Rule { Rule(expect: [NUMBERS]) }
@@ -237,7 +237,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(r1.success == true)
     }
 
-    @Test func parserTriggerFunction() {
+    @Test func parserTriggerFunction() throws {
         class TriggerGrammar: Grammar {
             var captured: String?
             func begin() -> RuleFunction { LINE }
@@ -255,7 +255,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(grammar.captured == "hello")
     }
 
-    @Test func parserErrorPosition() {
+    @Test func parserErrorPosition() throws {
         class SimpleGrammar: Grammar {
             func begin() -> RuleFunction { LINE }
             func LINE() -> Rule { Rule(expect: [WORD, NUMBER]) }
@@ -268,7 +268,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(result.errorPos != nil)
     }
 
-    @Test func parserInvalidGrammarRuleFailsWithoutCrash() {
+    @Test func parserInvalidGrammarRuleFailsWithoutCrash() throws {
         class BadGrammar: Grammar {
             func begin() -> RuleFunction { BAD }
             func BAD() -> Rule { Rule() }
@@ -279,7 +279,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(result.parserError == .invalidGrammarRuleMissingTokenOrExpect)
     }
 
-    @Test func parserParseThrowingReportsGrammarError() {
+    @Test func parserParseThrowingReportsGrammarError() throws {
         class BadGrammar: Grammar {
             func begin() -> RuleFunction { BAD }
             func BAD() -> Rule { Rule() }
@@ -293,17 +293,17 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         }
     }
 
-    @Test func matchStringValue() {
+    @Test func matchStringValue() throws {
         let m: Match = .string("hello")
         #expect(m.stringValue == "hello")
     }
 
-    @Test func matchNullValue() {
+    @Test func matchNullValue() throws {
         let m: Match = .null
         #expect(m.stringValue == nil)
     }
 
-    @Test func matchArrayValue() {
+    @Test func matchArrayValue() throws {
         let m: Match = .array([.string("a"), .string("b")])
         #expect(m.stringValue == nil) // arrays don't have stringValue
     }
@@ -312,12 +312,12 @@ struct RegistryParserFactoryEasyScoreSystemTests {
     // MARK: - Factory Tests
     // ============================================================
 
-    @Test func factoryCreation() {
+    @Test func factoryCreation() throws {
         let factory = Factory()
         #expect(factory.getStave() == nil)
     }
 
-    @Test func factoryStave() {
+    @Test func factoryStave() throws {
         let factory = Factory()
         let stave = factory.Stave(x: 10, y: 20, width: 300)
         #expect(stave.getX() == 10)
@@ -325,27 +325,27 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(factory.getStave() != nil)
     }
 
-    @Test func factoryTabStave() {
+    @Test func factoryTabStave() throws {
         let factory = Factory()
         let ts = factory.TabStave(x: 10, y: 20, width: 300)
         #expect(ts is TabStave)
         #expect(ts.getWidth() == 300)
     }
 
-    @Test func factoryStaveNote() {
+    @Test func factoryStaveNote() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 300)
         let note = factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter))
         #expect(note.getKeys().count == 1)
     }
 
-    @Test func factoryGhostNote() {
+    @Test func factoryGhostNote() throws {
         let factory = Factory()
         let ghost = factory.GhostNote(duration: .quarter)
         #expect(ghost.getDuration() == "4")
     }
 
-    @Test func factoryGhostNoteParsingDuration() {
+    @Test func factoryGhostNoteParsingDuration() throws {
         let factory = Factory()
         let ghost = factory.GhostNote(parsingDuration: "8")
         #expect(ghost != nil)
@@ -353,7 +353,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(ghost?.isRest() == true)
     }
 
-    @Test func factoryAccidental() {
+    @Test func factoryAccidental() throws {
         let factory = Factory()
         let accid = factory.Accidental(type: .sharp)
         #expect(accid.getCategory() == "Accidental")
@@ -365,38 +365,50 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(accid.accidentalType == .sharp)
     }
 
-    @Test func factoryAccidentalParsingOrNil() {
+    @Test func factoryAccidentalParsingOrNil() throws {
         let factory = Factory()
         #expect(factory.Accidental(parsingOrNil: "invalid") == nil)
     }
 
-    @Test func factoryAnnotation() {
+    @Test func factoryAnnotation() throws {
         let factory = Factory()
         let ann = factory.Annotation(text: "test")
         #expect(ann.getCategory() == "Annotation")
     }
 
-    @Test func factoryArticulation() {
+    @Test func factoryArticulation() throws {
         let factory = Factory()
         let art = factory.Articulation(type: "a.")
         #expect(art.getCategory() == "Articulation")
     }
 
-    @Test func factoryVoice() {
+    @Test func factoryVoice() throws {
         let factory = Factory()
         let voice = factory.Voice()
         // Voice defaults to strict mode
         #expect(voice.getMode() == .strict)
     }
 
-    @Test func factoryVoiceTimeSpec() {
+    @Test func factoryVoiceTimeSpec() throws {
         let factory = Factory()
         let voice = factory.Voice(timeSignature: .meter(3, 4))
         // 3/4 time = 3 beats of quarter note resolution
         #expect(voice.getTotalTicks().value() > 0)
     }
 
-    @Test func factoryBeam() {
+    @Test func factoryVoiceThrowingValidation() throws {
+        let factory = Factory()
+        let topOnly = TimeSignatureDigits(rawValue: "4")!
+        do {
+            _ = try factory.VoiceThrowing(timeSignature: .topOnly(topOnly))
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? VoiceTimeError == .nonMetricalTimeSignature("/4"))
+        }
+        #expect(factory.Voice(timeSignature: .topOnly(topOnly)).getTotalTicks().value() > 0)
+    }
+
+    @Test func factoryBeam() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let notes: [StemmableNote] = [
@@ -404,10 +416,25 @@ struct RegistryParserFactoryEasyScoreSystemTests {
             factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .eighth)),
         ]
         let beam = factory.Beam(notes: notes)
-        #expect(beam is Beam)
+        #expect(beam != nil)
     }
 
-    @Test func factoryTuplet() {
+    @Test func factoryBeamThrowingValidation() throws {
+        let factory = Factory()
+        let notes: [StemmableNote] = [
+            factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)),
+            factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .quarter)),
+        ]
+        do {
+            _ = try factory.BeamThrowing(notes: notes)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? BeamError == .notesNotShorterThanQuarter)
+        }
+        #expect(factory.Beam(notes: notes) == nil)
+    }
+
+    @Test func factoryTuplet() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let notes: [Note] = [
@@ -416,10 +443,22 @@ struct RegistryParserFactoryEasyScoreSystemTests {
             factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .e, octave: 4)), duration: .eighth)),
         ]
         let tuplet = factory.Tuplet(notes: notes)
-        #expect(tuplet.getNoteCount() == 3)
+        #expect(tuplet != nil)
+        #expect(tuplet?.getNoteCount() == 3)
     }
 
-    @Test func factoryReset() {
+    @Test func factoryTupletThrowingValidation() throws {
+        let factory = Factory()
+        do {
+            _ = try factory.TupletThrowing(notes: [])
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? TupletError == .noNotesProvided)
+        }
+        #expect(factory.Tuplet(notes: []) == nil)
+    }
+
+    @Test func factoryReset() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 300)
         factory.reset()
@@ -427,13 +466,13 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(factory.getVoices().isEmpty)
     }
 
-    @Test func factoryChordSymbol() {
+    @Test func factoryChordSymbol() throws {
         let factory = Factory()
         let cs = factory.ChordSymbol()
         #expect(cs.getCategory() == "ChordSymbol")
     }
 
-    @Test func factoryTabNote() {
+    @Test func factoryTabNote() throws {
         let factory = Factory()
         _ = factory.TabStave(x: 0, y: 0, width: 300)
         let tn = factory.TabNote(TabNoteStruct(
@@ -442,25 +481,25 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(tn.getCategory() == "TabNote")
     }
 
-    @Test func factoryFormatter() {
+    @Test func factoryFormatter() throws {
         let factory = Factory()
         let fmt = factory.Formatter()
         #expect(fmt.hasMinTotalWidth == false)
     }
 
-    @Test func factoryTickContext() {
+    @Test func factoryTickContext() throws {
         let factory = Factory()
         let tc = factory.TickContext()
         #expect(tc is TickContext)
     }
 
-    @Test func factoryModifierContext() {
+    @Test func factoryModifierContext() throws {
         let factory = Factory()
         let mc = factory.ModifierContext()
         #expect(mc.preFormatted == false)
     }
 
-    @Test func factoryStaveConnector() {
+    @Test func factoryStaveConnector() throws {
         let factory = Factory()
         let s1 = factory.Stave(x: 0, y: 0, width: 300)
         let s2 = factory.Stave(x: 0, y: 100, width: 300)
@@ -468,7 +507,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(conn.getType() == .double)
     }
 
-    @Test func factoryStaveTie() {
+    @Test func factoryStaveTie() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 300)
         let n1 = factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter))
@@ -477,19 +516,19 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(tie.getCategory() == "StaveTie")
     }
 
-    @Test func factoryOrnament() {
+    @Test func factoryOrnament() throws {
         let factory = Factory()
         let orn = factory.Ornament("mordent")
         #expect(orn.getCategory() == "Ornament")
     }
 
-    @Test func factoryEasyScore() {
+    @Test func factoryEasyScore() throws {
         let factory = Factory()
         let score = factory.EasyScore()
         #expect(score.defaults.clef == .treble)
     }
 
-    @Test func factoryDrawWithoutContextThrows() {
+    @Test func factoryDrawWithoutContextThrows() throws {
         let factory = Factory()
         do {
             try factory.draw()
@@ -503,7 +542,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
     // MARK: - EasyScore Tests
     // ============================================================
 
-    @Test func easyScoreParseSimple() {
+    @Test func easyScoreParseSimple() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -511,7 +550,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(notes.count == 1)
     }
 
-    @Test func easyScoreDirectInitWithoutFactoryThrows() {
+    @Test func easyScoreDirectInitWithoutFactoryThrows() throws {
         do {
             _ = try EasyScore()
             #expect(Bool(false))
@@ -520,7 +559,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         }
     }
 
-    @Test func easyScoreMultipleNotes() {
+    @Test func easyScoreMultipleNotes() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -528,7 +567,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(notes.count == 4)
     }
 
-    @Test func easyScoreDurations() {
+    @Test func easyScoreDurations() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -536,7 +575,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(notes.count == 4)
     }
 
-    @Test func easyScoreChord() {
+    @Test func easyScoreChord() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -544,7 +583,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(notes.count == 1)
     }
 
-    @Test func easyScoreAccidentals() {
+    @Test func easyScoreAccidentals() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -552,7 +591,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(notes.count == 3)
     }
 
-    @Test func easyScoreDots() {
+    @Test func easyScoreDots() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -560,7 +599,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(notes.count == 2)
     }
 
-    @Test func easyScoreVoice() {
+    @Test func easyScoreVoice() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -569,7 +608,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(voice.getTickables().count == 4)
     }
 
-    @Test func easyScoreSetDefaults() {
+    @Test func easyScoreSetDefaults() throws {
         let factory = Factory()
         let score = factory.EasyScore()
         _ = score.set(defaults: EasyScoreDefaults(clef: .bass, time: .meter(3, 4)))
@@ -577,7 +616,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(score.defaults.time == .meter(3, 4))
     }
 
-    @Test func easyScoreBeam() {
+    @Test func easyScoreBeam() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -586,7 +625,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(beamed.count == 4)
     }
 
-    @Test func easyScoreParseResult() {
+    @Test func easyScoreParseResult() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -594,7 +633,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(result.success == true)
     }
 
-    @Test func easyScoreParseInvalidDurationFailsSemantically() {
+    @Test func easyScoreParseInvalidDurationFailsSemantically() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -604,7 +643,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(score.notes("C4/3").isEmpty)
     }
 
-    @Test func easyScoreParseInvalidClefOptionFailsSemantically() {
+    @Test func easyScoreParseInvalidClefOptionFailsSemantically() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -613,7 +652,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(score.lastParseError == .invalidClef("badclef"))
     }
 
-    @Test func easyScoreParseInvalidStemOptionFailsSemantically() {
+    @Test func easyScoreParseInvalidStemOptionFailsSemantically() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -639,7 +678,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         }
     }
 
-    @Test func easyScoreGhostNote() {
+    @Test func easyScoreGhostNote() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -648,7 +687,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(notes.count == 3)
     }
 
-    @Test func easyScoreStemUp() {
+    @Test func easyScoreStemUp() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -657,7 +696,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(notes[0].getStemDirection() == Stem.UP)
     }
 
-    @Test func easyScoreStemDown() {
+    @Test func easyScoreStemDown() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -670,18 +709,18 @@ struct RegistryParserFactoryEasyScoreSystemTests {
     // MARK: - System Tests
     // ============================================================
 
-    @Test func systemCategory() {
+    @Test func systemCategory() throws {
         #expect(System.category == "System")
     }
 
-    @Test func systemCreation() {
+    @Test func systemCreation() throws {
         let factory = Factory()
         let system = factory.System()
         #expect(system.getX() == 10)
         #expect(system.getY() == 10)
     }
 
-    @Test func systemDirectInitWithoutFactoryThrows() {
+    @Test func systemDirectInitWithoutFactoryThrows() throws {
         do {
             _ = try System()
             #expect(Bool(false))
@@ -690,7 +729,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         }
     }
 
-    @Test func systemSetPosition() {
+    @Test func systemSetPosition() throws {
         let factory = Factory()
         let system = factory.System()
         system.setX(50)
@@ -699,7 +738,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(system.getY() == 100)
     }
 
-    @Test func systemAddStave() {
+    @Test func systemAddStave() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -711,7 +750,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(system.getStaves().count == 1)
     }
 
-    @Test func systemMultipleStaves() {
+    @Test func systemMultipleStaves() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -726,7 +765,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(system.getStaves().count == 2)
     }
 
-    @Test func systemFormat() {
+    @Test func systemFormat() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -740,7 +779,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(system.boundingBox != nil)
     }
 
-    @Test func systemDrawBeforeFormatThrows() {
+    @Test func systemDrawBeforeFormatThrows() throws {
         let factory = Factory()
         let system = factory.System()
         do {
@@ -751,7 +790,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         }
     }
 
-    @Test func systemAddConnector() {
+    @Test func systemAddConnector() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -765,7 +804,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(conn.getType() == .double)
     }
 
-    @Test func systemOptionsDefaults() {
+    @Test func systemOptionsDefaults() throws {
         let opts = SystemOptions()
         #expect(opts.x == 10)
         #expect(opts.y == 10)
@@ -778,7 +817,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
     // MARK: - Formatter Extensions Tests
     // ============================================================
 
-    @Test func formatterPreCalculateMinTotalWidth() {
+    @Test func formatterPreCalculateMinTotalWidth() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -791,7 +830,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(width > 0)
     }
 
-    @Test func formatterTune() {
+    @Test func formatterTune() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -805,11 +844,39 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(cost >= 0)
     }
 
+    @Test func formatterThrowingResolutionValidation() throws {
+        do {
+            _ = try Formatter.getResolutionMultiplierThrowing([])
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? FormatterError == .noVoicesToFormat)
+        }
+
+        let voice44 = Voice(time: VoiceTime(numBeats: 4, beatValue: 4))
+        let voice34 = Voice(time: VoiceTime(numBeats: 3, beatValue: 4))
+        _ = voice44.setMode(.soft)
+        _ = voice34.setMode(.soft)
+        do {
+            _ = try Formatter.getResolutionMultiplierThrowing([voice44, voice34])
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? FormatterError == .tickMismatch)
+        }
+
+        let incomplete = Voice(time: VoiceTime(numBeats: 4, beatValue: 4))
+        do {
+            _ = try Formatter.getResolutionMultiplierThrowing([incomplete])
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? FormatterError == .incompleteVoice)
+        }
+    }
+
     // ============================================================
     // MARK: - Integration Tests
     // ============================================================
 
-    @Test func easyScoreWithFactory() {
+    @Test func easyScoreWithFactory() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 500)
         let score = factory.EasyScore()
@@ -818,7 +885,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(voice.getTickables().count == 4)
     }
 
-    @Test func systemWithEasyScore() {
+    @Test func systemWithEasyScore() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 500)
         let score = factory.EasyScore()
@@ -831,7 +898,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(system.getStaves().count == 1)
     }
 
-    @Test func registryWithElement() {
+    @Test func registryWithElement() throws {
         let reg = Registry()
         let stave = Stave(x: 0, y: 0, width: 300)
         _ = reg.register(stave, id: "stave1")
@@ -840,7 +907,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(found?.getCategory() == "Stave")
     }
 
-    @Test func parserWithEasyScoreGrammar() {
+    @Test func parserWithEasyScoreGrammar() throws {
         let factory = Factory()
         let builder = Builder(factory: factory)
         let grammar = EasyScoreGrammar(builder: builder)
@@ -849,14 +916,14 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(result.success == true)
     }
 
-    @Test func factoryContextPropagation() {
+    @Test func factoryContextPropagation() throws {
         let factory = Factory()
         let stave = factory.Stave(x: 0, y: 0, width: 400)
         // Without context, stave should still work
         #expect(stave.getWidth() == 400)
     }
 
-    @Test func easyScoreChordWithAccidentals() {
+    @Test func easyScoreChordWithAccidentals() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()
@@ -864,7 +931,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(notes.count == 1)
     }
 
-    @Test func factoryMultipleNoteTypes() {
+    @Test func factoryMultipleNoteTypes() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let sn = factory.StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter))
@@ -875,7 +942,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         #expect(accid.getCategory() == "Accidental")
     }
 
-    @Test func systemGetVoices() {
+    @Test func systemGetVoices() throws {
         let factory = Factory()
         _ = factory.Stave(x: 0, y: 0, width: 400)
         let score = factory.EasyScore()

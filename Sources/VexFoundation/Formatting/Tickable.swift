@@ -5,6 +5,26 @@ import Foundation
 
 // MARK: - Formatter Metrics
 
+public enum TickableError: Error, LocalizedError, Equatable, Sendable {
+    case unformattedWidth
+    case noVoice
+    case noTickContext(String)
+    case noModifierContext
+
+    public var errorDescription: String? {
+        switch self {
+        case .unformattedWidth:
+            return "Can't call getWidth on an unformatted tickable."
+        case .noVoice:
+            return "Tickable has no voice."
+        case .noTickContext(let message):
+            return message
+        case .noModifierContext:
+            return "No modifier context attached to this tickable."
+        }
+    }
+}
+
 /// Metrics maintained by the formatter during layout.
 public struct FormatterMetrics {
     public var duration: String = ""
@@ -60,8 +80,12 @@ open class Tickable: VexElement {
     }
 
     public func getTickableWidth() -> Double {
+        (try? getTickableWidthThrowing()) ?? (tickableWidth + (modifierContext?.getWidth() ?? 0))
+    }
+
+    public func getTickableWidthThrowing() throws -> Double {
         guard _preFormatted else {
-            fatalError("[VexError] UnformattedNote: Can't call getWidth on an unformatted note.")
+            throw TickableError.unformattedWidth
         }
         return tickableWidth + (modifierContext?.getWidth() ?? 0)
     }
@@ -77,12 +101,12 @@ open class Tickable: VexElement {
     public func getXShift() -> Double { xShift }
 
     public func getX() -> Double {
-        let tc = checkTickContext("Can't getX() without a TickContext.")
+        let tc = (try? checkTickContextThrowing("Can't getX() without a TickContext.")) ?? TickContext()
         return tc.getX() + xShift
     }
 
     public func getAbsoluteX() -> Double {
-        let tc = checkTickContext("Can't getAbsoluteX() without a TickContext.")
+        let tc = (try? checkTickContextThrowing("Can't getAbsoluteX() without a TickContext.")) ?? TickContext()
         return tc.getX()
     }
 
@@ -113,8 +137,12 @@ open class Tickable: VexElement {
     // MARK: - Voice
 
     public func getVoice() -> Voice {
+        (try? getVoiceThrowing()) ?? Voice()
+    }
+
+    public func getVoiceThrowing() throws -> Voice {
         guard let voice else {
-            fatalError("[VexError] NoVoice: Tickable has no voice.")
+            throw TickableError.noVoice
         }
         return voice
     }
@@ -131,8 +159,12 @@ open class Tickable: VexElement {
     }
 
     public func checkTickContext(_ message: String = "Tickable has no tick context.") -> TickContext {
+        (try? checkTickContextThrowing(message)) ?? TickContext()
+    }
+
+    public func checkTickContextThrowing(_ message: String = "Tickable has no tick context.") throws -> TickContext {
         guard let tickContext else {
-            fatalError("[VexError] NoTickContext: \(message)")
+            throw TickableError.noTickContext(message)
         }
         return tickContext
     }
@@ -148,8 +180,12 @@ open class Tickable: VexElement {
     public func getModifierContext() -> ModifierContext? { modifierContext }
 
     public func checkModifierContext() -> ModifierContext {
+        (try? checkModifierContextThrowing()) ?? ModifierContext()
+    }
+
+    public func checkModifierContextThrowing() throws -> ModifierContext {
         guard let modifierContext else {
-            fatalError("[VexError] NoModifierContext: No modifier context attached to this tickable.")
+            throw TickableError.noModifierContext
         }
         return modifierContext
     }

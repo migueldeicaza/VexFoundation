@@ -5,6 +5,31 @@ import Foundation
 
 // MARK: - Voice Time
 
+public enum VoiceTimeError: Error, LocalizedError, Equatable, Sendable {
+    case nonMetricalTimeSignature(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .nonMetricalTimeSignature(let raw):
+            return "Voice requires a metrical time signature. Got \(raw)."
+        }
+    }
+}
+
+public enum VoiceError: Error, LocalizedError, Equatable, Sendable {
+    case noStave
+    case tooManyTicks
+
+    public var errorDescription: String? {
+        switch self {
+        case .noStave:
+            return "No stave attached to voice."
+        case .tooManyTicks:
+            return "Too many ticks for voice in strict/full mode."
+        }
+    }
+}
+
 /// Time signature specification for a voice.
 public struct VoiceTime {
     public var numBeats: Int
@@ -17,9 +42,9 @@ public struct VoiceTime {
         self.resolution = resolution
     }
 
-    public init(timeSignature: TimeSignatureSpec, resolution: Int = Tables.RESOLUTION) {
+    public init(timeSignature: TimeSignatureSpec, resolution: Int = Tables.RESOLUTION) throws {
         guard let meter = timeSignature.meter else {
-            fatalError("[VexError] BadArguments: Voice requires a metrical time signature. Got \(timeSignature.rawValue).")
+            throw VoiceTimeError.nonMetricalTimeSignature(timeSignature.rawValue)
         }
         self.init(numBeats: meter.numerator, beatValue: meter.denominator, resolution: resolution)
     }
@@ -69,7 +94,13 @@ public final class Voice: VexElement {
 
     /// Convenience init from a typed time signature.
     public convenience init(timeSignature: TimeSignatureSpec) {
-        self.init(time: VoiceTime(timeSignature: timeSignature))
+        let time = (try? VoiceTime(timeSignature: timeSignature)) ?? VoiceTime()
+        self.init(time: time)
+    }
+
+    /// Throwing variant for typed call sites that want explicit validation failures.
+    public convenience init(validatingTimeSignature timeSignature: TimeSignatureSpec) throws {
+        try self.init(time: VoiceTime(timeSignature: timeSignature))
     }
 
     // MARK: - Accessors
@@ -104,9 +135,9 @@ public final class Voice: VexElement {
 
     public func getStave() -> Stave? { voiceStave }
 
-    public func checkStave() -> Stave {
+    public func checkStave() throws -> Stave {
         guard let voiceStave else {
-            fatalError("[VexError] NoStave: No stave attached to instance.")
+            throw VoiceError.noStave
         }
         return voiceStave
     }
@@ -154,6 +185,15 @@ public final class Voice: VexElement {
 
     @discardableResult
     public func addTickable(_ tickable: Tickable) -> Self {
+        do {
+            return try addTickableThrowing(tickable)
+        } catch {
+            return self
+        }
+    }
+
+    @discardableResult
+    public func addTickableThrowing(_ tickable: Tickable) throws -> Self {
         if !tickable.shouldIgnoreTicks() {
             let ticks = tickable.getTicks()
             ticksUsed.add(ticks)
@@ -161,7 +201,7 @@ public final class Voice: VexElement {
 
             if (mode == .strict || mode == .full) && ticksUsed > totalTicks {
                 ticksUsed.subtract(ticks)
-                fatalError("[VexError] BadArgument: Too many ticks.")
+                throw VoiceError.tooManyTicks
             }
 
             if ticks < smallestTickCount {
@@ -179,7 +219,16 @@ public final class Voice: VexElement {
 
     @discardableResult
     public func addTickables(_ tickables: [Tickable]) -> Self {
-        for t in tickables { _ = addTickable(t) }
+        do {
+            return try addTickablesThrowing(tickables)
+        } catch {
+            return self
+        }
+    }
+
+    @discardableResult
+    public func addTickablesThrowing(_ tickables: [Tickable]) throws -> Self {
+        for t in tickables { _ = try addTickableThrowing(t) }
         return self
     }
 
@@ -187,8 +236,17 @@ public final class Voice: VexElement {
 
     @discardableResult
     public func preFormat() -> Self {
+        do {
+            return try preFormatThrowing()
+        } catch {
+            return self
+        }
+    }
+
+    @discardableResult
+    public func preFormatThrowing() throws -> Self {
         if voicePreFormatted { return self }
-        let stave = checkStave()
+        let stave = try checkStave()
         for tickable in tickables {
             if tickable.getStave() == nil {
                 tickable.setStave(stave)

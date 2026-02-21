@@ -5,6 +5,17 @@ import Foundation
 
 // MARK: - Tuplet Location
 
+public enum TupletError: Error, LocalizedError, Equatable, Sendable {
+    case noNotesProvided
+
+    public var errorDescription: String? {
+        switch self {
+        case .noNotesProvided:
+            return "No notes provided for tuplet."
+        }
+    }
+}
+
 public enum TupletLocation: Int {
     case bottom = -1
     case top = 1
@@ -100,9 +111,9 @@ public final class Tuplet: VexElement {
 
     // MARK: - Init
 
-    public init(notes: [Note], options: TupletOptions = TupletOptions()) {
+    public init(notes: [Note], options: TupletOptions = TupletOptions()) throws {
         guard !notes.isEmpty else {
-            fatalError("[VexError] BadArguments: No notes provided for tuplet.")
+            throw TupletError.noNotesProvided
         }
 
         self.notes = notes

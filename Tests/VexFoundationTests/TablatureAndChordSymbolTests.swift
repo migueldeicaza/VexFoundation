@@ -268,6 +268,63 @@ struct TablatureAndChordSymbolTests {
         #expect(tn.getYs().count == 1)
     }
 
+    @Test func tabNoteValidatingInitAndConvenienceFallback() throws {
+        let emptyStruct = TabNoteStruct(positions: [], duration: .quarter)
+        let fallback = TabNote(emptyStruct)
+        #expect(fallback.tabInitError == .emptyPositions)
+        #expect(fallback.getLineForRest() == 0)
+
+        do {
+            _ = try TabNote(validating: emptyStruct)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? TabNoteError == .emptyPositions)
+        }
+    }
+
+    @Test func tabNoteThrowingPreconditions() throws {
+        let tn = makeTabNote()
+
+        do {
+            _ = try tn.getModifierStartXYThrowing(position: .left, index: 0)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? TabNoteError == .unformattedNoteForModifierStart)
+        }
+
+        tn.preFormatted = true
+
+        do {
+            _ = try tn.getModifierStartXYThrowing(position: .left, index: 0)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? TabNoteError == .noYValues)
+        }
+
+        _ = tn.setYs([100])
+        do {
+            _ = try tn.getModifierStartXYThrowing(position: .left, index: 2)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? TabNoteError == .invalidModifierIndex(2))
+        }
+    }
+
+    @Test func tabNoteStemYThrowing() throws {
+        let tn = makeTabNote()
+        do {
+            _ = try tn.getStemYThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? NoteError == .noStave)
+        }
+
+        let stave = makeTabStave()
+        _ = tn.setStave(stave)
+        let y = try tn.getStemYThrowing()
+        #expect(y == stave.getYForLine(-0.5))
+    }
+
     // ============================================================
     // MARK: - TabTie Tests
     // ============================================================

@@ -5,6 +5,26 @@ import Foundation
 
 // MARK: - Glyph Types
 
+public enum GlyphError: Error, LocalizedError, Equatable, Sendable {
+    case missingGlyph(String)
+    case missingOutline(String)
+    case noStave
+    case noContext
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingGlyph(let code):
+            return "Glyph \(code) does not exist in font."
+        case .missingOutline(let code):
+            return "Glyph \(code) has no outline defined."
+        case .noStave:
+            return "No stave attached to glyph."
+        case .noContext:
+            return "No rendering context for glyph."
+        }
+    }
+}
+
 /// Glyph outline command opcodes.
 public enum OutlineCode: Int {
     case move = 0
@@ -222,21 +242,22 @@ public final class Glyph: VexElement {
                 return (font, glyph)
             }
         }
-        throw VexError("BadGlyph", "Glyph \(code) does not exist in font.")
+        throw GlyphError.missingGlyph(code)
     }
 
     /// Load metrics for a glyph code, parsing its outline if needed.
     public static func loadMetrics(fontStack: [VexFont], code: String, category: String?) -> GlyphMetrics {
+        (try? loadMetricsThrowing(fontStack: fontStack, code: code, category: category))
+            ?? fallbackMetrics(fontStack: fontStack)
+    }
+
+    public static func loadMetricsThrowing(fontStack: [VexFont], code: String, category: String?) throws -> GlyphMetrics {
         let fontAndGlyph: (font: VexFont, glyph: FontGlyph)
-        do {
-            fontAndGlyph = try lookupGlyph(fontStack: fontStack, code: code)
-        } catch {
-            fatalError("[VexError] BadGlyph: Glyph \(code) does not exist in font.")
-        }
+        fontAndGlyph = try lookupGlyph(fontStack: fontStack, code: code)
         let (font, glyph) = fontAndGlyph
 
         guard let outlineStr = glyph.outline else {
-            fatalError("[VexError] BadGlyph: Glyph \(code) has no outline defined.")
+            throw GlyphError.missingOutline(code)
         }
 
         var xShift: Double = 0
@@ -267,6 +288,25 @@ public final class Glyph: VexElement {
             scale: scale,
             ha: glyph.ha,
             outline: parsedOutline,
+            font: font
+        )
+    }
+
+    private static func fallbackMetrics(fontStack: [VexFont]) -> GlyphMetrics {
+        if fontStack.isEmpty {
+            FontLoader.loadDefaultFonts()
+        }
+        let font = MUSIC_FONT_STACK.first ?? FontLoader.loadBravura()
+        return GlyphMetrics(
+            width: 0,
+            height: 0,
+            xMin: 0,
+            xMax: 0,
+            xShift: 0,
+            yShift: 0,
+            scale: 1,
+            ha: 0,
+            outline: [],
             font: font
         )
     }
@@ -517,17 +557,19 @@ public final class Glyph: VexElement {
     }
 
     public func checkStave() -> Stave {
+        (try? checkStaveThrowing()) ?? Stave(x: 0, y: 0, width: 0)
+    }
+
+    public func checkStaveThrowing() throws -> Stave {
         guard let stave else {
-            fatalError("[VexError] NoStave: No stave attached to glyph.")
+            throw GlyphError.noStave
         }
         return stave
     }
 
     /// Render the glyph at the given x position on the attached stave.
     public func renderToStave(x: Double) {
-        guard let ctx = getContext() else {
-            fatalError("[VexError] NoContext: No rendering context for glyph.")
-        }
+        guard let ctx = getContext() else { return }
         let m = glyphMetrics!
         let scale = glyphScale * m.scale
         let stave = checkStave()

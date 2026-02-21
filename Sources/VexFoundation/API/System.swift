@@ -233,7 +233,11 @@ public final class System: VexElement {
 
     /// Format the system: layout all staves and voices.
     public func format() {
-        VexRuntime.withContext(runtimeContext) {
+        _ = try? formatThrowing()
+    }
+
+    public func formatThrowing() throws {
+        try VexRuntime.withContext(runtimeContext) {
             let alpha = options.details.alpha
             let fmtOptions = FormatterOptions(softmaxFactor: Tables.SOFTMAX_FACTOR)
             let formatter = Formatter(options: fmtOptions)
@@ -259,7 +263,7 @@ public final class System: VexElement {
                 }
             }
 
-            _ = formatter.joinVoices(partVoices)
+            _ = try formatter.joinVoicesThrowing(partVoices)
 
             // Update start position of all staves
             for part in partStaves {
@@ -268,7 +272,7 @@ public final class System: VexElement {
 
             var justifyWidth: Double
             if options.autoWidth && !partVoices.isEmpty {
-                justifyWidth = formatter.preCalculateMinTotalWidth(partVoices)
+                justifyWidth = try formatter.preCalculateMinTotalWidthThrowing(partVoices)
                 options.width = justifyWidth + Stave.rightPadding + (startX - options.x)
                 for part in partStaves {
                     _ = part.setStaveWidth(options.width)
@@ -282,7 +286,7 @@ public final class System: VexElement {
             }
 
             if !partVoices.isEmpty {
-                _ = formatter.format(
+                _ = try formatter.formatThrowing(
                     partVoices,
                     justifyWidth: options.noJustification ? 0 : justifyWidth,
                     options: options.formatOptions
