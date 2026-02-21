@@ -72,6 +72,748 @@ struct UpstreamSVGParityTests {
         }
     }
 
+    @Test("Auto_Beaming.Simple_Auto_Beaming")
+    func autoBeamingSimpleAutoBeamingMatchesUpstream() throws {
+        try runSVGParityCase(module: "Auto_Beaming", test: "Simple_Auto_Beaming", width: 450, height: 140) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("f5/8, e5, d5, c5/16, c5, d5/8, e5, f5, f5/32, f5, f5, f5"),
+                time: .meter(4, 4)
+            )
+            let beams = try Beam.applyAndGetBeams(voice)
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Auto_Beaming_With_Overflow_Group")
+    func autoBeamingWithOverflowGroupMatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Auto_Beaming_With_Overflow_Group",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("f5/4., e5/8, d5/8, d5/16, c5/16, c5/16, c5/16, f5/16, f5/32, f5/32"),
+                time: .meter(4, 4)
+            )
+            let beams = try Beam.applyAndGetBeams(voice)
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Even_Group_Stem_Directions")
+    func autoBeamingEvenGroupStemDirectionsMatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Even_Group_Stem_Directions",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("a4/8, b4, g4, c5, f4, d5, e4, e5, b4, b4, g4, d5"),
+                time: .meter(6, 4)
+            )
+            let beams = try Beam.applyAndGetBeams(voice)
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Odd_Group_Stem_Directions")
+    func autoBeamingOddGroupStemDirectionsMatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Odd_Group_Stem_Directions",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("g4/8, b4, d5, c5, f4, d5, e4, g5, g4, b4, g4, d5, a4, c5, a4"),
+                time: .meter(15, 8)
+            )
+            let beams = try Beam.applyAndGetBeams(voice, groups: [Fraction(3, 8)])
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Odd_Beam_Groups_Auto_Beaming")
+    func autoBeamingOddBeamGroupsAutoBeamingMatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Odd_Beam_Groups_Auto_Beaming",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("f5, e5, d5, c5, c5, d5, e5, f5, f5, f4, f3, f5/16, f5"),
+                time: .meter(6, 4)
+            )
+            let beams = try Beam.applyAndGetBeams(voice, groups: [Fraction(2, 8), Fraction(3, 8), Fraction(1, 8)])
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.More_Simple_Auto_Beaming_0")
+    func autoBeamingMoreSimple0MatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "More_Simple_Auto_Beaming_0",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("c4/8, g4, c5, g5, a5, c4, d4, a5"),
+                time: .meter(4, 4)
+            )
+            let beams = try Beam.applyAndGetBeams(voice)
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.More_Simple_Auto_Beaming_1")
+    func autoBeamingMoreSimple1MatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "More_Simple_Auto_Beaming_1",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("c5/16, g5, c5, c5/r, c5/r, (c4 e4 g4), d4, a5, c4, g4, c5, b4/r, (c4 e4), b4/r, b4/r, a4"),
+                time: .meter(4, 4)
+            )
+            let beams = try Beam.applyAndGetBeams(voice)
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Beam_Across_All_Rests")
+    func autoBeamingBeamAcrossAllRestsMatchesUpstream() throws {
+        try runSVGParityCase(module: "Auto_Beaming", test: "Beam_Across_All_Rests", width: 450, height: 140) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("c5/16, g5, c5, c5/r, c5/r, (c4 e4 g4), d4, a5, c4, g4, c5, b4/r, (c4 e4), b4/r, b4/r, a4"),
+                time: .meter(4, 4)
+            )
+            let beams = try Beam.generateBeams(stemmableNotes(in: voice), config: BeamConfig(beamRests: true))
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Beam_Across_All_Rests_with_Stemlets")
+    func autoBeamingBeamAcrossAllRestsWithStemletsMatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Beam_Across_All_Rests_with_Stemlets",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("c5/16, g5, c5, c5/r, c5/r, (c4 e4 g4), d4, a5, c4, g4, c5, b4/r, (c4 e4), b4/r, b4/r, a4"),
+                time: .meter(4, 4)
+            )
+            let beams = try Beam.generateBeams(
+                stemmableNotes(in: voice),
+                config: BeamConfig(beamRests: true, showStemlets: true)
+            )
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Break_Beams_on_Middle_Rests_Only")
+    func autoBeamingBreakBeamsOnMiddleRestsOnlyMatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Break_Beams_on_Middle_Rests_Only",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("c5/16, g5, c5, c5/r, c5/r, (c4 e4 g4), d4, a5, c4, g4, c5, b4/r, (c4 e4), b4/r, b4/r, a4"),
+                time: .meter(4, 4)
+            )
+            let beams = try Beam.generateBeams(
+                stemmableNotes(in: voice),
+                config: BeamConfig(beamRests: true, beamMiddleOnly: true)
+            )
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Break_Beams_on_Rest")
+    func autoBeamingBreakBeamsOnRestMatchesUpstream() throws {
+        try runSVGParityCase(module: "Auto_Beaming", test: "Break_Beams_on_Rest", width: 450, height: 140) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("c5/16, g5, c5, c5/r, c5/r, (c4 e4 g4), d4, a5, c4, g4, c5, b4/r, (c4 e4), b4/r, b4/r, a4"),
+                time: .meter(4, 4)
+            )
+            let beams = try Beam.generateBeams(stemmableNotes(in: voice), config: BeamConfig(beamRests: false))
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Maintain_Stem_Directions")
+    func autoBeamingMaintainStemDirectionsMatchesUpstream() throws {
+        try runSVGParityCase(module: "Auto_Beaming", test: "Maintain_Stem_Directions", width: 450, height: 200) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes(
+                    [
+                        #"b4/16,            b4,              b4[stem="down"], b4/r"#,
+                        #"b4/r,             b4[stem="down"], b4,              b4"#,
+                        #"b4[stem="down"],  b4[stem="down"], b4,              b4/r"#,
+                        #"b4/32,            b4[stem="down"], b4[stem="down"], b4, b4/16/r, b4"#,
+                    ].joined(separator: ","),
+                    options: ["stem": "up"]
+                ),
+                time: .meter(4, 4)
+            )
+            let beams = try Beam.generateBeams(
+                stemmableNotes(in: voice),
+                config: BeamConfig(beamRests: false, maintainStemDirections: true)
+            )
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Maintain_Stem_Directions___Beam_Over_Rests")
+    func autoBeamingMaintainStemDirectionsBeamOverRestsMatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Maintain_Stem_Directions___Beam_Over_Rests",
+            width: 450,
+            height: 200
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes(
+                    [
+                        #"b4/16,            b4,              b4[stem="down"], b4/r"#,
+                        #"b4/r,             b4[stem="down"], b4,              b4"#,
+                        #"b4[stem="down"],  b4[stem="down"], b4,              b4/r"#,
+                        #"b4/32,            b4[stem="down"], b4[stem="down"], b4, b4/16/r, b4"#,
+                    ].joined(separator: ","),
+                    options: ["stem": "up"]
+                ),
+                time: .meter(4, 4)
+            )
+            let beams = try Beam.generateBeams(
+                stemmableNotes(in: voice),
+                config: BeamConfig(beamRests: true, maintainStemDirections: true)
+            )
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Beat_group_with_unbeamable_note___2_2")
+    func autoBeamingBeatGroupWithUnbeamableNote22MatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Beat_group_with_unbeamable_note___2_2",
+            width: 450,
+            height: 200
+        ) { factory, context in
+            let stave = factory.Stave().addTimeSignature(.meter(2, 4))
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("b4/16, b4, b4/4, b4/16, b4"),
+                time: .meter(2, 4)
+            )
+            let beams = try Beam.generateBeams(
+                stemmableNotes(in: voice),
+                config: BeamConfig(groups: [Fraction(2, 2)], beamRests: false, maintainStemDirections: true)
+            )
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Offset_beat_grouping___6_8_")
+    func autoBeamingOffsetBeatGrouping68MatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Offset_beat_grouping___6_8_",
+            width: 450,
+            height: 200
+        ) { factory, context in
+            let stave = factory.Stave().addTimeSignature(.meter(6, 8))
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("b4/4, b4/4, b4/8, b4/8"),
+                time: .meter(6, 8)
+            )
+            let beams = try Beam.generateBeams(
+                stemmableNotes(in: voice),
+                config: BeamConfig(groups: [Fraction(3, 8)], beamRests: false, maintainStemDirections: true)
+            )
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Odd_Time___Guessing_Default_Beam_Groups")
+    func autoBeamingOddTimeGuessingDefaultBeamGroupsMatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Odd_Time___Guessing_Default_Beam_Groups",
+            width: 450,
+            height: 400
+        ) { factory, context in
+            let score = factory.EasyScore()
+
+            let stave1 = factory.Stave(y: 10).addTimeSignature(.meter(5, 4))
+            let voice1 = score.voice(score.notes("c5/8, g5, c5, b4, b4, c4, d4, a5, c4, g4"), time: .meter(5, 4))
+
+            let stave2 = factory.Stave(y: 150).addTimeSignature(.meter(5, 8))
+            let voice2 = score.voice(score.notes("c5/8, g5, c5, b4, b4"), time: .meter(5, 8))
+
+            let stave3 = factory.Stave(y: 290).addTimeSignature(.meter(13, 16))
+            let voice3 = score.voice(
+                score.notes("c5/16, g5, c5, b4, b4, c5, g5, c5, b4, b4, c5, b4, b4"),
+                time: .meter(13, 16)
+            )
+
+            var beams: [Beam] = []
+            beams += try Beam.applyAndGetBeams(voice1, groups: Beam.getDefaultBeamGroups(.meter(5, 4)))
+            beams += try Beam.applyAndGetBeams(voice2, groups: Beam.getDefaultBeamGroups(.meter(5, 8)))
+            beams += try Beam.applyAndGetBeams(voice3, groups: Beam.getDefaultBeamGroups(.meter(13, 16)))
+
+            let formatter = factory.Formatter()
+            _ = formatter.formatToStave([voice1], stave: stave1)
+            _ = formatter.formatToStave([voice2], stave: stave2)
+            _ = formatter.formatToStave([voice3], stave: stave3)
+            Stave.formatBegModifiers([stave1, stave2, stave3])
+
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Custom_Beam_Groups")
+    func autoBeamingCustomBeamGroupsMatchesUpstream() throws {
+        try runSVGParityCase(module: "Auto_Beaming", test: "Custom_Beam_Groups", width: 450, height: 400) { factory, context in
+            let score = factory.EasyScore()
+
+            let stave1 = factory.Stave(y: 10).addTimeSignature(.meter(5, 4))
+            let voice1 = score.voice(score.notes("c5/8, g5, c5, b4, b4, c4, d4, a5, c4, g4"), time: .meter(5, 4))
+
+            let stave2 = factory.Stave(y: 150).addTimeSignature(.meter(5, 8))
+            let voice2 = score.voice(score.notes("c5/8, g5, c5, b4, b4"), time: .meter(5, 8))
+
+            let stave3 = factory.Stave(y: 290).addTimeSignature(.meter(13, 16))
+            let voice3 = score.voice(
+                score.notes("c5/16, g5, c5, b4, b4, c5, g5, c5, b4, b4, c5, b4, b4"),
+                time: .meter(13, 16)
+            )
+
+            var beams: [Beam] = []
+            beams += try Beam.applyAndGetBeams(voice1, groups: [Fraction(5, 8)])
+            beams += try Beam.applyAndGetBeams(voice2, groups: [Fraction(3, 8), Fraction(2, 8)])
+            beams += try Beam.applyAndGetBeams(voice3, groups: [Fraction(7, 16), Fraction(2, 16), Fraction(4, 16)])
+
+            let formatter = factory.Formatter()
+            _ = formatter.formatToStave([voice1], stave: stave1)
+            _ = formatter.formatToStave([voice2], stave: stave2)
+            _ = formatter.formatToStave([voice3], stave: stave3)
+            Stave.formatBegModifiers([stave1, stave2, stave3])
+
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.More_Automatic_Beaming")
+    func autoBeamingMoreAutomaticBeamingMatchesUpstream() throws {
+        try runSVGParityCase(module: "Auto_Beaming", test: "More_Automatic_Beaming", width: 450, height: 140) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("c4/8, g4/4, c5/8., g5/16, a5/4, a5/16, (c5 e5)/16, a5/8"),
+                time: .meter(9, 8)
+            )
+            let beams = try Beam.applyAndGetBeams(voice, groups: Beam.getDefaultBeamGroups(.meter(9, 8)))
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Automatic_Beaming_4_4_with__3__3__2_Pattern")
+    func autoBeamingAutomaticBeaming44332PatternMatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Automatic_Beaming_4_4_with__3__3__2_Pattern",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("c4/8, g4/4, c5/8, g5, a5, a5, f5"),
+                time: .meter(4, 4)
+            )
+            let beams = try Beam.applyAndGetBeams(voice, groups: [Fraction(3, 8), Fraction(3, 8), Fraction(2, 8)])
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Automatic_Beaming_4_4_with__3__3__2_Pattern_and_Overflow")
+    func autoBeamingAutomaticBeaming44332PatternAndOverflowMatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Automatic_Beaming_4_4_with__3__3__2_Pattern_and_Overflow",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("c4/8, g4/4., c5/8, g5, a5, a5"),
+                time: .meter(4, 4)
+            )
+            let beams = try Beam.applyAndGetBeams(voice, groups: [Fraction(3, 8), Fraction(3, 8), Fraction(2, 8)])
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Automatic_Beaming_8_4_with__3__2__3_Pattern_and_2_Overflows")
+    func autoBeamingAutomaticBeaming84232PatternAnd2OverflowsMatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Automatic_Beaming_8_4_with__3__2__3_Pattern_and_2_Overflows",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("c4/16, g4/2, f4/16, c5/8, a4/16, c4/16, g4/8, b4, c5, g5, f5, e5, c5, a4/4"),
+                time: .meter(8, 4)
+            )
+            let beams = try Beam.applyAndGetBeams(voice, groups: [Fraction(3, 8), Fraction(2, 8), Fraction(3, 8)])
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Automatic_Beaming_8_4_with__3__2__3_Pattern_and_3_Overflows")
+    func autoBeamingAutomaticBeaming84232PatternAnd3OverflowsMatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Automatic_Beaming_8_4_with__3__2__3_Pattern_and_3_Overflows",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes("c4/16, g4/1, f4/16, c5/8, g5, f5, e5, c5, a4/4"),
+                time: .meter(8, 4)
+            )
+            let beams = try Beam.applyAndGetBeams(voice, groups: [Fraction(3, 8), Fraction(2, 8), Fraction(3, 8)])
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Duration_Based_Secondary_Beam_Breaks")
+    func autoBeamingDurationBasedSecondaryBeamBreaksMatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Duration_Based_Secondary_Beam_Breaks",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes(
+                    [
+                        "f5/32, f5, f5, f5, f5/16., f5/32",
+                        "f5/16, f5/8, f5/16",
+                        "f5/32, f5/16., f5., f5/32",
+                        "f5/16., f5/32, f5, f5/16.",
+                    ].joined(separator: ",")
+                )
+            )
+
+            let beams = try Beam.generateBeams(stemmableNotes(in: voice), config: BeamConfig(secondaryBreaks: "8"))
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Duration_Based_Secondary_Beam_Breaks_2")
+    func autoBeamingDurationBasedSecondaryBeamBreaks2MatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "Duration_Based_Secondary_Beam_Breaks_2",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+
+            let notes = score.tuplet(score.notes("e5/16, f5, f5"))
+                + score.tuplet(score.notes("f5/16, f5, c5"))
+                + score.notes("a4/16., f4/32")
+                + score.tuplet(score.notes("d4/16, d4, d4"))
+                + score.tuplet(score.notes("a5/8, (e5 g5), a5"))
+                + score.tuplet(score.notes("f5/16, f5, f5"))
+                + score.tuplet(score.notes("f5/16, f5, a4"))
+
+            let voice = score.voice(notes)
+            let beams = try Beam.generateBeams(stemmableNotes(in: voice), config: BeamConfig(secondaryBreaks: "8"))
+
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Simple_Tuplet_Auto_Beaming")
+    func autoBeamingSimpleTupletAutoBeamingMatchesUpstream() throws {
+        try runSVGParityCase(module: "Auto_Beaming", test: "Simple_Tuplet_Auto_Beaming", width: 450, height: 140) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+
+            let notes = score.tuplet(score.notes("c4/8, g4, c5"))
+                + score.notes("g5/8, a5")
+                + score.tuplet(
+                    score.notes("a5/16, (c5 e5), a5, d5, a5"),
+                    options: TupletOptions(notesOccupied: 4, ratioed: false)
+                )
+            let voice = score.voice(notes, time: .meter(3, 4))
+            let beams = try Beam.applyAndGetBeams(voice)
+
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.More_Simple_Tuplet_Auto_Beaming")
+    func autoBeamingMoreSimpleTupletAutoBeamingMatchesUpstream() throws {
+        try runSVGParityCase(
+            module: "Auto_Beaming",
+            test: "More_Simple_Tuplet_Auto_Beaming",
+            width: 450,
+            height: 140
+        ) { factory, context in
+            let stave = factory.Stave()
+            let score = factory.EasyScore()
+
+            let notes = score.tuplet(score.notes("d4/4, g4, c5"))
+                + score.notes("g5/16, a5, a5, (c5 e5)")
+            let voice = score.voice(notes, time: .meter(3, 4))
+            let beams = try Beam.applyAndGetBeams(voice)
+
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Flat_Beams_Up")
+    func autoBeamingFlatBeamsUpMatchesUpstream() throws {
+        try runSVGParityCase(module: "Auto_Beaming", test: "Flat_Beams_Up", width: 450, height: 140) { factory, context in
+            let stave = factory.Stave(y: 40)
+            let score = factory.EasyScore()
+
+            let notes = score.tuplet(score.notes("c4/8, g4, f5"))
+                + score.notes("d5/8")
+                + score.tuplet(score.notes("c5/16, (c4 e4 g4), f4"))
+                + score.notes("d5/8, e5, c4, f5/32, f5, f5, f5")
+            let voice = score.voice(notes)
+            let beams = try Beam.generateBeams(stemmableNotes(in: voice), config: BeamConfig(stemDirection: .up, flatBeams: true))
+
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Flat_Beams_Down")
+    func autoBeamingFlatBeamsDownMatchesUpstream() throws {
+        try runSVGParityCase(module: "Auto_Beaming", test: "Flat_Beams_Down", width: 450, height: 200) { factory, context in
+            let stave = factory.Stave(y: 40)
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes(
+                    "c5/64, c5, c5, c5, c5, c5, c5, c5, a5/8, g5, (d4 f4 a4)/16, d4, d5/8, e5, g5, a6/32, a6, a6, g4/64, g4"
+                )
+            )
+            let beams = try Beam.generateBeams(stemmableNotes(in: voice), config: BeamConfig(stemDirection: .down, flatBeams: true))
+
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Flat_Beams_Mixed_Direction")
+    func autoBeamingFlatBeamsMixedDirectionMatchesUpstream() throws {
+        try runSVGParityCase(module: "Auto_Beaming", test: "Flat_Beams_Mixed_Direction", width: 450, height: 200) { factory, context in
+            let stave = factory.Stave(y: 40)
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes(
+                    "c5/64, d5, e5, c5, f5, c5, a5, c5, a5/8, g5, (d4 f4 a4)/16, d4, d5/8, e5, c4, a4/32, a4, a4, g4/64, g4"
+                )
+            )
+            let beams = try Beam.generateBeams(stemmableNotes(in: voice), config: BeamConfig(flatBeams: true))
+
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Flat_Beams_Up__uniform_")
+    func autoBeamingFlatBeamsUpUniformMatchesUpstream() throws {
+        try runSVGParityCase(module: "Auto_Beaming", test: "Flat_Beams_Up__uniform_", width: 450, height: 140) { factory, context in
+            let stave = factory.Stave(y: 40)
+            let score = factory.EasyScore()
+
+            let notes = score.tuplet(score.notes("c4/8, g4, g5"))
+                + score.notes("d5/8, c5/16, (c4 e4 g4), d5/8, e5, c4, f5/32, f5, f5, f5")
+            let voice = score.voice(notes)
+            let beams = try Beam.generateBeams(
+                stemmableNotes(in: voice),
+                config: BeamConfig(stemDirection: .up, flatBeams: true, flatBeamOffset: 50)
+            )
+
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Flat_Beams_Down__uniform_")
+    func autoBeamingFlatBeamsDownUniformMatchesUpstream() throws {
+        try runSVGParityCase(module: "Auto_Beaming", test: "Flat_Beams_Down__uniform_", width: 450, height: 200) { factory, context in
+            let stave = factory.Stave(y: 40)
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes(
+                    "c5/64, c5, c5, c5, c5, c5, c5, c5, a5/8, g5, (e4 g4 b4)/16, e5, d5/8, e5/8, g5/8, a6/32, a6, a6, g4/64, g4"
+                )
+            )
+            let beams = try Beam.generateBeams(
+                stemmableNotes(in: voice),
+                config: BeamConfig(stemDirection: .down, flatBeams: true, flatBeamOffset: 155)
+            )
+
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Flat_Beams_Up_Bounds")
+    func autoBeamingFlatBeamsUpBoundsMatchesUpstream() throws {
+        try runSVGParityCase(module: "Auto_Beaming", test: "Flat_Beams_Up_Bounds", width: 450, height: 140) { factory, context in
+            let stave = factory.Stave(y: 40)
+            let score = factory.EasyScore()
+
+            let notes = score.tuplet(score.notes("c4/8, g4/8, g5/8"))
+                + score.notes("d5/8, c5/16, (c4 e4 g4)/16, d5/8, e5/8, c4/8, f5/32, f5/32, f5/32, f5/32")
+            let voice = score.voice(notes)
+            let beams = try Beam.generateBeams(
+                stemmableNotes(in: voice),
+                config: BeamConfig(stemDirection: .up, flatBeams: true, flatBeamOffset: 60)
+            )
+
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
+    @Test("Auto_Beaming.Flat_Beams_Down_Bounds")
+    func autoBeamingFlatBeamsDownBoundsMatchesUpstream() throws {
+        try runSVGParityCase(module: "Auto_Beaming", test: "Flat_Beams_Down_Bounds", width: 450, height: 200) { factory, context in
+            let stave = factory.Stave(y: 40)
+            let score = factory.EasyScore()
+            let voice = score.voice(
+                score.notes(
+                    [
+                        "g5/8, a6/32, a6/32, a6/32, g4/64, g4/64",
+                        "c5/64, c5/64, c5/64, c5/64, c5/64, c5/64, c5/64, c5/64, a5/8",
+                        "g5/8, (e4 g4 b4)/16, e5/16",
+                        "d5/8, e5/8",
+                    ].joined(separator: ","),
+                    options: ["stem": "down"]
+                )
+            )
+            let beams = try Beam.generateBeams(
+                stemmableNotes(in: voice),
+                config: BeamConfig(stemDirection: .down, flatBeams: true, flatBeamOffset: 145)
+            )
+
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+            try drawBeams(beams, context: context)
+        }
+    }
+
     @Test("StaveModifier.Stave_Draw_Test")
     func staveModifierStaveDrawTestMatchesUpstream() throws {
         try runSVGParityCase(module: "StaveModifier", test: "Stave_Draw_Test", width: 400, height: 120) { _, context in
@@ -290,6 +1032,57 @@ struct UpstreamSVGParityTests {
             _ = voice.addTickables(tickables)
             _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
             try factory.draw()
+        }
+    }
+
+    @Test("Clef_Keys.Major_Key_Clef_Test")
+    func clefKeysMajorKeyClefTestMatchesUpstream() throws {
+        try runSVGParityCase(module: "Clef_Keys", test: "Major_Key_Clef_Test", width: 720, height: 1780) { _, context in
+            try drawClefKeysTest(context: context, keys: upstreamMajorKeys)
+        }
+    }
+
+    @Test("Clef_Keys.Minor_Key_Clef_Test")
+    func clefKeysMinorKeyClefTestMatchesUpstream() throws {
+        try runSVGParityCase(module: "Clef_Keys", test: "Minor_Key_Clef_Test", width: 720, height: 1780) { _, context in
+            try drawClefKeysTest(context: context, keys: upstreamMinorKeys)
+        }
+    }
+
+    @Test("Clef_Keys.Stave_Helper")
+    func clefKeysStaveHelperMatchesUpstream() throws {
+        try runSVGParityCase(module: "Clef_Keys", test: "Stave_Helper", width: 720, height: 400) { _, context in
+            let widths = upstreamKeySigFontWidths()
+            let clefWidth = upstreamKeyClefWidth()
+            let accidentalCount = 28.0
+            let keySigPadding = 10.0
+            let sharpTestWidth = accidentalCount * widths.sharpWidth + clefWidth + Stave.defaultPadding + 7 * keySigPadding
+            let flatTestWidth = accidentalCount * widths.flatWidth + clefWidth + Stave.defaultPadding + 7 * keySigPadding
+
+            let keys = upstreamMajorKeys
+            let stave1 = Stave(x: 10, y: 10, width: flatTestWidth).addClef(.treble)
+            let stave2 = Stave(x: 10, y: 90, width: flatTestWidth).addClef(.bass)
+            let stave3 = Stave(x: 10, y: 170, width: sharpTestWidth).addClef(.alto)
+            let stave4 = Stave(x: 10, y: 260, width: sharpTestWidth).addClef(.tenor)
+
+            for i in 0..<8 {
+                _ = stave1.addKeySignature(keys[i])
+                _ = stave2.addKeySignature(keys[i])
+            }
+
+            for i in 8..<keys.count {
+                _ = stave3.addKeySignature(keys[i])
+                _ = stave4.addKeySignature(keys[i])
+            }
+
+            _ = stave1.setContext(context)
+            _ = stave2.setContext(context)
+            _ = stave3.setContext(context)
+            _ = stave4.setContext(context)
+            try stave1.draw()
+            try stave2.draw()
+            try stave3.draw()
+            try stave4.draw()
         }
     }
 
@@ -924,6 +1717,17 @@ struct UpstreamSVGParityTests {
         return parsed.isEmpty ? defaultFonts : parsed
     }
 
+    private func stemmableNotes(in voice: Voice) -> [StemmableNote] {
+        voice.getTickables().compactMap { $0 as? StemmableNote }
+    }
+
+    private func drawBeams(_ beams: [Beam], context: SVGRenderContext) throws {
+        for beam in beams {
+            _ = beam.setContext(context)
+            try beam.draw()
+        }
+    }
+
     private func runSVGParityCase(
         module: String,
         test: String,
@@ -982,6 +1786,16 @@ struct UpstreamSVGParityTests {
         }
     }
 
+    func runCategorySVGParityCase(
+        module: String,
+        test: String,
+        width: Double,
+        height: Double,
+        draw: (Factory, SVGRenderContext) throws -> Void
+    ) throws {
+        try runSVGParityCase(module: module, test: test, width: width, height: height, draw: draw)
+    }
+
     private func applyUpstreamFontStack(fontName: String) throws {
         switch fontName {
         case "Bravura":
@@ -1019,6 +1833,63 @@ struct UpstreamSVGParityTests {
         let naturalWidth = Glyph.getWidth(code: "accidentalNatural", point: glyphScale) + 2
         let clefWidth = Glyph.getWidth(code: "gClef", point: glyphScale) * 2
         return (sharpWidth: sharpWidth, flatWidth: flatWidth, naturalWidth: naturalWidth, clefWidth: clefWidth)
+    }
+
+    private func upstreamKeyClefWidth() -> Double {
+        Glyph.getWidth(code: "gClef", point: 39)
+    }
+
+    private func drawClefKeysTest(context: SVGRenderContext, keys: [String]) throws {
+        let widths = upstreamKeySigFontWidths()
+        let clefWidth = upstreamKeyClefWidth()
+        let accidentalCount = 28.0
+        let keySigPadding = 10.0
+        let sharpTestWidth = accidentalCount * widths.sharpWidth + clefWidth + Stave.defaultPadding + 6 * keySigPadding
+        let flatTestWidth = accidentalCount * widths.flatWidth + clefWidth + Stave.defaultPadding + 6 * keySigPadding
+
+        let clefs: [ClefName] = [
+            .treble,
+            .soprano,
+            .mezzoSoprano,
+            .alto,
+            .tenor,
+            .baritoneF,
+            .baritoneC,
+            .bass,
+            .french,
+            .subbass,
+            .percussion,
+        ]
+
+        let yOffsetForSharpStaves = 10.0 + 80.0 * Double(clefs.count)
+        var flatStaves: [Stave] = []
+        var sharpStaves: [Stave] = []
+
+        for (index, clef) in clefs.enumerated() {
+            let flatStave = Stave(x: 10, y: 10 + 80 * Double(index), width: flatTestWidth).addClef(clef)
+            let sharpStave = Stave(x: 10, y: yOffsetForSharpStaves + 10 + 80 * Double(index), width: sharpTestWidth)
+                .addClef(clef)
+
+            for flatIx in 0..<8 {
+                _ = KeySignature(keySpec: keys[flatIx]).addToStave(flatStave)
+            }
+            for sharpIx in 8..<keys.count {
+                _ = KeySignature(keySpec: keys[sharpIx]).addToStave(sharpStave)
+            }
+
+            flatStaves.append(flatStave)
+            sharpStaves.append(sharpStave)
+        }
+
+        let allStaves = flatStaves + sharpStaves
+        Stave.formatBegModifiers(allStaves)
+
+        for index in 0..<clefs.count {
+            _ = flatStaves[index].setContext(context)
+            _ = sharpStaves[index].setContext(context)
+            try flatStaves[index].draw()
+            try sharpStaves[index].draw()
+        }
     }
 
     private func expectedSVGURL(module: String, test: String, font: String) -> URL {

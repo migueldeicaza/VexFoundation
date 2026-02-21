@@ -121,7 +121,7 @@ public final class Factory {
         options: StaveOptions? = nil
     ) -> VexFoundation.TabStave {
         let w = width ?? (self.options.width - self.options.staveSpace)
-        var opts = options ?? StaveOptions()
+        var opts = options ?? StaveOptions(numLines: 6)
         if options?.spacingBetweenLinesPx == nil {
             opts.spacingBetweenLinesPx = self.options.staveSpace * 1.3
         }

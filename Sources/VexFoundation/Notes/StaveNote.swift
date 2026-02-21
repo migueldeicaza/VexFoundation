@@ -737,6 +737,17 @@ public class StaveNote: StemmableNote {
         getGlyphWidth() * (displaced ? 2 : 1)
     }
 
+    // MARK: - Beam
+
+    @discardableResult
+    override public func setBeam(_ beam: Beam) -> Self {
+        _ = super.setBeam(beam)
+        calcNoteDisplacements()
+        // Match upstream: once a beam is attached, switch to beam stem extension metrics.
+        stem?.setExtension(getStemExtension())
+        return self
+    }
+
     // MARK: - Note Displacements
 
     public func calcNoteDisplacements() {
@@ -802,11 +813,11 @@ public class StaveNote: StemmableNote {
 
     /// Returns the x offset for the first dot after the notehead.
     public func getFirstDotPx() -> Double {
-        var dotX = getGlyphWidth() + xShift + 2
-        if stemDirection == Stem.UP && hasFlag() {
-            dotX += flag?.getMetrics().width ?? 0
+        var px = getRightDisplacedHeadPx()
+        if checkModifierContext().getMembers("Parenthesis").isEmpty == false {
+            px += (Glyph.MUSIC_FONT_STACK.first?.lookupMetric("parenthesis.default.width") as? Double) ?? 0
         }
-        return dotX
+        return px
     }
 
     // MARK: - Ledger Line Style
