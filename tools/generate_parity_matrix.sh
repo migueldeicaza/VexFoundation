@@ -135,7 +135,7 @@ topic_correspondence_for() {
       printf 'Bach Demo|`BachDemoParityTests.swift`'
       return
       ;;
-    barline|stave|stavemodifier|timesignature)
+    barline|stave|stavemodifier)
       printf 'Stave System|`StaveTests.swift`'
       return
       ;;
@@ -169,6 +169,10 @@ topic_correspondence_for() {
       ;;
     formatter|tickcontext|voice)
       printf 'Voice, Formatter, TickContext Parity|`VoiceFormatterTickContextParityTests.swift`'
+      return
+      ;;
+    timesignature)
+      printf 'Time Signature Parity|`TimeSignatureParityTests.swift`'
       return
       ;;
     easyscore|factory|parser|registry|system)

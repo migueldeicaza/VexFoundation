@@ -164,6 +164,14 @@ public enum TimeSignatureSpec: Hashable, Sendable, Codable {
             return
         }
 
+        // Support standalone alternation / interchange symbols used in
+        // time-signature compositions (e.g. "6/8 + 3/4", "3/4 - 2/4").
+        if normalized == "+" || normalized == "-" {
+            guard let token = TimeSignatureDigits(parsing: normalized) else { return nil }
+            self = .topOnly(token)
+            return
+        }
+
         let parts = normalized.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false)
         guard parts.count == 2 else { return nil }
 
