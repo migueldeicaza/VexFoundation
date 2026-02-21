@@ -91,23 +91,38 @@ public final class StaveConnector: VexElement {
             ctx.fillRect(x + 2, topY, 1, height)
 
         case .brace:
-            // Render brace using bezier curves
-            let topX = x - 2
-            let midY = topY + height / 2
+            let width = 12.0
+            let x1 = topStave.getX() - 2 + connectorXShift
+            let y1 = topY
+            let x3 = x1
+            let y3 = bottomY
+            let x2 = x1 - width
+            let y2 = y1 + height / 2
+            let cpx1 = x2 - 0.9 * width
+            let cpy1 = y1 + 0.2 * height
+            let cpx2 = x1 + 1.1 * width
+            let cpy2 = y2 - 0.135 * height
+            let cpx3 = cpx2
+            let cpy3 = y2 + 0.135 * height
+            let cpx4 = cpx1
+            let cpy4 = y3 - 0.2 * height
+            let cpx5 = x2 - width
+            let cpy5 = cpy4
+            let cpx6 = x1 + 0.4 * width
+            let cpy6 = y2 + 0.135 * height
+            let cpx7 = cpx6
+            let cpy7 = y2 - 0.135 * height
+            let cpx8 = cpx5
+            let cpy8 = cpy1
+
             ctx.beginPath()
-            ctx.moveTo(topX, topY)
-            ctx.bezierCurveTo(
-                topX - 8, topY,
-                topX - 8, midY,
-                topX - 5, midY
-            )
-            ctx.bezierCurveTo(
-                topX - 8, midY,
-                topX - 8, bottomY,
-                topX, bottomY
-            )
+            ctx.moveTo(x1, y1)
+            ctx.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x2, y2)
+            ctx.bezierCurveTo(cpx3, cpy3, cpx4, cpy4, x3, y3)
+            ctx.bezierCurveTo(cpx5, cpy5, cpx6, cpy6, x2, y2)
+            ctx.bezierCurveTo(cpx7, cpy7, cpx8, cpy8, x1, y1)
+            ctx.fill()
             ctx.stroke()
-            ctx.closePath()
 
         case .bracket:
             // Render bracket with top and bottom hooks

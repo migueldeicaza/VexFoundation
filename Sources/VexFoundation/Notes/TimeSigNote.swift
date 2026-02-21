@@ -23,8 +23,7 @@ public final class TimeSigNote: Note {
 
         super.init(NoteStruct(duration: .twoFiftySixth))
 
-        let glyph = timeSig.getGlyph()
-        setTickableWidth(glyph.getMetrics().width)
+        setTickableWidth(timeSig.getModifierWidth())
         ignoreTicks = true
     }
 
@@ -43,17 +42,11 @@ public final class TimeSigNote: Note {
 
     override public func draw() throws {
         let stave = checkStave()
-        let ctx = try checkContext()
+        _ = try checkContext()
         setRendered()
-
-        let tsGlyph = timeSig.getGlyph()
-        if tsGlyph.getContext() == nil {
-            _ = tsGlyph.setContext(ctx)
-        }
-
-        _ = tsGlyph.setStave(stave)
-        _ = tsGlyph.setYShift(stave.getYForLine(2) - stave.getYForGlyphs())
-        tsGlyph.renderToStave(x: getAbsoluteX())
+        _ = timeSig.setStave(stave)
+        timeSig.modifierX = getAbsoluteX()
+        try timeSig.drawStave(stave: stave)
     }
 }
 
