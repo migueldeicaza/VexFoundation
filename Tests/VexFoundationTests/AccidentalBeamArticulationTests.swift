@@ -23,6 +23,15 @@ struct AccidentalBeamArticulationTests {
         ))
     }
 
+    private func makeParsedNote(_ key: String, duration: String = "4") throws -> StaveNote {
+        let noteStruct = try StaveNoteStruct(parsingKeys: [key], duration: duration)
+        return StaveNote(noteStruct)
+    }
+
+    private func hasAccidental(_ note: StaveNote) -> Bool {
+        note.getModifiers().contains { $0 is Accidental }
+    }
+
     // MARK: - Accidental Creation
 
     @Test func accidentalCreation() throws {
@@ -163,6 +172,101 @@ struct AccidentalBeamArticulationTests {
         #expect(Tables.accidentalColumnsTable[3]?["a"] == [1, 3, 2])
         #expect(Tables.accidentalColumnsTable[4]?["spaced_out_tetrachord"] == [1, 2, 1, 2])
         #expect(Tables.accidentalColumnsTable[6]?["very_spaced_out_hexachord"] == [1, 2, 1, 2, 1, 2])
+    }
+
+    @Test func accidentalApplyAccidentalsSingleVoiceParity() throws {
+        let notes = try [
+            makeParsedNote("bb/4"),
+            makeParsedNote("bb/4"),
+            makeParsedNote("g#/4"),
+            makeParsedNote("g/4"),
+            makeParsedNote("b/4"),
+            makeParsedNote("b/4"),
+            makeParsedNote("a#/4"),
+            makeParsedNote("g#/4"),
+        ]
+
+        let voice = Voice().setMode(.soft)
+        for note in notes {
+            _ = voice.addTickable(note)
+        }
+
+        try Accidental.applyAccidentals([voice], keySignature: "F")
+
+        #expect(hasAccidental(notes[0]) == false)
+        #expect(hasAccidental(notes[1]) == false)
+        #expect(hasAccidental(notes[2]) == true)
+        #expect(hasAccidental(notes[3]) == true)
+        #expect(hasAccidental(notes[4]) == true)
+        #expect(hasAccidental(notes[5]) == false)
+        #expect(hasAccidental(notes[6]) == true)
+        #expect(hasAccidental(notes[7]) == true)
+    }
+
+    @Test func accidentalApplyAccidentalsMultiVoiceSharedStateParity() throws {
+        let notes0 = try [
+            makeParsedNote("c/4"),
+            makeParsedNote("d/4"),
+            makeParsedNote("e/4"),
+            makeParsedNote("f/4"),
+            makeParsedNote("g/4"),
+            makeParsedNote("a/4"),
+            makeParsedNote("b/4"),
+            makeParsedNote("c/5"),
+        ]
+
+        let notes1 = try [
+            makeParsedNote("c/5"),
+            makeParsedNote("d/5"),
+            makeParsedNote("e/5"),
+            makeParsedNote("f/5"),
+            makeParsedNote("g/5"),
+            makeParsedNote("a/5"),
+            makeParsedNote("b/5"),
+            makeParsedNote("c/6"),
+        ]
+
+        let voice0 = Voice().setMode(.soft)
+        let voice1 = Voice().setMode(.soft)
+        for note in notes0 { _ = voice0.addTickable(note) }
+        for note in notes1 { _ = voice1.addTickable(note) }
+
+        let keyManager = try KeyManager(parsing: "Ab")
+        try Accidental.applyAccidentals([voice0, voice1], keyManager: keyManager)
+
+        #expect(hasAccidental(notes0[0]) == false)
+        #expect(hasAccidental(notes0[1]) == true)
+        #expect(hasAccidental(notes0[2]) == true)
+        #expect(hasAccidental(notes0[3]) == false)
+        #expect(hasAccidental(notes0[4]) == false)
+        #expect(hasAccidental(notes0[5]) == true)
+        #expect(hasAccidental(notes0[6]) == true)
+        #expect(hasAccidental(notes0[7]) == false)
+
+        #expect(hasAccidental(notes1[0]) == false)
+        #expect(hasAccidental(notes1[1]) == true)
+        #expect(hasAccidental(notes1[2]) == true)
+        #expect(hasAccidental(notes1[3]) == false)
+        #expect(hasAccidental(notes1[4]) == false)
+        #expect(hasAccidental(notes1[5]) == true)
+        #expect(hasAccidental(notes1[6]) == true)
+        #expect(hasAccidental(notes1[7]) == false)
+    }
+
+    @Test func accidentalApplyAccidentalsStringConvenienceFailureModes() throws {
+        let note = try makeParsedNote("c/4")
+        let voice = Voice().setMode(.soft)
+        _ = voice.addTickable(note)
+
+        let result = Accidental.applyAccidentalsOrNil([voice], keySignature: "H#")
+        #expect(result == nil)
+
+        do {
+            try Accidental.applyAccidentals([voice], keySignature: "H#")
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? AccidentalApplyError == .invalidKeySignature("H#"))
+        }
     }
 
     // MARK: - Beam Creation

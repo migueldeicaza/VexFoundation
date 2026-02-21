@@ -46,7 +46,10 @@ public enum AccidentalType: String, CaseIterable, Sendable, Codable {
     case buyukMucennebFlat = "bss"
     case sori = "o"
     case koron = "k"
+    case microtonalOne = "bbs"
     case buyukMucennebSharp = "++-"
+    case microtonalThree = "ashs"
+    case microtonalFour = "afhf"
 
     /// Parse from a string token.
     public init?(parsing raw: String) {
@@ -63,6 +66,27 @@ public enum AccidentalParseError: Error, LocalizedError, Sendable {
         switch self {
         case .invalidType(let value):
             return "Unknown accidental type: '\(value)'."
+        }
+    }
+}
+
+/// Errors for automatic accidental application.
+public enum AccidentalApplyError: Error, LocalizedError, Equatable, Sendable {
+    case invalidKeySignature(String)
+    case malformedKey(String)
+    case invalidAccidental(String)
+    case missingScaleRoot(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidKeySignature(let key):
+            return "Invalid key signature for automatic accidentals: '\(key)'."
+        case .malformedKey(let key):
+            return "Malformed note key while applying accidentals: '\(key)'."
+        case .invalidAccidental(let accidental):
+            return "Invalid accidental while applying accidentals: '\(accidental)'."
+        case .missingScaleRoot(let root):
+            return "Missing scale root '\(root)' while applying accidentals."
         }
     }
 }
@@ -413,6 +437,158 @@ public final class Accidental: Modifier {
             if line2.dblSharpLine { clearance -= 0.5 }
         }
         return abs(clearance) < clearanceRequired
+    }
+
+    // MARK: - Automatic Accidentals
+
+    /// Automatically apply accidentals across one or more voices using a pre-validated key manager.
+    ///
+    /// The accidental state is shared across all provided voices at matching tick positions.
+    public static func applyAccidentals(_ voices: [Voice], keyManager: KeyManager) throws {
+        let music = keyManager.music
+        var scaleMapByRoot: [String: String] = [:]
+        for (root, note) in keyManager.scaleMap {
+            // Match VexFlow createScaleMap behavior: naturals are explicit.
+            scaleMapByRoot[root] = note.count == 1 ? "\(note)n" : note
+        }
+        try applyAccidentals(voices, scaleMapByRoot: scaleMapByRoot, music: music)
+    }
+
+    /// Automatically apply accidentals across one or more voices using a string key signature.
+    ///
+    /// Example: `try Accidental.applyAccidentals([voice], keySignature: "F")`
+    public static func applyAccidentals(_ voices: [Voice], keySignature: String = "C") throws {
+        let normalized = keySignature.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedKey = normalized.isEmpty ? "C" : normalized
+        let keyManager: KeyManager
+        do {
+            keyManager = try KeyManager(parsing: resolvedKey)
+        } catch {
+            throw AccidentalApplyError.invalidKeySignature(keySignature)
+        }
+        try applyAccidentals(voices, keyManager: keyManager)
+    }
+
+    /// Failable convenience wrapper for string key signatures.
+    ///
+    /// Returns `nil` when the key signature is invalid.
+    @discardableResult
+    public static func applyAccidentalsOrNil(_ voices: [Voice], keySignature: String = "C") -> [Voice]? {
+        guard (try? applyAccidentals(voices, keySignature: keySignature)) != nil else {
+            return nil
+        }
+        return voices
+    }
+
+    private static func applyAccidentals(
+        _ voices: [Voice],
+        scaleMapByRoot: [String: String],
+        music: Music
+    ) throws {
+        var tickPositions: [Fraction] = []
+        var tickNoteMap: [String: [Tickable]] = [:]
+
+        func tickKey(_ position: Fraction) -> String {
+            position.clone().simplify().description
+        }
+
+        // Group tickables by absolute tick position across all voices.
+        for voice in voices {
+            let tickPosition = Fraction(0, 1)
+            for tickable in voice.getTickables() {
+                if tickable.shouldIgnoreTicks() { continue }
+
+                let positionKey = tickKey(tickPosition)
+                if tickNoteMap[positionKey] == nil {
+                    tickPositions.append(tickPosition.clone())
+                    tickNoteMap[positionKey] = [tickable]
+                } else {
+                    tickNoteMap[positionKey]?.append(tickable)
+                }
+
+                tickPosition.add(tickable.getTicks())
+            }
+        }
+
+        tickPositions.sort()
+
+        // Mutable per-octave accidental state, e.g. "c4" -> "c#".
+        var scaleMap: [String: String] = [:]
+
+        func processTickable(_ tickable: Tickable, modifiedPitches: inout Set<String>) throws {
+            guard let staveNote = tickable as? StaveNote,
+                  !staveNote.isRest(),
+                  !staveNote.shouldIgnoreTicks()
+            else {
+                return
+            }
+
+            for (keyIndex, keyString) in staveNote.keys.enumerated() {
+                let parts = keyString.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+                guard parts.count >= 2 else {
+                    throw AccidentalApplyError.malformedKey(keyString)
+                }
+
+                let keyToken = parts[0]
+                let octave = parts[1]
+                let keyParts: NoteParts
+                do {
+                    keyParts = try music.noteParts(parsing: keyToken)
+                } catch {
+                    throw AccidentalApplyError.malformedKey(keyString)
+                }
+
+                let accidentalString = keyParts.accidental ?? "n"
+                let pitch = keyParts.root + accidentalString
+
+                let scaleStateKey = keyParts.root + octave
+                if scaleMap[scaleStateKey] == nil {
+                    guard let initialPitch = scaleMapByRoot[keyParts.root] else {
+                        throw AccidentalApplyError.missingScaleRoot(keyParts.root)
+                    }
+                    scaleMap[scaleStateKey] = initialPitch
+                }
+
+                let sameAccidental = (scaleMap[scaleStateKey] == pitch)
+                let pitchIdentity = "\(keyParts.root)\(accidentalString)/\(octave)"
+                let previouslyModified = modifiedPitches.contains(pitchIdentity)
+
+                // Remove duplicate pre-existing accidental of same type at this key index.
+                staveNote.noteModifiers.removeAll { modifier in
+                    guard let accidental = modifier as? Accidental else { return false }
+                    return accidental.type == accidentalString && accidental.getIndex() == keyIndex
+                }
+
+                if !sameAccidental || previouslyModified {
+                    scaleMap[scaleStateKey] = pitch
+
+                    guard let accidentalType = AccidentalType(parsing: accidentalString) else {
+                        throw AccidentalApplyError.invalidAccidental(accidentalString)
+                    }
+                    _ = staveNote.addModifier(Accidental(accidentalType), index: keyIndex)
+                    modifiedPitches.insert(pitchIdentity)
+                }
+            }
+
+            // Process grace notes attached to this note.
+            for modifier in staveNote.getModifiers() {
+                if let graceGroup = modifier as? GraceNoteGroup {
+                    for graceNote in graceGroup.getGraceNotes() {
+                        try processTickable(graceNote, modifiedPitches: &modifiedPitches)
+                    }
+                }
+            }
+        }
+
+        for tickPosition in tickPositions {
+            let positionKey = tickKey(tickPosition)
+            guard let tickables = tickNoteMap[positionKey] else { continue }
+
+            var modifiedPitches = Set<String>()
+            for tickable in tickables {
+                try processTickable(tickable, modifiedPitches: &modifiedPitches)
+            }
+        }
     }
 
     // MARK: - Draw
