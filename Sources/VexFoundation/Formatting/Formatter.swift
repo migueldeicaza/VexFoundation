@@ -371,7 +371,10 @@ public final class Formatter {
                         let prevContext = contextMap[contextList[i - 1]]!
 
                         // Find matching voices
-                        let matchingKeys = voices.keys.filter { backVoices[$0] != nil }
+                        // Match VexFlow's Object.keys() traversal order for voice ids.
+                        let matchingKeys = voices.keys
+                            .filter { backVoices[$0] != nil }
+                            .sorted()
                         if !matchingKeys.isEmpty {
                             var maxTicksVal: Double = 0
                             var maxNegativeShiftPx = Double.infinity

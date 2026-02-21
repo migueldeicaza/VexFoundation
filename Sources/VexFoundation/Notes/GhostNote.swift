@@ -31,6 +31,8 @@ public final class GhostNote: StemmableNote {
 
     public override init(_ noteStruct: NoteStruct) {
         super.init(noteStruct)
+        // Match upstream behavior: ghost notes must not contribute intrinsic width.
+        setTickableWidth(0)
     }
 
     // MARK: - Overrides
@@ -50,13 +52,15 @@ public final class GhostNote: StemmableNote {
     }
 
     override public func preFormat() {
+        setTickableWidth(0)
         preFormatted = true
     }
 
     override public func draw() throws {
         setRendered()
-        // Ghost notes don't render, but their annotations should
+        // Ghost notes don't render, but their annotations should.
         for modifier in getModifiers() {
+            guard modifier is Annotation else { continue }
             modifier.setContext(getContext())
             try modifier.draw()
         }
