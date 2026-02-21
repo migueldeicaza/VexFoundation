@@ -3,6 +3,17 @@
 
 import Foundation
 
+public enum StaveLineError: Error, LocalizedError, Equatable, Sendable {
+    case mismatchedIndices(firstCount: Int, lastCount: Int)
+
+    public var errorDescription: String? {
+        switch self {
+        case .mismatchedIndices(let firstCount, let lastCount):
+            return "Connected notes must have same number of indices (\(firstCount) vs \(lastCount))."
+        }
+    }
+}
+
 // MARK: - StaveLine Notes
 
 public struct StaveLineNotes {
@@ -65,18 +76,45 @@ public final class StaveLine: VexElement {
     public var lastIndices: [Int]
     public var lineText: String = ""
     public var lineRenderOptions = StaveLineRenderOptions()
+    public private(set) var initError: StaveLineError?
+
+    private static func normalizeNotes(_ notes: StaveLineNotes) -> (notes: StaveLineNotes, error: StaveLineError?) {
+        guard notes.firstIndices.count != notes.lastIndices.count else {
+            return (notes, nil)
+        }
+        let error = StaveLineError.mismatchedIndices(
+            firstCount: notes.firstIndices.count,
+            lastCount: notes.lastIndices.count
+        )
+        var normalized = notes
+        let count = min(notes.firstIndices.count, notes.lastIndices.count)
+        if count > 0 {
+            normalized.firstIndices = Array(notes.firstIndices.prefix(count))
+            normalized.lastIndices = Array(notes.lastIndices.prefix(count))
+        } else {
+            normalized.firstIndices = [0]
+            normalized.lastIndices = [0]
+        }
+        return (normalized, error)
+    }
 
     // MARK: - Init
 
     public init(notes: StaveLineNotes) {
-        guard notes.firstIndices.count == notes.lastIndices.count else {
-            fatalError("[VexError] BadArguments: Connected notes must have same number of indices.")
-        }
-        self.firstNote = notes.firstNote
-        self.firstIndices = notes.firstIndices
-        self.lastNote = notes.lastNote
-        self.lastIndices = notes.lastIndices
+        let normalized = Self.normalizeNotes(notes)
+        self.firstNote = normalized.notes.firstNote
+        self.firstIndices = normalized.notes.firstIndices
+        self.lastNote = normalized.notes.lastNote
+        self.lastIndices = normalized.notes.lastIndices
+        self.initError = normalized.error
         super.init()
+    }
+
+    public convenience init(validating notes: StaveLineNotes) throws {
+        self.init(notes: notes)
+        if let initError {
+            throw initError
+        }
     }
 
     // MARK: - Setters
@@ -89,8 +127,17 @@ public final class StaveLine: VexElement {
 
     @discardableResult
     public func setNotes(_ notes: StaveLineNotes) -> Self {
+        _ = try? setNotesThrowing(notes)
+        return self
+    }
+
+    @discardableResult
+    public func setNotesThrowing(_ notes: StaveLineNotes) throws -> Self {
         guard notes.firstIndices.count == notes.lastIndices.count else {
-            fatalError("[VexError] BadArguments: Connected notes must have same number of indices.")
+            throw StaveLineError.mismatchedIndices(
+                firstCount: notes.firstIndices.count,
+                lastCount: notes.lastIndices.count
+            )
         }
         firstNote = notes.firstNote
         firstIndices = notes.firstIndices

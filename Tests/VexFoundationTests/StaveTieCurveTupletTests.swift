@@ -96,6 +96,31 @@ struct StaveTieCurveTupletTests {
         #expect(StaveTie.category == "StaveTie")
     }
 
+    @Test func staveTieValidatingInitAndThrowingSetNotes() throws {
+        do {
+            _ = try StaveTie(validating: TieNotes())
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveTieError == .requiresStartOrEndNote)
+        }
+
+        let note1 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
+        let note2 = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .d, octave: 4)), duration: .quarter)
+        let tie = StaveTie(notes: TieNotes(firstNote: note1, lastNote: note2))
+
+        do {
+            _ = try tie.setNotesThrowing(TieNotes(
+                firstNote: note1,
+                lastNote: note2,
+                firstIndices: [0, 1],
+                lastIndices: [0]
+            ))
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveTieError == .mismatchedIndices(firstCount: 2, lastCount: 1))
+        }
+    }
+
     // MARK: - Curve Creation
 
     @Test func curveCreation() throws {
@@ -158,6 +183,17 @@ struct StaveTieCurveTupletTests {
 
     @Test func curveCategory() throws {
         #expect(Curve.category == "Curve")
+    }
+
+    @Test func curveThrowingSetNotesValidation() throws {
+        let note = makeNote(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter)
+        let curve = Curve(from: note, to: nil)
+        do {
+            _ = try curve.setNotesThrowing(from: nil, to: nil)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? CurveError == .requiresStartOrEndNote)
+        }
     }
 
     @Test func curvePositionEnum() throws {

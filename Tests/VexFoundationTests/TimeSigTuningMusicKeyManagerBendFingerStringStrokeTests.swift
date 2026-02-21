@@ -485,6 +485,19 @@ struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
         #expect(sn.getWidth() == 20)
     }
 
+    @Test func stringNumberThrowingFormatRequiresStaveNote() throws {
+        let sn = StringNumber("1")
+        let tab = TabNote(TabNoteStruct(positions: [TabNotePosition(str: 1, fret: 3)], duration: .quarter))
+        _ = tab.addModifier(sn, index: 0)
+        var state = ModifierContextState()
+        do {
+            _ = try StringNumber.formatThrowing([sn], state: &state)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StringNumberError == .requiresStaveNote)
+        }
+    }
+
     // ============================================================
     // MARK: - Stroke Tests
     // ============================================================

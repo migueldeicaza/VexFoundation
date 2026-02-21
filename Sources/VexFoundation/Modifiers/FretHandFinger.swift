@@ -4,6 +4,17 @@
 
 import Foundation
 
+public enum FretHandFingerError: Error, LocalizedError, Equatable, Sendable {
+    case invalidPosition(ModifierPosition)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidPosition(let position):
+            return "The position \(position) does not exist."
+        }
+    }
+}
+
 // MARK: - FretHandFinger
 
 /// Renders fret-hand finger numbers on notes.
@@ -157,7 +168,7 @@ public final class FretHandFinger: Modifier {
         case .right:
             dotX += 1
         default:
-            fatalError("[VexError] InvalidPosition: The position \(position) does not exist")
+            throw FretHandFingerError.invalidPosition(position)
         }
 
         ctx.save()

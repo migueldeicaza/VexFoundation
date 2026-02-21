@@ -3,6 +3,20 @@
 
 import Foundation
 
+public enum StaveError: Error, LocalizedError, Equatable, Sendable {
+    case lineNumberOutOfRange(Int)
+    case invalidLineConfigCount(expected: Int, actual: Int)
+
+    public var errorDescription: String? {
+        switch self {
+        case .lineNumberOutOfRange(let line):
+            return "Line number out of range: \(line)"
+        case .invalidLineConfigCount(let expected, let actual):
+            return "Config array length must match num_lines (\(actual) vs \(expected))."
+        }
+    }
+}
+
 // MARK: - Stave Options
 
 /// Configuration for individual stave lines.
@@ -89,16 +103,16 @@ open class Stave: VexElement {
 
     /// Default left+right padding used to size staves correctly.
     public static var defaultPadding: Double {
-        let musicFont = Glyph.MUSIC_FONT_STACK.first!
-        let left = (musicFont.lookupMetric("stave.padding") as? Double) ?? 0
-        let right = (musicFont.lookupMetric("stave.endPaddingMax") as? Double) ?? 0
+        let musicFont = Glyph.MUSIC_FONT_STACK.first
+        let left = (musicFont?.lookupMetric("stave.padding") as? Double) ?? 0
+        let right = (musicFont?.lookupMetric("stave.endPaddingMax") as? Double) ?? 0
         return left + right
     }
 
     /// Right padding only, used when startX is pre-determined.
     public static var rightPadding: Double {
-        let musicFont = Glyph.MUSIC_FONT_STACK.first!
-        return (musicFont.lookupMetric("stave.endPaddingMax") as? Double) ?? 0
+        let musicFont = Glyph.MUSIC_FONT_STACK.first
+        return (musicFont?.lookupMetric("stave.endPaddingMax") as? Double) ?? 0
     }
 
     // MARK: - Properties
@@ -159,17 +173,29 @@ open class Stave: VexElement {
 
     @discardableResult
     public func setConfigForLine(_ lineNumber: Int, config: StaveLineConfig) -> Self {
+        _ = try? setConfigForLineThrowing(lineNumber, config: config)
+        return self
+    }
+
+    @discardableResult
+    public func setConfigForLines(_ configs: [StaveLineConfig]) -> Self {
+        _ = try? setConfigForLinesThrowing(configs)
+        return self
+    }
+
+    @discardableResult
+    public func setConfigForLineThrowing(_ lineNumber: Int, config: StaveLineConfig) throws -> Self {
         guard lineNumber >= 0 && lineNumber < options.numLines else {
-            fatalError("[VexError] StaveConfigError: Line number out of range.")
+            throw StaveError.lineNumberOutOfRange(lineNumber)
         }
         options.lineConfig[lineNumber] = config
         return self
     }
 
     @discardableResult
-    public func setConfigForLines(_ configs: [StaveLineConfig]) -> Self {
+    public func setConfigForLinesThrowing(_ configs: [StaveLineConfig]) throws -> Self {
         guard configs.count == options.numLines else {
-            fatalError("[VexError] StaveConfigError: Config array length must match num_lines.")
+            throw StaveError.invalidLineConfigCount(expected: options.numLines, actual: configs.count)
         }
         options.lineConfig = configs
         return self

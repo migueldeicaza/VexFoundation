@@ -4,6 +4,20 @@
 
 import Foundation
 
+public enum StringNumberError: Error, LocalizedError, Equatable, Sendable {
+    case requiresStaveNote
+    case invalidPosition(ModifierPosition)
+
+    public var errorDescription: String? {
+        switch self {
+        case .requiresStaveNote:
+            return "StringNumber requires a StaveNote."
+        case .invalidPosition(let position):
+            return "The position \(position) is invalid."
+        }
+    }
+}
+
 // MARK: - Line End Type
 
 public enum LineEndType: Int {
@@ -26,6 +40,14 @@ public final class StringNumber: Modifier {
         _ nums: [StringNumber],
         state: inout ModifierContextState
     ) -> Bool {
+        (try? formatThrowing(nums, state: &state)) ?? false
+    }
+
+    @discardableResult
+    public static func formatThrowing(
+        _ nums: [StringNumber],
+        state: inout ModifierContextState
+    ) throws -> Bool {
         let leftShift = state.leftShift
         let rightShift = state.rightShift
         let numSpacing: Double = 1
@@ -50,7 +72,7 @@ public final class StringNumber: Modifier {
             let note = num.getNote()
             let pos = num.getPosition()
             guard let staveNote = note as? StaveNote else {
-                fatalError("[VexError] NoStaveNote: StringNumber requires a StaveNote.")
+                throw StringNumberError.requiresStaveNote
             }
             let index = num.checkIndex()
             let props = staveNote.getKeyProps()[index]
@@ -215,7 +237,7 @@ public final class StringNumber: Modifier {
         case .right:
             dotX += radius / 2
         default:
-            fatalError("[VexError] InvalidPosition: The position \(position) is invalid")
+            throw StringNumberError.invalidPosition(position)
         }
 
         ctx.save()

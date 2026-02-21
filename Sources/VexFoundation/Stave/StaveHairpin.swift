@@ -4,6 +4,20 @@
 
 import Foundation
 
+public enum StaveHairpinError: Error, LocalizedError, Equatable, Sendable {
+    case requiresStartOrEndNote
+    case requiresBothNotesForDraw
+
+    public var errorDescription: String? {
+        switch self {
+        case .requiresStartOrEndNote:
+            return "Hairpin needs to have either firstNote or lastNote set."
+        case .requiresBothNotesForDraw:
+            return "Notes required to draw hairpin."
+        }
+    }
+}
+
 // MARK: - Hairpin Type
 
 public enum HairpinType: Int {
@@ -46,17 +60,25 @@ public final class StaveHairpin: VexElement {
     public var renderOptions = HairpinRenderOptions()
     public var firstNote: Note?
     public var lastNote: Note?
+    public private(set) var initError: StaveHairpinError?
 
     // MARK: - Init
 
     public init(firstNote: Note?, lastNote: Note?, type: HairpinType) {
-        guard firstNote != nil || lastNote != nil else {
-            fatalError("[VexError] BadArguments: Hairpin needs to have either firstNote or lastNote set.")
+        if firstNote == nil && lastNote == nil {
+            self.initError = .requiresStartOrEndNote
         }
         self.firstNote = firstNote
         self.lastNote = lastNote
         self.hairpinType = type
         super.init()
+    }
+
+    public convenience init(validating firstNote: Note?, lastNote: Note?, type: HairpinType) throws {
+        self.init(firstNote: firstNote, lastNote: lastNote, type: type)
+        if let initError {
+            throw initError
+        }
     }
 
     // MARK: - Setters
@@ -77,8 +99,14 @@ public final class StaveHairpin: VexElement {
 
     @discardableResult
     public func setNotes(firstNote: Note?, lastNote: Note?) -> Self {
+        _ = try? setNotesThrowing(firstNote: firstNote, lastNote: lastNote)
+        return self
+    }
+
+    @discardableResult
+    public func setNotesThrowing(firstNote: Note?, lastNote: Note?) throws -> Self {
         guard firstNote != nil || lastNote != nil else {
-            fatalError("[VexError] BadArguments: Hairpin needs to have either firstNote or lastNote set.")
+            throw StaveHairpinError.requiresStartOrEndNote
         }
         self.firstNote = firstNote
         self.lastNote = lastNote
@@ -129,7 +157,7 @@ public final class StaveHairpin: VexElement {
         setRendered()
 
         guard let firstNote, let lastNote else {
-            fatalError("[VexError] NoNote: Notes required to draw hairpin.")
+            throw StaveHairpinError.requiresBothNotesForDraw
         }
 
         let start = firstNote.getModifierStartXY(position: hairpinPosition, index: 0)

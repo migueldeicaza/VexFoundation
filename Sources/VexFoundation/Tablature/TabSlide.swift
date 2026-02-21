@@ -66,17 +66,20 @@ public final class TabSlide: TabTie {
         lastYs: [Double]
     ) throws {
         guard !firstYs.isEmpty && !lastYs.isEmpty else {
-            fatalError("[VexError] BadArguments: No Y-values to render")
+            throw StaveTieError.noYValues
         }
 
         let ctx = try checkContext()
 
         let firstIndices = notes.firstIndices
         for i in 0..<firstIndices.count {
+            guard firstIndices[i] >= 0, firstIndices[i] < firstYs.count else {
+                throw StaveTieError.badIndices
+            }
             let slideY = firstYs[firstIndices[i]] + renderOptions.yShift
 
             guard !slideY.isNaN else {
-                fatalError("[VexError] BadArguments: Bad indices for slide rendering.")
+                throw StaveTieError.badIndices
             }
 
             ctx.beginPath()

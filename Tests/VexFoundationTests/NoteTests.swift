@@ -120,6 +120,38 @@ struct NoteTests {
         #expect(positions.count == 3)
     }
 
+    @Test func modifierAndModifierContextThrowingPreconditions() throws {
+        let modifier = Modifier()
+        do {
+            _ = try modifier.getNoteThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? ModifierError == .noNote)
+        }
+
+        do {
+            _ = try modifier.checkIndexThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? ModifierError == .noIndex)
+        }
+
+        do {
+            _ = try modifier.checkModifierContextThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? ModifierError == .noModifierContext)
+        }
+
+        let mc = ModifierContext()
+        do {
+            _ = try mc.getMetricsThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? ModifierContextError == .unformattedMember)
+        }
+    }
+
     // MARK: - Stem
 
     @Test func stemDirections() {

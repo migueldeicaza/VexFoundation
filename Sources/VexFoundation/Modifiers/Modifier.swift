@@ -3,6 +3,26 @@
 
 import Foundation
 
+public enum ModifierError: Error, LocalizedError, Equatable, Sendable {
+    case noNote
+    case noIndex
+    case noModifierContext
+    case notImplemented(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .noNote:
+            return "Modifier has no note."
+        case .noIndex:
+            return "Modifier has an invalid index."
+        case .noModifierContext:
+            return "Modifier context required."
+        case .notImplemented(let category):
+            return "draw() not implemented for modifier \(category)."
+        }
+    }
+}
+
 // MARK: - Modifier Position
 
 /// Positions where note modifiers can appear.
@@ -39,6 +59,10 @@ open class Modifier: VexElement {
     public weak var modifierContext: ModifierContext?
     private var spacingFromNextModifier: Double = 0
 
+    private static func fallbackNote() -> Note {
+        Note(NoteStruct(duration: .quarter))
+    }
+
     // MARK: - Width
 
     public func getWidth() -> Double { modifierWidth }
@@ -52,18 +76,26 @@ open class Modifier: VexElement {
     // MARK: - Note
 
     public func getNote() -> Note {
+        (try? getNoteThrowing()) ?? Self.fallbackNote()
+    }
+
+    public func getNoteThrowing() throws -> Note {
         guard let note else {
-            fatalError("[VexError] NoNote: Modifier has no note.")
+            throw ModifierError.noNote
         }
         return note
     }
 
     public func checkAttachedNote() -> Note {
+        (try? checkAttachedNoteThrowing()) ?? Self.fallbackNote()
+    }
+
+    public func checkAttachedNoteThrowing() throws -> Note {
         guard index != nil else {
-            fatalError("[VexError] NoIndex: Can't draw \(getCategory()) without an index.")
+            throw ModifierError.noIndex
         }
         guard let note else {
-            fatalError("[VexError] NoNote: Can't draw \(getCategory()) without a note.")
+            throw ModifierError.noNote
         }
         return note
     }
@@ -79,8 +111,12 @@ open class Modifier: VexElement {
     public func getIndex() -> Int? { index }
 
     public func checkIndex() -> Int {
+        (try? checkIndexThrowing()) ?? 0
+    }
+
+    public func checkIndexThrowing() throws -> Int {
         guard let index else {
-            fatalError("[VexError] NoIndex: Modifier has an invalid index.")
+            throw ModifierError.noIndex
         }
         return index
     }
@@ -141,8 +177,12 @@ open class Modifier: VexElement {
     public func getModifierContext() -> ModifierContext? { modifierContext }
 
     public func checkModifierContext() -> ModifierContext {
+        (try? checkModifierContextThrowing()) ?? ModifierContext()
+    }
+
+    public func checkModifierContextThrowing() throws -> ModifierContext {
         guard let modifierContext else {
-            fatalError("[VexError] NoModifierContext: Modifier Context Required.")
+            throw ModifierError.noModifierContext
         }
         return modifierContext
     }
@@ -178,6 +218,6 @@ open class Modifier: VexElement {
 
     override open func draw() throws {
         _ = try checkContext()
-        fatalError("[VexError] NotImplemented: draw() not implemented for this modifier.")
+        throw ModifierError.notImplemented(getCategory())
     }
 }

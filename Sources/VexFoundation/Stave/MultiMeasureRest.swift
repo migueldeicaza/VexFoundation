@@ -3,6 +3,20 @@
 
 import Foundation
 
+public enum MultiMeasureRestError: Error, LocalizedError, Equatable, Sendable {
+    case noStave
+    case invalidMeasureCount(Int)
+
+    public var errorDescription: String? {
+        switch self {
+        case .noStave:
+            return "No stave attached to multi-measure rest."
+        case .invalidMeasureCount(let count):
+            return "Invalid multi-measure rest number: \(count)"
+        }
+    }
+}
+
 // MARK: - MultiMeasureRestRenderOptions
 
 public struct MultiMeasureRestRenderOptions {
@@ -41,9 +55,9 @@ public struct MultiMeasureRestRenderOptions {
         self.showNumber = showNumber
         self.numberLine = numberLine
 
-        let musicFont = Glyph.MUSIC_FONT_STACK.first!
+        let musicFont = Glyph.MUSIC_FONT_STACK.first
         self.numberGlyphPoint = numberGlyphPoint
-            ?? (musicFont.lookupMetric("digits.point") as? Double)
+            ?? (musicFont?.lookupMetric("digits.point") as? Double)
             ?? Tables.NOTATION_FONT_SCALE
 
         self.paddingLeft = paddingLeft
@@ -89,6 +103,7 @@ public final class MultiMeasureRest: VexElement {
     public var xs: (left: Double, right: Double) = (left: 0, right: 0)
     public var numberOfMeasures: Int
     public var mmrStave: Stave?
+    public private(set) var initError: MultiMeasureRestError?
 
     private let hasPaddingLeft: Bool
     private let hasPaddingRight: Bool
@@ -106,11 +121,21 @@ public final class MultiMeasureRest: VexElement {
         self.hasLineThickness = true
         self.hasSymbolSpacing = options.symbolSpacing != 0
 
-        let musicFont = Glyph.MUSIC_FONT_STACK.first!
-        let fontLineShift = (musicFont.lookupMetric("digits.shiftLine") as? Double) ?? 0
+        if numberOfMeasures <= 0 {
+            self.initError = .invalidMeasureCount(numberOfMeasures)
+        }
+        let musicFont = Glyph.MUSIC_FONT_STACK.first
+        let fontLineShift = (musicFont?.lookupMetric("digits.shiftLine") as? Double) ?? 0
         self.renderOpts.numberLine += fontLineShift
 
         super.init()
+    }
+
+    public convenience init(validatingNumberOfMeasures numberOfMeasures: Int, options: MultiMeasureRestRenderOptions) throws {
+        self.init(numberOfMeasures: numberOfMeasures, options: options)
+        if let initError {
+            throw initError
+        }
     }
 
     // MARK: - Accessors
@@ -126,8 +151,12 @@ public final class MultiMeasureRest: VexElement {
     public func getStave() -> Stave? { mmrStave }
 
     public func checkStave() -> Stave {
+        (try? checkStaveThrowing()) ?? Stave(x: 0, y: 0, width: 0)
+    }
+
+    public func checkStaveThrowing() throws -> Stave {
         guard let mmrStave else {
-            fatalError("[VexError] NoStave: No stave attached to instance.")
+            throw MultiMeasureRestError.noStave
         }
         return mmrStave
     }
@@ -229,7 +258,7 @@ public final class MultiMeasureRest: VexElement {
         let ctx = try checkContext()
         setRendered()
 
-        let stave = checkStave()
+        let stave = try checkStaveThrowing()
 
         var left = stave.getNoteStartX()
         var right = stave.getNoteEndX()
@@ -260,7 +289,7 @@ public final class MultiMeasureRest: VexElement {
 
         if options.showNumber {
             guard let numberDigits = TimeSignatureDigits(rawValue: String(numberOfMeasures)) else {
-                fatalError("[VexError] BadArguments: Invalid multi-measure rest number: \(numberOfMeasures)")
+                throw MultiMeasureRestError.invalidMeasureCount(numberOfMeasures)
             }
             let timeSpec: TimeSignatureSpec = .topOnly(numberDigits)
             let timeSig = TimeSignature(timeSpec: timeSpec, customPadding: 0)

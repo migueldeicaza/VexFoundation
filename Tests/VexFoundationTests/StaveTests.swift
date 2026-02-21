@@ -124,6 +124,16 @@ struct StaveTests {
         #expect(barline.getBarlineType() == .double)
     }
 
+    @Test func staveModifierThrowingPrecondition() throws {
+        let barline = Barline(.single)
+        do {
+            _ = try barline.checkStaveThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveModifierError == .noStave)
+        }
+    }
+
     @Test func staveBarlineConfig() {
         let stave = Stave(x: 0, y: 0, width: 400)
 
@@ -290,6 +300,24 @@ struct StaveTests {
         // Hide middle line
         stave.setConfigForLine(2, config: StaveLineConfig(visible: false))
         #expect(stave.getConfigForLines()[2].visible == false)
+    }
+
+    @Test func staveLineConfigThrowingValidation() throws {
+        let stave = Stave(x: 0, y: 0, width: 400)
+
+        do {
+            _ = try stave.setConfigForLineThrowing(8, config: StaveLineConfig(visible: false))
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveError == .lineNumberOutOfRange(8))
+        }
+
+        do {
+            _ = try stave.setConfigForLinesThrowing([StaveLineConfig(visible: true)])
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveError == .invalidLineConfigCount(expected: 5, actual: 1))
+        }
     }
 
     @Test func staveCustomLineCount() {

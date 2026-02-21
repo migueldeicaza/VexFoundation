@@ -462,6 +462,24 @@ struct TablatureAndChordSymbolTests {
         #expect(slide.direction == TabSlide.SLIDE_UP)
     }
 
+    @Test func tabSlideRenderTieThrowingValidation() throws {
+        let n1 = makeTabNote()
+        let n2 = makeTabNote()
+        let slide = TabSlide(notes: TieNotes(firstNote: n1, lastNote: n2))
+        do {
+            try slide.renderTie(
+                direction: .up,
+                firstXPx: 10,
+                lastXPx: 20,
+                firstYs: [],
+                lastYs: []
+            )
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveTieError == .noYValues)
+        }
+    }
+
     // ============================================================
     // MARK: - GraceTabNote Tests
     // ============================================================

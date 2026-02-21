@@ -3,6 +3,17 @@
 
 import Foundation
 
+public enum GraceNoteError: Error, LocalizedError, Equatable, Sendable {
+    case noBeam
+
+    public var errorDescription: String? {
+        switch self {
+        case .noBeam:
+            return "Can't calculate slash bounding box without a beam."
+        }
+    }
+}
+
 // MARK: - GraceNote Struct
 
 /// Input structure for creating a GraceNote (extends StaveNoteStruct).
@@ -262,7 +273,7 @@ public class GraceNote: StaveNote {
             if !beam.postFormatted {
                 beam.postFormat()
             }
-            let bbox = calcBeamedNotesSlashBBox(
+            let bbox = try calcBeamedNotesSlashBBoxThrowing(
                 slashStemOffset: 8 * offsetScale,
                 slashBeamOffset: 8 * offsetScale,
                 stemProtrusion: 6 * offsetScale,
@@ -325,8 +336,22 @@ public class GraceNote: StaveNote {
         stemProtrusion: Double,
         beamProtrusion: Double
     ) -> (x1: Double, y1: Double, x2: Double, y2: Double) {
+        (try? calcBeamedNotesSlashBBoxThrowing(
+            slashStemOffset: slashStemOffset,
+            slashBeamOffset: slashBeamOffset,
+            stemProtrusion: stemProtrusion,
+            beamProtrusion: beamProtrusion
+        )) ?? (0, 0, 0, 0)
+    }
+
+    public func calcBeamedNotesSlashBBoxThrowing(
+        slashStemOffset: Double,
+        slashBeamOffset: Double,
+        stemProtrusion: Double,
+        beamProtrusion: Double
+    ) throws -> (x1: Double, y1: Double, x2: Double, y2: Double) {
         guard let beam else {
-            fatalError("[VexError] NoBeam: Can't calculate without a beam.")
+            throw GraceNoteError.noBeam
         }
 
         let beamSlope = beam.slope

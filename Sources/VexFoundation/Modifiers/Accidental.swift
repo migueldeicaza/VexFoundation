@@ -3,6 +3,17 @@
 
 import Foundation
 
+public enum AccidentalError: Error, LocalizedError, Equatable, Sendable {
+    case missingTableMapping(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingTableMapping(let type):
+            return "Missing accidental table mapping for type: \(type)"
+        }
+    }
+}
+
 // MARK: - Accidental Layout Metrics
 
 /// Metrics for accidental layout on a single stave line.
@@ -73,22 +84,39 @@ public final class Accidental: Modifier {
     public var fontScale: Double = Tables.NOTATION_FONT_SCALE
     public var parenLeftPadding: Double = 2
     public var parenRightPadding: Double = 2
+    public private(set) var initError: AccidentalError?
 
     private var glyph: Glyph!
     private var parenLeft: Glyph?
     private var parenRight: Glyph?
 
+    private static func fallbackAccidentalData() -> AccidentalCode {
+        Tables.accidentalCode(AccidentalType.natural.rawValue) ?? AccidentalCode(
+            code: "accidentalNatural",
+            parenRightPaddingAdjustment: 0
+        )
+    }
+
     // MARK: - Init
 
     public init(_ accidentalType: AccidentalType) {
-        guard let accData = Tables.accidentalCode(accidentalType.rawValue) else {
-            fatalError("[VexError] BadRuntimeState: Missing accidental table mapping for type: \(accidentalType.rawValue)")
+        if let accData = Tables.accidentalCode(accidentalType.rawValue) {
+            self.accidentalData = accData
+        } else {
+            self.accidentalData = Self.fallbackAccidentalData()
+            self.initError = .missingTableMapping(accidentalType.rawValue)
         }
         self.accidentalType = accidentalType
-        self.accidentalData = accData
         super.init()
         position = .left
         reset()
+    }
+
+    public convenience init(validating accidentalType: AccidentalType) throws {
+        self.init(accidentalType)
+        if let initError {
+            throw initError
+        }
     }
 
     /// String convenience initializer that throws on invalid accidental type.

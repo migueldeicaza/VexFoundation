@@ -3,6 +3,26 @@
 
 import Foundation
 
+public enum StaveTieError: Error, LocalizedError, Equatable, Sendable {
+    case requiresStartOrEndNote
+    case mismatchedIndices(firstCount: Int, lastCount: Int)
+    case noYValues
+    case badIndices
+
+    public var errorDescription: String? {
+        switch self {
+        case .requiresStartOrEndNote:
+            return "Tie needs to have either firstNote or lastNote set."
+        case .mismatchedIndices(let firstCount, let lastCount):
+            return "Tied notes must have same number of indices (\(firstCount) vs \(lastCount))."
+        case .noYValues:
+            return "No Y-values to render tie."
+        case .badIndices:
+            return "Bad indices for tie rendering."
+        }
+    }
+}
+
 // MARK: - Tie Notes
 
 /// Specifies the notes and indices for a tie connection.
@@ -51,6 +71,34 @@ open class StaveTie: VexElement {
     public var notes: TieNotes
     public var text: String?
     public var direction: TieDirection?
+    public private(set) var initError: StaveTieError?
+
+    private static func normalizedTieNotes(_ notes: TieNotes) -> (notes: TieNotes, error: StaveTieError?) {
+        guard notes.firstNote != nil || notes.lastNote != nil else {
+            return (TieNotes(firstIndices: [0], lastIndices: [0]), .requiresStartOrEndNote)
+        }
+
+        var normalized = notes
+        if normalized.firstIndices.isEmpty { normalized.firstIndices = [0] }
+        if normalized.lastIndices.isEmpty { normalized.lastIndices = [0] }
+        guard normalized.firstIndices.count != normalized.lastIndices.count else {
+            return (normalized, nil)
+        }
+
+        let error = StaveTieError.mismatchedIndices(
+            firstCount: normalized.firstIndices.count,
+            lastCount: normalized.lastIndices.count
+        )
+        let count = min(normalized.firstIndices.count, normalized.lastIndices.count)
+        if count > 0 {
+            normalized.firstIndices = Array(normalized.firstIndices.prefix(count))
+            normalized.lastIndices = Array(normalized.lastIndices.prefix(count))
+        } else {
+            normalized.firstIndices = [0]
+            normalized.lastIndices = [0]
+        }
+        return (normalized, error)
+    }
 
     // MARK: - Init
 
@@ -58,7 +106,16 @@ open class StaveTie: VexElement {
         self.notes = TieNotes()
         self.text = text
         super.init()
-        setNotes(notes)
+        let normalized = Self.normalizedTieNotes(notes)
+        self.notes = normalized.notes
+        self.initError = normalized.error
+    }
+
+    public convenience init(validating notes: TieNotes, text: String? = nil) throws {
+        self.init(notes: notes, text: text)
+        if let initError {
+            throw initError
+        }
     }
 
     // MARK: - Direction
@@ -78,8 +135,14 @@ open class StaveTie: VexElement {
 
     @discardableResult
     public func setNotes(_ notes: TieNotes) -> Self {
+        _ = try? setNotesThrowing(notes)
+        return self
+    }
+
+    @discardableResult
+    public func setNotesThrowing(_ notes: TieNotes) throws -> Self {
         guard notes.firstNote != nil || notes.lastNote != nil else {
-            fatalError("[VexError] BadArguments: Tie needs to have either firstNote or lastNote set.")
+            throw StaveTieError.requiresStartOrEndNote
         }
 
         var n = notes
@@ -87,7 +150,10 @@ open class StaveTie: VexElement {
         if n.lastIndices.isEmpty { n.lastIndices = [0] }
 
         guard n.firstIndices.count == n.lastIndices.count else {
-            fatalError("[VexError] BadArguments: Tied notes must have same number of indices.")
+            throw StaveTieError.mismatchedIndices(
+                firstCount: n.firstIndices.count,
+                lastCount: n.lastIndices.count
+            )
         }
 
         self.notes = n
@@ -110,7 +176,7 @@ open class StaveTie: VexElement {
         lastYs: [Double]
     ) throws {
         guard !firstYs.isEmpty && !lastYs.isEmpty else {
-            fatalError("[VexError] BadArguments: No Y-values to render")
+            throw StaveTieError.noYValues
         }
 
         let ctx = try checkContext()
@@ -133,12 +199,16 @@ open class StaveTie: VexElement {
         _ = ctx.openGroup("stavetie", getAttribute("id") ?? "")
 
         for i in 0..<firstIndices.count {
+            guard firstIndices[i] >= 0, firstIndices[i] < firstYs.count,
+                  lastIndices[i] >= 0, lastIndices[i] < lastYs.count else {
+                throw StaveTieError.badIndices
+            }
             let cpX = (lastXPx + lastXShift + firstXPx + firstXShift) / 2
             let firstYPx = firstYs[firstIndices[i]] + yShift
             let lastYPx = lastYs[lastIndices[i]] + yShift
 
             guard !firstYPx.isNaN && !lastYPx.isNaN else {
-                fatalError("[VexError] BadArguments: Bad indices for tie rendering.")
+                throw StaveTieError.badIndices
             }
 
             let topCpY = (firstYPx + lastYPx) / 2 + cp1 * direction.signDouble
@@ -182,6 +252,10 @@ open class StaveTie: VexElement {
     override public func draw() throws {
         _ = try checkContext()
         setRendered()
+
+        guard notes.firstNote != nil || notes.lastNote != nil else {
+            throw StaveTieError.requiresStartOrEndNote
+        }
 
         let firstNote = notes.firstNote
         let lastNote = notes.lastNote

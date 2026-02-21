@@ -245,6 +245,18 @@ struct NoteSubGroupBarNoteVibratoParenthesisMMRTests {
         #expect(vb.vibRenderOptions.harsh == true)
     }
 
+    @Test func vibratoBracketValidatingInit() throws {
+        let fallback = VibratoBracket(start: nil, stop: nil)
+        #expect(fallback.initError == .requiresStartOrStopNote)
+
+        do {
+            _ = try VibratoBracket(validatingStart: nil, stop: nil)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? VibratoBracketError == .requiresStartOrStopNote)
+        }
+    }
+
     // ============================================================
     // MARK: - VibratoRenderOptions Tests
     // ============================================================
@@ -465,6 +477,26 @@ struct NoteSubGroupBarNoteVibratoParenthesisMMRTests {
     @Test func multiMeasureRestNumberGlyphPoint() {
         let opts = MultiMeasureRestRenderOptions(numberOfMeasures: 4, numberGlyphPoint: 50)
         #expect(opts.numberGlyphPoint == 50)
+    }
+
+    @Test func multiMeasureRestValidatingInitAndThrowingStaveCheck() throws {
+        let opts = MultiMeasureRestRenderOptions(numberOfMeasures: 0)
+        let fallback = MultiMeasureRest(numberOfMeasures: 0, options: opts)
+        #expect(fallback.initError == .invalidMeasureCount(0))
+
+        do {
+            _ = try MultiMeasureRest(validatingNumberOfMeasures: 0, options: opts)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? MultiMeasureRestError == .invalidMeasureCount(0))
+        }
+
+        do {
+            _ = try fallback.checkStaveThrowing()
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? MultiMeasureRestError == .noStave)
+        }
     }
 
     // ============================================================

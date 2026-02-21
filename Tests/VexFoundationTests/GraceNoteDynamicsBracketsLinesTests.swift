@@ -98,6 +98,21 @@ struct GraceNoteDynamicsBracketsLinesTests {
         #expect(gn.getDuration() == "8")
     }
 
+    @Test func graceNoteBeamedSlashBBoxThrowingRequiresBeam() throws {
+        let gn = GraceNote(GraceNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth))
+        do {
+            _ = try gn.calcBeamedNotesSlashBBoxThrowing(
+                slashStemOffset: 8,
+                slashBeamOffset: 8,
+                stemProtrusion: 6,
+                beamProtrusion: 5
+            )
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? GraceNoteError == .noBeam)
+        }
+    }
+
     // MARK: - GraceNoteGroup
 
     @Test func graceNoteGroupCategory() {
@@ -417,6 +432,35 @@ struct GraceNoteDynamicsBracketsLinesTests {
         let line = StaveLine(notes: StaveLineNotes(firstNote: note1, lastNote: note2))
         _ = line.setNotes(StaveLineNotes(firstNote: note3, lastNote: note2))
         #expect(line.firstNote === note3)
+    }
+
+    @Test func staveLineValidatingAndThrowingSetNotes() throws {
+        let note1 = makeFormattedNote()
+        let note2 = makeFormattedNote()
+        do {
+            _ = try StaveLine(validating: StaveLineNotes(
+                firstNote: note1,
+                firstIndices: [0, 1],
+                lastNote: note2,
+                lastIndices: [0]
+            ))
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveLineError == .mismatchedIndices(firstCount: 2, lastCount: 1))
+        }
+
+        let line = StaveLine(notes: StaveLineNotes(firstNote: note1, lastNote: note2))
+        do {
+            _ = try line.setNotesThrowing(StaveLineNotes(
+                firstNote: note1,
+                firstIndices: [0, 1],
+                lastNote: note2,
+                lastIndices: [0]
+            ))
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveLineError == .mismatchedIndices(firstCount: 2, lastCount: 1))
+        }
     }
 
     @Test func staveLineRenderOptionsDefaults() {

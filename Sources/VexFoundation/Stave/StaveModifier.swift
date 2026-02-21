@@ -3,6 +3,17 @@
 
 import Foundation
 
+public enum StaveModifierError: Error, LocalizedError, Equatable, Sendable {
+    case noStave
+
+    public var errorDescription: String? {
+        switch self {
+        case .noStave:
+            return "No stave attached to modifier."
+        }
+    }
+}
+
 // MARK: - Layout Metrics
 
 /// Metrics used for modifier positioning within the stave layout.
@@ -64,8 +75,12 @@ open class StaveModifier: VexElement {
     public func getStave() -> Stave? { stave }
 
     public func checkStave() -> Stave {
+        (try? checkStaveThrowing()) ?? Stave(x: 0, y: 0, width: 0)
+    }
+
+    public func checkStaveThrowing() throws -> Stave {
         guard let stave else {
-            fatalError("[VexError] NoStave: No stave attached to instance.")
+            throw StaveModifierError.noStave
         }
         return stave
     }

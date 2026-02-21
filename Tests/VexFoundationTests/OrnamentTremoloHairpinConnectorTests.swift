@@ -327,6 +327,24 @@ struct OrnamentTremoloHairpinConnectorTests {
         #expect(hairpin.lastNote === note2)
     }
 
+    @Test func staveHairpinValidatingInitAndThrowingSetNotes() throws {
+        do {
+            _ = try StaveHairpin(validating: nil, lastNote: nil, type: .crescendo)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveHairpinError == .requiresStartOrEndNote)
+        }
+
+        let note = makeNote()
+        let hairpin = StaveHairpin(firstNote: note, lastNote: note, type: .decrescendo)
+        do {
+            _ = try hairpin.setNotesThrowing(firstNote: nil, lastNote: nil)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveHairpinError == .requiresStartOrEndNote)
+        }
+    }
+
     // MARK: - Connector Type
 
     @Test func connectorTypeEnum() {

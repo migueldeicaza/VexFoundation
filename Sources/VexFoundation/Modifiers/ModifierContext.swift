@@ -3,6 +3,17 @@
 
 import Foundation
 
+public enum ModifierContextError: Error, LocalizedError, Equatable, Sendable {
+    case unformattedMember
+
+    public var errorDescription: String? {
+        switch self {
+        case .unformattedMember:
+            return "Unformatted member has no metrics."
+        }
+    }
+}
+
 // MARK: - Modifier Context State
 
 /// Shared formatting state passed through modifier format methods.
@@ -72,8 +83,15 @@ public final class ModifierContext {
     public func getState() -> ModifierContextState { state }
 
     public func getMetrics() -> ModifierContextMetrics {
+        (try? getMetricsThrowing()) ?? ModifierContextMetrics(
+            width: state.leftShift + state.rightShift + spacing,
+            spacing: spacing
+        )
+    }
+
+    public func getMetricsThrowing() throws -> ModifierContextMetrics {
         guard formatted else {
-            fatalError("[VexError] UnformattedMember: Unformatted member has no metrics.")
+            throw ModifierContextError.unformattedMember
         }
         return ModifierContextMetrics(
             width: state.leftShift + state.rightShift + spacing,

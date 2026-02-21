@@ -3,6 +3,17 @@
 
 import Foundation
 
+public enum CurveError: Error, LocalizedError, Equatable, Sendable {
+    case requiresStartOrEndNote
+
+    public var errorDescription: String? {
+        switch self {
+        case .requiresStartOrEndNote:
+            return "Curve needs to have either from or to set."
+        }
+    }
+}
+
 // MARK: - Curve Position
 
 public enum CurvePosition: Int {
@@ -66,8 +77,14 @@ public final class Curve: VexElement {
 
     @discardableResult
     public func setNotes(from: Note?, to: Note?) -> Self {
+        _ = try? setNotesThrowing(from: from, to: to)
+        return self
+    }
+
+    @discardableResult
+    public func setNotesThrowing(from: Note?, to: Note?) throws -> Self {
         guard from != nil || to != nil else {
-            fatalError("[VexError] BadArguments: Curve needs to have either from or to set.")
+            throw CurveError.requiresStartOrEndNote
         }
         self.from = from
         self.to = to
@@ -134,6 +151,10 @@ public final class Curve: VexElement {
     override public func draw() throws {
         _ = try checkContext()
         setRendered()
+
+        guard from != nil || to != nil else {
+            throw CurveError.requiresStartOrEndNote
+        }
 
         let firstNote = from
         let lastNote = to

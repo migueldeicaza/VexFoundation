@@ -3,6 +3,17 @@
 
 import Foundation
 
+public enum BendError: Error, LocalizedError, Equatable, Sendable {
+    case missingLastBendState
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingLastBendState:
+            return "Internal bend state missing trailing bend phrase."
+        }
+    }
+}
+
 // MARK: - Bend Phrase
 
 public struct BendPhrase {
@@ -205,7 +216,7 @@ public final class Bend: Modifier {
         }
 
         guard let lb = lastBend, lb.x != nil else {
-            fatalError("[VexError] NoLastBendForBend: Internal error.")
+            throw BendError.missingLastBendState
         }
 
         if lb.type == Bend.UP {

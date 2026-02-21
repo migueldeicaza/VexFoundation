@@ -4,6 +4,17 @@
 
 import Foundation
 
+public enum VibratoBracketError: Error, LocalizedError, Equatable, Sendable {
+    case requiresStartOrStopNote
+
+    public var errorDescription: String? {
+        switch self {
+        case .requiresStartOrStopNote:
+            return "VibratoBracket needs start or stop note."
+        }
+    }
+}
+
 // MARK: - VibratoBracket
 
 /// Renders vibrato effect between two notes using a wave bracket.
@@ -17,16 +28,24 @@ public final class VibratoBracket: VexElement {
     public var stop: Note?
     public var vibLine: Double = 1
     public var vibRenderOptions = VibratoRenderOptions(vibratoWidth: 0)
+    public private(set) var initError: VibratoBracketError?
 
     // MARK: - Init
 
     public init(start: Note? = nil, stop: Note? = nil) {
-        guard start != nil || stop != nil else {
-            fatalError("[VexError] BadArguments: VibratoBracket needs start or stop note.")
+        if start == nil && stop == nil {
+            self.initError = .requiresStartOrStopNote
         }
         self.start = start
         self.stop = stop
         super.init()
+    }
+
+    public convenience init(validatingStart start: Note? = nil, stop: Note? = nil) throws {
+        self.init(start: start, stop: stop)
+        if let initError {
+            throw initError
+        }
     }
 
     // MARK: - Setters
@@ -48,6 +67,10 @@ public final class VibratoBracket: VexElement {
     override public func draw() throws {
         let ctx = try checkContext()
         setRendered()
+
+        guard start != nil || stop != nil else {
+            throw VibratoBracketError.requiresStartOrStopNote
+        }
 
         let y: Double
         if let start {

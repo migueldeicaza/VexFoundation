@@ -9,7 +9,7 @@ The project keeps VexFlow concepts (`Factory`, `EasyScore`, `System`, notes, mod
 - Swift Package (`swift-tools-version: 6.0`)
 - Platforms: iOS 16+, macOS 13+
 - Active port: API parity with VexFlow is in progress and APIs may evolve
-- Current test suite: `774` passing tests
+- Current test suite: `786` passing tests
 
 ## Installation
 
