@@ -6,6 +6,11 @@ import Foundation
 public enum StaveError: Error, LocalizedError, Equatable, Sendable {
     case lineNumberOutOfRange(Int)
     case invalidLineConfigCount(expected: Int, actual: Int)
+    case invalidRepetitionType(String)
+    case invalidVoltaType(String)
+    case invalidModifierPosition(String)
+    case invalidTextJustification(String)
+    case invalidTempoDuration(String)
 
     public var errorDescription: String? {
         switch self {
@@ -13,6 +18,16 @@ public enum StaveError: Error, LocalizedError, Equatable, Sendable {
             return "Line number out of range: \(line)"
         case .invalidLineConfigCount(let expected, let actual):
             return "Config array length must match num_lines (\(actual) vs \(expected))."
+        case .invalidRepetitionType(let value):
+            return "Invalid repetition type: '\(value)'."
+        case .invalidVoltaType(let value):
+            return "Invalid volta type: '\(value)'."
+        case .invalidModifierPosition(let value):
+            return "Invalid stave modifier position: '\(value)'."
+        case .invalidTextJustification(let value):
+            return "Invalid stave text justification: '\(value)'."
+        case .invalidTempoDuration(let value):
+            return "Invalid stave tempo duration: '\(value)'."
         }
     }
 }
@@ -66,6 +81,19 @@ public struct StaveOptions {
         self.spacingBetweenLinesPx = spacingBetweenLinesPx
         self.topTextPosition = topTextPosition
         self.numLines = numLines
+    }
+}
+
+/// Typed options for `StaveText` placement helpers.
+public struct StaveTextOptions: Sendable {
+    public var shiftX: Double
+    public var shiftY: Double
+    public var justification: StaveTextJustification
+
+    public init(shiftX: Double = 0, shiftY: Double = 0, justification: StaveTextJustification = .center) {
+        self.shiftX = shiftX
+        self.shiftY = shiftY
+        self.justification = justification
     }
 }
 
@@ -226,6 +254,12 @@ open class Stave: VexElement {
         return self
     }
 
+    /// Compatibility alias for VexFlow-style `setY`.
+    @discardableResult
+    public func setY(_ y: Double) -> Self {
+        setStaveY(y)
+    }
+
     public func getWidth() -> Double { staveWidth }
 
     @discardableResult
@@ -379,6 +413,134 @@ open class Stave: VexElement {
             shiftX -= begBarline.getModifierWidth()
         }
         return shiftX
+    }
+
+    // MARK: - Stave-Level Modifier Helpers
+
+    /// Add a repetition marker.
+    @discardableResult
+    public func setRepetitionType(_ type: RepetitionType, yShift: Double = 0) -> Self {
+        addModifier(StaveRepetition(type: type, x: staveX, yShift: yShift))
+    }
+
+    /// String convenience variant that throws on invalid repetition labels.
+    @discardableResult
+    public func setRepetitionType(parsing type: String, yShift: Double = 0) throws -> Self {
+        guard let parsed = RepetitionType(parsing: type) else {
+            throw StaveError.invalidRepetitionType(type)
+        }
+        return setRepetitionType(parsed, yShift: yShift)
+    }
+
+    /// String convenience variant that returns nil on invalid repetition labels.
+    @discardableResult
+    public func setRepetitionType(parsingOrNil type: String, yShift: Double = 0) -> Self? {
+        guard let parsed = RepetitionType(parsing: type) else { return nil }
+        return setRepetitionType(parsed, yShift: yShift)
+    }
+
+    /// Add a volta bracket.
+    @discardableResult
+    public func setVoltaType(_ type: VoltaType, number: String, yShift: Double) -> Self {
+        addModifier(Volta(type: type, number: number, x: staveX, yShift: yShift))
+    }
+
+    /// String convenience variant that throws on invalid volta labels.
+    @discardableResult
+    public func setVoltaType(parsing type: String, number: String, yShift: Double) throws -> Self {
+        guard let parsed = VoltaType(parsing: type) else {
+            throw StaveError.invalidVoltaType(type)
+        }
+        return setVoltaType(parsed, number: number, yShift: yShift)
+    }
+
+    /// String convenience variant that returns nil on invalid volta labels.
+    @discardableResult
+    public func setVoltaType(parsingOrNil type: String, number: String, yShift: Double) -> Self? {
+        guard let parsed = VoltaType(parsing: type) else { return nil }
+        return setVoltaType(parsed, number: number, yShift: yShift)
+    }
+
+    /// Add a section label.
+    @discardableResult
+    public func setSection(_ section: String, y: Double, xOffset: Double = 0, fontSize: Double? = nil,
+                           drawRect: Bool = true) -> Self {
+        let staveSection = StaveSection(section: section, x: staveX + xOffset, shiftY: y, drawRect: drawRect)
+        if let fontSize {
+            _ = staveSection.setFont(size: fontSize)
+        }
+        return addModifier(staveSection)
+    }
+
+    /// Add a tempo marking.
+    @discardableResult
+    public func setTempo(_ tempo: StaveTempoOptions, y: Double) -> Self {
+        addModifier(StaveTempo(tempo: tempo, x: staveX, shiftY: y))
+    }
+
+    /// String convenience variant that throws on invalid duration tokens.
+    @discardableResult
+    public func setTempo(parsingDuration duration: String?, bpm: Int? = nil, dots: Int? = nil,
+                         name: String? = nil, y: Double) throws -> Self {
+        let options: StaveTempoOptions
+        do {
+            options = try StaveTempoOptions(bpm: bpm, duration: duration, dots: dots, name: name)
+        } catch {
+            throw StaveError.invalidTempoDuration(duration ?? "")
+        }
+        return setTempo(options, y: y)
+    }
+
+    /// String convenience variant that returns nil on invalid duration tokens.
+    @discardableResult
+    public func setTempo(parsingDurationOrNil duration: String?, bpm: Int? = nil, dots: Int? = nil,
+                         name: String? = nil, y: Double) -> Self? {
+        guard let options = StaveTempoOptions(parsingDuration: duration, bpm: bpm, dots: dots, name: name) else {
+            return nil
+        }
+        return setTempo(options, y: y)
+    }
+
+    /// Add stave text using typed position and options.
+    @discardableResult
+    public func setText(_ text: String, position: StaveModifierPosition, options: StaveTextOptions = StaveTextOptions()) -> Self {
+        addModifier(StaveText(
+            text: text,
+            position: position,
+            shiftX: options.shiftX,
+            shiftY: options.shiftY,
+            justification: options.justification
+        ))
+    }
+
+    /// String convenience variant that throws on invalid position / justification labels.
+    @discardableResult
+    public func setText(_ text: String, parsingPosition position: String, shiftX: Double = 0, shiftY: Double = 0,
+                        parsingJustification justification: String = "center") throws -> Self {
+        guard let parsedPosition = StaveModifierPosition(parsing: position) else {
+            throw StaveError.invalidModifierPosition(position)
+        }
+        guard let parsedJustification = StaveTextJustification(parsing: justification) else {
+            throw StaveError.invalidTextJustification(justification)
+        }
+        return setText(text, position: parsedPosition, options: StaveTextOptions(
+            shiftX: shiftX,
+            shiftY: shiftY,
+            justification: parsedJustification
+        ))
+    }
+
+    /// String convenience variant that returns nil on invalid position / justification labels.
+    @discardableResult
+    public func setText(_ text: String, parsingPositionOrNil position: String, shiftX: Double = 0, shiftY: Double = 0,
+                        parsingJustificationOrNil justification: String = "center") -> Self? {
+        guard let parsedPosition = StaveModifierPosition(parsing: position) else { return nil }
+        guard let parsedJustification = StaveTextJustification(parsing: justification) else { return nil }
+        return setText(text, position: parsedPosition, options: StaveTextOptions(
+            shiftX: shiftX,
+            shiftY: shiftY,
+            justification: parsedJustification
+        ))
     }
 
     // MARK: - Barline Configuration

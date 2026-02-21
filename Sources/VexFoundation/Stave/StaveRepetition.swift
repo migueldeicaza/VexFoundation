@@ -4,7 +4,7 @@
 import Foundation
 
 /// Types of repetition markers.
-public enum RepetitionType: Int {
+public enum RepetitionType: Int, Sendable {
     case none = 1
     case codaLeft = 2
     case codaRight = 3
@@ -18,6 +18,41 @@ public enum RepetitionType: Int {
     case dsAlFine = 11
     case fine = 12
     case toCoda = 13
+
+    /// Parse from VexFlow-compatible repetition labels.
+    public init?(parsing raw: String) {
+        let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch normalized {
+        case "none":
+            self = .none
+        case "codaleft", "coda_left":
+            self = .codaLeft
+        case "codaright", "coda_right":
+            self = .codaRight
+        case "segnoleft", "segno_left":
+            self = .segnoLeft
+        case "segnoright", "segno_right":
+            self = .segnoRight
+        case "dc", "d.c.":
+            self = .dc
+        case "dcalcoda", "dc_al_coda", "d.c.alcoda":
+            self = .dcAlCoda
+        case "dcalfine", "dc_al_fine", "d.c.alfine":
+            self = .dcAlFine
+        case "ds", "d.s.":
+            self = .ds
+        case "dsalcoda", "ds_al_coda", "d.s.alcoda":
+            self = .dsAlCoda
+        case "dsalfine", "ds_al_fine", "d.s.alfine":
+            self = .dsAlFine
+        case "fine":
+            self = .fine
+        case "tocoda", "to_coda":
+            self = .toCoda
+        default:
+            return nil
+        }
+    }
 }
 
 /// Renders repetition markers (Coda, Segno, D.C., D.S., Fine, etc.) on a stave.

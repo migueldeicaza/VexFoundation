@@ -4,10 +4,25 @@
 import Foundation
 
 /// Text justification for StaveText.
-public enum StaveTextJustification: Int {
+public enum StaveTextJustification: Int, Sendable {
     case left = 1
     case center = 2
     case right = 3
+
+    /// Parse from textual labels used by compatibility inputs.
+    public init?(parsing raw: String) {
+        let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch normalized {
+        case "left":
+            self = .left
+        case "center", "centre", "middle":
+            self = .center
+        case "right":
+            self = .right
+        default:
+            return nil
+        }
+    }
 }
 
 /// Renders text above, below, left, or right of a stave.

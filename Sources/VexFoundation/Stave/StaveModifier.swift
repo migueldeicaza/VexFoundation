@@ -34,7 +34,7 @@ public struct LayoutMetrics: Sendable {
 // MARK: - StaveModifier Position
 
 /// Positions where modifiers can appear on a stave.
-public enum StaveModifierPosition: Int {
+public enum StaveModifierPosition: Int, Sendable {
     case center = 0
     case left = 1
     case right = 2
@@ -42,6 +42,29 @@ public enum StaveModifierPosition: Int {
     case below = 4
     case begin = 5
     case end = 6
+
+    /// Parse from string labels used by compatibility inputs.
+    public init?(parsing raw: String) {
+        let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch normalized {
+        case "center":
+            self = .center
+        case "left":
+            self = .left
+        case "right":
+            self = .right
+        case "above", "top":
+            self = .above
+        case "below", "bottom":
+            self = .below
+        case "begin", "start":
+            self = .begin
+        case "end":
+            self = .end
+        default:
+            return nil
+        }
+    }
 }
 
 // MARK: - StaveModifier

@@ -215,19 +215,21 @@ struct StaveModifierParityTests {
         _ = stave1.setBegBarType(.repeatBegin)
             .addClef(.treble)
             .addKeySignature("A")
-            .addModifier(StaveRepetition(type: .segnoLeft, x: stave1.getX(), yShift: 0))
-            .addModifier(Volta(type: .beginEnd, number: "1.", x: stave1.getX(), yShift: -5))
-            .addModifier(StaveTempo(tempo: StaveTempoOptions(bpm: 80, duration: .quarter, dots: 1), x: stave1.getX(), shiftY: 0))
-            .addModifier(StaveText(text: "Violin", position: .left, shiftY: -10))
-            .addModifier(StaveText(text: "Above Text", position: .above))
+            .setRepetitionType(.segnoLeft)
+            .setVoltaType(.beginEnd, number: "1.", yShift: -5)
+            .setTempo(StaveTempoOptions(bpm: 80, duration: .quarter, dots: 1), y: 0)
+            .setText("Violin", position: .left, options: StaveTextOptions(shiftY: -10))
+            .setText("Above Text", position: .above)
+            .setSection("A", y: 0, xOffset: 0, fontSize: 10, drawRect: false)
 
         let stave2 = Stave(x: 390, y: 40, width: 360)
         _ = stave2.setEndBarType(.double)
-            .addModifier(StaveRepetition(type: .toCoda, x: stave2.getX(), yShift: 0))
-            .addModifier(Volta(type: .end, number: "", x: stave2.getX(), yShift: -5))
-            .addModifier(StaveTempo(tempo: StaveTempoOptions(bpm: 120, name: "Andante"), x: stave2.getX(), shiftY: -16))
-            .addModifier(StaveText(text: "Right Text", position: .right, shiftY: -10))
-            .addModifier(StaveText(text: "Below Text", position: .below, justification: .right))
+            .setRepetitionType(.toCoda)
+            .setVoltaType(.end, number: "", yShift: -5)
+            .setTempo(StaveTempoOptions(bpm: 120, name: "Andante"), y: -16)
+            .setText("Right Text", position: .right, options: StaveTextOptions(shiftY: -10))
+            .setText("Below Text", position: .below, options: StaveTextOptions(justification: .right))
+            .setSection("B", y: 0, xOffset: 0, fontSize: 11)
 
         try drawMeasure(context, stave: stave1, notes: [makeNote(.c, 4, duration: .whole)])
         try drawMeasure(context, stave: stave2, notes: [makeNote(.d, 4, duration: .whole)])
@@ -241,5 +243,58 @@ struct StaveModifierParityTests {
         #expect(svg.contains("Violin"))
         #expect(svg.contains("Andante"))
         #expect(svg.contains("<svg"))
+    }
+
+    @Test func stringConvenienceApisThrowOrNil() throws {
+        let context = makeContext(width: 680, height: 220)
+        let stave = Stave(x: 10, y: 40, width: 620)
+        _ = stave.setContext(context).addClef(.treble)
+
+        _ = try stave
+            .setRepetitionType(parsing: "to_coda", yShift: 2)
+            .setVoltaType(parsing: "begin_end", number: "2.", yShift: -4)
+            .setTempo(parsingDuration: "8", bpm: 96, dots: 1, name: "Allegretto", y: -12)
+            .setText("Bridge", parsingPosition: "below", shiftY: 10, parsingJustification: "right")
+
+        let badRepetition = stave.setRepetitionType(parsingOrNil: "not-a-repetition")
+        let badVolta = stave.setVoltaType(parsingOrNil: "bad", number: "1.", yShift: 0)
+        let badTempo = stave.setTempo(parsingDurationOrNil: "bad-duration", bpm: 80, y: 0)
+        let badText = stave.setText("X", parsingPositionOrNil: "diagonal", parsingJustificationOrNil: "left")
+        #expect(badRepetition == nil)
+        #expect(badVolta == nil)
+        #expect(badTempo == nil)
+        #expect(badText == nil)
+
+        do {
+            _ = try stave.setRepetitionType(parsing: "???")
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveError == .invalidRepetitionType("???"))
+        }
+
+        do {
+            _ = try stave.setVoltaType(parsing: "???", number: "1.", yShift: 0)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveError == .invalidVoltaType("???"))
+        }
+
+        do {
+            _ = try stave.setTempo(parsingDuration: "invalid", bpm: 80, y: 0)
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveError == .invalidTempoDuration("invalid"))
+        }
+
+        do {
+            _ = try stave.setText("X", parsingPosition: "bad", parsingJustification: "left")
+            #expect(Bool(false))
+        } catch {
+            #expect(error as? StaveError == .invalidModifierPosition("bad"))
+        }
+
+        try drawMeasure(context, stave: stave, notes: [makeNote(.c, 4, duration: .whole)])
+        #expect(context.getSVG().contains("Allegretto"))
+        #expect(context.getSVG().contains("Bridge"))
     }
 }

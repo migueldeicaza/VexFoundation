@@ -4,12 +4,31 @@
 import Foundation
 
 /// Types of volta brackets.
-public enum VoltaType: Int {
+public enum VoltaType: Int, Sendable {
     case none = 1
     case begin = 2
     case mid = 3
     case end = 4
     case beginEnd = 5
+
+    /// Parse from VexFlow-compatible volta labels.
+    public init?(parsing raw: String) {
+        let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch normalized {
+        case "none":
+            self = .none
+        case "begin", "start":
+            self = .begin
+        case "mid", "middle":
+            self = .mid
+        case "end":
+            self = .end
+        case "beginend", "begin_end", "startend":
+            self = .beginEnd
+        default:
+            return nil
+        }
+    }
 }
 
 /// Renders volta brackets (1st/2nd endings) above a stave.
