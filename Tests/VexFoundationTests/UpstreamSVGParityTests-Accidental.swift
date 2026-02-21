@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import VexFoundation
 
@@ -7,11 +8,12 @@ extension UpstreamSVGParityTests {
         try runCategorySVGParityCase(module: "Accidental", test: "Basic", width: 700, height: 240) { _, context in
             let stave = Stave(x: 10, y: 10, width: 550)
             _ = stave.setContext(context)
-            try stave.draw()
 
             let notes = try makeAccidentalBasicNotes(stemDown: false)
-            try drawSimpleFormattedAccidentalNotes(notes, stave: stave, context: context, x: 10, paddingBetween: 45)
+            prepareSimpleFormattedAccidentalNotes(notes, stave: stave, x: 10, paddingBetween: 45)
             notes.forEach { drawUpstreamAccidentalNoteMetrics(context: context, note: $0, yPos: 140) }
+            try stave.draw()
+            try drawPreparedAccidentalNotes(notes, context: context)
             drawUpstreamAccidentalNoteWidthLegend(context: context, x: 480, y: 140)
         }
     }
@@ -21,11 +23,12 @@ extension UpstreamSVGParityTests {
         try runCategorySVGParityCase(module: "Accidental", test: "Stem_Down", width: 700, height: 240) { _, context in
             let stave = Stave(x: 10, y: 10, width: 550)
             _ = stave.setContext(context)
-            try stave.draw()
 
             let notes = try makeAccidentalBasicStemDownNotes()
-            try drawSimpleFormattedAccidentalNotes(notes, stave: stave, context: context, x: 0, paddingBetween: 30)
+            prepareSimpleFormattedAccidentalNotes(notes, stave: stave, x: 0, paddingBetween: 30)
             notes.forEach { drawUpstreamAccidentalNoteMetrics(context: context, note: $0, yPos: 140) }
+            try stave.draw()
+            try drawPreparedAccidentalNotes(notes, context: context)
             drawUpstreamAccidentalNoteWidthLegend(context: context, x: 480, y: 140)
         }
     }
@@ -40,11 +43,12 @@ extension UpstreamSVGParityTests {
         ) { _, context in
             let stave = Stave(x: 10, y: 10, width: 550)
             _ = stave.setContext(context)
-            try stave.draw()
 
             let notes = try makeAccidentalSpecialCaseNotes()
-            try drawSimpleFormattedAccidentalNotes(notes, stave: stave, context: context, x: 0, paddingBetween: 20)
+            prepareSimpleFormattedAccidentalNotes(notes, stave: stave, x: 0, paddingBetween: 20)
             notes.forEach { drawUpstreamAccidentalNoteMetrics(context: context, note: $0, yPos: 140) }
+            try stave.draw()
+            try drawPreparedAccidentalNotes(notes, context: context)
             drawUpstreamAccidentalNoteWidthLegend(context: context, x: 480, y: 140)
         }
     }
@@ -58,17 +62,20 @@ extension UpstreamSVGParityTests {
             context.scale(scale, scale)
 
             let accids = upstreamCautionaryAccidentalTypes()
-            let rowSize = max(1, Int((Double(accids.count) / Double(staveCount)).rounded()))
+            let mod = max(1, Int((Double(accids.count) / Double(staveCount)).rounded()))
 
             for row in 0..<staveCount {
                 let stave = Stave(x: 0, y: 10 + 200 * Double(row), width: staveWidth / scale)
                 _ = stave.setContext(context)
                 try stave.draw()
 
-                let start = row * rowSize
-                guard start < accids.count else { continue }
-                let end = min(start + rowSize, accids.count)
-                let rowMap = Array(accids[start..<end])
+                var rowMap: [String] = []
+                var index = 0
+                while index < mod && index + row * staveCount < accids.count {
+                    rowMap.append(accids[index + row * staveCount])
+                    index += 1
+                }
+                guard !rowMap.isEmpty else { continue }
 
                 let notes = try rowMap.map { accidental in
                     try StaveNote(validating: StaveNoteStruct(
@@ -80,7 +87,6 @@ extension UpstreamSVGParityTests {
                 }
 
                 let voice = Voice(time: VoiceTime(numBeats: rowMap.count, beatValue: 4))
-                    .setMode(.soft)
                     .addTickables(notes.map { $0 as Tickable })
 
                 _ = Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
@@ -140,11 +146,12 @@ extension UpstreamSVGParityTests {
         try runCategorySVGParityCase(module: "Accidental", test: "Microtonal", width: 700, height: 240) { _, context in
             let stave = Stave(x: 10, y: 10, width: 650)
             _ = stave.setContext(context)
-            try stave.draw()
 
             let notes = try makeAccidentalMicrotonalNotes()
-            try drawSimpleFormattedAccidentalNotes(notes, stave: stave, context: context, x: 0, paddingBetween: 35)
+            prepareSimpleFormattedAccidentalNotes(notes, stave: stave, x: 0, paddingBetween: 35)
             notes.forEach { drawUpstreamAccidentalNoteMetrics(context: context, note: $0, yPos: 140) }
+            try stave.draw()
+            try drawPreparedAccidentalNotes(notes, context: context)
             drawUpstreamAccidentalNoteWidthLegend(context: context, x: 580, y: 140)
         }
     }
@@ -154,11 +161,12 @@ extension UpstreamSVGParityTests {
         try runCategorySVGParityCase(module: "Accidental", test: "Microtonal__Iranian_", width: 700, height: 240) { _, context in
             let stave = Stave(x: 10, y: 10, width: 650)
             _ = stave.setContext(context)
-            try stave.draw()
 
             let notes = try makeAccidentalMicrotonalIranianNotes()
-            try drawSimpleFormattedAccidentalNotes(notes, stave: stave, context: context, x: 0, paddingBetween: 35)
+            prepareSimpleFormattedAccidentalNotes(notes, stave: stave, x: 0, paddingBetween: 35)
             notes.forEach { drawUpstreamAccidentalNoteMetrics(context: context, note: $0, yPos: 140) }
+            try stave.draw()
+            try drawPreparedAccidentalNotes(notes, context: context)
             drawUpstreamAccidentalNoteWidthLegend(context: context, x: 580, y: 140)
         }
     }
@@ -230,7 +238,6 @@ extension UpstreamSVGParityTests {
             let beams = try Beam.generateBeams(notes.map { $0 as StemmableNote })
 
             let voice = Voice(time: VoiceTime(numBeats: 4, beatValue: 4))
-                .setMode(.soft)
                 .addTickables(notes.map { $0 as Tickable })
 
             let formatter = Formatter(options: FormatterOptions(softmaxFactor: 100)).joinVoices([voice])
@@ -849,19 +856,64 @@ extension UpstreamSVGParityTests {
     }
 
     private func upstreamCautionaryAccidentalTypes() -> [String] {
-        ["#", "##", "b", "bb", "n", "db", "d", "++", "+", "+-", "bs", "bss", "o", "k", "bbs", "++-", "ashs", "afhf"]
+        let fallback = ["#", "##", "b", "bb", "n", "db", "d", "++", "+", "+-", "bs", "bss", "o", "k", "bbs", "++-", "ashs", "afhf"]
+        let sourcePath = "../vexflow/src/tables.ts"
+        guard let source = try? String(contentsOfFile: sourcePath, encoding: .utf8) else {
+            return fallback
+        }
+
+        guard let keyRegex = try? NSRegularExpression(
+            pattern: #"^\s*(?:'([^']+)'|([A-Za-z0-9_]+)):\s*\{"#,
+            options: []
+        ) else {
+            return fallback
+        }
+
+        var inAccidentals = false
+        var keys: [String] = []
+
+        for rawLine in source.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = String(rawLine)
+
+            if !inAccidentals {
+                if line.contains("const accidentals:") {
+                    inAccidentals = true
+                }
+                continue
+            }
+
+            if line.trimmingCharacters(in: .whitespacesAndNewlines) == "};" {
+                break
+            }
+
+            let nsRange = NSRange(line.startIndex..<line.endIndex, in: line)
+            guard let match = keyRegex.firstMatch(in: line, options: [], range: nsRange) else { continue }
+
+            if let quotedRange = Range(match.range(at: 1), in: line) {
+                keys.append(String(line[quotedRange]))
+            } else if let bareRange = Range(match.range(at: 2), in: line) {
+                keys.append(String(line[bareRange]))
+            }
+        }
+
+        let filtered = keys.filter { $0 != "{" && $0 != "}" }
+        return filtered.isEmpty ? fallback : filtered
     }
 
-    private func drawSimpleFormattedAccidentalNotes(
+    private func prepareSimpleFormattedAccidentalNotes(
         _ notes: [StaveNote],
         stave: Stave,
-        context: SVGRenderContext,
         x: Double,
         paddingBetween: Double
-    ) throws {
-        Formatter.SimpleFormat(notes.map { $0 as Tickable }, x: x, paddingBetween: paddingBetween)
+    ) {
         for note in notes {
             _ = note.setStave(stave)
+        }
+        Formatter.SimpleFormat(notes.map { $0 as Tickable }, x: x, paddingBetween: paddingBetween)
+    }
+
+    private func drawPreparedAccidentalNotes(_ notes: [StaveNote], context: SVGRenderContext) throws {
+        for note in notes {
             _ = note.setContext(context)
             try note.draw()
         }
@@ -923,6 +975,7 @@ extension UpstreamSVGParityTests {
         stroke(xPost2, xEnd, "red")
         stroke(xEnd, xFreedomRight, "#DD0")
         stroke(xStart - note.getXShift(), xStart, "#BBB")
+        drawUpstreamAccidentalDot(context: context, x: xAbs + note.getXShift(), y: y, color: "blue")
 
         let formatterMetrics = note.getFormatterMetrics()
         if formatterMetrics.iterations > 0 {
@@ -932,6 +985,16 @@ extension UpstreamSVGParityTests {
             _ = context.fillText("\(prefix)\(Int(spaceDeviation.rounded()))", xAbs + note.getXShift(), yPos - 10)
         }
 
+        _ = context.restore()
+    }
+
+    private func drawUpstreamAccidentalDot(context: SVGRenderContext, x: Double, y: Double, color: String = "#F55") {
+        _ = context.save()
+        _ = context.setFillStyle(color)
+        _ = context.beginPath()
+        _ = context.arc(x, y, 3, 0, Double.pi * 2, false)
+        _ = context.closePath()
+        _ = context.fill()
         _ = context.restore()
     }
 

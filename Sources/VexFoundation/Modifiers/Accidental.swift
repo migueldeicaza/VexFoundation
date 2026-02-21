@@ -102,7 +102,7 @@ public final class Accidental: Modifier {
     // MARK: - Properties
 
     public let accidentalType: AccidentalType
-    public var type: String { accidentalType.rawValue }
+    public let type: String
     public var accidentalData: AccidentalCode
     public var cautionary: Bool = false
     public var fontScale: Double = Tables.NOTATION_FONT_SCALE
@@ -121,16 +121,49 @@ public final class Accidental: Modifier {
         )
     }
 
+    private static func resolveAccidentalData(for type: String) -> AccidentalCode? {
+        if let code = Tables.accidentalCode(type) {
+            return code
+        }
+        if let code = Tables.accidentalCode(type.lowercased()) {
+            return code
+        }
+        if (try? Glyph.lookupGlyph(fontStack: Glyph.MUSIC_FONT_STACK, code: type)) != nil {
+            // Upstream includes many accidental names (e.g., Sagittal) whose glyph code
+            // is the same as the accidental key.
+            return AccidentalCode(code: type, parenRightPaddingAdjustment: -1)
+        }
+        return nil
+    }
+
+    private init(
+        type: String,
+        accidentalType: AccidentalType,
+        accidentalData: AccidentalCode,
+        initError: AccidentalError? = nil
+    ) {
+        self.type = type
+        self.accidentalType = accidentalType
+        self.accidentalData = accidentalData
+        self.initError = initError
+        super.init()
+        position = .left
+        reset()
+    }
+
     // MARK: - Init
 
     public init(_ accidentalType: AccidentalType) {
-        if let accData = Tables.accidentalCode(accidentalType.rawValue) {
+        if let accData = Self.resolveAccidentalData(for: accidentalType.rawValue) {
+            self.type = accidentalType.rawValue
+            self.accidentalType = accidentalType
             self.accidentalData = accData
         } else {
+            self.type = accidentalType.rawValue
+            self.accidentalType = accidentalType
             self.accidentalData = Self.fallbackAccidentalData()
             self.initError = .missingTableMapping(accidentalType.rawValue)
         }
-        self.accidentalType = accidentalType
         super.init()
         position = .left
         reset()
@@ -145,16 +178,28 @@ public final class Accidental: Modifier {
 
     /// String convenience initializer that throws on invalid accidental type.
     public convenience init(parsing type: String) throws {
-        guard let parsed = AccidentalType(parsing: type) else {
+        let trimmed = type.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let parsed = AccidentalType(parsing: trimmed) {
+            self.init(parsed)
+            return
+        }
+        guard let accidentalData = Self.resolveAccidentalData(for: trimmed) else {
             throw AccidentalParseError.invalidType(type)
         }
-        self.init(parsed)
+        self.init(
+            type: trimmed,
+            accidentalType: .natural,
+            accidentalData: accidentalData
+        )
     }
 
     /// String convenience initializer that returns nil on invalid accidental type.
     public convenience init?(parsingOrNil type: String) {
-        guard let parsed = AccidentalType(parsing: type) else { return nil }
-        self.init(parsed)
+        do {
+            try self.init(parsing: type)
+        } catch {
+            return nil
+        }
     }
 
     // MARK: - Reset
@@ -190,8 +235,11 @@ public final class Accidental: Modifier {
     @discardableResult
     override public func setNote(_ note: Note) -> Self {
         self.note = note
-        // Grace notes get smaller accidentals
-        // if isGraceNote(note) { fontScale = 25; reset() }
+        // Grace notes get smaller accidentals, matching upstream behavior.
+        if note is GraceNote {
+            fontScale = 25
+            reset()
+        }
         return self
     }
 

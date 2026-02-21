@@ -508,6 +508,7 @@ public final class Formatter {
     public func evaluate() -> Double {
         let contextList = tickContexts.list
         let contextMap = tickContexts.map
+        let justifyWidth = self.justifyWidth
 
         contextGaps = (total: 0, gaps: [])
 
@@ -531,41 +532,55 @@ public final class Formatter {
             prevContext.formatterMetrics.freedom.right = gap
         }
 
-        // Calculate total cost as sqrt of sum of squared deviations
         var durationStats: [String: (mean: Double, count: Int)] = [:]
-        var totalSquaredDeviation: Double = 0
 
-        for (index, tick) in contextList.enumerated() {
-            guard let context = contextMap[tick] else { continue }
-            for tickable in context.getTickables() {
-                let duration = "\(tickable.getTicks())"
-                let nextX: Double
-                if index < contextList.count - 1 {
-                    nextX = contextMap[contextList[index + 1]]?.getX() ?? justifyWidth
-                } else {
-                    nextX = justifyWidth
-                }
-                let space = nextX - context.getX()
-
-                if let stat = durationStats[duration] {
-                    let newMean = (stat.mean + space) / 2
-                    durationStats[duration] = (mean: newMean, count: stat.count + 1)
-                } else {
-                    durationStats[duration] = (mean: space, count: 1)
-                }
+        func updateStats(_ duration: String, _ space: Double) {
+            if var stats = durationStats[duration] {
+                stats.count += 1
+                stats.mean = (stats.mean + space) / 2
+                durationStats[duration] = stats
+            } else {
+                durationStats[duration] = (mean: space, count: 1)
             }
         }
 
-        for (_, tick) in contextList.enumerated() {
-            guard let context = contextMap[tick] else { continue }
-            for tickable in context.getTickables() {
-                let duration = "\(tickable.getTicks())"
-                let nextTick = contextList.first(where: { $0 > tick })
-                let nextX = nextTick.flatMap { contextMap[$0]?.getX() } ?? justifyWidth
-                let space = nextX - context.getX()
-                if let stat = durationStats[duration] {
-                    let deviation = space - stat.mean
-                    totalSquaredDeviation += deviation * deviation
+        for voice in voices {
+            let notes = voice.getTickables()
+            for (index, note) in notes.enumerated() {
+                let duration = note.getTicks().clone().simplify().description
+                let metrics = note.getMetrics()
+                let leftNoteEdge = note.getX() + metrics.notePx + metrics.modRightPx + metrics.rightDisplacedHeadPx
+
+                let space: Double
+                if index < notes.count - 1 {
+                    let rightNote = notes[index + 1]
+                    let rightMetrics = rightNote.getMetrics()
+                    let rightNoteEdge = rightNote.getX() - rightMetrics.modLeftPx - rightMetrics.leftDisplacedHeadPx
+
+                    space = rightNoteEdge - leftNoteEdge
+                    note.formatterMetrics.space.used = rightNote.getX() - note.getX()
+                    rightNote.formatterMetrics.freedom.left = space
+                } else {
+                    space = justifyWidth - leftNoteEdge
+                    note.formatterMetrics.space.used = justifyWidth - note.getX()
+                }
+
+                note.formatterMetrics.freedom.right = space
+                updateStats(duration, note.formatterMetrics.space.used)
+            }
+        }
+
+        var totalSquaredDeviation: Double = 0
+        for voice in voices {
+            for note in voice.getTickables() {
+                let duration = note.getTicks().clone().simplify().description
+                if let stats = durationStats[duration] {
+                    note.formatterMetrics.space.mean = stats.mean
+                    note.formatterMetrics.duration = duration
+                    note.formatterMetrics.iterations += 1
+                    note.formatterMetrics.space.deviation =
+                        note.formatterMetrics.space.used - note.formatterMetrics.space.mean
+                    totalSquaredDeviation += note.formatterMetrics.space.deviation * note.formatterMetrics.space.deviation
                 }
             }
         }
