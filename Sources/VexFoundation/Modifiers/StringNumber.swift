@@ -78,14 +78,14 @@ public final class StringNumber: Modifier {
             let props = staveNote.getKeyProps()[index]
             let verticalSpaceNeeded = (num.radius * 2) / Tables.STAVE_LINE_DISTANCE + 0.5
 
-            if let mc = note.getModifierContext() {
-                if pos == .above {
-                    num.textLine = mc.getState().topTextLine
-                    state.topTextLine += verticalSpaceNeeded
-                } else if pos == .below {
-                    num.textLine = mc.getState().textLine
-                    state.textLine += verticalSpaceNeeded
-                }
+            if pos == .above {
+                // Use the active formatting state passed by ModifierContext to avoid
+                // overlapping read/write access through note.modifierContext.state.
+                num.textLine = state.topTextLine
+                state.topTextLine += verticalSpaceNeeded
+            } else if pos == .below {
+                num.textLine = state.textLine
+                state.textLine += verticalSpaceNeeded
             }
 
             if note !== prevNote {

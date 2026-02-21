@@ -122,7 +122,7 @@ struct FretHandFingerParityTests {
         #expect(context.getSVG().contains("<svg"))
     }
 
-    @Test func fretHandFingerMultiVoiceWithStrokes_draw() throws {
+    @Test func fretHandFingerMultiVoiceWithStrokesAndStringNumbers_draw() throws {
         let (factory, context) = makeFactory(width: 720, height: 220)
         let score = factory.EasyScore()
         let stave = factory.Stave(x: 10, y: 30, width: 680)
@@ -133,8 +133,12 @@ struct FretHandFingerParityTests {
         _ = notes1[0].addModifier(factory.Fingering(number: "3", position: .left), index: 0)
         _ = notes1[0].addModifier(factory.Fingering(number: "2", position: .left), index: 1)
         _ = notes1[0].addModifier(factory.Fingering(number: "0", position: .left), index: 2)
+        _ = notes1[0].addModifier(factory.StringNumber(number: "4", position: .left), index: 1)
+        _ = notes1[0].addModifier(factory.StringNumber(number: "3", position: .above), index: 2)
 
         _ = notes1[1].addModifier(Stroke(type: .rasquedoUp), index: 0)
+        _ = notes1[1].addModifier(factory.StringNumber(number: "4", position: .right), index: 1)
+        _ = notes1[1].addModifier(factory.StringNumber(number: "3", position: .above), index: 2)
         _ = notes1[1].addModifier(factory.Accidental(type: .sharp), index: 0)
         _ = notes1[1].addModifier(factory.Accidental(type: .sharp), index: 1)
         _ = notes1[1].addModifier(factory.Accidental(type: .sharp), index: 2)
@@ -142,14 +146,20 @@ struct FretHandFingerParityTests {
         _ = notes1[2].addModifier(Stroke(type: .brushUp), index: 0)
         _ = notes1[2].addModifier(factory.Fingering(number: "3", position: .left), index: 0)
         _ = notes1[2].addModifier(factory.Fingering(number: "0", position: .right), index: 1)
+        _ = notes1[2].addModifier(factory.StringNumber(number: "4", position: .right), index: 1)
         _ = notes1[2].addModifier(factory.Fingering(number: "1", position: .left), index: 2)
+        _ = notes1[2].addModifier(factory.StringNumber(number: "3", position: .right), index: 2)
 
         _ = notes1[3].addModifier(Stroke(type: .brushDown), index: 0)
+        _ = notes1[3].addModifier(factory.StringNumber(number: "3", position: .left), index: 2)
+        _ = notes1[3].addModifier(factory.StringNumber(number: "4", position: .right), index: 1)
 
         let notes2 = score.notes("e3/8, e3, e3, e3, e3, e3, e3, e3", options: ["stem": "down"])
         _ = notes2[0].addModifier(factory.Fingering(number: "0", position: .left), index: 0)
+        _ = notes2[0].addModifier(factory.StringNumber(number: "6", position: .below), index: 0)
         _ = notes2[2].addModifier(factory.Accidental(type: .sharp), index: 0)
         _ = notes2[4].addModifier(factory.Fingering(number: "0", position: .left), index: 0)
+        _ = notes2[4].addModifier(factory.StringNumber(number: "6", position: .left).setOffsetX(15).setOffsetY(18), index: 0)
 
         let voices = [score.voice(notes2), score.voice(notes1)]
         _ = Formatter().joinVoices(voices).formatToStave(voices, stave: stave)
@@ -157,9 +167,12 @@ struct FretHandFingerParityTests {
 
         let fingerCount = notes1.reduce(0) { $0 + $1.getModifiersByType(FretHandFinger.category).count } +
             notes2.reduce(0) { $0 + $1.getModifiersByType(FretHandFinger.category).count }
+        let stringCount = notes1.reduce(0) { $0 + $1.getModifiersByType(StringNumber.category).count } +
+            notes2.reduce(0) { $0 + $1.getModifiersByType(StringNumber.category).count }
         let strokeCount = notes1.reduce(0) { $0 + $1.getModifiersByType(Stroke.category).count }
 
         #expect(fingerCount == 8)
+        #expect(stringCount == 10)
         #expect(strokeCount == 4)
         #expect(context.getSVG().contains("<svg"))
     }
