@@ -247,6 +247,18 @@ This workflow also writes a manifest to:
 - `.build/upstream-svg-parity/upstream_svg_manifest.json`
 - mismatch artifacts under `.build/upstream-svg-parity/artifacts`
 
+Track how many upstream SVG reference cases are covered by implemented parity tests:
+
+```bash
+tools/generate_upstream_svg_coverage.sh
+tools/generate_upstream_svg_coverage.sh --check
+```
+
+This writes:
+
+- `docs/upstream-svg-coverage.md`
+- `.build/upstream-svg-parity/upstream_svg_coverage.json`
+
 ## Key Differences from VexFlow
 
 - API redesign favors compile-time validation.
