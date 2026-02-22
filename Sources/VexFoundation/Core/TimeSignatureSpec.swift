@@ -82,8 +82,10 @@ public struct TimeSignatureMeter: Equatable, Sendable, Codable {
 public enum TimeSignatureSpec: Hashable, Sendable, Codable {
     case symbol(TimeSignatureSymbol)
     case numeric(top: TimeSignatureDigits, bottom: TimeSignatureDigits)
-    /// Top-only numeric representation used by special renderers (e.g. multi-measure rest numbers).
+    /// Numeric representation with digits rendered in the top row.
     case topOnly(TimeSignatureDigits)
+    /// Numeric representation with digits rendered in the bottom row.
+    case bottomOnly(TimeSignatureDigits)
 
     public static let commonTime: TimeSignatureSpec = .symbol(.common)
     public static let cutTime: TimeSignatureSpec = .symbol(.cutCommon)
@@ -115,7 +117,7 @@ public enum TimeSignatureSpec: Hashable, Sendable, Codable {
         switch self {
         case .symbol:
             return false
-        case .numeric, .topOnly:
+        case .numeric, .topOnly, .bottomOnly:
             return true
         }
     }
@@ -128,6 +130,8 @@ public enum TimeSignatureSpec: Hashable, Sendable, Codable {
         case .numeric(let top, let bottom):
             return "\(top.rawValue)/\(bottom.rawValue)"
         case .topOnly(let top):
+            return "/\(top.rawValue)"
+        case .bottomOnly(let top):
             return "/\(top.rawValue)"
         }
     }
@@ -149,7 +153,7 @@ public enum TimeSignatureSpec: Hashable, Sendable, Codable {
                 return nil
             }
             return TimeSignatureMeter(validatingOrNil: numerator, denominator: denominator)
-        case .topOnly:
+        case .topOnly, .bottomOnly:
             return nil
         }
     }
@@ -201,7 +205,7 @@ public enum TimeSignatureSpec: Hashable, Sendable, Codable {
             topRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             let bottom = TimeSignatureDigits(parsing: bottomRaw)
         {
-            self = .topOnly(bottom)
+            self = .bottomOnly(bottom)
             return
         }
 

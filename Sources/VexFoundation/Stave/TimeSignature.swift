@@ -118,6 +118,20 @@ public final class TimeSignature: StaveModifier {
                 line: 0,
                 num: true
             )
+        case .bottomOnly(let bottom):
+            let composite = TimeSigGlyph(
+                timeSignature: self,
+                topDigits: "",
+                botDigits: bottom.rawValue,
+                code: "timeSig0",
+                point: tsPoint
+            )
+            return ParseResult(
+                glyph: composite.glyph,
+                composite: composite,
+                line: 0,
+                num: true
+            )
         }
     }
 

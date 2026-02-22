@@ -33,25 +33,29 @@ public struct MultiMeasureRestRenderOptions {
     public var semibreveRestGlyphScale: Double = Tables.NOTATION_FONT_SCALE
     public var lineThickness: Double = 5
     public var serifThickness: Double = 2
+    public private(set) var hasPaddingLeft: Bool = false
+    public private(set) var hasPaddingRight: Bool = false
+    public private(set) var hasLineThickness: Bool = false
+    public private(set) var hasSymbolSpacing: Bool = false
 
     public init(
         numberOfMeasures: Int,
         useSymbols: Bool = false,
-        symbolSpacing: Double = 0,
+        symbolSpacing: Double? = nil,
         showNumber: Bool = true,
         numberLine: Double = -0.5,
         numberGlyphPoint: Double? = nil,
-        paddingLeft: Double = 0,
-        paddingRight: Double = 0,
+        paddingLeft: Double? = nil,
+        paddingRight: Double? = nil,
         line: Double = 2,
         spacingBetweenLinesPx: Double = Tables.STAVE_LINE_DISTANCE,
         semibreveRestGlyphScale: Double = Tables.NOTATION_FONT_SCALE,
-        lineThickness: Double = 5,
+        lineThickness: Double? = nil,
         serifThickness: Double = 2
     ) {
         self.numberOfMeasures = numberOfMeasures
         self.useSymbols = useSymbols
-        self.symbolSpacing = symbolSpacing
+        self.symbolSpacing = symbolSpacing ?? 0
         self.showNumber = showNumber
         self.numberLine = numberLine
 
@@ -60,13 +64,17 @@ public struct MultiMeasureRestRenderOptions {
             ?? (musicFont?.lookupMetric("digits.point") as? Double)
             ?? Tables.NOTATION_FONT_SCALE
 
-        self.paddingLeft = paddingLeft
-        self.paddingRight = paddingRight
+        self.paddingLeft = paddingLeft ?? 0
+        self.paddingRight = paddingRight ?? 0
         self.line = line
         self.spacingBetweenLinesPx = spacingBetweenLinesPx
         self.semibreveRestGlyphScale = semibreveRestGlyphScale
-        self.lineThickness = lineThickness
+        self.lineThickness = lineThickness ?? 5
         self.serifThickness = serifThickness
+        self.hasPaddingLeft = paddingLeft != nil
+        self.hasPaddingRight = paddingRight != nil
+        self.hasLineThickness = lineThickness != nil
+        self.hasSymbolSpacing = symbolSpacing != nil
     }
 }
 
@@ -116,10 +124,10 @@ public final class MultiMeasureRest: VexElement {
         self.numberOfMeasures = numberOfMeasures
         self.renderOpts = options
 
-        self.hasPaddingLeft = options.paddingLeft != 0
-        self.hasPaddingRight = options.paddingRight != 0
-        self.hasLineThickness = true
-        self.hasSymbolSpacing = options.symbolSpacing != 0
+        self.hasPaddingLeft = options.hasPaddingLeft
+        self.hasPaddingRight = options.hasPaddingRight
+        self.hasLineThickness = options.hasLineThickness
+        self.hasSymbolSpacing = options.hasSymbolSpacing
 
         if numberOfMeasures <= 0 {
             self.initError = .invalidMeasureCount(numberOfMeasures)
@@ -291,7 +299,7 @@ public final class MultiMeasureRest: VexElement {
             guard let numberDigits = TimeSignatureDigits(rawValue: String(numberOfMeasures)) else {
                 throw MultiMeasureRestError.invalidMeasureCount(numberOfMeasures)
             }
-            let timeSpec: TimeSignatureSpec = .topOnly(numberDigits)
+            let timeSpec: TimeSignatureSpec = .bottomOnly(numberDigits)
             let timeSig = TimeSignature(timeSpec: timeSpec, customPadding: 0)
             timeSig.tsPoint = options.numberGlyphPoint
             _ = timeSig.setTimeSig(timeSpec)
