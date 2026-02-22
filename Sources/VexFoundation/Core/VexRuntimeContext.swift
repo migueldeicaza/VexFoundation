@@ -22,10 +22,12 @@ public final class VexRuntimeContext {
     private var chordSymbolGlobalMetricsByCacheKey: [String: [String: Any]]
 
     private var unisonEnabled: Bool
+    private var staveLineThickness: Double
 
     public init(
         nextElementID: Int = 1000,
-        unisonEnabled: Bool = true
+        unisonEnabled: Bool = true,
+        staveLineThickness: Double = 1
     ) {
         self.nextElementID = nextElementID
         self.fontsByName = [:]
@@ -34,6 +36,7 @@ public final class VexRuntimeContext {
         self.glyphCacheKey = ""
         self.chordSymbolGlobalMetricsByCacheKey = [:]
         self.unisonEnabled = unisonEnabled
+        self.staveLineThickness = staveLineThickness
     }
 
     public func generateElementID() -> String {
@@ -123,6 +126,18 @@ public final class VexRuntimeContext {
         lock.lock()
         defer { lock.unlock() }
         unisonEnabled = enabled
+    }
+
+    public func getStaveLineThickness() -> Double {
+        lock.lock()
+        defer { lock.unlock() }
+        return staveLineThickness
+    }
+
+    public func setStaveLineThickness(_ thickness: Double) {
+        lock.lock()
+        defer { lock.unlock() }
+        staveLineThickness = thickness
     }
 }
 

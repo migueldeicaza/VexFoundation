@@ -96,68 +96,76 @@ public final class StaveTempo: StaveModifier {
         setRendered()
 
         let scale = glyphFontScale / Tables.NOTATION_FONT_SCALE
+        let name = tempo.name
+        let duration = tempo.duration
+        let dots = tempo.dots ?? 0
+        let bpm = tempo.bpm
         var x = modifierX + tempoShiftX + xShift
         let y = stave.getYForTopText(1) + tempoShiftY
 
         ctx.save()
-        ctx.setFont(fontInfo)
+        let textFormatter = TextFormatter.create(font: fontInfo, context: ctx)
 
-        // Draw tempo name
-        if let name = tempo.name {
+        if let name {
+            ctx.setFont(fontInfo)
             ctx.fillText(name, x, y)
-            x += ctx.measureText(name).width
+            x += textFormatter.getWidthForTextInPx(name)
         }
 
-        // Draw note + BPM
-        if let duration = tempo.duration, let bpm = tempo.bpm {
-            if tempo.name != nil {
-                ctx.fillText(" (", x, y)
-                x += ctx.measureText(" (").width
+        if let duration, let bpm {
+            var noteTextFont = fontInfo
+            noteTextFont.weight = VexFontWeight.normal.rawValue
+            noteTextFont.style = VexFontStyle.normal.rawValue
+            ctx.setFont(noteTextFont)
+            let noteTextFormatter = TextFormatter.create(font: noteTextFont, context: ctx)
+
+            if name != nil {
+                x += noteTextFormatter.getWidthForTextInPx("|")
+                ctx.fillText("(", x, y)
+                x += noteTextFormatter.getWidthForTextInPx("(")
             }
 
-            // Draw note glyph
             if let glyphProps = Tables.getGlyphProps(duration: duration) {
                 x += 3 * scale
 
-                // Render note head
-                if !glyphProps.codeHead.isEmpty {
-                    Glyph.renderGlyph(ctx: ctx, xPos: x, yPos: y, point: glyphFontScale,
-                                      code: glyphProps.codeHead)
-                }
+                Glyph.renderGlyph(
+                    ctx: ctx,
+                    xPos: x,
+                    yPos: y,
+                    point: glyphFontScale,
+                    code: glyphProps.codeHead
+                )
+                x += Glyph.getWidth(code: glyphProps.codeHead, point: glyphFontScale)
 
-                x += Glyph.getWidth(code: glyphProps.codeHead.isEmpty ? "noteheadBlack" : glyphProps.codeHead,
-                                     point: glyphFontScale) * scale
-
-                // Draw stem
                 if glyphProps.stem {
                     let stemHeight = 30 + (glyphProps.beamCount > 0 ? 3 * Double(glyphProps.beamCount - 1) : 0)
                     let scaledHeight = stemHeight * scale
-                    ctx.fillRect(x - scale, y - scaledHeight, scale, scaledHeight)
+                    let yTop = y - scaledHeight
+                    ctx.fillRect(x - scale, yTop, scale, scaledHeight)
 
-                    // Draw flag
                     if glyphProps.flag, let flagCode = glyphProps.codeFlagUpstem, !flagCode.isEmpty {
-                        Glyph.renderGlyph(ctx: ctx, xPos: x, yPos: y - scaledHeight,
-                                          point: glyphFontScale, code: flagCode)
-                        x += 12 * scale
+                        let flagMetrics = Glyph.renderGlyph(
+                            ctx: ctx,
+                            xPos: x,
+                            yPos: yTop,
+                            point: glyphFontScale,
+                            code: flagCode,
+                            category: "flag.staveTempo"
+                        )
+                        let resolution = (try? flagMetrics.font.getResolution()) ?? 1000
+                        x += (flagMetrics.width * Tables.NOTATION_FONT_SCALE) / resolution
                     }
                 }
 
-                // Draw dots
-                for _ in 0..<(tempo.dots ?? 0) {
+                for _ in 0..<dots {
                     x += 6 * scale
                     ctx.beginPath()
                     ctx.arc(x, y + 2 * scale, 2 * scale, 0, .pi * 2, false)
                     ctx.fill()
                 }
-
-                x += 10 * scale
             }
 
-            ctx.fillText("= \(bpm)", x, y)
-            if tempo.name != nil {
-                x += ctx.measureText("= \(bpm)").width
-                ctx.fillText(")", x, y)
-            }
+            ctx.fillText(" = \(bpm)\(name != nil ? ")" : "")", x + 3 * scale, y)
         }
 
         ctx.restore()

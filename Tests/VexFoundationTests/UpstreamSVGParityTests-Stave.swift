@@ -100,14 +100,14 @@ extension UpstreamSVGParityTests {
             _ = notesBar2Part2[0].addModifier(try Accidental(parsing: "#"), index: 0)
             _ = notesBar2Part2[1].addModifier(try Accidental(parsing: "#"), index: 0)
             _ = notesBar2Part2[3].addModifier(try Accidental(parsing: "b"), index: 0)
+            let beam1 = try Beam(notesBar2Part1.map { $0 as StemmableNote })
+            let beam2 = try Beam(notesBar2Part2.map { $0 as StemmableNote })
             let notesBar2 = notesBar2Part1 + notesBar2Part2
             try Formatter.FormatAndDraw(ctx: context, stave: staveBar2, notes: notesBar2)
 
-            let beam1 = try Beam(notesBar2Part1.map { $0 as StemmableNote })
             _ = beam1.setContext(context)
             try beam1.draw()
 
-            let beam2 = try Beam(notesBar2Part2.map { $0 as StemmableNote })
             _ = beam2.setContext(context)
             try beam2.draw()
 
@@ -463,7 +463,7 @@ extension UpstreamSVGParityTests {
                     .setContext(context)
                 try staveBar.draw()
 
-                let notesBar = try notes ?? makeUpstreamStaveCommonQuarterBar()
+                let notesBar = try notes ?? makeUpstreamStaveTempoQuarterBar()
                 try Formatter.FormatAndDraw(ctx: context, stave: staveBar, notes: notesBar)
                 x += width
             }
@@ -563,15 +563,15 @@ extension UpstreamSVGParityTests {
 
         let notesBar2Part1 = try makeUpstreamMultipleStaveBarlineEighthRun()
         let notesBar2Part2 = try makeUpstreamMultipleStaveBarlineEighthRun()
+        let beam1 = try Beam(notesBar2Part1.map { $0 as StemmableNote })
+        let beam2 = try Beam(notesBar2Part2.map { $0 as StemmableNote })
         let notesBar2 = notesBar2Part1 + notesBar2Part2
 
         try Formatter.FormatAndDraw(ctx: context, stave: staveBar2, notes: notesBar2)
 
-        let beam1 = try Beam(notesBar2Part1.map { $0 as StemmableNote })
         _ = beam1.setContext(context)
         try beam1.draw()
 
-        let beam2 = try Beam(notesBar2Part2.map { $0 as StemmableNote })
         _ = beam2.setContext(context)
         try beam2.draw()
     }
@@ -600,6 +600,15 @@ extension UpstreamSVGParityTests {
             try StaveNote(validating: StaveNoteStruct(parsingKeys: ["d/4"], duration: "q")),
             try StaveNote(validating: StaveNoteStruct(parsingKeys: ["b/4"], duration: "qr")),
             try StaveNote(validating: StaveNoteStruct(parsingKeys: ["c/4", "e/4", "g/4"], duration: "q")),
+        ]
+    }
+
+    private func makeUpstreamStaveTempoQuarterBar() throws -> [StaveNote] {
+        [
+            try StaveNote(validating: StaveNoteStruct(parsingKeys: ["c/4"], duration: "q")),
+            try StaveNote(validating: StaveNoteStruct(parsingKeys: ["d/4"], duration: "q")),
+            try StaveNote(validating: StaveNoteStruct(parsingKeys: ["b/4"], duration: "q")),
+            try StaveNote(validating: StaveNoteStruct(parsingKeys: ["c/4"], duration: "q")),
         ]
     }
 

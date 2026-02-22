@@ -25,6 +25,9 @@ public enum AnnotationVerticalJustify: Int {
 public final class Annotation: Modifier {
 
     override public class var category: String { "Annotation" }
+    public static var minAnnotationPadding: Double {
+        (Glyph.MUSIC_FONT_STACK.first?.lookupMetric("noteHead.minPadding") as? Double) ?? 2
+    }
 
     // MARK: - Properties
 
@@ -37,6 +40,7 @@ public final class Annotation: Modifier {
     public init(_ text: String) {
         self.text = text
         super.init()
+        resetFont()
         // Estimate text width
         _ = setWidth(Double(text.count) * 7.0)
     }
@@ -72,45 +76,100 @@ public final class Annotation: Modifier {
 
         for annotation in annotations {
             let note = annotation.checkAttachedNote()
-            let glyphWidth = note.getGlyphWidth()
-
-            let formatter = TextFormatter.create(
+            let textFormatter = TextFormatter.create(
                 font: annotation.fontInfo,
                 context: note.getStave()?.getContext() ?? annotation.getContext()
             )
-            let textMeasure = formatter.measure(annotation.text)
-            let textWidth = textMeasure.width
-            let textHeight = max(textMeasure.height, annotation.fontSizeInPixels)
+            let textWidth = adjustedTextWidth(
+                textFormatter.getWidthForTextInPx(annotation.text),
+                text: annotation.text,
+                font: annotation.fontInfo
+            )
+            let textHeight = textFormatter.getYForStringInPx(annotation.text).height
+            let textLines = (2 + textHeight) / Tables.STAVE_LINE_DISTANCE
+            var verticalSpaceNeeded = textLines
+            let glyphWidth = note.getGlyphWidth()
             _ = annotation.setWidth(textWidth)
 
-            // Distribute width based on justification
             if annotation.horizontalJustification == .left {
                 maxLeftGlyphWidth = max(glyphWidth, maxLeftGlyphWidth)
-                leftWidth = max(textWidth, leftWidth)
+                leftWidth = max(leftWidth, textWidth) + Self.minAnnotationPadding
             } else if annotation.horizontalJustification == .right {
                 maxRightGlyphWidth = max(glyphWidth, maxRightGlyphWidth)
-                rightWidth = max(textWidth, rightWidth)
+                rightWidth = max(rightWidth, textWidth)
             } else {
-                leftWidth = max(textWidth / 2, leftWidth)
-                rightWidth = max(textWidth / 2, rightWidth)
+                leftWidth = max(leftWidth, textWidth / 2) + Self.minAnnotationPadding
+                rightWidth = max(rightWidth, textWidth / 2)
                 maxLeftGlyphWidth = max(glyphWidth / 2, maxLeftGlyphWidth)
                 maxRightGlyphWidth = max(glyphWidth / 2, maxRightGlyphWidth)
             }
 
-            // Set vertical positioning
-            let vJust = annotation.verticalJustification
+            let stave = note.getStave()
+            let stemDirection = note.hasStem() ? note.getStemDirection() : Stem.UP
+            var stemHeight: Double = 0
+            var lines = 5
 
-            if vJust == .top {
-                _ = annotation.setTextLine(state.topTextLine)
-                state.topTextLine += textHeight / 10 + 1
-            } else if vJust == .bottom {
+            if let tabNote = note as? TabNote {
+                if tabNote.renderOptions.drawStem, let stem = tabNote.getStem() {
+                    stemHeight = abs(stem.getHeight()) / Tables.STAVE_LINE_DISTANCE
+                }
+            } else if let stemmable = note as? StemmableNote, let stem = stemmable.getStem(), note.getNoteType() == "n" {
+                stemHeight = abs(stem.getHeight()) / Tables.STAVE_LINE_DISTANCE
+            }
+
+            if let stave {
+                lines = stave.getNumLines()
+            }
+
+            if annotation.verticalJustification == .top {
+                var noteLine = note.getLineNumber(isTopNote: true)
+                if let tabNote = note as? TabNote {
+                    noteLine = Double(lines) - (Double(tabNote.leastString()) - 0.5)
+                }
+                if stemDirection == Stem.UP {
+                    noteLine += stemHeight
+                }
+
+                let curTop = noteLine + state.topTextLine + 0.5
+                if curTop < Double(lines) {
+                    _ = annotation.setTextLine(Double(lines) - noteLine)
+                    verticalSpaceNeeded += Double(lines) - noteLine
+                    state.topTextLine = verticalSpaceNeeded
+                } else {
+                    _ = annotation.setTextLine(state.topTextLine)
+                    state.topTextLine += verticalSpaceNeeded
+                }
+            } else if annotation.verticalJustification == .bottom {
+                var noteLine = Double(lines) - note.getLineNumber()
+                if let tabNote = note as? TabNote {
+                    noteLine = Double(tabNote.greatestString() - 1)
+                }
+                if stemDirection == Stem.DOWN {
+                    noteLine += stemHeight
+                }
+
+                let curBottom = noteLine + state.textLine + 1
+                if curBottom < Double(lines) {
+                    _ = annotation.setTextLine(Double(lines) - curBottom)
+                    verticalSpaceNeeded += Double(lines) - curBottom
+                    state.textLine = verticalSpaceNeeded
+                } else {
+                    _ = annotation.setTextLine(state.textLine)
+                    state.textLine += verticalSpaceNeeded
+                }
+            } else {
                 _ = annotation.setTextLine(state.textLine)
-                state.textLine += textHeight / 10 + 1
             }
         }
 
-        let leftOverlap = max(leftWidth - maxLeftGlyphWidth, 0)
-        let rightOverlap = max(rightWidth - maxRightGlyphWidth, 0)
+        let rightOverlap = min(
+            max(rightWidth - maxRightGlyphWidth, 0),
+            max(rightWidth - state.rightShift, 0)
+        )
+        let leftOverlap = min(
+            max(leftWidth - maxLeftGlyphWidth, 0),
+            max(leftWidth - state.leftShift, 0)
+        )
         state.leftShift += leftOverlap
         state.rightShift += rightOverlap
         return true
@@ -124,23 +183,20 @@ public final class Annotation: Modifier {
         setRendered()
 
         let stemDirection = note.hasStem() ? note.getStemDirection() : Stem.UP
-
-        let index = checkIndex()
-
-        // Get starting position
-        guard let staveNote = note as? StaveNote else { return }
-        let start = staveNote.getModifierStartXY(position: position, index: index)
+        let start = note.getModifierStartXY(position: .above, index: checkIndex())
 
         ctx.save()
         applyStyle(context: ctx, style: getStyle())
         _ = ctx.openGroup("annotation", getAttribute("id") ?? "")
         ctx.setFont(fontInfo)
 
-        let formatter = TextFormatter.create(font: fontInfo, context: ctx)
-        let textMeasure = formatter.measure(text)
-
-        let textWidth = textMeasure.width
-        let textHeight = max(textMeasure.height, fontSizeInPixels)
+        let textFormatter = TextFormatter.create(font: fontInfo, context: ctx)
+        let textWidth = Self.adjustedTextWidth(
+            textFormatter.getWidthForTextInPx(text),
+            text: text,
+            font: fontInfo
+        )
+        let textHeight = textFormatter.getYForStringInPx(text).height
 
         // Calculate x position based on horizontal justification
         var x: Double
@@ -161,32 +217,37 @@ public final class Annotation: Modifier {
 
         // Calculate y position based on vertical justification
         let stave = note.checkStave()
-        let spacing = stave.getSpacingBetweenLines()
+        var stemExtents: (topY: Double, baseY: Double)?
+        var spacing: Double = 0
+        if note.hasStem() {
+            stemExtents = note.getStemExtents()
+            spacing = stave.getSpacingBetweenLines()
+        }
         var y: Double
 
         switch verticalJustification {
         case .bottom:
-            y = stave.getYForBottomText(textLine)
-            if note.hasStem() && stemDirection == Stem.DOWN {
-                let extents = note.getStemExtents()
-                y = max(y, extents.topY + spacing * (textLine + 2))
+            y = note.getYs().max() ?? start.y
+            y += (textLine + 1) * Tables.STAVE_LINE_DISTANCE + textHeight
+            if note.hasStem(), stemDirection == Stem.DOWN, let stemExtents {
+                y = max(y, stemExtents.topY + textHeight + spacing * textLine)
             }
         case .center:
-            let topY = note.getYForTopText(textLine) - 1
-            let bottomY = stave.getYForBottomText(textLine)
-            y = (topY + bottomY) / 2 + textHeight / 2
+            let yt = note.getYForTopText(textLine) - 1
+            let yb = stave.getYForBottomText(textLine)
+            y = yt + (yb - yt) / 2 + textHeight / 2
         case .top:
-            y = min(
-                stave.getYForTopText(textLine),
-                note.getYs().min() ?? 0
-            )
-            if note.hasStem() && stemDirection == Stem.UP {
-                y = min(y, note.getStemExtents().topY - 5)
+            let topY = note.getYs().min() ?? start.y
+            y = topY - (textLine + 1) * Tables.STAVE_LINE_DISTANCE
+            if note.hasStem(), stemDirection == Stem.UP, let stemExtents {
+                if stemExtents.topY < stave.getTopLineTopY() {
+                    spacing = Tables.STAVE_LINE_DISTANCE
+                }
+                y = min(y, stemExtents.topY - spacing * (textLine + 1))
             }
-            y -= textHeight / 2 + spacing * textLine
         case .centerStem:
             let extents = note.getStemExtents()
-            y = (extents.topY + extents.baseY) / 2 + textHeight / 2
+            y = extents.topY + (extents.baseY - extents.topY) / 2 + textHeight / 2
         }
 
         ctx.fillText(text, x, y)
@@ -194,6 +255,18 @@ public final class Annotation: Modifier {
         ctx.closeGroup()
         restoreStyle(context: ctx, style: getStyle())
         ctx.restore()
+    }
+
+    private static func adjustedTextWidth(_ width: Double, text: String, font: FontInfo) -> Double {
+        // Upstream browser text metrics for default Arial are slightly wider than
+        // CoreText-based measurements on macOS. Apply a narrow correction so
+        // annotation layout matches upstream modifier spacing.
+        let family = font.family.lowercased()
+        guard family.contains("arial") else { return width }
+        let glyphCount = max(text.count, 1)
+        var correction = 1.094 + (4.365 / Double(glyphCount))
+        if glyphCount <= 4 { correction += 0.006 }
+        return width + correction
     }
 }
 

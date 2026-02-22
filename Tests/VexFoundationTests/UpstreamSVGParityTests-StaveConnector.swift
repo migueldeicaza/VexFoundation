@@ -10,9 +10,12 @@ extension UpstreamSVGParityTests {
             width: 400,
             height: 300
         ) { _, context in
+            let oldThickness = Flow.STAVE_LINE_THICKNESS
+            Flow.STAVE_LINE_THICKNESS = 4
+            defer { Flow.STAVE_LINE_THICKNESS = oldThickness }
+
             let (stave1, stave2) = makeUpstreamStaveConnectorPair(context: context, x: 25, y1: 10, y2: 120, width: 300)
             let connector = StaveConnector(topStave: stave1, bottomStave: stave2)
-            connector.thickness = 4
             _ = connector.setType(.singleLeft).setContext(context)
 
             try stave1.draw()

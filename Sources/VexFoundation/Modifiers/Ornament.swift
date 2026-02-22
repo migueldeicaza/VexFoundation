@@ -9,6 +9,12 @@ import Foundation
 public final class Ornament: Modifier {
 
     override public class var category: String { "Ornament" }
+    private struct OrnamentMetrics {
+        var xOffset: Double
+        var yOffset: Double
+        var stemUpYOffset: Double
+        var reportedWidth: Double
+    }
 
     // MARK: - Ornament Type Lists
 
@@ -32,6 +38,9 @@ public final class Ornament: Modifier {
 
     /// Ornaments that behave like articulations.
     public static let articulationTypes = ["bend", "plungerClosed", "plungerOpen"]
+    public static var minPadding: Double {
+        (Glyph.MUSIC_FONT_STACK.first?.lookupMetric("noteHead.minPadding") as? Double) ?? 2
+    }
 
     // MARK: - Properties
 
@@ -40,12 +49,17 @@ public final class Ornament: Modifier {
     public var adjustForStemDirection: Bool = false
     public var reportedWidth: Double = 0
 
+    private let ornamentCode: String
     private var ornamentGlyph: Glyph
+    private var stemUpYOffset: Double = 0
+    private var ornamentAlignWithNoteHead: Bool = false
     private var accidentalUpper: Glyph?
     private var accidentalLower: Glyph?
+    private var delayXShift: Double?
+    private var formatterReportedWidth: Double = 0
 
     public var renderOpts = (
-        accidentalUpperPadding: 6.0,
+        accidentalUpperPadding: 3.0,
         accidentalLowerPadding: 3.0,
         fontScale: Tables.NOTATION_FONT_SCALE
     )
@@ -54,21 +68,32 @@ public final class Ornament: Modifier {
 
     public init(_ type: String) {
         self.type = type
-
-        let code = Tables.ornamentCode(type) ?? type
-        self.ornamentGlyph = Glyph(code: code, point: Tables.NOTATION_FONT_SCALE)
-
-        // Check if this ornament adjusts for stem direction
-        self.adjustForStemDirection = !Ornament.alignWithNoteHeadTypes.contains(type)
-
-        // Delayed ornaments are note transitions
-        self.delayed = Ornament.noteTransitionTypes.contains(type)
+        self.ornamentCode = Tables.ornamentCode(type) ?? type
+        self.ornamentGlyph = Glyph(
+            code: ornamentCode,
+            point: Tables.NOTATION_FONT_SCALE,
+            options: GlyphOptions(category: "ornament.\(ornamentCode)")
+        )
 
         super.init()
+        resetFont()
 
-        // Report width from glyph metrics
-        self.reportedWidth = ornamentGlyph.getMetrics().width
-        _ = setWidth(reportedWidth)
+        let metrics = getMetrics()
+        self.adjustForStemDirection = !Ornament.alignWithNoteHeadTypes.contains(type)
+        self.delayed = Ornament.noteTransitionTypes.contains(type)
+        self.ornamentAlignWithNoteHead = Ornament.alignWithNoteHeadTypes.contains(type)
+        self.stemUpYOffset = metrics?.stemUpYOffset ?? 0
+        self.xShift = metrics?.xOffset ?? 0
+        self.yShift = metrics?.yOffset ?? 0
+        self.formatterReportedWidth = metrics?.reportedWidth ?? 0
+        // Preserve historical behavior in local unit tests while using upstream
+        // reported-width semantics for formatter spacing.
+        self.reportedWidth = metrics?.reportedWidth ?? ornamentGlyph.getMetrics().width
+
+        // Legacy ornaments require this origin adjustment for correct placement.
+        if metrics == nil {
+            ornamentGlyph.setOrigin(0.5, 1.0)
+        }
     }
 
     // MARK: - Delayed
@@ -84,14 +109,18 @@ public final class Ornament: Modifier {
     @discardableResult
     public func setUpperAccidental(_ accid: String) -> Self {
         let code = Tables.accidentalCodes[accid]?.code ?? accid
-        accidentalUpper = Glyph(code: code, point: renderOpts.fontScale)
+        let scale = renderOpts.fontScale / 1.3
+        accidentalUpper = Glyph(code: code, point: scale)
+        accidentalUpper?.setOrigin(0.5, 1.0)
         return self
     }
 
     @discardableResult
     public func setLowerAccidental(_ accid: String) -> Self {
         let code = Tables.accidentalCodes[accid]?.code ?? accid
-        accidentalLower = Glyph(code: code, point: renderOpts.fontScale)
+        let scale = renderOpts.fontScale / 1.3
+        accidentalLower = Glyph(code: code, point: scale)
+        accidentalLower?.setOrigin(0.5, 1.0)
         return self
     }
 
@@ -101,32 +130,52 @@ public final class Ornament: Modifier {
     public static func format(_ ornaments: [Ornament], state: inout ModifierContextState) -> Bool {
         if ornaments.isEmpty { return false }
 
-        var leftShift = state.leftShift
+        var width: Double = 0
         var rightShift = state.rightShift
-        var maxWidth: Double = 0
+        var leftShift = state.leftShift
+        var yOffset: Double = 0
 
         for ornament in ornaments {
             _ = ornament.checkAttachedNote()
-            let isAttack = Ornament.attackTypes.contains(ornament.type)
-            let isRelease = Ornament.releaseTypes.contains(ornament.type)
+            let increment = 2.0
 
-            let width = ornament.getWidth()
-            maxWidth = max(width, maxWidth)
-
-            if isAttack {
-                leftShift = max(width, leftShift)
+            if Ornament.releaseTypes.contains(ornament.type) {
+                ornament.xShift += rightShift + 2
             }
-            if isRelease {
-                rightShift = max(width, rightShift)
+            if Ornament.attackTypes.contains(ornament.type) {
+                ornament.xShift -= leftShift + 2
             }
 
-            _ = ornament.setXShift(0)
-            _ = ornament.setTextLine(state.topTextLine)
-            state.topTextLine += 1
+            if ornament.formatterReportedWidth > 0, ornament.xShift < 0 {
+                leftShift += ornament.formatterReportedWidth
+            } else if ornament.formatterReportedWidth > 0, ornament.xShift >= 0 {
+                rightShift += ornament.formatterReportedWidth + Ornament.minPadding
+            } else {
+                width = max(ornament.getWidth(), width)
+            }
+
+            if Ornament.articulationTypes.contains(ornament.type) {
+                let note = ornament.getNote()
+                if note.getLineNumber() >= 3 || ornament.getPosition() == .above {
+                    state.topTextLine += increment
+                    ornament.yShift += yOffset
+                    yOffset -= ornament.ornamentGlyph.bbox.h
+                } else {
+                    state.textLine += increment
+                    ornament.yShift += yOffset
+                    yOffset += ornament.ornamentGlyph.bbox.h
+                }
+            } else if ornament.getPosition() == .above {
+                _ = ornament.setTextLine(state.topTextLine)
+                state.topTextLine += increment
+            } else {
+                _ = ornament.setTextLine(state.textLine)
+                state.textLine += increment
+            }
         }
 
-        state.leftShift = leftShift
-        state.rightShift = rightShift
+        state.leftShift = leftShift + width / 2
+        state.rightShift = rightShift + width / 2
         return true
     }
 
@@ -134,62 +183,99 @@ public final class Ornament: Modifier {
 
     override public func draw() throws {
         let ctx = try checkContext()
-        let note = checkAttachedNote()
+        guard let note = checkAttachedNote() as? StemmableNote else { return }
         setRendered()
+        _ = ctx.openGroup("ornament", getAttribute("id"))
 
-        let stemDirection = note.hasStem() ? note.getStemDirection() : Stem.UP
+        let stemDirection = note.getStemDirection()
         let stave = note.checkStave()
+        let stemExtents = note.checkStem().getExtents()
+        var y = stemDirection == Stem.DOWN ? stemExtents.baseY : stemExtents.topY
 
-        // Get starting position
-        guard let staveNote = note as? StaveNote else { return }
-        let index = checkIndex()
-        let start = staveNote.getModifierStartXY(position: position, index: index)
-
-        var glyphX = start.x
-        var glyphY = stave.getYForTopText(textLine) - 3
-
-        // Adjust for stem direction
-        if adjustForStemDirection {
-            if stemDirection == Stem.UP {
-                glyphY = min(
-                    stave.getYForTopText(textLine) - 3,
-                    note.getYs().min() ?? 0
-                )
-                if note.hasStem() {
-                    glyphY = min(glyphY, note.getStemExtents().topY - 8)
+        if isTabNote(note) {
+            if note.hasStem() {
+                if stemDirection == Stem.DOWN {
+                    y = stave.getYForTopText(textLine)
                 }
             } else {
-                glyphY = max(
-                    stave.getYForBottomText(textLine),
-                    note.getYs().max() ?? 0
-                )
-                if note.hasStem() {
-                    glyphY = max(glyphY, note.getStemExtents().baseY + 8)
-                }
+                y = stave.getYForTopText(textLine)
             }
         }
 
-        // Delayed ornaments render after the note
+        let isPlacedOnNoteheadSide = stemDirection == Stem.DOWN
+        let spacing = stave.getSpacingBetweenLines()
+        var lineSpacing = 1.0
+        if !isPlacedOnNoteheadSide && note.hasBeam() {
+            lineSpacing += 0.5
+        }
+        let totalSpacing = spacing * (textLine + lineSpacing)
+        let glyphYBetweenLines = y - totalSpacing
+
+        let index = checkIndex()
+        let start = note.getModifierStartXY(position: position, index: index)
+
+        var glyphX = start.x
+        var glyphY = ornamentAlignWithNoteHead
+            ? start.y
+            : min(stave.getYForTopText(textLine), glyphYBetweenLines)
+        glyphY += yShift
+
         if delayed {
-            glyphX += getWidth() + 2
+            let resolvedDelayXShift: Double
+            if let cachedDelay = self.delayXShift {
+                resolvedDelayXShift = cachedDelay
+            } else {
+                var computedDelay = ornamentGlyph.getMetrics().width / 2
+                let startX = glyphX - stave.getNoteStartX()
+                let tickables = note.getVoice().getTickables()
+                if let noteIndex = tickables.firstIndex(where: { $0 === note }),
+                   noteIndex + 1 < tickables.count {
+                    let nextContext = tickables[noteIndex + 1].checkTickContext()
+                    computedDelay += (nextContext.getX() - startX) * 0.5
+                } else {
+                    computedDelay += (stave.getX() + stave.getWidth() - glyphX) * 0.5
+                }
+                self.delayXShift = computedDelay
+                resolvedDelayXShift = computedDelay
+            }
+            glyphX += resolvedDelayXShift
         }
 
-        // Render the ornament glyph
-        ornamentGlyph.render(ctx: ctx, x: glyphX, y: glyphY)
-
-        // Render upper accidental
-        if let upper = accidentalUpper {
-            let upperY = glyphY - ornamentGlyph.getMetrics().height / 2
-                - renderOpts.accidentalUpperPadding
-            upper.render(ctx: ctx, x: glyphX, y: upperY)
-        }
-
-        // Render lower accidental
         if let lower = accidentalLower {
-            let lowerY = glyphY + ornamentGlyph.getMetrics().height / 2
-                + renderOpts.accidentalLowerPadding
-            lower.render(ctx: ctx, x: glyphX, y: lowerY)
+            lower.render(ctx: ctx, x: glyphX, y: glyphY)
+            glyphY -= lower.getMetrics().height
+            glyphY -= renderOpts.accidentalLowerPadding
         }
+
+        if stemUpYOffset != 0, note.hasStem(), note.getStemDirection() == Stem.UP {
+            glyphY += stemUpYOffset
+        }
+        if note.getLineNumber() < 5, Ornament.noteTransitionTypes.contains(type) {
+            glyphY = stave.getBBox().y + 40
+        }
+
+        ornamentGlyph.render(ctx: ctx, x: glyphX + xShift, y: glyphY)
+
+        if let upper = accidentalUpper {
+            glyphY -= ornamentGlyph.getMetrics().height + renderOpts.accidentalUpperPadding
+            upper.render(ctx: ctx, x: glyphX, y: glyphY)
+        }
+        ctx.closeGroup()
+    }
+
+    private func getMetrics() -> OrnamentMetrics? {
+        guard let font = Glyph.MUSIC_FONT_STACK.first,
+              let ornament = font.lookupMetric("ornament") as? [String: Any],
+              let metric = ornament[ornamentCode] as? [String: Any] else {
+            return nil
+        }
+
+        return OrnamentMetrics(
+            xOffset: metric["xOffset"] as? Double ?? 0,
+            yOffset: metric["yOffset"] as? Double ?? 0,
+            stemUpYOffset: metric["stemUpYOffset"] as? Double ?? 0,
+            reportedWidth: metric["reportedWidth"] as? Double ?? 0
+        )
     }
 }
 

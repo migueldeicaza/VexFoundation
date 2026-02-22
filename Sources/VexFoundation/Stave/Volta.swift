@@ -76,17 +76,19 @@ public final class Volta: StaveModifier {
 
         let topY = stave.getYForTopText(Double(stave.getNumLines())) + voltaYShift
         let vertHeight = 1.5 * stave.getSpacingBetweenLines()
-        let width = stave.getWidth() - xShift
+        var width = stave.getWidth() - xShift
 
         // Vertical lines
         switch voltaType {
         case .begin:
             ctx.fillRect(modifierX + xShift, topY, 1, vertHeight)
         case .end:
-            ctx.fillRect(modifierX + xShift + width - 5, topY, 1, vertHeight)
+            width -= 5
+            ctx.fillRect(modifierX + xShift + width, topY, 1, vertHeight)
         case .beginEnd:
+            width -= 3
             ctx.fillRect(modifierX + xShift, topY, 1, vertHeight)
-            ctx.fillRect(modifierX + xShift + width - 3, topY, 1, vertHeight)
+            ctx.fillRect(modifierX + xShift + width, topY, 1, vertHeight)
         default:
             break
         }

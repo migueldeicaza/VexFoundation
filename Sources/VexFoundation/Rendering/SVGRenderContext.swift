@@ -345,7 +345,7 @@ public final class SVGRenderContext: RenderContext {
 
     @discardableResult
     public func fill() -> Self {
-        guard let d = currentPathData() else { return self }
+        let d = currentPathData() ?? ""
         appendElement(pathElement(
             d: d,
             fill: currentFillStyle,
@@ -357,7 +357,7 @@ public final class SVGRenderContext: RenderContext {
 
     @discardableResult
     public func stroke() -> Self {
-        guard let d = currentPathData() else { return self }
+        let d = currentPathData() ?? ""
         appendElement(pathElement(
             d: d,
             fill: "none",
@@ -372,11 +372,14 @@ public final class SVGRenderContext: RenderContext {
     @discardableResult
     public func rect(_ x: Double, _ y: Double, _ width: Double, _ height: Double) -> Self {
         let r = scaledRect(x, y, width, height)
-        currentPathCommands.append("M \(fmt(r.x)) \(fmt(r.y))")
-        currentPathCommands.append("L \(fmt(r.x + r.width)) \(fmt(r.y))")
-        currentPathCommands.append("L \(fmt(r.x + r.width)) \(fmt(r.y + r.height))")
-        currentPathCommands.append("L \(fmt(r.x)) \(fmt(r.y + r.height))")
-        currentPathCommands.append("Z")
+        var attrs = "x=\"\(fmt(r.x))\" y=\"\(fmt(r.y))\" width=\"\(fmt(r.width))\" height=\"\(fmt(r.height))\""
+        attrs += " fill=\"none\""
+        attrs += " stroke=\"\(escape(currentStrokeStyle))\""
+        attrs += " stroke-width=\"\(fmt(currentLineWidth))\""
+        if !currentLineDash.isEmpty {
+            attrs += " stroke-dasharray=\"\(currentLineDash.map(fmt).joined(separator: ","))\""
+        }
+        appendElement("<rect \(attrs) />")
         currentPoint = (x: r.x, y: r.y)
         currentSubpathStart = (x: r.x, y: r.y)
         return self

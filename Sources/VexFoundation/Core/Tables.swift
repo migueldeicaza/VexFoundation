@@ -99,7 +99,10 @@ public enum Tables {
     /// Default stem height in pixels.
     public static let STEM_HEIGHT: Double = 35
     /// Stave line thickness in pixels.
-    public static let STAVE_LINE_THICKNESS: Double = 1
+    public static var STAVE_LINE_THICKNESS: Double {
+        get { VexRuntime.getCurrentContext().getStaveLineThickness() }
+        set { VexRuntime.getCurrentContext().setStaveLineThickness(newValue) }
+    }
     /// Decimal places for rounding during rendering.
     public static let RENDER_PRECISION_PLACES: Int = 3
     /// Ticks per whole note.

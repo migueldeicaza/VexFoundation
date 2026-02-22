@@ -23,6 +23,14 @@ public enum ConnectorType: Int {
 public final class StaveConnector: VexElement {
 
     override public class var category: String { "StaveConnector" }
+    override public class var textFont: FontInfo {
+        FontInfo(
+            family: VexFont.SERIF,
+            size: 16,
+            weight: VexFontWeight.normal.rawValue,
+            style: VexFontStyle.normal.rawValue
+        )
+    }
 
     // MARK: - Properties
 
@@ -72,46 +80,51 @@ public final class StaveConnector: VexElement {
         let ctx = try checkContext()
         setRendered()
 
-        let topY = topStave.getYForLine(0)
-        let bottomY = bottomStave.getYForLine(Double(bottomStave.getNumLines() - 1))
-            + thickness
-        let height = bottomY - topY
+        var topY = topStave.getYForLine(0)
+        var botY = bottomStave.getYForLine(Double(bottomStave.getNumLines() - 1)) + thickness
+        var width = connectorWidth
+        var topX = topStave.getX()
 
-        let isRightSide = connectorType == .singleRight
+        let isRightSided = connectorType == .singleRight
             || connectorType == .boldDoubleRight
-        let topX = topStave.getX() + (isRightSide ? topStave.getWidth() : 0)
-        let x = topX + connectorXShift
+            || connectorType == .thinDouble
+        if isRightSided {
+            topX = topStave.getX() + topStave.getWidth()
+        }
+
+        var attachmentHeight = botY - topY
 
         switch connectorType {
         case .singleRight, .singleLeft:
-            ctx.fillRect(x, topY, 1, height)
+            width = 1
 
         case .double:
-            ctx.fillRect(x - 1, topY, 1, height)
-            ctx.fillRect(x + 2, topY, 1, height)
+            topX -= connectorWidth + 2
+            topY -= thickness
+            attachmentHeight += 0.5
 
         case .brace:
-            let width = 12.0
+            width = 12
             let x1 = topStave.getX() - 2 + connectorXShift
             let y1 = topY
             let x3 = x1
-            let y3 = bottomY
+            let y3 = botY
             let x2 = x1 - width
-            let y2 = y1 + height / 2
+            let y2 = y1 + attachmentHeight / 2
             let cpx1 = x2 - 0.9 * width
-            let cpy1 = y1 + 0.2 * height
+            let cpy1 = y1 + 0.2 * attachmentHeight
             let cpx2 = x1 + 1.1 * width
-            let cpy2 = y2 - 0.135 * height
+            let cpy2 = y2 - 0.135 * attachmentHeight
             let cpx3 = cpx2
-            let cpy3 = y2 + 0.135 * height
+            let cpy3 = y2 + 0.135 * attachmentHeight
             let cpx4 = cpx1
-            let cpy4 = y3 - 0.2 * height
+            let cpy4 = y3 - 0.2 * attachmentHeight
             let cpx5 = x2 - width
             let cpy5 = cpy4
             let cpx6 = x1 + 0.4 * width
-            let cpy6 = y2 + 0.135 * height
+            let cpy6 = y2 + 0.135 * attachmentHeight
             let cpx7 = cpx6
-            let cpy7 = y2 - 0.135 * height
+            let cpy7 = y2 - 0.135 * attachmentHeight
             let cpx8 = cpx5
             let cpy8 = cpy1
 
@@ -125,44 +138,70 @@ public final class StaveConnector: VexElement {
             ctx.stroke()
 
         case .bracket:
-            // Render bracket with top and bottom hooks
-            let bracketTopY = topY - 1
-            let bracketBottomY = bottomY + 1
-            ctx.fillRect(x - 2, bracketTopY, 3, bracketBottomY - bracketTopY)
+            topY -= 6
+            botY += 6
+            attachmentHeight = botY - topY
+            Glyph.renderGlyph(ctx: ctx, xPos: topX - 5, yPos: topY, point: 40, code: "bracketTop")
+            Glyph.renderGlyph(ctx: ctx, xPos: topX - 5, yPos: botY, point: 40, code: "bracketBottom")
+            topX -= connectorWidth + 2
 
-            // Top hook
-            ctx.fillRect(x - 2, bracketTopY, 10, 3)
-            // Bottom hook
-            ctx.fillRect(x - 2, bracketBottomY - 3, 10, 3)
+        case .boldDoubleLeft:
+            drawBoldDoubleLine(ctx: ctx, type: connectorType, topX: topX + connectorXShift, topY: topY, botY: botY - thickness)
 
-        case .boldDoubleLeft, .boldDoubleRight:
-            ctx.fillRect(x, topY, 3, height)
-            ctx.fillRect(x + 5, topY, 1, height)
+        case .boldDoubleRight:
+            drawBoldDoubleLine(ctx: ctx, type: connectorType, topX: topX, topY: topY, botY: botY - thickness)
 
         case .thinDouble:
-            ctx.fillRect(x, topY, 1, height)
-            ctx.fillRect(x + 3, topY, 1, height)
+            width = 1
+            attachmentHeight -= thickness
 
         case .none:
             break
         }
 
-        // Draw text labels
-        for text in texts {
-            let centerX = (topStave.getX() + topStave.getWidth() / 2
-                + bottomStave.getX() + bottomStave.getWidth() / 2) / 2
-            let centerY = topY + height / 2
-
-            ctx.save()
-            ctx.setFont(getFont())
-            let measured = ctx.measureText(text.content)
-            ctx.fillText(
-                text.content,
-                centerX - measured.width / 2 + text.shiftX,
-                centerY + text.shiftY
-            )
-            ctx.restore()
+        if connectorType != .brace
+            && connectorType != .boldDoubleLeft
+            && connectorType != .boldDoubleRight
+            && connectorType != .none {
+            ctx.fillRect(topX, topY, width, attachmentHeight)
         }
+
+        if connectorType == .thinDouble {
+            ctx.fillRect(topX - 3, topY, width, attachmentHeight)
+        }
+
+        ctx.save()
+        _ = ctx.setLineWidth(2)
+        _ = ctx.setFont(getFont())
+        for text in texts {
+            let textWidth = ctx.measureText(text.content).width
+            let x = topStave.getX() - textWidth - 24 + text.shiftX
+            let y = (topStave.getYForLine(0) + bottomStave.getBottomLineY()) / 2 + text.shiftY
+            _ = ctx.fillText(text.content, x, y + 4)
+        }
+        ctx.restore()
+    }
+
+    private func drawBoldDoubleLine(
+        ctx: RenderContext,
+        type: ConnectorType,
+        topX: Double,
+        topY: Double,
+        botY: Double
+    ) {
+        guard type == .boldDoubleLeft || type == .boldDoubleRight else { return }
+
+        var xShift = 3.0
+        var variableWidth = 3.5
+        let thickLineOffset = 2.0
+
+        if type == .boldDoubleRight {
+            xShift = -5
+            variableWidth = 3
+        }
+
+        ctx.fillRect(topX + xShift, topY, 1, botY - topY)
+        ctx.fillRect(topX - thickLineOffset, topY, variableWidth, botY - topY)
     }
 }
 

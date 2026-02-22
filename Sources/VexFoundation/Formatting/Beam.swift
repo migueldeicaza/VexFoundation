@@ -677,6 +677,20 @@ public final class Beam: VexElement {
             return group.allSatisfy { $0.getIntrinsicTicks() < quarterTicks }
         }
 
+        // Collect tuplets in group order so we can normalize location/bracketing
+        // once beam ownership is finalized.
+        var allTuplets: [Tuplet] = []
+        for group in noteGroups {
+            var tuplet: Tuplet?
+            for note in group {
+                let noteTuplet = note.getTuplet()
+                if let noteTuplet, tuplet !== noteTuplet {
+                    tuplet = noteTuplet
+                    allTuplets.append(noteTuplet)
+                }
+            }
+        }
+
         // Create Beam objects
         var beams: [Beam] = []
         for group in beamedGroups {
@@ -693,6 +707,21 @@ public final class Beam: VexElement {
                 beam.renderOptions.flatBeamOffset = config.flatBeamOffset
             }
             beams.append(beam)
+        }
+
+        // Reformat tuplets after beams have been attached to notes.
+        for tuplet in allTuplets {
+            if let first = tuplet.notes.first as? StemmableNote {
+                let location: TupletLocation = first.getStemDirection() == Stem.DOWN ? .bottom : .top
+                _ = tuplet.setTupletLocation(location)
+            }
+
+            var bracketed = false
+            for note in tuplet.notes where !note.hasBeam() {
+                bracketed = true
+                break
+            }
+            _ = tuplet.setBracketed(bracketed)
         }
 
         return beams

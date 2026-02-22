@@ -70,6 +70,11 @@ public enum Flow {
 
     public static var RESOLUTION: Int { Tables.RESOLUTION }
 
+    public static var STAVE_LINE_THICKNESS: Double {
+        get { Tables.STAVE_LINE_THICKNESS }
+        set { Tables.STAVE_LINE_THICKNESS = newValue }
+    }
+
     public static var RENDER_PRECISION_PLACES: Int { Tables.RENDER_PRECISION_PLACES }
 
     // MARK: Runtime Context

@@ -73,6 +73,13 @@ public final class Bend: Modifier {
 
         var lastWidth: Double = 0
         for bend in bends {
+            let note = bend.checkAttachedNote()
+            if let tabNote = note as? TabNote {
+                let stringPos = Double(tabNote.leastString() - 1)
+                if state.topTextLine < stringPos {
+                    state.topTextLine = stringPos
+                }
+            }
             _ = bend.setXShift(lastWidth)
             lastWidth = bend.getWidth()
             _ = bend.setTextLine(state.topTextLine)
@@ -108,6 +115,7 @@ public final class Bend: Modifier {
         }
 
         super.init()
+        resetFont()
         updateWidth()
     }
 
@@ -139,7 +147,10 @@ public final class Bend: Modifier {
                 let additionalWidth = phrase[i].type == Bend.UP
                     ? bendRenderOptions.bendWidth
                     : bendRenderOptions.releaseWidth
-                let textWidth = Double(phrase[i].text.count) * 6 // approximate text width
+                // Keep a lightweight deterministic estimate here. In the JS implementation,
+                // TextFormatter uses pre-registered glyph metrics for web fonts; we approximate
+                // that behavior until a matching text metrics registry is ported.
+                let textWidth = Double(phrase[i].text.count) * 5.926
                 let w = max(additionalWidth, textWidth) + 3
                 phrase[i].width = w
                 phrase[i].drawWidth = w / 2
