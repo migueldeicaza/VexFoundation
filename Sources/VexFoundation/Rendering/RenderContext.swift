@@ -161,8 +161,55 @@ extension RenderContext {
     /// Set the font from a CSS shorthand string (e.g., "bold 10pt Arial").
     @discardableResult
     public func setFont(_ cssString: String) -> Self {
-        // Simple parsing: split into style, weight, size, family
-        let info = VexFont.validate(family: cssString)
+        let trimmed = cssString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return setFont(VexFont.validate())
+        }
+
+        let tokens = trimmed.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard
+            let sizeIndex = tokens.firstIndex(where: {
+                $0.range(of: #"^[0-9]*\.?[0-9]+(pt|px|em|%|in|mm|cm)$"#, options: .regularExpression) != nil
+            })
+        else {
+            let info = VexFont.validate(family: trimmed)
+            return setFont(info)
+        }
+
+        var style: String?
+        var weight: String?
+        if sizeIndex > 0 {
+            for token in tokens[0..<sizeIndex] {
+                let lower = token.lowercased()
+                if ["italic", "oblique"].contains(lower) {
+                    style = token
+                    continue
+                }
+                if lower == "normal" {
+                    if style == nil {
+                        style = token
+                    } else if weight == nil {
+                        weight = token
+                    }
+                    continue
+                }
+                if lower == "bold" || Int(lower) != nil {
+                    weight = token
+                }
+            }
+        }
+
+        let size = tokens[sizeIndex]
+        let family = sizeIndex + 1 < tokens.count
+            ? tokens[(sizeIndex + 1)...].joined(separator: " ")
+            : trimmed
+
+        let info = VexFont.validate(
+            family: family,
+            size: size,
+            weight: weight,
+            style: style
+        )
         return setFont(info)
     }
 

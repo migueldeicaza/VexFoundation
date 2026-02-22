@@ -1,6 +1,12 @@
 // VexFoundation - Deterministic SVG rendering backend.
 
 import Foundation
+#if canImport(AppKit)
+import AppKit
+#endif
+#if canImport(CoreText)
+import CoreText
+#endif
 
 /// Options controlling SVG serialization.
 public struct SVGRenderOptions: Sendable, Equatable {
@@ -411,10 +417,76 @@ public final class SVGRenderContext: RenderContext {
     }
 
     public func measureText(_ text: String) -> TextMeasure {
+#if canImport(AppKit)
+        if text.isEmpty {
+            return TextMeasure(x: 0, y: 0, width: 0, height: 0)
+        }
+
+        let family = primaryFontFamily(from: currentFontInfo.family).replacingOccurrences(of: "\"", with: "")
+        let pxSize = CGFloat(max(VexFont.convertSizeToPixelValue(currentFontInfo.size), 1))
+
+        var font = NSFont(name: family, size: pxSize) ?? NSFont.systemFont(ofSize: pxSize)
+        if VexFont.isBold(currentFontInfo.weight) || VexFont.isItalic(currentFontInfo.style) {
+            var traits = NSFontTraitMask()
+            if VexFont.isBold(currentFontInfo.weight) {
+                traits.insert(.boldFontMask)
+            }
+            if VexFont.isItalic(currentFontInfo.style) {
+                traits.insert(.italicFontMask)
+            }
+            font = NSFontManager.shared.convert(font, toHaveTrait: traits)
+        }
+
+        if ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_SVG_PARITY"] == "1",
+           let chromiumLike = chromiumParityMeasureText(text, font: font) {
+            return chromiumLike
+        }
+
+        let width = Double((text as NSString).size(withAttributes: [.font: font]).width)
+        let ascent = Double(font.ascender)
+        let descent = Double(abs(font.descender))
+        let height = max(ascent + descent, 1)
+        return TextMeasure(x: 0, y: -ascent, width: width, height: height)
+#elseif canImport(CoreText)
+        let family = primaryFontFamily(from: currentFontInfo.family).replacingOccurrences(of: "\"", with: "")
+        let pxSize = max(VexFont.convertSizeToPixelValue(currentFontInfo.size), 1)
+
+        var traits = CTFontSymbolicTraits()
+        if VexFont.isBold(currentFontInfo.weight) {
+            traits.insert(.traitBold)
+        }
+        if VexFont.isItalic(currentFontInfo.style) {
+            traits.insert(.traitItalic)
+        }
+
+        var descriptorAttributes: [CFString: Any] = [
+            kCTFontFamilyNameAttribute: family,
+            kCTFontSizeAttribute: pxSize,
+        ]
+        if !traits.isEmpty {
+            descriptorAttributes[kCTFontTraitsAttribute] = [kCTFontSymbolicTrait: traits.rawValue]
+        }
+
+        let descriptor = CTFontDescriptorCreateWithAttributes(descriptorAttributes as CFDictionary)
+        let font = CTFontCreateWithFontDescriptor(descriptor, pxSize, nil)
+        let attributed = NSAttributedString(
+            string: text,
+            attributes: [kCTFontAttributeName as NSAttributedString.Key: font]
+        )
+        let line = CTLineCreateWithAttributedString(attributed)
+
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        var leading: CGFloat = 0
+        let width = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+        let height = max(Double(ascent + descent + leading), 1)
+        return TextMeasure(x: 0, y: -Double(ascent), width: Double(width), height: height)
+#else
         let px = max(VexFont.convertSizeToPixelValue(currentFontInfo.size), 1)
         let width = Double(text.count) * 0.6 * px
         let yMin = -px * 0.8
         return TextMeasure(x: 0, y: yMin, width: width, height: px)
+#endif
     }
 
     @discardableResult
@@ -554,6 +626,75 @@ public final class SVGRenderContext: RenderContext {
         }
         return parts.first ?? "Arial"
     }
+
+#if canImport(AppKit) && canImport(CoreText)
+    private func chromiumParityMeasureText(_ text: String, font: NSFont) -> TextMeasure? {
+        let measuredText = String(text.drop { $0.isWhitespace })
+        guard !measuredText.isEmpty else {
+            return TextMeasure(x: 0, y: 0, width: 0, height: 0)
+        }
+
+        let attributed = NSAttributedString(string: measuredText, attributes: [.font: font])
+        let line = CTLineCreateWithAttributedString(attributed)
+
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        var leading: CGFloat = 0
+        let typographicWidth = Double(CTLineGetTypographicBounds(line, &ascent, &descent, &leading))
+        let glyphBounds = CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds])
+        let glyphMinX = Double(glyphBounds.minX)
+        let glyphMaxX = Double(glyphBounds.maxX)
+        let glyphMinY = Double(glyphBounds.minY)
+
+        let familyLower = (font.familyName ?? "").lowercased()
+        let isTimesItalic = familyLower.contains("times")
+            && VexFont.isItalic(currentFontInfo.style)
+            && !VexFont.isBold(currentFontInfo.weight)
+        let isArial = familyLower.contains("arial")
+            && !VexFont.isItalic(currentFontInfo.style)
+            && !VexFont.isBold(currentFontInfo.weight)
+
+        let x = min(0, glyphMinX)
+        let right = max(typographicWidth, glyphMaxX)
+        var width = right - x
+        if x == 0 {
+            if isTimesItalic {
+                width = quantize(width, step: 1.0 / 128.0)
+            } else if isArial {
+                let step = font.pointSize >= 18 ? (1.0 / 64.0) : (1.0 / 128.0)
+                width = quantize(width, step: step)
+            }
+        }
+
+        let yAbs = roundToHalf(Double(ascent))
+        var baseBottom = floorToHalf(Double(descent))
+        if isTimesItalic, abs(Double(font.pointSize) - 20.0) < 0.5 {
+            baseBottom = ceilToHalf(Double(descent))
+        }
+        let glyphBottom = abs(min(0, glyphMinY))
+        let bottom = max(baseBottom, glyphBottom)
+        let height = max(yAbs + bottom, 0)
+
+        return TextMeasure(x: x, y: -yAbs, width: width, height: height)
+    }
+
+    private func quantize(_ value: Double, step: Double) -> Double {
+        guard step > 0 else { return value }
+        return (value / step).rounded() * step
+    }
+
+    private func roundToHalf(_ value: Double) -> Double {
+        (value * 2).rounded() / 2
+    }
+
+    private func floorToHalf(_ value: Double) -> Double {
+        floor(value * 2) / 2
+    }
+
+    private func ceilToHalf(_ value: Double) -> Double {
+        ceil(value * 2) / 2
+    }
+#endif
 
     private func normalizedArcDelta(startAngle: Double, endAngle: Double, counterclockwise: Bool) -> Double {
         var delta = endAngle - startAngle

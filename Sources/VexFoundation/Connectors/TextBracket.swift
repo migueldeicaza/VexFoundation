@@ -47,6 +47,14 @@ public struct TextBracketRenderOptions {
 public final class TextBracket: VexElement {
 
     override public class var category: String { "TextBracket" }
+    override public class var textFont: FontInfo {
+        FontInfo(
+            family: VexFont.SERIF,
+            size: 15,
+            weight: VexFontWeight.normal.rawValue,
+            style: VexFontStyle.italic.rawValue
+        )
+    }
 
     // MARK: - Properties
 
@@ -90,6 +98,47 @@ public final class TextBracket: VexElement {
         return self
     }
 
+    private func drawDashedLine(
+        context: any RenderContext,
+        fromX: Double,
+        fromY: Double,
+        toX: Double,
+        toY: Double,
+        dashPattern: [Double]
+    ) {
+        context.beginPath()
+
+        let dx = toX - fromX
+        let dy = toY - fromY
+        let angle = atan2(dy, dx)
+        var x = fromX
+        var y = fromY
+        context.moveTo(fromX, fromY)
+
+        var index = 0
+        var draw = true
+        while !((dx < 0 ? x <= toX : x >= toX) && (dy < 0 ? y <= toY : y >= toY)) {
+            let dashLength = dashPattern[index % dashPattern.count]
+            index += 1
+
+            let nx = x + cos(angle) * dashLength
+            x = dx < 0 ? max(toX, nx) : min(toX, nx)
+
+            let ny = y + sin(angle) * dashLength
+            y = dy < 0 ? max(toY, ny) : min(toY, ny)
+
+            if draw {
+                context.lineTo(x, y)
+            } else {
+                context.moveTo(x, y)
+            }
+            draw.toggle()
+        }
+
+        context.closePath()
+        context.stroke()
+    }
+
     // MARK: - Draw
 
     override public func draw() throws {
@@ -129,9 +178,9 @@ public final class TextBracket: VexElement {
         // Superscript position
         let superY = y - mainHeight / 2.5
 
-        // Draw superscript at smaller size
-        let smallerSize = 15.0 * 0.714286
-        _ = ctx.setFont(nil, smallerSize, nil, "italic")
+        let baseFont = fontInfo
+        let smallerSize = VexFont.scaleSize(fontSizeInPoints, 0.714286)
+        _ = ctx.setFont(baseFont.family, smallerSize, baseFont.weight, baseFont.style)
         _ = ctx.fillText(superscriptText, startX + mainWidth + 1, superY)
 
         let superMeasure = ctx.measureText(superscriptText)
@@ -155,25 +204,25 @@ public final class TextBracket: VexElement {
         }
 
         if bracketRenderOptions.dashed {
-            _ = ctx.setLineDash(bracketRenderOptions.dash)
+            drawDashedLine(
+                context: ctx,
+                fromX: lineStartX,
+                fromY: lineY,
+                toX: endX,
+                toY: lineY,
+                dashPattern: bracketRenderOptions.dash
+            )
 
-            // Main line
-            ctx.beginPath()
-            ctx.moveTo(lineStartX, lineY)
-            ctx.lineTo(endX, lineY)
-            ctx.stroke()
-            ctx.closePath()
-
-            // Ending bracket
             if bracketRenderOptions.showBracket {
-                ctx.beginPath()
-                ctx.moveTo(endX, lineY + 1 * posValue)
-                ctx.lineTo(endX, lineY + bracketHeight)
-                ctx.stroke()
-                ctx.closePath()
+                drawDashedLine(
+                    context: ctx,
+                    fromX: endX,
+                    fromY: lineY + 1 * posValue,
+                    toX: endX,
+                    toY: lineY + bracketHeight,
+                    dashPattern: bracketRenderOptions.dash
+                )
             }
-
-            _ = ctx.setLineDash([])
         } else {
             ctx.beginPath()
             ctx.moveTo(lineStartX, lineY)
