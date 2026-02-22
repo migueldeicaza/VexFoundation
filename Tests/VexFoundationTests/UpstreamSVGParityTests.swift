@@ -13,6 +13,7 @@ struct UpstreamSVGParityTests {
     private static let referenceDirEnvKey = "VEXFOUNDATION_UPSTREAM_SVG_REFERENCE_DIR"
     private static let fontsEnvKey = "VEXFOUNDATION_UPSTREAM_SVG_FONTS"
     private static let artifactsDirEnvKey = "VEXFOUNDATION_UPSTREAM_SVG_ARTIFACTS_DIR"
+    private static let signatureEpsilonEnvKey = "VEXFOUNDATION_UPSTREAM_SVG_SIGNATURE_EPSILON"
 
     private let defaultFonts = ["Bravura", "Gonville", "Petaluma", "Leland"]
 
@@ -1717,6 +1718,18 @@ struct UpstreamSVGParityTests {
         return parsed.isEmpty ? defaultFonts : parsed
     }
 
+    private var signatureComparisonEpsilon: Double {
+        guard let raw = ProcessInfo.processInfo.environment[Self.signatureEpsilonEnvKey]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !raw.isEmpty,
+            let parsed = Double(raw),
+            parsed > 0
+        else {
+            return 0
+        }
+        return parsed
+    }
+
     private func stemmableNotes(in voice: Voice) -> [StemmableNote] {
         voice.getTickables().compactMap { $0 as? StemmableNote }
     }
@@ -1763,7 +1776,8 @@ struct UpstreamSVGParityTests {
                 let actualSignature = drawingSignature(svg: actualSVG)
                 let expectedSignature = drawingSignature(svg: expectedSVG)
 
-                if actualSignature != expectedSignature {
+                let epsilon = signatureComparisonEpsilon
+                if !signaturesMatch(actual: actualSignature, expected: expectedSignature, epsilon: epsilon) {
                     let artifacts = try writeMismatchArtifacts(
                         module: module,
                         test: test,
@@ -1779,6 +1793,7 @@ struct UpstreamSVGParityTests {
                         Expected: \(expectedURL.path)
                         Actual artifact: \(artifacts.actualSVG.path)
                         Expected artifact: \(artifacts.expectedSVG.path)
+                        Signature epsilon: \(epsilon)
                         """
                     )
                 }
@@ -2080,6 +2095,61 @@ struct UpstreamSVGParityTests {
             text.removeLast()
         }
         return text
+    }
+
+    private func signaturesMatch(actual: String, expected: String, epsilon: Double) -> Bool {
+        if epsilon <= 0 {
+            return actual == expected
+        }
+
+        let actualRows = actual.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        let expectedRows = expected.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        guard actualRows.count == expectedRows.count else { return false }
+
+        for index in 0..<actualRows.count {
+            let lhs = actualRows[index]
+            let rhs = expectedRows[index]
+            if lhs == rhs { continue }
+            if !signatureRowsMatchWithEpsilon(lhs, rhs, epsilon: epsilon) {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    private func signatureRowsMatchWithEpsilon(_ lhs: String, _ rhs: String, epsilon: Double) -> Bool {
+        let numberPattern = #"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?"#
+        guard let regex = try? NSRegularExpression(pattern: numberPattern) else {
+            return lhs == rhs
+        }
+
+        let lhsRange = NSRange(lhs.startIndex..<lhs.endIndex, in: lhs)
+        let rhsRange = NSRange(rhs.startIndex..<rhs.endIndex, in: rhs)
+        let lhsMatches = regex.matches(in: lhs, options: [], range: lhsRange)
+        let rhsMatches = regex.matches(in: rhs, options: [], range: rhsRange)
+        guard lhsMatches.count == rhsMatches.count else { return false }
+
+        let lhsSkeleton = regex.stringByReplacingMatches(in: lhs, options: [], range: lhsRange, withTemplate: "#")
+        let rhsSkeleton = regex.stringByReplacingMatches(in: rhs, options: [], range: rhsRange, withTemplate: "#")
+        guard lhsSkeleton == rhsSkeleton else { return false }
+
+        for index in 0..<lhsMatches.count {
+            guard
+                let lhsTokenRange = Range(lhsMatches[index].range, in: lhs),
+                let rhsTokenRange = Range(rhsMatches[index].range, in: rhs),
+                let lhsValue = Double(lhs[lhsTokenRange]),
+                let rhsValue = Double(rhs[rhsTokenRange])
+            else {
+                return false
+            }
+
+            if abs(lhsValue - rhsValue) > epsilon {
+                return false
+            }
+        }
+
+        return true
     }
 
     private func normalizedSVGText(_ svg: String) -> String {

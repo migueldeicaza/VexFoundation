@@ -240,6 +240,9 @@ Compare Swift-rendered drawing output against upstream `pptr-*.svg` files:
 tools/upstream_svg_parity.sh
 tools/upstream_svg_parity.sh --font Bravura
 tools/upstream_svg_parity.sh --reference-dir ../vexmotion/build/images/reference
+tools/upstream_svg_parity.sh --strict
+tools/upstream_svg_parity.sh --tolerant
+tools/upstream_svg_parity.sh --signature-epsilon 0.005
 ```
 
 This workflow also writes a manifest to:
@@ -251,6 +254,8 @@ Track how many upstream SVG reference cases are covered by implemented parity te
 
 ```bash
 tools/generate_upstream_svg_coverage.sh
+tools/generate_upstream_svg_coverage.sh --parity-mode strict
+tools/generate_upstream_svg_coverage.sh --parity-mode tolerant --signature-epsilon 0.005
 tools/generate_upstream_svg_coverage.sh --check
 ```
 
