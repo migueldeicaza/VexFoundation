@@ -120,6 +120,11 @@ open class StemmableNote: Note {
         let dir = direction
         stemDirection = dir
 
+        if let staveNote = self as? StaveNote {
+            _ = staveNote.reset()
+        } else if let tabNote = self as? TabNote {
+            _ = tabNote.reset()
+        }
         if hasFlag() {
             buildFlag()
         }

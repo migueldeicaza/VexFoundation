@@ -342,6 +342,6 @@ extension UpstreamSVGParityTests {
 
         let widthInEm = (glyph.xMax - glyph.xMin) / resolution
         let ptScale = VexFont.scaleToPxFrom["pt"] ?? (4.0 / 3.0)
-        return widthInEm * 38 * ptScale * 2
+        return widthInEm * 38 * ptScale
     }
 }
