@@ -664,8 +664,11 @@ public final class SVGRenderContext: RenderContext {
             if isTimesItalic {
                 width = quantize(width, step: 1.0 / 128.0)
             } else if isArial {
-                let step = font.pointSize >= 18 ? (1.0 / 64.0) : (1.0 / 128.0)
-                width = quantize(width, step: step)
+                // Chromium canvas text layout for Arial regular trends slightly wider than
+                // CoreText on macOS in parity mode. Use a tiny deterministic bias so
+                // tab/fret spacing matches upstream fixture SVGs.
+                let bias = currentScaleX >= 1 ? (1.0 / 512.0) : (-1.0 / 512.0)
+                width += bias
             }
         }
 

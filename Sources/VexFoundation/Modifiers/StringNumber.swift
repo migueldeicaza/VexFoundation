@@ -32,6 +32,31 @@ public enum LineEndType: Int {
 public final class StringNumber: Modifier {
 
     override public class var category: String { "StringNumber" }
+    override public class var textFont: FontInfo {
+        FontInfo(
+            family: VexFont.SANS_SERIF,
+            size: VexFont.SIZE,
+            weight: VexFontWeight.bold.rawValue,
+            style: VexFontStyle.normal.rawValue
+        )
+    }
+
+    private struct StringNumberMetrics {
+        var verticalPadding: Double
+        var stemPadding: Double
+        var leftPadding: Double
+        var rightPadding: Double
+    }
+
+    private static var metrics: StringNumberMetrics {
+        let musicFont = Glyph.MUSIC_FONT_STACK.first
+        return StringNumberMetrics(
+            verticalPadding: (musicFont?.lookupMetric("stringNumber.verticalPadding") as? Double) ?? 0,
+            stemPadding: (musicFont?.lookupMetric("stringNumber.stemPadding") as? Double) ?? 0,
+            leftPadding: (musicFont?.lookupMetric("stringNumber.leftPadding") as? Double) ?? 0,
+            rightPadding: (musicFont?.lookupMetric("stringNumber.rightPadding") as? Double) ?? 0
+        )
+    }
 
     // MARK: - Static Format
 
@@ -61,6 +86,7 @@ public final class StringNumber: Modifier {
             var line: Double
             var shiftL: Double
             var shiftR: Double
+            var order: Int
         }
 
         var numsList: [NumInfo] = []
@@ -68,7 +94,7 @@ public final class StringNumber: Modifier {
         var extraXSpaceForDisplaced: Double = 0
         var shiftRight: Double = 0
 
-        for num in nums {
+        for (order, num) in nums.enumerated() {
             let note = num.getNote()
             let pos = num.getPosition()
             guard let staveNote = note as? StaveNote else {
@@ -102,11 +128,16 @@ public final class StringNumber: Modifier {
 
             numsList.append(NumInfo(
                 pos: pos, note: note, num: num, line: props.line,
-                shiftL: extraXSpaceForDisplaced, shiftR: shiftRight
+                shiftL: extraXSpaceForDisplaced, shiftR: shiftRight, order: order
             ))
         }
 
-        numsList.sort { $0.line > $1.line }
+        numsList.sort {
+            if $0.line == $1.line {
+                return $0.order < $1.order
+            }
+            return $0.line > $1.line
+        }
 
         var numShiftR: Double = 0
         var xWidthL: Double = 0
@@ -155,6 +186,7 @@ public final class StringNumber: Modifier {
         super.init()
         position = .above
         _ = setWidth(radius * 2 + 4)
+        resetFont()
     }
 
     // MARK: - Setters
@@ -203,6 +235,47 @@ public final class StringNumber: Modifier {
 
     // MARK: - Draw
 
+    private func drawDashedLine(
+        _ ctx: any RenderContext,
+        fromX: Double,
+        fromY: Double,
+        toX: Double,
+        toY: Double,
+        dashPattern: [Double]
+    ) {
+        ctx.beginPath()
+
+        let dx = toX - fromX
+        let dy = toY - fromY
+        let angle = atan2(dy, dx)
+        var x = fromX
+        var y = fromY
+        ctx.moveTo(fromX, fromY)
+
+        var index = 0
+        var draw = true
+        while !((dx < 0 ? x <= toX : x >= toX) && (dy < 0 ? y <= toY : y >= toY)) {
+            let dashLength = dashPattern[index % dashPattern.count]
+            index += 1
+
+            let nx = x + cos(angle) * dashLength
+            x = dx < 0 ? max(toX, nx) : min(toX, nx)
+
+            let ny = y + sin(angle) * dashLength
+            y = dy < 0 ? max(toY, ny) : min(toY, ny)
+
+            if draw {
+                ctx.lineTo(x, y)
+            } else {
+                ctx.moveTo(x, y)
+            }
+            draw.toggle()
+        }
+
+        ctx.closePath()
+        ctx.stroke()
+    }
+
     override public func draw() throws {
         let ctx = try checkContext()
         let note = checkAttachedNote()
@@ -219,23 +292,23 @@ public final class StringNumber: Modifier {
             dotY = ys.min() ?? dotY
             if note.hasStem() && stemDirection == Stem.UP {
                 if let stemmable = note as? StemmableNote {
-                    dotY = stemmable.checkStem().getExtents().topY
+                    dotY = stemmable.checkStem().getExtents().topY + Self.metrics.stemPadding
                 }
             }
-            dotY -= radius + textLine * Tables.STAVE_LINE_DISTANCE
+            dotY -= radius + Self.metrics.verticalPadding + textLine * Tables.STAVE_LINE_DISTANCE
         case .below:
             let ys = note.getYs()
             dotY = ys.max() ?? dotY
             if note.hasStem() && stemDirection == Stem.DOWN {
                 if let stemmable = note as? StemmableNote {
-                    dotY = stemmable.checkStem().getExtents().topY
+                    dotY = stemmable.checkStem().getExtents().topY - Self.metrics.stemPadding
                 }
             }
-            dotY += radius + textLine * Tables.STAVE_LINE_DISTANCE
+            dotY += radius + Self.metrics.verticalPadding + textLine * Tables.STAVE_LINE_DISTANCE
         case .left:
-            dotX -= radius / 2
+            dotX -= radius / 2 + Self.metrics.leftPadding
         case .right:
-            dotX += radius / 2
+            dotX += radius / 2 + Self.metrics.rightPadding
         default:
             throw StringNumberError.invalidPosition(position)
         }
@@ -256,30 +329,37 @@ public final class StringNumber: Modifier {
             ctx.setStrokeStyle("#000000")
             ctx.setLineCap(.round)
             ctx.setLineWidth(0.6)
-            if dashed {
-                ctx.setLineDash([3, 3])
-            }
-            ctx.beginPath()
-            ctx.moveTo(dotX + 10, dotY)
-            ctx.lineTo(dotX + endX, dotY)
-            ctx.stroke()
+            drawDashedLine(
+                ctx,
+                fromX: dotX + 10,
+                fromY: dotY,
+                toX: dotX + endX,
+                toY: dotY,
+                dashPattern: dashed ? [3, 3] : [3, 0]
+            )
 
             switch leg {
             case .up:
-                ctx.beginPath()
-                ctx.moveTo(dotX + endX, dotY)
-                ctx.lineTo(dotX + endX, dotY - 10)
-                ctx.stroke()
+                drawDashedLine(
+                    ctx,
+                    fromX: dotX + endX,
+                    fromY: dotY,
+                    toX: dotX + endX,
+                    toY: dotY - 10,
+                    dashPattern: dashed ? [3, 3] : [3, 0]
+                )
             case .down:
-                ctx.beginPath()
-                ctx.moveTo(dotX + endX, dotY)
-                ctx.lineTo(dotX + endX, dotY + 10)
-                ctx.stroke()
+                drawDashedLine(
+                    ctx,
+                    fromX: dotX + endX,
+                    fromY: dotY,
+                    toX: dotX + endX,
+                    toY: dotY + 10,
+                    dashPattern: dashed ? [3, 3] : [3, 0]
+                )
             case .none:
                 break
             }
-
-            ctx.setLineDash([])
         }
 
         ctx.restore()

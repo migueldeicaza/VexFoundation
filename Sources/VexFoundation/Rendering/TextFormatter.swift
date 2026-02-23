@@ -78,6 +78,15 @@ public final class TextFormatter {
         VexFont.convertSizeToPixelValue(fontInfo.size)
     }
 
+    /// Approximate VexFlow's `TextFormatter.maxHeight` behavior for common text families.
+    /// This is used by modifiers such as Bend/Vibrato in formatting paths.
+    public var maxHeight: Double {
+        if let scale = Self.maxHeightScale(for: fontInfo.family) {
+            return fontSizeInPixels * scale
+        }
+        return getYForStringInPx("M").height
+    }
+
     // MARK: - Measurement
 
     /// Measure raw text bounds.
@@ -129,5 +138,27 @@ public final class TextFormatter {
     public func clearCache() {
         widthCachePx.removeAll(keepingCapacity: true)
         extentCache.removeAll(keepingCapacity: true)
+    }
+
+    private static func maxHeightScale(for family: String) -> Double? {
+        let normalized = family.lowercased()
+        // From upstream text font metrics:
+        // Arial ('@'.ha=1923, resolution=2048)
+        if normalized.contains("arial") {
+            return 1923.0 / 2048.0
+        }
+        // sans-serif ('@'.ha=1924, resolution=2048)
+        if normalized.contains("sans-serif") {
+            return 1924.0 / 2048.0
+        }
+        // serif / Times-like fallback ('@'.ha=1415, resolution=2048)
+        if normalized.contains("times") || normalized.contains("serif") {
+            return 1415.0 / 2048.0
+        }
+        // Roboto Slab ('b'.ha=1581, resolution=2048)
+        if normalized.contains("roboto slab") {
+            return 1581.0 / 2048.0
+        }
+        return nil
     }
 }

@@ -92,7 +92,7 @@ public final class VibratoBracket: VexElement {
 
         let stopX: Double
         if let stop {
-            stopX = stop.getAbsoluteX() - stop.getGlyphWidth() - 5
+            stopX = stop.getAbsoluteX() - stop.getTickableWidth() - 5
         } else if let start {
             stopX = start.checkStave().getTieEndX() - 10
         } else {

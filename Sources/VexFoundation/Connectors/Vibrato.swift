@@ -60,13 +60,19 @@ public final class Vibrato: Modifier {
         var width: Double = 0
         var shift = state.rightShift - 7
 
-        // If there's a bend, drop the text line
-        // (Bend is not yet ported — check if available)
-        state.topTextLine += 1
+        let bends = context.getMembers("Bend").compactMap { $0 as? Bend }
+        let resolvedTextLine: Double
+        if bends.isEmpty {
+            state.topTextLine += 1
+            resolvedTextLine = textLine
+        } else {
+            let maxBendHeight = bends.map { $0.getTextHeight() }.max() ?? 0
+            resolvedTextLine = textLine - (maxBendHeight / Tables.STAVE_LINE_DISTANCE + 1)
+        }
 
         for vibrato in vibratos {
             _ = vibrato.setXShift(shift)
-            _ = vibrato.setTextLine(textLine)
+            _ = vibrato.setTextLine(resolvedTextLine)
             width += vibrato.getWidth()
             shift += width
         }
@@ -111,22 +117,27 @@ public final class Vibrato: Modifier {
         var cx = x
         if harsh {
             ctx.moveTo(cx, y + waveGirth + 1)
-            for _ in 0..<Int(numWaves / 2) {
+            var index = 0.0
+            while index < numWaves / 2 {
                 ctx.lineTo(cx + waveWidth, y - waveHeight / 2)
                 cx += waveWidth
                 ctx.lineTo(cx + waveWidth, y + waveHeight / 2)
                 cx += waveWidth
+                index += 1
             }
-            for _ in 0..<Int(numWaves / 2) {
+            index = 0
+            while index < numWaves / 2 {
                 ctx.lineTo(cx - waveWidth, y - waveHeight / 2 + waveGirth + 1)
                 cx -= waveWidth
                 ctx.lineTo(cx - waveWidth, y + waveHeight / 2 + waveGirth + 1)
                 cx -= waveWidth
+                index += 1
             }
             ctx.fill()
         } else {
             ctx.moveTo(cx, y + waveGirth)
-            for _ in 0..<Int(numWaves / 2) {
+            var index = 0.0
+            while index < numWaves / 2 {
                 ctx.quadraticCurveTo(
                     cx + waveWidth / 2, y - waveHeight / 2,
                     cx + waveWidth, y
@@ -137,8 +148,10 @@ public final class Vibrato: Modifier {
                     cx + waveWidth, y
                 )
                 cx += waveWidth
+                index += 1
             }
-            for _ in 0..<Int(numWaves / 2) {
+            index = 0
+            while index < numWaves / 2 {
                 ctx.quadraticCurveTo(
                     cx - waveWidth / 2, y + waveHeight / 2 + waveGirth,
                     cx - waveWidth, y + waveGirth
@@ -149,6 +162,7 @@ public final class Vibrato: Modifier {
                     cx - waveWidth, y + waveGirth
                 )
                 cx -= waveWidth
+                index += 1
             }
             ctx.fill()
         }
@@ -161,8 +175,7 @@ public final class Vibrato: Modifier {
         let note = checkAttachedNote()
         setRendered()
 
-        guard let staveNote = note as? StaveNote else { return }
-        let start = staveNote.getModifierStartXY(position: .right, index: checkIndex())
+        let start = note.getModifierStartXY(position: .right, index: checkIndex())
 
         let vx = start.x + xShift
         let vy = note.getYForTopText(textLine) + 2

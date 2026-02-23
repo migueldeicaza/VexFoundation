@@ -21,6 +21,14 @@ public enum FretHandFingerError: Error, LocalizedError, Equatable, Sendable {
 public final class FretHandFinger: Modifier {
 
     override public class var category: String { "FretHandFinger" }
+    override public class var textFont: FontInfo {
+        FontInfo(
+            family: VexFont.SANS_SERIF,
+            size: 9,
+            weight: VexFontWeight.bold.rawValue,
+            style: VexFontStyle.normal.rawValue
+        )
+    }
 
     // MARK: - Static Format
 
@@ -42,6 +50,7 @@ public final class FretHandFinger: Modifier {
             var line: Double
             var shiftL: Double
             var shiftR: Double
+            var order: Int
         }
 
         var numsList: [NumInfo] = []
@@ -49,7 +58,7 @@ public final class FretHandFinger: Modifier {
         var shiftLeft: Double = 0
         var shiftRight: Double = 0
 
-        for num in nums {
+        for (order, num) in nums.enumerated() {
             let note = num.getNote()
             let pos = num.getPosition()
             let index = num.checkIndex()
@@ -69,11 +78,16 @@ public final class FretHandFinger: Modifier {
 
             numsList.append(NumInfo(
                 note: note, num: num, pos: pos, line: props.line,
-                shiftL: shiftLeft, shiftR: shiftRight
+                shiftL: shiftLeft, shiftR: shiftRight, order: order
             ))
         }
 
-        numsList.sort { $0.line > $1.line }
+        numsList.sort {
+            if $0.line == $1.line {
+                return $0.order < $1.order
+            }
+            return $0.line > $1.line
+        }
 
         var numShiftL: Double = 0
         var numShiftR: Double = 0
@@ -121,6 +135,7 @@ public final class FretHandFinger: Modifier {
         super.init()
         _ = setWidth(7)
         position = .left
+        resetFont()
     }
 
     // MARK: - Setters

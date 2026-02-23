@@ -136,6 +136,11 @@ public final class Bend: Modifier {
 
     public func getText() -> String { text }
 
+    public func getTextHeight() -> Double {
+        let formatter = TextFormatter.create(font: fontInfo)
+        return formatter.maxHeight
+    }
+
     // MARK: - Update Width
 
     private func updateWidth() {

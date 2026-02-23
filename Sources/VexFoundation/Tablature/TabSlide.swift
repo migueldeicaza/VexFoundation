@@ -91,6 +91,62 @@ public final class TabSlide: TabTie {
 
         setRendered()
     }
+
+    // MARK: - Draw
+
+    override public func draw() throws {
+        _ = try checkContext()
+        setRendered()
+
+        guard notes.firstNote != nil || notes.lastNote != nil else {
+            throw StaveTieError.requiresStartOrEndNote
+        }
+
+        let firstNote = notes.firstNote
+        let lastNote = notes.lastNote
+
+        var firstXPx: Double = 0
+        var lastXPx: Double = 0
+        var firstYs: [Double] = [0]
+        var lastYs: [Double] = [0]
+        var tieDirection: TieDirection?
+
+        if let firstNote {
+            let firstIndex = notes.firstIndices.first ?? 0
+            firstXPx = firstNote.getModifierStartXY(position: .right, index: firstIndex).x + renderOptions.tieSpacing
+            tieDirection = TieDirection(stemDirection: firstNote.getStemDirection())
+            firstYs = firstNote.getYs()
+        } else if let lastNote {
+            let stave = lastNote.checkStave()
+            firstXPx = stave.getTieStartX()
+            firstYs = lastNote.getYs()
+            notes.firstIndices = notes.lastIndices
+        }
+
+        if let lastNote {
+            let lastIndex = notes.lastIndices.first ?? 0
+            lastXPx = lastNote.getModifierStartXY(position: .left, index: lastIndex).x + renderOptions.tieSpacing
+            tieDirection = TieDirection(stemDirection: lastNote.getStemDirection())
+            lastYs = lastNote.getYs()
+        } else if let firstNote {
+            let stave = firstNote.checkStave()
+            lastXPx = stave.getTieEndX()
+            lastYs = firstNote.getYs()
+            notes.lastIndices = notes.firstIndices
+        }
+
+        if let direction {
+            tieDirection = direction
+        }
+
+        try renderTie(
+            direction: tieDirection ?? .up,
+            firstXPx: firstXPx,
+            lastXPx: lastXPx,
+            firstYs: firstYs,
+            lastYs: lastYs
+        )
+    }
 }
 
 // MARK: - Preview
