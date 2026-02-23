@@ -53,8 +53,11 @@ public final class Dot: Modifier {
     @discardableResult
     override public func setNote(_ note: Note) -> Self {
         self.note = note
-        // Grace notes get smaller dots
-        // if isGraceNote(note) { radius *= 0.5; setWidth(3) }
+        // Match upstream: grace notes draw smaller augmentation dots.
+        if note is GraceNote {
+            radius *= 0.5
+            _ = setWidth(3)
+        }
         return self
     }
 

@@ -199,7 +199,7 @@ public struct GraceNoteStruct {
             type: type,
             stemDirection: stemDirection,
             autoStem: autoStem,
-            strokePx: GraceNote.LEDGER_LINE_OFFSET,
+            strokePx: GraceNote.GRACE_LEDGER_LINE_OFFSET,
             glyphFontScale: Tables.NOTATION_FONT_SCALE * GraceNote.SCALE,
             octaveShift: octaveShift,
             clef: clef

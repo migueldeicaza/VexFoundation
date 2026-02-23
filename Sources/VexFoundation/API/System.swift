@@ -22,9 +22,11 @@ public enum SystemError: Error, LocalizedError, Equatable, Sendable {
 /// Formatter options extended with alpha for tuning.
 public struct SystemFormatterOptions {
     public var alpha: Double = 0.5
+    public var softmaxFactor: Double = Tables.SOFTMAX_FACTOR
 
-    public init(alpha: Double = 0.5) {
+    public init(alpha: Double = 0.5, softmaxFactor: Double = Tables.SOFTMAX_FACTOR) {
         self.alpha = alpha
+        self.softmaxFactor = softmaxFactor
     }
 }
 
@@ -239,7 +241,7 @@ public final class System: VexElement {
     public func formatThrowing() throws {
         try VexRuntime.withContext(runtimeContext) {
             let alpha = options.details.alpha
-            let fmtOptions = FormatterOptions(softmaxFactor: Tables.SOFTMAX_FACTOR)
+            let fmtOptions = FormatterOptions(softmaxFactor: options.details.softmaxFactor)
             let formatter = Formatter(options: fmtOptions)
             self.formatter = formatter
 
