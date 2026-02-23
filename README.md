@@ -13,15 +13,23 @@ The project keeps VexFlow concepts (`Factory`, `EasyScore`, `System`, notes, mod
 
 ## Installation
 
-Add the package as a local dependency in `Package.swift`:
+Add the package from GitHub in `Package.swift`:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/migueldeicaza/VexFoundation.git", branch: "main")
+]
+```
+
+Then add `"VexFoundation"` to your target dependencies.
+
+If you are working from a local checkout, you can use:
 
 ```swift
 dependencies: [
     .package(path: "../VexFoundation")
 ]
 ```
-
-Then add `"VexFoundation"` to your target dependencies.
 
 ## Quick Start (SwiftUI + EasyScore)
 
