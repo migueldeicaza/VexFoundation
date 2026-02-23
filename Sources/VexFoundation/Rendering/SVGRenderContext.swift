@@ -585,11 +585,26 @@ public final class SVGRenderContext: RenderContext {
     }
 
     private func scaledRect(_ x: Double, _ y: Double, _ width: Double, _ height: Double) -> (x: Double, y: Double, width: Double, height: Double) {
-        (
-            x: x,
-            y: y,
-            width: width,
-            height: height
+        var originX = x
+        var originY = y
+        var resolvedWidth = width
+        var resolvedHeight = height
+
+        // Canvas allows negative rect dimensions; normalize to canonical SVG rect coordinates.
+        if resolvedWidth < 0 {
+            originX += resolvedWidth
+            resolvedWidth = -resolvedWidth
+        }
+        if resolvedHeight < 0 {
+            originY += resolvedHeight
+            resolvedHeight = -resolvedHeight
+        }
+
+        return (
+            x: originX,
+            y: originY,
+            width: resolvedWidth,
+            height: resolvedHeight
         )
     }
 
