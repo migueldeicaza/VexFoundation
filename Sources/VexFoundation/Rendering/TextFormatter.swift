@@ -23,6 +23,34 @@ public struct TextExtent: Sendable, Equatable {
 /// - if a `RenderContext` is available, measurements come from `measureText`
 /// - if no context is available, deterministic fallback heuristics are used
 public final class TextFormatter {
+    private struct TextFontGlyphMetrics: Decodable {
+        let yMin: Double?
+        let yMax: Double?
+        let ha: Double
+        let advanceWidth: Double?
+
+        private enum CodingKeys: String, CodingKey {
+            case yMin = "y_min"
+            case yMax = "y_max"
+            case ha
+            case advanceWidth
+        }
+    }
+
+    private struct TextFontMetricsFile: Decodable {
+        let fontFamily: String
+        let resolution: Double
+        let glyphs: [String: TextFontGlyphMetrics]
+    }
+
+    private struct RegisteredTextFontMetrics {
+        let family: String
+        let resolution: Double
+        let glyphs: [String: TextFontGlyphMetrics]
+        let maxSizeGlyph: String
+        let bold: Bool
+        let italic: Bool
+    }
 
     // MARK: - Configuration
 
@@ -36,6 +64,7 @@ public final class TextFormatter {
 
     private var widthCachePx: [String: Double] = [:]
     private var extentCache: [String: TextExtent] = [:]
+    private var registeredMetrics: RegisteredTextFontMetrics?
 
     // MARK: - Init
 
@@ -47,6 +76,7 @@ public final class TextFormatter {
         self.fontInfo = VexFont.validate(fontInfo: fontInfo)
         self.context = context
         self.fallbackAverageCharacterWidthInEm = fallbackAverageCharacterWidthInEm
+        refreshRegisteredMetrics()
     }
 
     /// Convenience constructor matching VexFlow's `TextFormatter.create(...)` intent.
@@ -62,6 +92,7 @@ public final class TextFormatter {
     @discardableResult
     public func setFont(_ font: FontInfo) -> Self {
         fontInfo = VexFont.validate(fontInfo: font)
+        refreshRegisteredMetrics()
         clearCache()
         return self
     }
@@ -81,6 +112,13 @@ public final class TextFormatter {
     /// Approximate VexFlow's `TextFormatter.maxHeight` behavior for common text families.
     /// This is used by modifiers such as Bend/Vibrato in formatting paths.
     public var maxHeight: Double {
+        if let registeredMetrics {
+            let maxGlyph = glyphMetrics(for: registeredMetrics.maxSizeGlyph, in: registeredMetrics)
+            if let maxGlyph {
+                return (maxGlyph.ha / registeredMetrics.resolution) * fontSizeInPixels
+            }
+        }
+
         if let scale = Self.maxHeightScale(for: fontInfo.family) {
             return fontSizeInPixels * scale
         }
@@ -99,6 +137,12 @@ public final class TextFormatter {
             return measure
         }
 
+        if let registeredMetrics {
+            let extent = extentForTextUsingRegisteredMetrics(text, metrics: registeredMetrics)
+            let width = widthForTextUsingRegisteredMetrics(text, metrics: registeredMetrics)
+            return TextMeasure(x: 0, y: extent.yMin, width: width, height: extent.height)
+        }
+
         let px = fontSizeInPixels
         let width = Double(text.count) * fallbackAverageCharacterWidthInEm * px
         let yMin = -px * 0.8
@@ -108,7 +152,16 @@ public final class TextFormatter {
     /// Text width in pixels.
     public func getWidthForTextInPx(_ text: String) -> Double {
         if let cached = widthCachePx[text] { return cached }
-        let value = measure(text).width
+
+        let value: Double
+        if context != nil {
+            value = measure(text).width
+        } else if let registeredMetrics {
+            value = widthForTextUsingRegisteredMetrics(text, metrics: registeredMetrics)
+        } else {
+            value = measure(text).width
+        }
+
         widthCachePx[text] = value
         return value
     }
@@ -127,8 +180,18 @@ public final class TextFormatter {
     /// Vertical extent for a text string.
     public func getYForStringInPx(_ text: String) -> TextExtent {
         if let cached = extentCache[text] { return cached }
-        let m = measure(text)
-        let extent = TextExtent(yMin: m.y, yMax: m.y + m.height, height: m.height)
+
+        let extent: TextExtent
+        if context != nil {
+            let m = measure(text)
+            extent = TextExtent(yMin: m.y, yMax: m.y + m.height, height: m.height)
+        } else if let registeredMetrics {
+            extent = extentForTextUsingRegisteredMetrics(text, metrics: registeredMetrics)
+        } else {
+            let m = measure(text)
+            extent = TextExtent(yMin: m.y, yMax: m.y + m.height, height: m.height)
+        }
+
         extentCache[text] = extent
         return extent
     }
@@ -138,6 +201,126 @@ public final class TextFormatter {
     public func clearCache() {
         widthCachePx.removeAll(keepingCapacity: true)
         extentCache.removeAll(keepingCapacity: true)
+    }
+
+    private static let defaultRegisteredTextFontMetrics: [RegisteredTextFontMetrics] = {
+        let specs: [(resource: String, bold: Bool, italic: Bool, maxSizeGlyph: String)] = [
+            ("sans_bold_text_metrics", true, false, "@"),
+            ("sans_text_metrics", false, false, "@"),
+            ("serif_text_metrics", false, false, "@"),
+            ("robotoslab_glyphs", false, false, "b"),
+            ("petalumascript_glyphs", false, false, "b"),
+        ]
+
+        let decoder = JSONDecoder()
+        var registered: [RegisteredTextFontMetrics] = []
+        for spec in specs {
+            let url = Bundle.module.url(forResource: spec.resource, withExtension: "json")
+                ?? Bundle.module.url(forResource: spec.resource, withExtension: "json", subdirectory: "text_metrics")
+            guard
+                let url,
+                let data = try? Data(contentsOf: url),
+                let parsed = try? decoder.decode(TextFontMetricsFile.self, from: data)
+            else { continue }
+
+            registered.append(RegisteredTextFontMetrics(
+                family: parsed.fontFamily,
+                resolution: parsed.resolution,
+                glyphs: parsed.glyphs,
+                maxSizeGlyph: spec.maxSizeGlyph,
+                bold: spec.bold,
+                italic: spec.italic
+            ))
+        }
+        return registered
+    }()
+
+    private static func matchingRegisteredMetrics(for requestedFont: FontInfo) -> RegisteredTextFontMetrics? {
+        let normalized = VexFont.validate(fontInfo: requestedFont)
+        let families = normalized.family
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        let candidatesSource = defaultRegisteredTextFontMetrics
+        guard !candidatesSource.isEmpty else { return nil }
+
+        var candidates: [RegisteredTextFontMetrics] = []
+        for requestedFamily in families {
+            let matching = candidatesSource.filter {
+                $0.family.lowercased().hasPrefix(requestedFamily.lowercased())
+            }
+            if !matching.isEmpty {
+                candidates = matching
+                break
+            }
+        }
+
+        if candidates.isEmpty {
+            candidates = [candidatesSource[0]]
+        }
+
+        if candidates.count == 1 {
+            return candidates[0]
+        }
+
+        let wantsBold = VexFont.isBold(normalized.weight)
+        let wantsItalic = VexFont.isItalic(normalized.style)
+        if let perfect = candidates.first(where: { $0.bold == wantsBold && $0.italic == wantsItalic }) {
+            return perfect
+        }
+        if let partial = candidates.first(where: { $0.bold == wantsBold || $0.italic == wantsItalic }) {
+            return partial
+        }
+        return candidates[0]
+    }
+
+    private func refreshRegisteredMetrics() {
+        registeredMetrics = Self.matchingRegisteredMetrics(for: fontInfo)
+    }
+
+    private func widthForTextUsingRegisteredMetrics(_ text: String, metrics: RegisteredTextFontMetrics) -> Double {
+        var widthInEm = 0.0
+        for character in text {
+            let glyph = glyphMetrics(for: String(character), in: metrics)
+            if let advanceWidth = glyph?.advanceWidth {
+                widthInEm += advanceWidth / metrics.resolution
+            } else {
+                widthInEm += fallbackAverageCharacterWidthInEm
+            }
+        }
+        return widthInEm * fontSizeInPixels
+    }
+
+    private func extentForTextUsingRegisteredMetrics(_ text: String, metrics: RegisteredTextFontMetrics) -> TextExtent {
+        var yMin = 0.0
+        var yMax = maxHeightForRegisteredMetrics(metrics)
+
+        for character in text {
+            guard let glyph = glyphMetrics(for: String(character), in: metrics) else { continue }
+            if let glyphMin = glyph.yMin {
+                yMin = min(yMin, (glyphMin / metrics.resolution) * fontSizeInPixels)
+            }
+            if let glyphMax = glyph.yMax {
+                yMax = max(yMax, (glyphMax / metrics.resolution) * fontSizeInPixels)
+            }
+        }
+
+        return TextExtent(yMin: yMin, yMax: yMax, height: yMax - yMin)
+    }
+
+    private func maxHeightForRegisteredMetrics(_ metrics: RegisteredTextFontMetrics) -> Double {
+        guard let glyph = glyphMetrics(for: metrics.maxSizeGlyph, in: metrics) else {
+            return fontSizeInPixels
+        }
+        return (glyph.ha / metrics.resolution) * fontSizeInPixels
+    }
+
+    private func glyphMetrics(for character: String, in metrics: RegisteredTextFontMetrics) -> TextFontGlyphMetrics? {
+        if let glyph = metrics.glyphs[character] {
+            return glyph
+        }
+        return metrics.glyphs[metrics.maxSizeGlyph]
     }
 
     private static func maxHeightScale(for family: String) -> Double? {

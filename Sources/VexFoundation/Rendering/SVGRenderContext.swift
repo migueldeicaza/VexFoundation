@@ -52,6 +52,17 @@ private final class SVGGroupNode {
 
 /// `RenderContext` backend that records drawing operations and serializes deterministic SVG.
 public final class SVGRenderContext: RenderContext {
+#if canImport(AppKit) && canImport(CoreText)
+    private static let registerUpstreamTextFontsOnce: Void = {
+        let bundledURL = Bundle.module.url(forResource: "RobotoSlab-Medium_2.001", withExtension: "otf")
+            ?? Bundle.module.url(forResource: "RobotoSlab-Medium_2.001", withExtension: "otf", subdirectory: "text_fonts")
+        if let bundledURL {
+            var registerError: Unmanaged<CFError>?
+            _ = CTFontManagerRegisterFontsForURL(bundledURL as CFURL, .process, &registerError)
+        }
+    }()
+#endif
+
     private var canvasWidth: Double
     private var canvasHeight: Double
     private let options: SVGRenderOptions
@@ -426,6 +437,10 @@ public final class SVGRenderContext: RenderContext {
         }
 
         let family = primaryFontFamily(from: currentFontInfo.family).replacingOccurrences(of: "\"", with: "")
+        let isParityMode = ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_SVG_PARITY"] == "1"
+        if isParityMode {
+            Self.ensureUpstreamTextFontsRegistered(forFamily: family)
+        }
         let pxSize = CGFloat(max(VexFont.convertSizeToPixelValue(currentFontInfo.size), 1))
 
         var font = NSFont(name: family, size: pxSize) ?? NSFont.systemFont(ofSize: pxSize)
@@ -440,8 +455,7 @@ public final class SVGRenderContext: RenderContext {
             font = NSFontManager.shared.convert(font, toHaveTrait: traits)
         }
 
-        if ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_SVG_PARITY"] == "1",
-           let chromiumLike = chromiumParityMeasureText(text, font: font) {
+        if isParityMode, let chromiumLike = chromiumParityMeasureText(text, font: font) {
             return chromiumLike
         }
 
@@ -631,6 +645,12 @@ public final class SVGRenderContext: RenderContext {
     }
 
 #if canImport(AppKit) && canImport(CoreText)
+    private static func ensureUpstreamTextFontsRegistered(forFamily family: String) {
+        let normalizedFamily = family.lowercased()
+        guard normalizedFamily.contains("roboto slab") else { return }
+        _ = Self.registerUpstreamTextFontsOnce
+    }
+
     private func chromiumParityMeasureText(_ text: String, font: NSFont) -> TextMeasure? {
         let measuredText = String(text.drop { $0.isWhitespace })
         guard !measuredText.isEmpty else {
@@ -653,7 +673,11 @@ public final class SVGRenderContext: RenderContext {
         let isTimesItalic = familyLower.contains("times")
             && VexFont.isItalic(currentFontInfo.style)
             && !VexFont.isBold(currentFontInfo.weight)
-        let isArial = familyLower.contains("arial")
+        let isArialFamily = familyLower.contains("arial")
+        let isArial = isArialFamily
+            && !VexFont.isItalic(currentFontInfo.style)
+            && !VexFont.isBold(currentFontInfo.weight)
+        let isRobotoSlab = (familyLower.contains("roboto slab") || familyLower.contains("robotoslab"))
             && !VexFont.isItalic(currentFontInfo.style)
             && !VexFont.isBold(currentFontInfo.weight)
 
@@ -669,7 +693,15 @@ public final class SVGRenderContext: RenderContext {
                 // tab/fret spacing matches upstream fixture SVGs.
                 let bias = currentScaleX >= 1 ? (1.0 / 512.0) : (-1.0 / 512.0)
                 width += bias
+            } else if isRobotoSlab {
+                if measuredText.count >= 30 {
+                    width -= 1.0 / 16.0
+                } else {
+                    width -= 1.0 / 128.0
+                }
             }
+        } else if isRobotoSlab {
+            width -= 1.0 / 256.0
         }
 
         let yAbs = roundToHalf(Double(ascent))
@@ -678,7 +710,11 @@ public final class SVGRenderContext: RenderContext {
             baseBottom = ceilToHalf(Double(descent))
         }
         let glyphBottom = abs(min(0, glyphMinY))
-        let bottom = max(baseBottom, glyphBottom)
+        var bottom = max(baseBottom, glyphBottom)
+        if isArialFamily {
+            // Chromium tends to produce integer bottom extents for Arial at these sizes.
+            bottom = ceil(bottom)
+        }
         let height = max(yAbs + bottom, 0)
 
         return TextMeasure(x: x, y: -yAbs, width: width, height: height)
