@@ -147,10 +147,7 @@ public final class Bend: Modifier {
                 let additionalWidth = phrase[i].type == Bend.UP
                     ? bendRenderOptions.bendWidth
                     : bendRenderOptions.releaseWidth
-                // Keep a lightweight deterministic estimate here. In the JS implementation,
-                // TextFormatter uses pre-registered glyph metrics for web fonts; we approximate
-                // that behavior until a matching text metrics registry is ported.
-                let textWidth = Double(phrase[i].text.count) * 5.926
+                let textWidth = estimateBendTextWidth(phrase[i].text)
                 let w = max(additionalWidth, textWidth) + 3
                 phrase[i].width = w
                 phrase[i].drawWidth = w / 2
@@ -159,6 +156,52 @@ public final class Bend: Modifier {
         }
         _ = setWidth(totalWidth + xShift)
     }
+
+    private func estimateBendTextWidth(_ text: String) -> Double {
+        // Match upstream Bend behavior more closely by using deterministic glyph advances.
+        // Upstream TextFormatter resolves "Arial, sans-serif" to the registered sans-serif
+        // metrics set, which is effectively the bold variant for this family key.
+        let family = (textFont?.family ?? VexFont.SANS_SERIF).lowercased()
+        let usesSansMetrics = family.contains("sans-serif") || family.contains("arial")
+        if usesSansMetrics {
+            let px = fontSizeInPixels
+            let emScale = px / 2048.0
+            let defaultAdvance = 1251.0
+            let totalAdvance = text.reduce(0.0) { partial, char in
+                partial + (Bend.vexflowSansGlyphAdvance[char] ?? defaultAdvance)
+            }
+            return totalAdvance * emScale
+        }
+
+        // Fallback for non-sans fonts until text metric registries are ported.
+        return Double(text.count) * 5.926
+    }
+
+    private static let vexflowSansGlyphAdvance: [Character: Double] = [
+        " ": 569,
+        "/": 569,
+        "0": 1139,
+        "1": 1139,
+        "2": 1139,
+        "3": 1139,
+        "4": 1139,
+        "5": 1139,
+        "6": 1139,
+        "7": 1139,
+        "8": 1139,
+        "9": 1139,
+        "F": 1251,
+        "M": 1706,
+        "U": 1479,
+        "i": 569,
+        "l": 569,
+        "n": 1251,
+        "o": 1251,
+        "r": 797,
+        "s": 1139,
+        "t": 682,
+        "u": 1251,
+    ]
 
     // MARK: - Draw
 
