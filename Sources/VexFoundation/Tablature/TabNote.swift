@@ -339,6 +339,12 @@ open class TabNote: StemmableNote {
         tickableWidth = w
     }
 
+    /// Upstream TabNote overrides glyph width semantics to use the rendered fret text width.
+    /// This width participates in formatter / modifier spacing (e.g. Annotation.format).
+    override public func getGlyphWidth() -> Double {
+        tickableWidth
+    }
+
     // MARK: - Stave
 
     @discardableResult
