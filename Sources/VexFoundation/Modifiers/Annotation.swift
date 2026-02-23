@@ -76,15 +76,8 @@ public final class Annotation: Modifier {
 
         for annotation in annotations {
             let note = annotation.checkAttachedNote()
-            let textFormatter = TextFormatter.create(
-                font: annotation.fontInfo,
-                context: note.getStave()?.getContext() ?? annotation.getContext()
-            )
-            let textWidth = adjustedTextWidth(
-                textFormatter.getWidthForTextInPx(annotation.text),
-                text: annotation.text,
-                font: annotation.fontInfo
-            )
+            let textFormatter = TextFormatter.create(font: annotation.fontInfo)
+            let textWidth = textFormatter.getWidthForTextInPx(annotation.text)
             let textHeight = textFormatter.getYForStringInPx(annotation.text).height
             let textLines = (2 + textHeight) / Tables.STAVE_LINE_DISTANCE
             var verticalSpaceNeeded = textLines
@@ -190,12 +183,8 @@ public final class Annotation: Modifier {
         _ = ctx.openGroup("annotation", getAttribute("id") ?? "")
         ctx.setFont(fontInfo)
 
-        let textFormatter = TextFormatter.create(font: fontInfo, context: ctx)
-        let textWidth = Self.adjustedTextWidth(
-            textFormatter.getWidthForTextInPx(text),
-            text: text,
-            font: fontInfo
-        )
+        let textFormatter = TextFormatter.create(font: fontInfo)
+        let textWidth = textFormatter.getWidthForTextInPx(text)
         let textHeight = textFormatter.getYForStringInPx(text).height
 
         // Calculate x position based on horizontal justification
@@ -255,18 +244,6 @@ public final class Annotation: Modifier {
         ctx.closeGroup()
         restoreStyle(context: ctx, style: getStyle())
         ctx.restore()
-    }
-
-    private static func adjustedTextWidth(_ width: Double, text: String, font: FontInfo) -> Double {
-        // Upstream browser text metrics for default Arial are slightly wider than
-        // CoreText-based measurements on macOS. Apply a narrow correction so
-        // annotation layout matches upstream modifier spacing.
-        let family = font.family.lowercased()
-        guard family.contains("arial") else { return width }
-        let glyphCount = max(text.count, 1)
-        var correction = 1.094 + (4.365 / Double(glyphCount))
-        if glyphCount <= 4 { correction += 0.006 }
-        return width + correction
     }
 }
 

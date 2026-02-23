@@ -164,8 +164,7 @@ struct TextFormatterParityTests {
         var state = ModifierContextState()
         _ = Annotation.format([annotation], state: &state)
 
-        let rawWidth = 4.0 * annotation.fontSizeInPixels * 0.5
-        let expectedWidth = rawWidth + 1.094 + (4.365 / 4.0) + 0.006
+        let expectedWidth = TextFormatter.create(font: annotation.fontInfo).getWidthForTextInPx("WIDE")
         #expect(annotation.getWidth() == expectedWidth)
         #expect(state.topTextLine > 0)
     }
