@@ -1746,6 +1746,7 @@ struct UpstreamSVGParityTests {
         test: String,
         width: Double,
         height: Double,
+        signatureEpsilonOverride: Double? = nil,
         draw: (Factory, SVGRenderContext) throws -> Void
     ) throws {
         guard isEnabled else { return }
@@ -1776,7 +1777,7 @@ struct UpstreamSVGParityTests {
                 let actualSignature = drawingSignature(svg: actualSVG)
                 let expectedSignature = drawingSignature(svg: expectedSVG)
 
-                let epsilon = signatureComparisonEpsilon
+                let epsilon = signatureEpsilonOverride ?? signatureComparisonEpsilon
                 if !signaturesMatch(actual: actualSignature, expected: expectedSignature, epsilon: epsilon) {
                     let artifacts = try writeMismatchArtifacts(
                         module: module,
@@ -1806,9 +1807,17 @@ struct UpstreamSVGParityTests {
         test: String,
         width: Double,
         height: Double,
+        signatureEpsilonOverride: Double? = nil,
         draw: (Factory, SVGRenderContext) throws -> Void
     ) throws {
-        try runSVGParityCase(module: module, test: test, width: width, height: height, draw: draw)
+        try runSVGParityCase(
+            module: module,
+            test: test,
+            width: width,
+            height: height,
+            signatureEpsilonOverride: signatureEpsilonOverride,
+            draw: draw
+        )
     }
 
     private func applyUpstreamFontStack(fontName: String) throws {

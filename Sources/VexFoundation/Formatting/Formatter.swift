@@ -81,6 +81,7 @@ public final class Formatter {
     public var totalCost: Double = 0
     public var totalShift: Double = 0
     public var tickContexts = AlignmentContexts()
+    public var modifierContexts: [ModifierContext] = []
     public var formatterOptions: FormatterOptions
     public var voices: [Voice] = []
     public var lossHistory: [Double] = []
@@ -187,7 +188,10 @@ public final class Formatter {
     }
 
     public func createModifierContextsThrowing(_ voices: [Voice]) throws {
-        if voices.isEmpty { return }
+        if voices.isEmpty {
+            modifierContexts = []
+            return
+        }
         let resolutionMultiplier = try Formatter.getResolutionMultiplierThrowing(voices)
 
         var staveTickMap: [ObjectIdentifier?: [Int: ModifierContext]] = [:]
@@ -214,6 +218,10 @@ public final class Formatter {
                 ticksUsed.add(tickable.getTicks())
             }
         }
+
+        // Mirror upstream formatter post-format behavior by retaining all
+        // modifier contexts created during joinVoices().
+        modifierContexts = contexts
     }
 
     // MARK: - Create Tick Contexts
@@ -594,6 +602,9 @@ public final class Formatter {
 
     @discardableResult
     public func postFormat() -> Self {
+        for context in modifierContexts {
+            context.postFormat()
+        }
         for context in tickContexts.array {
             _ = context.postFormat()
         }

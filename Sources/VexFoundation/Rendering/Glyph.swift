@@ -64,6 +64,11 @@ struct GlyphOutline {
     private let originY: Double
     private let scale: Double
     private let precision: Double
+
+    /// Match JavaScript Math.round semantics (ties toward +infinity).
+    private func jsRound(_ value: Double) -> Double {
+        Foundation.floor(value + 0.5)
+    }
     private var i: Int = 0
 
     init(outline: [Double], originX: Double, originY: Double, scale: Double) {
@@ -79,23 +84,33 @@ struct GlyphOutline {
     mutating func next() -> Int {
         let val = outline[i]
         i += 1
-        return Int((val * precision).rounded() / precision)
+        return Int(jsRound(val * precision) / precision)
     }
 
     mutating func nextX() -> Double {
         let val = outline[i]
         i += 1
-        return ((originX + val * scale) * precision).rounded() / precision
+        return jsRound((originX + val * scale) * precision) / precision
     }
 
     mutating func nextY() -> Double {
         let val = outline[i]
         i += 1
-        return ((originY - val * scale) * precision).rounded() / precision
+        return jsRound((originY - val * scale) * precision) / precision
     }
 
     /// Parse an outline string ("m 0 0 l 100 200 q ...") into a numeric array.
     static func parse(_ str: String) -> [Double] {
+        func parseIntLike(_ token: Substring) -> Double {
+            if let intValue = Int(token) {
+                return Double(intValue)
+            }
+            if let doubleValue = Double(token) {
+                return doubleValue.rounded(.towardZero)
+            }
+            return 0
+        }
+
         var result: [Double] = []
         let parts = str.split(separator: " ")
         var i = 0
@@ -105,26 +120,26 @@ struct GlyphOutline {
             switch cmd {
             case "m":
                 result.append(Double(OutlineCode.move.rawValue))
-                result.append(Double(parts[i]) ?? 0); i += 1
-                result.append(Double(parts[i]) ?? 0); i += 1
+                result.append(parseIntLike(parts[i])); i += 1
+                result.append(parseIntLike(parts[i])); i += 1
             case "l":
                 result.append(Double(OutlineCode.line.rawValue))
-                result.append(Double(parts[i]) ?? 0); i += 1
-                result.append(Double(parts[i]) ?? 0); i += 1
+                result.append(parseIntLike(parts[i])); i += 1
+                result.append(parseIntLike(parts[i])); i += 1
             case "q":
                 result.append(Double(OutlineCode.quadratic.rawValue))
-                result.append(Double(parts[i]) ?? 0); i += 1
-                result.append(Double(parts[i]) ?? 0); i += 1
-                result.append(Double(parts[i]) ?? 0); i += 1
-                result.append(Double(parts[i]) ?? 0); i += 1
+                result.append(parseIntLike(parts[i])); i += 1
+                result.append(parseIntLike(parts[i])); i += 1
+                result.append(parseIntLike(parts[i])); i += 1
+                result.append(parseIntLike(parts[i])); i += 1
             case "b":
                 result.append(Double(OutlineCode.bezier.rawValue))
-                result.append(Double(parts[i]) ?? 0); i += 1
-                result.append(Double(parts[i]) ?? 0); i += 1
-                result.append(Double(parts[i]) ?? 0); i += 1
-                result.append(Double(parts[i]) ?? 0); i += 1
-                result.append(Double(parts[i]) ?? 0); i += 1
-                result.append(Double(parts[i]) ?? 0); i += 1
+                result.append(parseIntLike(parts[i])); i += 1
+                result.append(parseIntLike(parts[i])); i += 1
+                result.append(parseIntLike(parts[i])); i += 1
+                result.append(parseIntLike(parts[i])); i += 1
+                result.append(parseIntLike(parts[i])); i += 1
+                result.append(parseIntLike(parts[i])); i += 1
             case "z":
                 break // close path, implicit in fill
             default:

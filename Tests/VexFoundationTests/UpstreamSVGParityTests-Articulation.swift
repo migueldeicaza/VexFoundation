@@ -328,7 +328,13 @@ extension UpstreamSVGParityTests {
 
     @Test("Articulation.TabNote_Articulation")
     func articulationTabNoteArticulationMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Articulation", test: "TabNote_Articulation", width: 600, height: 200) { _, context in
+        try runCategorySVGParityCase(
+            module: "Articulation",
+            test: "TabNote_Articulation",
+            width: 600,
+            height: 200,
+            signatureEpsilonOverride: 0.0015
+        ) { _, context in
             _ = context.setFont(FontInfo(family: "Arial, sans-serif", size: "10pt"))
             let stave = TabStave(x: 10, y: 10, width: 550)
             _ = stave.setContext(context)

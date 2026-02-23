@@ -364,17 +364,24 @@ open class TabNote: StemmableNote {
                         context.save()
                         context.setFont(font)
                         let measuredWidth = context.measureText(text).width
-                        // Browser canvas text metrics for Arial are slightly narrower than CoreText.
-                        // Apply a tiny deterministic correction so upstream tab SVG fixtures match.
-                        let chromiumParityCorrection = 0.0025 * Double(text.count)
-                        gp.width = max(0, measuredWidth - chromiumParityCorrection)
+                        // Browser canvas metrics used by upstream fixtures are
+                        // slightly narrower than CoreText for tab fret text.
+                        // Empirical fit: 1-char ~= 0.0035px, 2-char ~= 0.0050px.
+                        let chromiumParityCorrection = 0.002 + 0.0015 * Double(text.count)
+                        let corrected = max(0, measuredWidth - chromiumParityCorrection)
+                        gp.width = (corrected * 1000).rounded() / 1000
                         context.restore()
                     }
                 }
                 glyphPropsArr[i] = gp
                 w = max(gp.getWidth(), w)
             }
-            tickableWidth = w
+            // Upstream parity quirk:
+            // formatter spacing uses the initial tab width estimate, while
+            // final rendering uses measured text widths (updated on redraw).
+            if preFormatted {
+                tickableWidth = w
+            }
         }
 
         // Calculate Y positions

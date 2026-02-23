@@ -18,7 +18,8 @@ private func getRoundingFunction(_ line: Double, _ position: ModifierPosition) -
     if isWithinLines(line, position) {
         return position == .above ? { Foundation.ceil($0) } : { Foundation.floor($0) }
     }
-    return { $0.rounded() }
+    // Match JavaScript Math.round semantics (ties toward +infinity).
+    return { Foundation.floor($0 + 0.5) }
 }
 
 private func snapLineToStaff(_ canSitBetweenLines: Bool, _ line: Double, _ position: ModifierPosition, _ offsetDirection: Double) -> Double {

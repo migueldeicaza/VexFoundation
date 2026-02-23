@@ -232,6 +232,7 @@ open class StemmableNote: Note {
 
     @discardableResult
     override public func postFormat() -> Self {
+        beam?.postFormat()
         postFormatted = true
         return self
     }
