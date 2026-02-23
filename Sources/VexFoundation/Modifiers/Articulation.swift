@@ -36,6 +36,14 @@ private func getTopY(_ note: Note, _ textLine: Double) -> Double {
     let stemDirection = note.hasStem() ? note.getStemDirection() : Stem.UP
     let extents = note.getStemExtents()
 
+    if note is TabNote {
+        let stave = note.checkStave()
+        if note.hasStem() {
+            return stemDirection == Stem.UP ? extents.topY : stave.getYForTopText(textLine)
+        }
+        return stave.getYForTopText(textLine)
+    }
+
     if note.hasStem() {
         return stemDirection == Stem.UP ? extents.topY : extents.baseY
     }
@@ -46,6 +54,14 @@ private func getBottomY(_ note: Note, _ textLine: Double) -> Double {
     let stemDirection = note.hasStem() ? note.getStemDirection() : Stem.UP
     let extents = note.getStemExtents()
 
+    if note is TabNote {
+        let stave = note.checkStave()
+        if note.hasStem() {
+            return stemDirection == Stem.UP ? stave.getYForBottomText(textLine) : extents.topY
+        }
+        return stave.getYForBottomText(textLine)
+    }
+
     if note.hasStem() {
         return stemDirection == Stem.UP ? extents.baseY : extents.topY
     }
@@ -55,6 +71,10 @@ private func getBottomY(_ note: Note, _ textLine: Double) -> Double {
 private func getInitialOffset(_ note: Note, _ position: ModifierPosition) -> Double {
     let isOnStemTip = (position == .above && note.getStemDirection() == Stem.UP) ||
                       (position == .below && note.getStemDirection() == Stem.DOWN)
+
+    if note is TabNote {
+        return (note.hasStem() && isOnStemTip) ? 1 : 0
+    }
 
     if note.hasStem() && isOnStemTip {
         return 0.5
@@ -218,11 +238,11 @@ public final class Articulation: Modifier {
 
         let stave = note.checkStave()
         let staffSpace = stave.getSpacingBetweenLines()
+        let isTab = note is TabNote
 
-        guard let staveNote = note as? StaveNote else { return }
-        let x = staveNote.getModifierStartXY(position: position, index: index).x
+        let x = note.getModifierStartXY(position: position, index: index).x
 
-        let shouldSitOutsideStaff = !canSitBetweenLines
+        let shouldSitOutsideStaff = !canSitBetweenLines || isTab
         let initialOffset = getInitialOffset(note, position)
 
         let padding = (Glyph.MUSIC_FONT_STACK.first?.lookupMetric("articulation.\(glyph.getCode()).padding") as? Double) ?? 0
@@ -242,22 +262,24 @@ public final class Articulation: Modifier {
             }
         }
 
-        // Snap to staff lines
-        let offsetDirection: Double = position == .above ? -1 : 1
-        let props = note.getKeyProps()
-        if index < props.count {
-            let noteLine = props[index].line
-            let ys = note.getYs()
-            if index < ys.count {
-                let distanceFromNote = (ys[index] - y) / staffSpace
-                let articLine = distanceFromNote + noteLine
-                let snappedLine = snapLineToStaff(canSitBetweenLines, articLine, position, offsetDirection)
+        if !isTab {
+            // Snap to staff lines for stave/grace notes.
+            let offsetDirection: Double = position == .above ? -1 : 1
+            let props = note.getKeyProps()
+            if index < props.count {
+                let noteLine = props[index].line
+                let ys = note.getYs()
+                if index < ys.count {
+                    let distanceFromNote = (ys[index] - y) / staffSpace
+                    let articLine = distanceFromNote + noteLine
+                    let snappedLine = snapLineToStaff(canSitBetweenLines, articLine, position, offsetDirection)
 
-                if isWithinLines(snappedLine, position) {
-                    glyph.setOrigin(0.5, 0.5)
+                    if isWithinLines(snappedLine, position) {
+                        glyph.setOrigin(0.5, 0.5)
+                    }
+
+                    y += abs(snappedLine - articLine) * staffSpace * offsetDirection + padding * offsetDirection
                 }
-
-                y += abs(snappedLine - articLine) * staffSpace * offsetDirection + padding * offsetDirection
             }
         }
 
