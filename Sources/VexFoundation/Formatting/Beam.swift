@@ -114,7 +114,7 @@ public final class Beam: VexElement {
     public var slope: Double = 0
     public var renderOptions = BeamRenderOptions()
 
-    private let stemDirection: StemDirection
+    private var stemDirection: StemDirection
     private let ticks: Double
     private var yShift: Double = 0
     private var breakOnIndices: [Int] = []
@@ -140,8 +140,11 @@ public final class Beam: VexElement {
         self.beamCount = notes.reduce(0) { max($0, $1.getGlyphProps().beamCount) }
 
         var direction = self.stemDirection
-        if autoStem {
+        if autoStem && isStaveNote(notes[0]) {
             direction = calculateStemDirection(notes)
+        } else if autoStem && isTabNote(notes[0]) {
+            let stemWeight = notes.reduce(0) { $0 + $1.getStemDirection().sign }
+            direction = stemWeight > -1 ? .up : .down
         }
 
         super.init()
@@ -150,6 +153,7 @@ public final class Beam: VexElement {
         for note in notes {
             if autoStem {
                 _ = note.setStemDirection(direction)
+                self.stemDirection = direction
             }
             _ = note.setBeam(self)
         }
@@ -450,7 +454,7 @@ public final class Beam: VexElement {
     public func postFormat() {
         if postFormatted { return }
 
-        if renderOptions.flatBeams {
+        if isTabNote(notes[0]) || renderOptions.flatBeams {
             calculateFlatSlope()
         } else {
             calculateSlope()

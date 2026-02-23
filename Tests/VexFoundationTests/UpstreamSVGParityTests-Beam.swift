@@ -130,6 +130,8 @@ extension UpstreamSVGParityTests {
             let beamRanges = [0..<4, 4..<8, 8..<12]
             for range in beamRanges {
                 #expect(factory.Beam(notes: Array(voice1Notes[range])) != nil)
+            }
+            for range in beamRanges {
                 #expect(factory.Beam(notes: Array(voice2Notes[range])) != nil)
             }
 
