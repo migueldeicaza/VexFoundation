@@ -38,8 +38,10 @@ public final class Tremolo: Modifier {
         setRendered()
 
         let stemDirection = note.getStemDirection()
+        let isGraceNote = note is GraceNote
+        let scale = isGraceNote ? GraceNote.SCALE : 1.0
 
-        let category = "tremolo.default"
+        let category = isGraceNote ? "tremolo.grace" : "tremolo.default"
 
         guard let musicFont = Glyph.MUSIC_FONT_STACK.first else { return }
         var ySpacing = (musicFont.lookupMetric("\(category).spacing") as? Double ?? 12)
@@ -50,16 +52,15 @@ public final class Tremolo: Modifier {
         var y = note.getStemExtents().baseY - height
 
         if stemDirection == .down {
-            y += (musicFont.lookupMetric("\(category).offsetYStemDown") as? Double ?? 0)
+            y += ((musicFont.lookupMetric("\(category).offsetYStemDown") as? Double ?? 0) * scale)
         } else {
-            y += (musicFont.lookupMetric("\(category).offsetYStemUp") as? Double ?? 0)
+            y += ((musicFont.lookupMetric("\(category).offsetYStemUp") as? Double ?? 0) * scale)
         }
 
         let fontScale = (musicFont.lookupMetric("\(category).point") as? Double)
-            ?? Note.getPoint()
+            ?? Note.getPoint(isGraceNote ? "grace" : "default")
 
-        guard let staveNote = note as? StaveNote else { return }
-        let start = staveNote.getModifierStartXY(position: position, index: checkIndex())
+        let start = note.getModifierStartXY(position: position, index: checkIndex())
         var x = start.x
 
         let stemKey = stemDirection == Stem.UP ? "Up" : "Down"
