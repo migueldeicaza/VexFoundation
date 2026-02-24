@@ -354,16 +354,18 @@ open class TabNote: StemmableNote {
         if let ctx { setContext(ctx) }
         // Recalculate widths based on the context's font
         if let context = ctx {
-            let shouldMeasureTextWidths = !(self is GraceTabNote)
             var measuredMax: Double = 0
             for i in 0..<glyphPropsArr.count {
                 var gp = glyphPropsArr[i]
                 let text = gp.text
-                if shouldMeasureTextWidths && text.uppercased() != "X" {
+                if text.uppercased() != "X" {
                     if let font = renderOptions.font {
                         context.save()
                         context.setFont(font)
                         gp.width = context.measureText(text).width
+                        // Upstream switches getWidth() to return measured width directly.
+                        // In Swift, emulate that by neutralizing the pre-measure scale factor.
+                        gp.scale = 1
                         context.restore()
                     }
                 }

@@ -156,16 +156,21 @@ public final class GraceNoteGroup: Modifier {
                 firstIndices: [0],
                 lastIndices: [0]
             )
-            let tie = StaveTie(notes: tieNotes)
-            tie.renderOptions.cp2 = 12
-            tie.renderOptions.yShift = 7 + slurYShift
-            // Upstream draws tab grace slurs above the tab notes.
-            if note is TabNote || graceNotes.first is TabNote {
-                tie.setDirection(TieDirection.down)
+            if note is StaveNote {
+                let tie = StaveTie(notes: tieNotes)
+                tie.renderOptions.cp2 = 12
+                tie.renderOptions.yShift = 7 + slurYShift
+                _ = tie.setContext(ctx)
+                try tie.draw()
+                slur = tie
+            } else {
+                let tie = TabTie(notes: tieNotes)
+                tie.renderOptions.cp2 = 12
+                tie.renderOptions.yShift = 5 + slurYShift
+                _ = tie.setContext(ctx)
+                try tie.draw()
+                slur = tie
             }
-            _ = tie.setContext(ctx)
-            try tie.draw()
-            slur = tie
         }
     }
 }
