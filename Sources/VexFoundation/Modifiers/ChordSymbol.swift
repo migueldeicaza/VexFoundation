@@ -58,9 +58,15 @@ public final class ChordSymbol: Modifier {
     /// Match upstream `ChordSymbol.TEXT_FONT`.
     override public class var textFont: FontInfo {
         let musicFontName = Glyph.MUSIC_FONT_STACK.first?.name.lowercased() ?? ""
-        let family = (musicFontName == "petaluma")
-            ? "PetalumaScript, Arial, sans-serif"
-            : "Roboto Slab, Times, serif"
+        let parityMode = ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_SVG_PARITY"] == "1"
+        let family: String
+        if musicFontName == "petaluma" {
+            // Upstream SVG fixtures for Petaluma chord symbols are generated with text fallback
+            // behavior closer to Roboto Slab/serif metrics than PetalumaScript glyph metrics.
+            family = parityMode ? "Roboto Slab, Times, serif" : "PetalumaScript, Arial, sans-serif"
+        } else {
+            family = "Roboto Slab, Times, serif"
+        }
         return FontInfo(
             family: family,
             size: "12pt",

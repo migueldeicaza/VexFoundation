@@ -8,6 +8,7 @@ ARTIFACTS_DIR="${VEXFOUNDATION_UPSTREAM_SVG_ARTIFACTS_DIR:-.build/upstream-svg-p
 MANIFEST_PATH="${VEXFOUNDATION_UPSTREAM_SVG_MANIFEST_PATH:-.build/upstream-svg-parity/upstream_svg_manifest.json}"
 PARITY_MODE="strict"
 SIGNATURE_EPSILON="${VEXFOUNDATION_UPSTREAM_SVG_SIGNATURE_EPSILON:-}"
+DISABLE_PER_CASE_EPSILON="${VEXFOUNDATION_UPSTREAM_SVG_DISABLE_PER_CASE_EPSILON:-}"
 
 usage() {
   cat <<'EOF'
@@ -23,6 +24,9 @@ Options:
   --tolerant               Enable tolerant compare (defaults epsilon to 0.005).
   --signature-epsilon <n>  Numeric epsilon for SVG signature compare.
                            Example: 0.005. Implies tolerant mode.
+  --disable-per-case-epsilon
+                           Disable per-case epsilon overrides in the Swift harness.
+                           Useful for auditing true strict drift.
   --no-manifest            Skip manifest generation.
   -h, --help               Show help.
 EOF
@@ -64,6 +68,10 @@ while [[ $# -gt 0 ]]; do
       PARITY_MODE="tolerant"
       shift 2
       ;;
+    --disable-per-case-epsilon)
+      DISABLE_PER_CASE_EPSILON="1"
+      shift
+      ;;
     --no-manifest)
       GENERATE_MANIFEST=0
       shift
@@ -85,6 +93,11 @@ if [[ -n "$SIGNATURE_EPSILON" ]]; then
     echo "Invalid --signature-epsilon value: $SIGNATURE_EPSILON" >&2
     exit 1
   fi
+fi
+
+if [[ -n "$DISABLE_PER_CASE_EPSILON" && "$DISABLE_PER_CASE_EPSILON" != "1" ]]; then
+  echo "Invalid --disable-per-case-epsilon value: $DISABLE_PER_CASE_EPSILON" >&2
+  exit 1
 fi
 
 if [[ "$PARITY_MODE" == "tolerant" && -z "$SIGNATURE_EPSILON" ]]; then
@@ -124,6 +137,9 @@ echo "  mode:      $PARITY_MODE"
 if [[ -n "$SIGNATURE_EPSILON" ]]; then
   echo "  epsilon:   $SIGNATURE_EPSILON"
 fi
+if [[ "$DISABLE_PER_CASE_EPSILON" == "1" ]]; then
+  echo "  per-case epsilon overrides: disabled"
+fi
 echo "  artifacts: $ARTIFACTS_DIR"
 
 if [[ "$PARITY_MODE" == "tolerant" ]]; then
@@ -132,11 +148,13 @@ if [[ "$PARITY_MODE" == "tolerant" ]]; then
   VEXFOUNDATION_UPSTREAM_SVG_ARTIFACTS_DIR="$ARTIFACTS_DIR" \
   VEXFOUNDATION_UPSTREAM_SVG_FONTS="$FONTS" \
   VEXFOUNDATION_UPSTREAM_SVG_SIGNATURE_EPSILON="$SIGNATURE_EPSILON" \
+  VEXFOUNDATION_UPSTREAM_SVG_DISABLE_PER_CASE_EPSILON="$DISABLE_PER_CASE_EPSILON" \
   swift test --filter "$FILTER"
 else
   VEXFOUNDATION_UPSTREAM_SVG_PARITY=1 \
   VEXFOUNDATION_UPSTREAM_SVG_REFERENCE_DIR="$REFERENCE_DIR" \
   VEXFOUNDATION_UPSTREAM_SVG_ARTIFACTS_DIR="$ARTIFACTS_DIR" \
   VEXFOUNDATION_UPSTREAM_SVG_FONTS="$FONTS" \
+  VEXFOUNDATION_UPSTREAM_SVG_DISABLE_PER_CASE_EPSILON="$DISABLE_PER_CASE_EPSILON" \
   swift test --filter "$FILTER"
 fi

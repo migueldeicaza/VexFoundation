@@ -177,7 +177,6 @@ extension UpstreamSVGParityTests {
             _ = factory.Stave(x: 10, y: 10, width: 650)
 
             let notes = try makeAccidentalSagittalNotes(factory: factory)
-            Formatter.SimpleFormat(notes.map { $0 as Tickable })
 
             _ = factory.StaveTie(
                 notes: TieNotes(
@@ -215,6 +214,7 @@ extension UpstreamSVGParityTests {
             )
             _ = factory.Beam(notes: [notes[2], notes[3]])
             _ = factory.Beam(notes: [notes[6], notes[7]])
+            Formatter.SimpleFormat(notes.map { $0 as Tickable })
 
             notes.forEach { drawUpstreamAccidentalNoteMetrics(context: context, note: $0, yPos: 140) }
             try factory.draw()

@@ -346,7 +346,13 @@ public final class Beam: VexElement {
 
         if let forced = forcedPartialDirections[noteIndex] { return forced }
 
-        let lookupDur = "\(Tables.durationToNumber(duration) / 2)"
+        let lookupDurValue = Tables.durationToNumber(duration) / 2
+        let lookupDur: String
+        if lookupDurValue.rounded(.towardZero) == lookupDurValue {
+            lookupDur = String(Int(lookupDurValue))
+        } else {
+            lookupDur = String(lookupDurValue)
+        }
         guard let lookupTicks = Tables.durationToTicks(lookupDur) else { return .left }
         let lookupTicksD = Double(lookupTicks)
 

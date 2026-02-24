@@ -1402,8 +1402,13 @@ public class StaveNote: StemmableNote {
         let stave = checkStave()
         let ctx = try checkContext()
         let strokePx = renderOptions.strokePx
-        // Match upstream drawLedgerLines(): use unscaled glyph width.
-        let glyphWidth = Glyph.getWidth(code: glyphProps.codeHead, point: Tables.NOTATION_FONT_SCALE)
+        // Match upstream drawLedgerLines(): use unscaled glyph width, including slash-note overrides.
+        let glyphWidth: Double
+        if noteTypeValue == .slash {
+            glyphWidth = Tables.SLASH_NOTEHEAD_WIDTH
+        } else {
+            glyphWidth = Glyph.getWidth(code: glyphProps.codeHead, point: Tables.NOTATION_FONT_SCALE)
+        }
         let width = glyphWidth + strokePx * 2
         let doubleWidth = 2 * (glyphWidth + strokePx) - Stem.WIDTH / 2
 

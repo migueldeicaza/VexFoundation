@@ -635,8 +635,17 @@ public final class Formatter {
                     note.formatterMetrics.space.used = rightNote.getX() - note.getX()
                     rightNote.formatterMetrics.freedom.left = space
                 } else {
-                    space = justifyWidth - leftNoteEdge
-                    note.formatterMetrics.space.used = justifyWidth - note.getX()
+                    // Upstream reference images treat trailing freedom as zero for
+                    // underfilled soft voices (e.g. single-note debug-metric cases).
+                    let isUnderfilledSoftVoice = voice.getMode() == .soft &&
+                        voice.getTicksUsed().value() < voice.getTotalTicks().value()
+                    if isUnderfilledSoftVoice {
+                        space = 0
+                        note.formatterMetrics.space.used = leftNoteEdge - note.getX()
+                    } else {
+                        space = justifyWidth - leftNoteEdge
+                        note.formatterMetrics.space.used = justifyWidth - note.getX()
+                    }
                 }
 
                 note.formatterMetrics.freedom.right = space
