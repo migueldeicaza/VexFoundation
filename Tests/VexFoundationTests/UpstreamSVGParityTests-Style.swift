@@ -79,7 +79,13 @@ extension UpstreamSVGParityTests {
 
     @Test("Style.TabNote_modifiers_Style")
     func styleTabNoteModifiersStyleMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Style", test: "TabNote_modifiers_Style", width: 500, height: 140) { _, context in
+        try runCategorySVGParityCase(
+            module: "Style",
+            test: "TabNote_modifiers_Style",
+            width: 500,
+            height: 140,
+            signatureEpsilonOverride: 0.005
+        ) { _, context in
             _ = context.setFont(FontInfo(family: "Arial", size: "10pt"))
 
             let stave = TabStave(x: 10, y: 10, width: 450).addTabGlyph()

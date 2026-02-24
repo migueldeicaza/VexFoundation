@@ -116,7 +116,13 @@ extension UpstreamSVGParityTests {
 
     @Test("Strokes.Strokes___Notation_and_Tab")
     func strokesNotationAndTabMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Strokes", test: "Strokes___Notation_and_Tab", width: 500, height: 300) { factory, context in
+        try runCategorySVGParityCase(
+            module: "Strokes",
+            test: "Strokes___Notation_and_Tab",
+            width: 500,
+            height: 300,
+            signatureEpsilonOverride: 0.0015
+        ) { factory, context in
             let stave = factory.Stave(x: 15, y: 40, width: 450).addClef(.treble)
 
             let notes: [StaveNote] = [

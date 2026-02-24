@@ -696,7 +696,7 @@ public class StaveNote: StemmableNote {
             let lastLine = keyProps[keyProps.count - 1].line
             let top = max(restLine, lastLine)
             let bot = min(restLine, lastLine)
-            restLine = (top + bot) / 2
+            restLine = midLine(top, bot)
         }
         return restLine
     }

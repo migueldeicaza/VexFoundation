@@ -109,6 +109,54 @@ public final class Formatter {
         }
     }
 
+    private static func jsRound(_ value: Double) -> Int {
+        if value >= 0 {
+            return Int(floor(value + 0.5))
+        }
+        return Int(ceil(value - 0.5))
+    }
+
+    /// Helper function to render formatter debug overlays.
+    public static func plotDebugging(
+        ctx: RenderContext,
+        formatter: Formatter,
+        xPos: Double,
+        y1: Double,
+        y2: Double,
+        stavePadding: Double? = nil
+    ) {
+        let resolvedPadding =
+            stavePadding
+            ?? (Glyph.MUSIC_FONT_STACK.first?.lookupMetric("stave.padding") as? Double)
+            ?? 12
+        let x = xPos + resolvedPadding
+        let contextGaps = formatter.contextGaps
+
+        _ = ctx.save()
+        _ = ctx.setFont(VexFont.SANS_SERIF, 8, nil, nil)
+
+        for gap in contextGaps.gaps {
+            _ = ctx.beginPath()
+            _ = ctx.setStrokeStyle("rgba(100,200,100,0.4)")
+            _ = ctx.setFillStyle("rgba(100,200,100,0.4)")
+            _ = ctx.setLineWidth(1)
+            _ = ctx.fillRect(x + gap.x1, y1, max(gap.x2 - gap.x1, 0), y2 - y1)
+
+            _ = ctx.setFillStyle("green")
+            _ = ctx.fillText("\(jsRound(gap.x2 - gap.x1))", x + gap.x1, y2 + 12)
+        }
+
+        _ = ctx.setFillStyle("red")
+        let lossText = String(
+            format: "Loss: %.2f Shift: %.2f Gap: %.2f",
+            formatter.totalCost,
+            formatter.totalShift,
+            contextGaps.total
+        )
+        _ = ctx.fillText(lossText, x - 20, y2 + 27)
+        _ = ctx.restore()
+    }
+
     // MARK: - Static: FormatAndDraw
 
     /// Format and draw a single voice. Returns a bounding box.
@@ -219,9 +267,8 @@ public final class Formatter {
             }
         }
 
-        // Mirror upstream formatter post-format behavior by retaining all
-        // modifier contexts created during joinVoices().
-        modifierContexts = contexts
+        // Upstream joinVoices() accumulates modifier contexts across calls.
+        modifierContexts.append(contentsOf: contexts)
     }
 
     // MARK: - Create Tick Contexts
@@ -351,7 +398,26 @@ public final class Formatter {
         // No justification needed
         if justifyWidth <= 0 { return evaluate() }
 
-        guard contextList.count > 1 else { return 0 }
+        guard let firstTick = contextList.first,
+              let firstOnlyContext = contextMap[firstTick] else {
+            return evaluate()
+        }
+
+        // Upstream behavior: single-context staves still apply center alignment.
+        if contextList.count == 1 {
+            let metrics = firstOnlyContext.getMetrics()
+            let adjustedJustifyWidth =
+                justifyWidth
+                - metrics.notePx
+                - metrics.totalRightPx
+                - metrics.totalLeftPx
+            let centerX = adjustedJustifyWidth / 2
+            for tickable in firstOnlyContext.getCenterAlignedTickables() {
+                tickable.setCenterXShift(centerX - firstOnlyContext.getX())
+            }
+            self.justifyWidth = justifyWidth
+            return evaluate()
+        }
 
         let firstContext = contextMap[contextList[0]]!
         let lastContext = contextMap[contextList[contextList.count - 1]]!

@@ -172,11 +172,16 @@ public final class Dot: Modifier {
         let note = checkAttachedNote()
         setRendered()
 
-        guard let staveNote = note as? StaveNote else { return }
         let stave = note.checkStave()
         let lineSpace = stave.getSpacingBetweenLines()
 
-        let start = staveNote.getModifierStartXY(position: position, index: checkIndex(), forceFlagRight: true)
+        var start = note.getModifierStartXY(position: position, index: checkIndex())
+        if let staveNote = note as? StaveNote {
+            start = staveNote.getModifierStartXY(position: position, index: checkIndex(), forceFlagRight: true)
+        } else if let tabNote = note as? TabNote {
+            // Upstream: TabNote dots are anchored at the stem base.
+            start.y = tabNote.getStemExtents().baseY
+        }
 
         let x = start.x + xShift + modifierWidth - radius
         let y = start.y + yShift + dotShiftY * lineSpace

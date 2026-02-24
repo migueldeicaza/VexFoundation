@@ -25,7 +25,7 @@ extension UpstreamSVGParityTests {
                 let staffWidth = voiceWidth + Stave.defaultPadding + chordSymbolGClefWidth()
                 _ = formatter.format([voice], justifyWidth: voiceWidth)
 
-                let stave = Stave(x: 10, y: y, width: staffWidth).addClef(.treble)
+                let stave = factory.Stave(x: 10, y: y, width: staffWidth).addClef(.treble)
                 _ = stave.setContext(context)
                 try stave.draw()
                 try voice.draw(context: context, stave: stave)
@@ -110,6 +110,7 @@ extension UpstreamSVGParityTests {
                 let score = factory.EasyScore()
                 let voice = score.voice(notes.map { $0 as Note }, time: .meter(4, 4))
                 _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+                try factory.draw()
             }
 
             var chords: [ChordSymbol] = [
@@ -165,8 +166,6 @@ extension UpstreamSVGParityTests {
             _ = chords[3].addGlyphOrText("C#")
             _ = chordAddGlyphOrText(chords[3], "7(#11b9)", modifier: .sup)
             try drawRow(chords, y: 240)
-
-            try factory.draw()
         }
     }
 
@@ -181,7 +180,7 @@ extension UpstreamSVGParityTests {
             _ = context.scale(1.5, 1.5)
 
             func drawRow(_ chords: [ChordSymbol], y: Double) throws {
-                let stave = Stave(x: 10, y: y, width: 450).addClef(.treble)
+                let stave = factory.Stave(x: 10, y: y, width: 450).addClef(.treble)
                 _ = stave.setContext(context)
                 try stave.draw()
                 let notes: [StaveNote] = try [
@@ -244,13 +243,16 @@ extension UpstreamSVGParityTests {
             _ = context.scale(1.5, 1.5)
 
             func draw(_ c1: ChordSymbol, _ c2: ChordSymbol, y: Double) throws {
-                let stave = Stave(x: 10, y: y, width: 450).addClef(.treble)
+                let stave = factory.Stave(x: 10, y: y, width: 450).addClef(.treble)
                 _ = stave.setContext(context)
                 try stave.draw()
                 let note1 = try chordSymbolNote(factory, ["e/4", "a/4", "d/5"], "h", c1, stemDirection: .up)
                     .addModifier(factory.Accidental(type: .flat), index: 0)
                 let note2 = try chordSymbolNote(factory, ["c/5", "e/5", "c/6"], "h", c2, stemDirection: .down)
-                _ = try Formatter.FormatAndDraw(ctx: context, stave: stave, notes: [note1, note2])
+                let score = factory.EasyScore()
+                let voice = score.voice([note1, note2].map { $0 as Note }, time: .meter(4, 4))
+                _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+                try factory.draw()
             }
 
             var chord1 = makeChordSymbol(factory, hJustify: .left, reportWidth: false).addText("F7").setHorizontal(.left)
@@ -423,7 +425,7 @@ extension UpstreamSVGParityTests {
         _ factory: Factory,
         fontSize: Double? = nil,
         vJustify: ChordSymbolVerticalJustify = .top,
-        hJustify: ChordSymbolHorizontalJustify = .left,
+        hJustify: ChordSymbolHorizontalJustify = .center,
         kerning: Bool = true,
         reportWidth: Bool = true
     ) -> ChordSymbol {
@@ -451,8 +453,18 @@ extension UpstreamSVGParityTests {
     }
 
     private func chordSymbolGClefWidth() -> Double {
-        let point = 38 * (VexFont.scaleToPxFrom["pt"] ?? 1)
-        return Glyph.getWidth(code: "gClef", point: point)
+        guard
+            let font = Glyph.MUSIC_FONT_STACK.first,
+            let glyphs = try? font.getGlyphs(),
+            let glyph = glyphs["gClef"]
+        else {
+            let point = 38 * (VexFont.scaleToPxFrom["pt"] ?? 1)
+            return Glyph.getWidth(code: "gClef", point: point)
+        }
+
+        let resolution = (try? font.getResolution()) ?? 1000
+        let widthInEm = (glyph.xMax - glyph.xMin) / resolution
+        return widthInEm * 38 * (VexFont.scaleToPxFrom["pt"] ?? 1)
     }
 
     @discardableResult

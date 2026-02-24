@@ -355,6 +355,361 @@ extension UpstreamSVGParityTests {
         }
     }
 
+    @Test("StaveNote.Flag_and_Dot_Placement___Stem_Up")
+    func staveNoteFlagAndDotPlacementStemUpMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "StaveNote", test: "Flag_and_Dot_Placement___Stem_Up", width: 800, height: 150) { _, context in
+            let stave = Stave(x: 10, y: 10, width: 975)
+            _ = stave.setContext(context)
+
+            let notes = try [
+                StaveNoteStruct(parsingKeys: ["f/4"], duration: "4", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["f/4"], duration: "8", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["f/4"], duration: "16", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["f/4"], duration: "32", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["f/4"], duration: "64", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["f/4"], duration: "128", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["g/4"], duration: "4", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["g/4"], duration: "8", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["g/4"], duration: "16", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["g/4"], duration: "32"),
+                StaveNoteStruct(parsingKeys: ["g/4"], duration: "64", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["g/4"], duration: "128", stemDirection: .up),
+            ].map(StaveNote.init)
+
+            Dot.buildAndAttach(notes.map { $0 as Note }, all: true)
+            Dot.buildAndAttach([notes[5], notes[11]].map { $0 as Note }, all: true)
+
+            try stave.draw()
+            for (index, note) in notes.enumerated() {
+                _ = try drawUpstreamStaveNote(note, stave: stave, context: context, x: Double(index) * 65)
+            }
+        }
+    }
+
+    @Test("StaveNote.Flag_and_Dots_Placement___Stem_Down")
+    func staveNoteFlagAndDotsPlacementStemDownMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "StaveNote", test: "Flag_and_Dots_Placement___Stem_Down", width: 800, height: 160) { _, context in
+            let stave = Stave(x: 10, y: 10, width: 975)
+            _ = stave.setContext(context)
+
+            let notes = try [
+                StaveNoteStruct(parsingKeys: ["e/5"], duration: "4", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["e/5"], duration: "8", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["e/5"], duration: "16", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["e/5"], duration: "32", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["e/5"], duration: "64", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["e/5"], duration: "128", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["d/5"], duration: "4", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["d/5"], duration: "8", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["d/5"], duration: "16", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["d/5"], duration: "32", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["d/5"], duration: "64", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["d/5"], duration: "128", stemDirection: .down),
+            ].map(StaveNote.init)
+
+            Dot.buildAndAttach(notes.map { $0 as Note }, all: true)
+
+            try stave.draw()
+            for (index, note) in notes.enumerated() {
+                _ = try drawUpstreamStaveNote(note, stave: stave, context: context, x: Double(index) * 65)
+            }
+        }
+    }
+
+    @Test("StaveNote.Beam_and_Dot_Placement___Stem_Up")
+    func staveNoteBeamAndDotPlacementStemUpMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "StaveNote", test: "Beam_and_Dot_Placement___Stem_Up", width: 800, height: 150) { _, context in
+            let stave = Stave(x: 10, y: 10, width: 975)
+            _ = stave.setContext(context)
+
+            let notes = try [
+                StaveNoteStruct(parsingKeys: ["f/4"], duration: "8", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["f/4"], duration: "16", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["f/4"], duration: "32", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["f/4"], duration: "64", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["f/4"], duration: "128", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["g/4"], duration: "8", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["g/4"], duration: "16", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["g/4"], duration: "32"),
+                StaveNoteStruct(parsingKeys: ["g/4"], duration: "64", stemDirection: .up),
+                StaveNoteStruct(parsingKeys: ["g/4"], duration: "128", stemDirection: .up),
+            ].map(StaveNote.init)
+
+            Dot.buildAndAttach(notes.map { $0 as Note }, all: true)
+            Dot.buildAndAttach([notes[4], notes[9]].map { $0 as Note }, all: true)
+            let beam = try Beam(notes)
+
+            try stave.draw()
+            for (index, note) in notes.enumerated() {
+                _ = try drawUpstreamStaveNote(note, stave: stave, context: context, x: Double(index) * 65)
+            }
+            _ = beam.setContext(context)
+            try beam.draw()
+        }
+    }
+
+    @Test("StaveNote.Beam_and_Dot_Placement___Stem_Down")
+    func staveNoteBeamAndDotPlacementStemDownMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "StaveNote", test: "Beam_and_Dot_Placement___Stem_Down", width: 800, height: 160) { _, context in
+            let stave = Stave(x: 10, y: 10, width: 975)
+            _ = stave.setContext(context)
+
+            let notes = try [
+                StaveNoteStruct(parsingKeys: ["e/5"], duration: "8", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["e/5"], duration: "16", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["e/5"], duration: "32", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["e/5"], duration: "64", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["e/5"], duration: "128", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["d/5"], duration: "8", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["d/5"], duration: "16", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["d/5"], duration: "32", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["d/5"], duration: "64", stemDirection: .down),
+                StaveNoteStruct(parsingKeys: ["d/5"], duration: "128", stemDirection: .down),
+            ].map(StaveNote.init)
+
+            Dot.buildAndAttach(notes.map { $0 as Note }, all: true)
+            let beam = try Beam(notes)
+
+            try stave.draw()
+            for (index, note) in notes.enumerated() {
+                _ = try drawUpstreamStaveNote(note, stave: stave, context: context, x: Double(index) * 65)
+            }
+            _ = beam.setContext(context)
+            try beam.draw()
+        }
+    }
+
+    @Test("StaveNote.Note_Heads_Placement___Simple")
+    func staveNoteNoteHeadsPlacementSimpleMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "StaveNote", test: "Note_Heads_Placement___Simple", width: 800, height: 250) { factory, _ in
+            let score = factory.EasyScore()
+
+            let system1 = factory.System(options: SystemOptions(x: 50, width: 200, y: 100))
+            _ = system1.addStave(SystemStave(voices: [
+                score.voice(
+                    score.beam(score.notes("a4/8, b4/8", options: ["stem": "up"]))
+                        + score.notes("a4/q/r, a4/h/r")
+                ),
+                score.voice(score.notes("g4/w")),
+            ]))
+                .addClef(ClefName.treble)
+                .addTimeSignature(TimeSignatureSpec.meter(4, 4))
+
+            let system2 = factory.System(options: SystemOptions(x: 250, width: 150, y: 100))
+            _ = system2.addStave(SystemStave(voices: [
+                score.voice(score.notes("b4/h, b4/h/r")),
+                score.voice(score.notes("b4/w")),
+            ]))
+
+            let system3 = factory.System(options: SystemOptions(x: 400, width: 150, y: 100))
+            _ = system3.addStave(SystemStave(voices: [
+                score.voice(score.notes("d5/h, d5/h/r")),
+                score.voice(score.notes("e4/w")),
+            ]))
+
+            let system4 = factory.System(options: SystemOptions(x: 550, width: 150, y: 100))
+            _ = system4.addStave(SystemStave(voices: [
+                score.voice(score.notes("e4/q, e4/q/r, e4/h/r")),
+                score.voice(score.notes("e4/8, e4/8/r, e4/q/r, e4/h/r")),
+            ]))
+
+            try system1.formatThrowing()
+            try system2.formatThrowing()
+            try system3.formatThrowing()
+            try system4.formatThrowing()
+            try factory.draw()
+        }
+    }
+
+    @Test("StaveNote.No_Padding")
+    func staveNoteNoPaddingMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "StaveNote", test: "No_Padding", width: 800, height: 500) { factory, _ in
+            let score = factory.EasyScore()
+
+            try addUpstreamNoPaddingSystems(factory: factory, score: score, y: 100, noPadding: true)
+            try addUpstreamNoPaddingSystems(factory: factory, score: score, y: 200, noPadding: false)
+            try factory.draw()
+        }
+    }
+
+    @Test("StaveNote.Note_Heads_Placement___Hidden_Notes")
+    func staveNoteNoteHeadsPlacementHiddenNotesMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "StaveNote", test: "Note_Heads_Placement___Hidden_Notes", width: 800, height: 250) { factory, _ in
+            let score = factory.EasyScore()
+
+            let system1 = factory.System(options: SystemOptions(x: 50, width: 200, y: 100))
+            let notes1 = score.notes("g4/w")
+            notes1[0].renderOptions.draw = false
+            _ = system1.addStave(SystemStave(voices: [
+                score.voice(
+                    score.beam(score.notes("a4/8, b4/8", options: ["stem": "up"]))
+                        + score.notes("a4/q/r, a4/h/r")
+                ),
+                score.voice(notes1),
+            ]))
+                .addClef(ClefName.treble)
+                .addTimeSignature(TimeSignatureSpec.meter(4, 4))
+
+            let system2 = factory.System(options: SystemOptions(x: 250, width: 150, y: 100))
+            let notes2 = score.notes("b4/w")
+            notes2[0].renderOptions.draw = false
+            _ = system2.addStave(SystemStave(voices: [
+                score.voice(score.notes("b4/h, b4/h/r")),
+                score.voice(notes2),
+            ]))
+
+            let system3 = factory.System(options: SystemOptions(x: 400, width: 150, y: 100))
+            _ = system3.addStave(SystemStave(voices: [
+                score.voice(score.notes("d5/h, d5/h/r")),
+                score.voice(score.notes("e4/w")),
+            ]))
+
+            let system4 = factory.System(options: SystemOptions(x: 550, width: 150, y: 100))
+            let notes4 = score.notes("e4/q, e4/q/r, e4/h/r")
+            notes4[0].renderOptions.draw = false
+            notes4[2].renderOptions.draw = false
+            _ = system4.addStave(SystemStave(voices: [
+                score.voice(notes4),
+                score.voice(score.notes("e4/8, e4/8/r, e4/q/r, e4/h/r")),
+            ]))
+
+            try system1.formatThrowing()
+            try system2.formatThrowing()
+            try system3.formatThrowing()
+            try system4.formatThrowing()
+            try factory.draw()
+        }
+    }
+
+    @Test("StaveNote.Center_Aligned_Note")
+    func staveNoteCenterAlignedNoteMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "StaveNote", test: "Center_Aligned_Note", width: 400, height: 160) { factory, _ in
+            let stave = factory.Stave(x: 10, y: 10, width: 350)
+                .addClef(.treble)
+                .addTimeSignature(.meter(4, 4))
+
+            let note = try factory.StaveNote(StaveNoteStruct(
+                parsingKeys: ["b/4"],
+                duration: "1r",
+                alignCenter: true
+            ))
+            let voice = factory.Voice().setStrict(false).addTickables([note])
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("StaveNote.Center_Aligned_Note_with_Articulation")
+    func staveNoteCenterAlignedNoteWithArticulationMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "StaveNote", test: "Center_Aligned_Note_with_Articulation", width: 400, height: 160) { factory, _ in
+            let stave = factory.Stave(x: 10, y: 10, width: 350)
+                .addClef(.treble)
+                .addTimeSignature(.meter(4, 4))
+
+            let note = try factory.StaveNote(StaveNoteStruct(
+                parsingKeys: ["b/4"],
+                duration: "1r",
+                alignCenter: true
+            ))
+                .addModifier(Articulation("a@a").setPosition(.above), index: 0)
+
+            let voice = factory.Voice().setStrict(false).addTickables([note])
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("StaveNote.Center_Aligned_Note_with_Annotation")
+    func staveNoteCenterAlignedNoteWithAnnotationMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "StaveNote", test: "Center_Aligned_Note_with_Annotation", width: 400, height: 160) { factory, _ in
+            let stave = factory.Stave(x: 10, y: 10, width: 350)
+                .addClef(.treble)
+                .addTimeSignature(.meter(4, 4))
+
+            let note = try factory.StaveNote(StaveNoteStruct(
+                parsingKeys: ["b/4"],
+                duration: "1r",
+                alignCenter: true
+            ))
+                .addModifier(Annotation("Whole measure rest").setVerticalJustification(.top), index: 0)
+
+            let voice = factory.Voice().setStrict(false).addTickables([note])
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("StaveNote.Center_Aligned_Note_with_Multiple_Modifiers")
+    func staveNoteCenterAlignedNoteWithMultipleModifiersMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "StaveNote", test: "Center_Aligned_Note_with_Multiple_Modifiers", width: 400, height: 160) { factory, _ in
+            let stave = factory.Stave(x: 10, y: 10, width: 350)
+                .addClef(.treble)
+                .addTimeSignature(.meter(4, 4))
+
+            let note = try factory.StaveNote(StaveNoteStruct(
+                parsingKeys: ["c/4", "e/4", "g/4"],
+                duration: "4",
+                alignCenter: true
+            ))
+                .addModifier(Annotation("Test").setPosition(.above), index: 0)
+                .addModifier(Stroke(type: .brushUp), index: 0)
+                .addModifier(Accidental(.sharp), index: 1)
+                .addModifier(FretHandFinger("3").setPosition(.left), index: 0)
+                .addModifier(FretHandFinger("2").setPosition(.left), index: 2)
+                .addModifier(FretHandFinger("1").setPosition(.right), index: 1)
+                .addModifier(StringNumber("4").setPosition(.below), index: 2)
+
+            Dot.buildAndAttach([note], all: true)
+
+            let voice = factory.Voice().setStrict(false).addTickables([note])
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("StaveNote.Center_Aligned_Note___Multi_Voice")
+    func staveNoteCenterAlignedNoteMultiVoiceMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "StaveNote", test: "Center_Aligned_Note___Multi_Voice", width: 400, height: 160) { factory, _ in
+            let stave = factory.Stave(x: 10, y: 10, width: 350)
+                .addClef(.treble)
+                .addTimeSignature(.meter(3, 8))
+            let customDuration = Fraction(3, 8)
+
+            let notes0 = [
+                try factory.StaveNote(StaveNoteStruct(
+                    parsingKeys: ["c/4"],
+                    duration: "1r",
+                    alignCenter: true,
+                    durationOverride: customDuration
+                )),
+            ]
+
+            let notes1 = [
+                try factory.StaveNote(StaveNoteStruct(parsingKeys: ["b/4"], duration: "8")),
+                try factory.StaveNote(StaveNoteStruct(parsingKeys: ["b/4"], duration: "8")),
+                try factory.StaveNote(StaveNoteStruct(parsingKeys: ["b/4"], duration: "8")),
+            ]
+            _ = notes1[1].addModifier(factory.Accidental(type: .sharp), index: 0)
+
+            _ = factory.Beam(notes: notes1)
+
+            let voice0 = factory.Voice(timeSignature: .meter(3, 8)).setStrict(false).addTickables(notes0.map { $0 as Tickable })
+            let voice1 = factory.Voice(timeSignature: .meter(3, 8)).setStrict(false).addTickables(notes1.map { $0 as Tickable })
+            _ = factory.Formatter().joinVoices([voice0, voice1]).formatToStave([voice0, voice1], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("StaveNote.Interactive_Mouseover_StaveNote")
+    func staveNoteInteractiveMouseoverMatchesUpstream() throws {
+        try runUpstreamStaveNoteDrawBasicCase(
+            test: "Interactive_Mouseover_StaveNote",
+            clef: .treble,
+            octaveShift: 0,
+            restKey: "r/4"
+        )
+    }
+
     @Test("StaveNote.Displacements")
     func staveNoteDisplacementsMatchesUpstream() throws {
         try runCategorySVGParityCase(module: "StaveNote", test: "Displacements", width: 700, height: 155) { _, context in
@@ -395,6 +750,47 @@ extension UpstreamSVGParityTests {
                 )
             }
         }
+    }
+
+    private func addUpstreamNoPaddingSystems(
+        factory: Factory,
+        score: EasyScore,
+        y: Double,
+        noPadding: Bool
+    ) throws {
+        let system1 = factory.System(options: SystemOptions(noPadding: noPadding, x: 50, width: 200, y: y))
+        _ = system1.addStave(SystemStave(voices: [
+            score.voice(
+                score.beam(score.notes("a4/8, b4/8", options: ["stem": "up"]))
+                    + score.notes("a4/q, a4/h")
+            ),
+            score.voice(score.notes("g4/w")),
+        ]))
+            .addClef(ClefName.treble)
+            .addTimeSignature(TimeSignatureSpec.meter(4, 4))
+
+        let system2 = factory.System(options: SystemOptions(noPadding: noPadding, x: 250, width: 150, y: y))
+        _ = system2.addStave(SystemStave(voices: [
+            score.voice(score.notes("b4/h, b4/h")),
+            score.voice(score.notes("b4/w")),
+        ]))
+
+        let system3 = factory.System(options: SystemOptions(noPadding: noPadding, x: 400, width: 150, y: y))
+        _ = system3.addStave(SystemStave(voices: [
+            score.voice(score.notes("d5/h, d5/h")),
+            score.voice(score.notes("e4/w")),
+        ]))
+
+        let system4 = factory.System(options: SystemOptions(noPadding: noPadding, x: 550, width: 150, y: y))
+        _ = system4.addStave(SystemStave(voices: [
+            score.voice(score.notes("e4/q, e4/q, e4/h")),
+            score.voice(score.notes("e4/8, e4/8, e4/q, e4/h")),
+        ]))
+
+        try system1.formatThrowing()
+        try system2.formatThrowing()
+        try system3.formatThrowing()
+        try system4.formatThrowing()
     }
 
     private func runUpstreamStaveNoteDrawBasicCase(

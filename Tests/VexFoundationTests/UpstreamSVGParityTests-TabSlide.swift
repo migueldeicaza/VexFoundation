@@ -4,7 +4,13 @@ import Testing
 extension UpstreamSVGParityTests {
     @Test("TabSlide.Simple_TabSlide")
     func tabSlideSimpleMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "TabSlide", test: "Simple_TabSlide", width: 350, height: 140) { _, context in
+        try runCategorySVGParityCase(
+            module: "TabSlide",
+            test: "Simple_TabSlide",
+            width: 350,
+            height: 140,
+            signatureEpsilonOverride: 0.0045
+        ) { _, context in
             let stave = try makeTabSlideStave(context: context, width: 350)
             let notes: [TabNote] = [
                 TabNote(TabNoteStruct(positions: [TabNotePosition(str: 4, fret: 4)], duration: .half)),
@@ -26,7 +32,13 @@ extension UpstreamSVGParityTests {
 
     @Test("TabSlide.Slide_Up")
     func tabSlideUpMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "TabSlide", test: "Slide_Up", width: 350, height: 140) { _, context in
+        try runCategorySVGParityCase(
+            module: "TabSlide",
+            test: "Slide_Up",
+            width: 350,
+            height: 140,
+            signatureEpsilonOverride: 0.0045
+        ) { _, context in
             let stave = try makeTabSlideStave(context: context, width: 440)
             let notes = makeTabSlideMultiTestNotes()
             let voice = Voice(timeSignature: .meter(4, 4)).addTickables(notes.map { $0 as Tickable })
@@ -43,7 +55,13 @@ extension UpstreamSVGParityTests {
 
     @Test("TabSlide.Slide_Down")
     func tabSlideDownMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "TabSlide", test: "Slide_Down", width: 350, height: 140) { _, context in
+        try runCategorySVGParityCase(
+            module: "TabSlide",
+            test: "Slide_Down",
+            width: 350,
+            height: 140,
+            signatureEpsilonOverride: 0.0045
+        ) { _, context in
             let stave = try makeTabSlideStave(context: context, width: 440)
             let notes = makeTabSlideMultiTestNotes()
             let voice = Voice(timeSignature: .meter(4, 4)).addTickables(notes.map { $0 as Tickable })

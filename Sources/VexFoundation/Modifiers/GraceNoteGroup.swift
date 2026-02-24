@@ -151,14 +151,18 @@ public final class GraceNoteGroup: Modifier {
         // Draw slur if requested
         if showSlur {
             let tieNotes = TieNotes(
-                firstNote: note as? StaveNote,
-                lastNote: graceNotes.first as? StaveNote,
+                firstNote: note,
+                lastNote: graceNotes.first,
                 firstIndices: [0],
                 lastIndices: [0]
             )
             let tie = StaveTie(notes: tieNotes)
             tie.renderOptions.cp2 = 12
             tie.renderOptions.yShift = 7 + slurYShift
+            // Upstream draws tab grace slurs above the tab notes.
+            if note is TabNote || graceNotes.first is TabNote {
+                tie.setDirection(TieDirection.down)
+            }
             _ = tie.setContext(ctx)
             try tie.draw()
             slur = tie

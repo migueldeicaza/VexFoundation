@@ -14,7 +14,17 @@ public final class TabStave: Stave {
 
     public override init(x: Double, y: Double, width: Double, options: StaveOptions? = nil) {
         var tabOptions = options ?? StaveOptions()
-        tabOptions.spacingBetweenLinesPx = options?.spacingBetweenLinesPx ?? 13
+        let defaultStaveSpacing = StaveOptions().spacingBetweenLinesPx
+        if let options {
+            // JS options objects can omit spacing while overriding other fields.
+            // In Swift, omitted fields collapse to defaults, so keep TabStave's 13px
+            // spacing when the incoming value is just the base Stave default.
+            tabOptions.spacingBetweenLinesPx = options.spacingBetweenLinesPx == defaultStaveSpacing
+                ? 13
+                : options.spacingBetweenLinesPx
+        } else {
+            tabOptions.spacingBetweenLinesPx = 13
+        }
         tabOptions.numLines = options?.numLines ?? 6
         tabOptions.topTextPosition = options?.topTextPosition ?? 1
         super.init(x: x, y: y, width: width, options: tabOptions)

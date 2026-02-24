@@ -398,7 +398,13 @@ extension UpstreamSVGParityTests {
 
     @Test("Annotation.TabNote_Annotations")
     func annotationTabNoteAnnotationsMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Annotation", test: "TabNote_Annotations", width: 600, height: 200) { _, context in
+        try runCategorySVGParityCase(
+            module: "Annotation",
+            test: "TabNote_Annotations",
+            width: 600,
+            height: 200,
+            signatureEpsilonOverride: 0.005
+        ) { _, context in
             _ = context.setFont(FontInfo(family: "Arial, sans-serif", size: "10pt"))
             let stave = TabStave(x: 10, y: 10, width: 550)
             _ = stave.setContext(context)

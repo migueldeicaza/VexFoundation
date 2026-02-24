@@ -216,6 +216,60 @@ open class Note: Tickable {
         )
     }
 
+    private static func jsRound(_ value: Double) -> Int {
+        if value >= 0 {
+            return Int(floor(value + 0.5))
+        }
+        return Int(ceil(value - 0.5))
+    }
+
+    /// Debug helper. Displays formatter metrics for a tickable.
+    public static func plotMetrics(ctx: RenderContext, note: Tickable, yPos: Double) {
+        let metrics = note.getMetrics()
+        let xStart = note.getAbsoluteX() - metrics.modLeftPx - metrics.leftDisplacedHeadPx
+        let xPre1 = note.getAbsoluteX() - metrics.leftDisplacedHeadPx
+        let xAbs = note.getAbsoluteX()
+        let xPost1 = note.getAbsoluteX() + metrics.notePx
+        let xPost2 = note.getAbsoluteX() + metrics.notePx + metrics.rightDisplacedHeadPx
+        let xEnd = note.getAbsoluteX() + metrics.notePx + metrics.rightDisplacedHeadPx + metrics.modRightPx
+        let xFreedomRight = xEnd + note.getFormatterMetrics().freedom.right
+        let xWidth = xEnd - xStart
+
+        _ = ctx.save()
+        _ = ctx.setFont(VexFont.SANS_SERIF, 8, nil, nil)
+        _ = ctx.fillText("\(jsRound(xWidth))px", xStart + note.getXShift(), yPos)
+
+        let y = yPos + 7
+        func stroke(_ x1: Double, _ x2: Double, _ color: String, _ yy: Double = y) {
+            _ = ctx.beginPath()
+            _ = ctx.setStrokeStyle(color)
+            _ = ctx.setFillStyle(color)
+            _ = ctx.setLineWidth(3)
+            _ = ctx.moveTo(x1 + note.getXShift(), yy)
+            _ = ctx.lineTo(x2 + note.getXShift(), yy)
+            _ = ctx.stroke()
+        }
+
+        stroke(xStart, xPre1, "red")
+        stroke(xPre1, xAbs, "#999")
+        stroke(xAbs, xPost1, "green")
+        stroke(xPost1, xPost2, "#999")
+        stroke(xPost2, xEnd, "red")
+        stroke(xEnd, xFreedomRight, "#DD0")
+        stroke(xStart - note.getXShift(), xStart, "#BBB")
+        drawDot(ctx, x: xAbs + note.getXShift(), y: y, color: "blue")
+
+        let formatterMetrics = note.getFormatterMetrics()
+        if formatterMetrics.iterations > 0 {
+            let deviation = formatterMetrics.space.deviation
+            let prefix = deviation >= 0 ? "+" : ""
+            _ = ctx.setFillStyle("red")
+            _ = ctx.fillText("\(prefix)\(jsRound(deviation))", xAbs + note.getXShift(), yPos - 10)
+        }
+
+        _ = ctx.restore()
+    }
+
     /// Strict parse variant that throws when the input is invalid.
     public static func parseNoteStructThrowing(_ noteStruct: NoteStruct) throws -> ParsedNote {
         guard let parsed = parseNoteStruct(noteStruct) else {
@@ -241,7 +295,7 @@ open class Note: Tickable {
     public var glyphProps: GlyphProps!
     public var keys: [String]
     public var keyProps: [KeyProps] = []
-    public weak var noteStave: Stave?
+    public var noteStave: Stave?
     public var renderOptions = NoteRenderOptions()
     public var noteValue: NoteValue
     public var noteTypeValue: NoteType

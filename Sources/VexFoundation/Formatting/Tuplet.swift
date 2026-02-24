@@ -138,6 +138,8 @@ public final class Tuplet: VexElement {
 
         super.init()
 
+        // Match upstream: tuplet initialization realigns rests within the tuplet group.
+        Formatter.AlignRestsToNotes(notes, alignAllNotes: true, alignTuplets: true)
         resolveGlyphs()
         attach()
     }
@@ -239,6 +241,26 @@ public final class Tuplet: VexElement {
     // MARK: - Y Position
 
     public func getYPosition() -> Double {
+        // Upstream tuplets are positioned from the note's base stem metrics,
+        // not from post-beam extension adjustments.
+        func tupletStemExtents(for note: Note) -> (topY: Double, baseY: Double) {
+            guard let beam = note.beam,
+                  beam.useUnformattedStemExtentsForTuplets,
+                  let stemmable = note as? StemmableNote,
+                  let stem = stemmable.getStem()
+            else {
+                return note.getStemExtents()
+            }
+
+            let isStemUp = stemmable.getStemDirection() == Stem.UP
+            let ys = [stem.yTop, stem.yBottom]
+            let innerMost = isStemUp ? (ys.min() ?? 0) : (ys.max() ?? 0)
+            let outerMost = isStemUp ? (ys.max() ?? 0) : (ys.min() ?? 0)
+            let stemHeight = Stem.HEIGHT + stemmable.getStemExtension()
+            let stemTipY = innerMost + stemHeight * -stemmable.getStemDirection().signDouble
+            return (topY: stemTipY, baseY: outerMost)
+        }
+
         let nestedOffset = Double(getNestedTupletCount()) * Tuplet.NESTING_OFFSET * Double(-location.rawValue)
         let yOffset = options.yOffset ?? 0
 
@@ -258,10 +280,11 @@ public final class Tuplet: VexElement {
 
                 if note.hasStem() || note.isRest() {
                     let topY: Double
+                    let extents = tupletStemExtents(for: note)
                     if note.getStemDirection() == Stem.UP {
-                        topY = note.getStemExtents().topY - m.stemOffset
+                        topY = extents.topY - m.stemOffset
                     } else {
-                        topY = note.getStemExtents().baseY - m.noteHeadOffset
+                        topY = extents.baseY - m.noteHeadOffset
                     }
                     yPos = min(topY, yPos)
                     if modLines > 0 {
@@ -282,10 +305,11 @@ public final class Tuplet: VexElement {
             for note in notes {
                 if note.hasStem() || note.isRest() {
                     let bottomY: Double
+                    let extents = tupletStemExtents(for: note)
                     if note.getStemDirection() == Stem.UP {
-                        bottomY = note.getStemExtents().baseY + m.noteHeadOffset
+                        bottomY = extents.baseY + m.noteHeadOffset
                     } else {
-                        bottomY = note.getStemExtents().topY + m.stemOffset
+                        bottomY = extents.topY + m.stemOffset
                     }
                     if bottomY > yPos {
                         yPos = bottomY

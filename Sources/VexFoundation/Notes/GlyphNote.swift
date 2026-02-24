@@ -42,6 +42,7 @@ open class GlyphNote: Note {
     @discardableResult
     public func setGlyph(_ glyph: Glyph) -> Self {
         noteGlyph = glyph
+        setTickableWidth(noteGlyph.getMetrics().width)
         return self
     }
 
@@ -94,12 +95,7 @@ open class GlyphNote: Note {
         noteGlyph.yShift = stave.getYForLine(glyphNoteOptions.line)
             - stave.getYForGlyphs()
 
-        let x: Double
-        if isCenterAligned() {
-            x = getAbsoluteX() + getCenterXShift()
-        } else {
-            x = getAbsoluteX()
-        }
+        let x = isCenterAligned() ? getAbsoluteX() - tickableWidth / 2 : getAbsoluteX()
 
         noteGlyph.renderToStave(x: x)
         try drawModifiers()

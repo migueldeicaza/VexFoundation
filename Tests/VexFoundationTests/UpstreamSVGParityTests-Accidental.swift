@@ -171,6 +171,57 @@ extension UpstreamSVGParityTests {
         }
     }
 
+    @Test("Accidental.Sagittal")
+    func accidentalSagittalMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Accidental", test: "Sagittal", width: 700, height: 240) { factory, context in
+            _ = factory.Stave(x: 10, y: 10, width: 650)
+
+            let notes = try makeAccidentalSagittalNotes(factory: factory)
+            Formatter.SimpleFormat(notes.map { $0 as Tickable })
+
+            _ = factory.StaveTie(
+                notes: TieNotes(
+                    firstNote: notes[0],
+                    lastNote: notes[1],
+                    firstIndices: [0, 1],
+                    lastIndices: [0, 1]
+                )
+            )
+            _ = factory.StaveTie(
+                notes: TieNotes(
+                    firstNote: notes[0],
+                    lastNote: notes[1],
+                    firstIndices: [3],
+                    lastIndices: [3]
+                ),
+                direction: .down
+            )
+            _ = factory.StaveTie(
+                notes: TieNotes(
+                    firstNote: notes[4],
+                    lastNote: notes[5],
+                    firstIndices: [0, 1],
+                    lastIndices: [0, 1]
+                )
+            )
+            _ = factory.StaveTie(
+                notes: TieNotes(
+                    firstNote: notes[4],
+                    lastNote: notes[5],
+                    firstIndices: [3],
+                    lastIndices: [3]
+                ),
+                direction: .down
+            )
+            _ = factory.Beam(notes: [notes[2], notes[3]])
+            _ = factory.Beam(notes: [notes[6], notes[7]])
+
+            notes.forEach { drawUpstreamAccidentalNoteMetrics(context: context, note: $0, yPos: 140) }
+            try factory.draw()
+            drawUpstreamAccidentalNoteWidthLegend(context: context, x: 580, y: 140)
+        }
+    }
+
     @Test("Accidental.Factory_API")
     func accidentalFactoryAPIMatchesUpstream() throws {
         try runCategorySVGParityCase(module: "Accidental", test: "Factory_API", width: 700, height: 240) { factory, _ in
@@ -823,6 +874,42 @@ extension UpstreamSVGParityTests {
         _ = note4.addModifier(try makeUpstreamAccidental("k"), index: 3)
 
         return [note0, note1, note2, note3, note4]
+    }
+
+    private func makeAccidentalSagittalNotes(factory: Factory) throws -> [StaveNote] {
+        let note0 = try factory.StaveNote(StaveNoteStruct(parsingKeys: ["d/4", "f/4", "b/4", "b/4"], duration: "4"))
+        _ = note0.addModifier(try makeUpstreamAccidental("accSagittal11MediumDiesisUp"), index: 1)
+        _ = note0.addModifier(try makeUpstreamAccidental("accSagittal5CommaDown"), index: 2)
+        _ = note0.addModifier(try makeUpstreamAccidental("b"), index: 3)
+        _ = note0.addModifier(try makeUpstreamAccidental("accSagittal7CommaDown"), index: 3)
+
+        let note1 = try factory.StaveNote(StaveNoteStruct(parsingKeys: ["d/4", "f/4", "a/4", "b/4"], duration: "4"))
+        _ = note1.addModifier(try makeUpstreamAccidental("accSagittal35LargeDiesisDown"), index: 2)
+
+        let note2 = try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4", "e/4", "g/4", "c/5"], duration: "8"))
+        _ = note2.addModifier(try makeUpstreamAccidental("accSagittal5CommaDown"), index: 1)
+
+        let note3 = try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4", "e/4", "g/4", "b/4"], duration: "8"))
+        _ = note3.addModifier(try makeUpstreamAccidental("b"), index: 1)
+        _ = note3.addModifier(try makeUpstreamAccidental("accSagittal7CommaDown"), index: 1)
+        _ = note3.addModifier(try makeUpstreamAccidental("accSagittal11LargeDiesisDown"), index: 3)
+
+        let note4 = try factory.StaveNote(StaveNoteStruct(parsingKeys: ["d/4", "f/4", "b/4", "b/4"], duration: "4"))
+        _ = note4.addModifier(try makeUpstreamAccidental("accSagittal11MediumDiesisUp"), index: 1)
+        _ = note4.addModifier(try makeUpstreamAccidental("accSagittal5CommaDown"), index: 2)
+        _ = note4.addModifier(try makeUpstreamAccidental("accSagittalFlat7CDown"), index: 3)
+
+        let note5 = try factory.StaveNote(StaveNoteStruct(parsingKeys: ["d/4", "f/4", "a/4", "b/4"], duration: "4"))
+        _ = note5.addModifier(try makeUpstreamAccidental("accSagittal35LargeDiesisDown"), index: 2)
+
+        let note6 = try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4", "e/4", "g/4", "c/5"], duration: "8"))
+        _ = note6.addModifier(try makeUpstreamAccidental("accSagittal5CommaDown"), index: 1)
+
+        let note7 = try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4", "e/4", "g/4", "b/4"], duration: "8"))
+        _ = note7.addModifier(try makeUpstreamAccidental("accSagittalFlat7CDown"), index: 1)
+        _ = note7.addModifier(try makeUpstreamAccidental("accSagittal11LargeDiesisDown"), index: 3)
+
+        return [note0, note1, note2, note3, note4, note5, note6, note7]
     }
 
     private struct AutomaticAccidentalNoteSpec {

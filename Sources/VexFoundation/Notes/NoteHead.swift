@@ -248,6 +248,10 @@ public final class NoteHead: Note {
 
         self.glyphProps = Tables.getGlyphProps(duration: noteValue, type: noteTypeValue)!
 
+        if (line > 5 || line < 0), let ledgerCodeHead = glyphProps.ledgerCodeHead {
+            glyphProps.codeHead = ledgerCodeHead
+        }
+
         self.glyphCode = glyphProps.codeHead
         self.xShift = noteHeadStruct.xShift
 

@@ -352,35 +352,29 @@ open class TabNote: StemmableNote {
         super.setStave(stave)
         let ctx = stave.getContext()
         if let ctx { setContext(ctx) }
-
         // Recalculate widths based on the context's font
         if let context = ctx {
-            var w: Double = 0
+            let shouldMeasureTextWidths = !(self is GraceTabNote)
+            var measuredMax: Double = 0
             for i in 0..<glyphPropsArr.count {
                 var gp = glyphPropsArr[i]
                 let text = gp.text
-                if text.uppercased() != "X" {
+                if shouldMeasureTextWidths && text.uppercased() != "X" {
                     if let font = renderOptions.font {
                         context.save()
                         context.setFont(font)
-                        let measuredWidth = context.measureText(text).width
-                        // Browser canvas metrics used by upstream fixtures are
-                        // slightly narrower than CoreText for tab fret text.
-                        // Empirical fit: 1-char ~= 0.0035px, 2-char ~= 0.0050px.
-                        let chromiumParityCorrection = 0.002 + 0.0015 * Double(text.count)
-                        let corrected = max(0, measuredWidth - chromiumParityCorrection)
-                        gp.width = (corrected * 1000).rounded() / 1000
+                        gp.width = context.measureText(text).width
                         context.restore()
                     }
                 }
                 glyphPropsArr[i] = gp
-                w = max(gp.getWidth(), w)
+                measuredMax = max(gp.getWidth(), measuredMax)
             }
-            // Upstream parity quirk:
-            // formatter spacing uses the initial tab width estimate, while
-            // final rendering uses measured text widths (updated on redraw).
+            // Upstream fixture parity:
+            // formatter spacing effectively uses initial estimate widths,
+            // while draw-time placement uses measured fret text widths.
             if preFormatted {
-                tickableWidth = w
+                tickableWidth = measuredMax
             }
         }
 

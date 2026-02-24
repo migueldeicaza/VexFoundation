@@ -181,7 +181,6 @@ public struct TextNoteStruct {
 
 private struct TextNoteGlyphInfo {
     let code: String
-    let point: Double
     let xShift: Double
     let yShift: Double
 }
@@ -193,29 +192,37 @@ private struct TextNoteGlyphInfo {
 public final class TextNote: Note {
 
     override public class var category: String { "TextNote" }
+    override public class var textFont: FontInfo {
+        FontInfo(
+            family: VexFont.SANS_SERIF,
+            size: "12pt",
+            weight: VexFontWeight.normal.rawValue,
+            style: VexFontStyle.normal.rawValue
+        )
+    }
 
     // MARK: - Glyph Definitions
 
     private static let GLYPHS: [String: TextNoteGlyphInfo] = [
-        "segno": TextNoteGlyphInfo(code: "segno", point: 40, xShift: 0, yShift: 0),
-        "tr": TextNoteGlyphInfo(code: "ornamentTrill", point: 40, xShift: 0, yShift: 0),
-        "mordent": TextNoteGlyphInfo(code: "ornamentMordent", point: 40, xShift: 0, yShift: 0),
-        "mordent_upper": TextNoteGlyphInfo(code: "ornamentShortTrill", point: 40, xShift: 0, yShift: 0),
-        "mordent_lower": TextNoteGlyphInfo(code: "ornamentMordent", point: 40, xShift: 0, yShift: 0),
-        "f": TextNoteGlyphInfo(code: "dynamicForte", point: 40, xShift: 0, yShift: 0),
-        "p": TextNoteGlyphInfo(code: "dynamicPiano", point: 40, xShift: 0, yShift: 0),
-        "m": TextNoteGlyphInfo(code: "dynamicMezzo", point: 40, xShift: 0, yShift: 0),
-        "s": TextNoteGlyphInfo(code: "dynamicSforzando", point: 40, xShift: 0, yShift: 0),
-        "z": TextNoteGlyphInfo(code: "dynamicZ", point: 40, xShift: 0, yShift: 0),
-        "coda": TextNoteGlyphInfo(code: "coda", point: 40, xShift: 0, yShift: 0),
-        "pedal_open": TextNoteGlyphInfo(code: "keyboardPedalPed", point: 40, xShift: 0, yShift: 0),
-        "pedal_close": TextNoteGlyphInfo(code: "keyboardPedalUp", point: 40, xShift: 0, yShift: 0),
-        "caesura_straight": TextNoteGlyphInfo(code: "caesura", point: 40, xShift: 0, yShift: 0),
-        "caesura_curved": TextNoteGlyphInfo(code: "caesuraCurved", point: 40, xShift: 0, yShift: 0),
-        "breath": TextNoteGlyphInfo(code: "breathMarkComma", point: 40, xShift: 0, yShift: 0),
-        "tick": TextNoteGlyphInfo(code: "breathMarkTick", point: 40, xShift: 0, yShift: 0),
-        "turn": TextNoteGlyphInfo(code: "ornamentTurn", point: 40, xShift: 0, yShift: 0),
-        "turn_inverted": TextNoteGlyphInfo(code: "ornamentTurnSlash", point: 40, xShift: 0, yShift: 0),
+        "segno": TextNoteGlyphInfo(code: "segno", xShift: 0, yShift: 0),
+        "tr": TextNoteGlyphInfo(code: "ornamentTrill", xShift: 0, yShift: 0),
+        "mordent": TextNoteGlyphInfo(code: "ornamentMordent", xShift: 0, yShift: 0),
+        "mordent_upper": TextNoteGlyphInfo(code: "ornamentShortTrill", xShift: 0, yShift: 0),
+        "mordent_lower": TextNoteGlyphInfo(code: "ornamentMordent", xShift: 0, yShift: 0),
+        "f": TextNoteGlyphInfo(code: "dynamicForte", xShift: 0, yShift: 0),
+        "p": TextNoteGlyphInfo(code: "dynamicPiano", xShift: 0, yShift: 0),
+        "m": TextNoteGlyphInfo(code: "dynamicMezzo", xShift: 0, yShift: 0),
+        "s": TextNoteGlyphInfo(code: "dynamicSforzando", xShift: 0, yShift: 0),
+        "z": TextNoteGlyphInfo(code: "dynamicZ", xShift: 0, yShift: 0),
+        "coda": TextNoteGlyphInfo(code: "coda", xShift: 0, yShift: 0),
+        "pedal_open": TextNoteGlyphInfo(code: "keyboardPedalPed", xShift: 0, yShift: 0),
+        "pedal_close": TextNoteGlyphInfo(code: "keyboardPedalUp", xShift: 0, yShift: 0),
+        "caesura_straight": TextNoteGlyphInfo(code: "caesura", xShift: 0, yShift: 0),
+        "caesura_curved": TextNoteGlyphInfo(code: "caesuraCurved", xShift: 0, yShift: 0),
+        "breath": TextNoteGlyphInfo(code: "breathMarkComma", xShift: 0, yShift: 0),
+        "tick": TextNoteGlyphInfo(code: "breathMarkTick", xShift: 0, yShift: 0),
+        "turn": TextNoteGlyphInfo(code: "ornamentTurn", xShift: 0, yShift: 0),
+        "turn_inverted": TextNoteGlyphInfo(code: "ornamentTurnSlash", xShift: 0, yShift: 0),
     ]
 
     // MARK: - Properties
@@ -250,7 +257,12 @@ public final class TextNote: Note {
         // If a glyph is specified, create it
         if let glyphName = noteStruct.glyph,
            let glyphInfo = TextNote.GLYPHS[glyphName] {
-            noteGlyph = Glyph(code: glyphInfo.code, point: glyphInfo.point)
+            noteGlyph = Glyph(
+                code: glyphInfo.code,
+                point: Tables.NOTATION_FONT_SCALE,
+                options: GlyphOptions(category: "textNote")
+            )
+            setTickableWidth(noteGlyph?.getMetrics().width ?? 0)
         }
     }
 
@@ -276,17 +288,23 @@ public final class TextNote: Note {
 
     override public func preFormat() {
         if preFormatted { return }
+        let tickContext = checkTickContext("Can't preformat without a TickContext.")
 
         if smooth {
-            tickableWidth = 0
+            setTickableWidth(0)
         } else if let glyph = noteGlyph {
-            tickableWidth = glyph.getMetrics().width
+            setTickableWidth(glyph.getMetrics().width)
         } else {
-            let formatter = TextFormatter.create(
-                font: fontInfo,
-                context: getContext() ?? noteStave?.getContext()
-            )
-            tickableWidth = formatter.getWidthForTextInPx(text)
+            if let ctx = try? checkContext() {
+                ctx.setFont(fontInfo)
+                setTickableWidth(ctx.measureText(text).width)
+            } else {
+                let formatter = TextFormatter.create(
+                    font: fontInfo,
+                    context: getContext() ?? noteStave?.getContext()
+                )
+                setTickableWidth(formatter.getWidthForTextInPx(text))
+            }
         }
 
         // Adjust displaced head offsets based on justification
@@ -295,6 +313,7 @@ public final class TextNote: Note {
         } else if justification == .right {
             leftDisplacedHeadPx = tickableWidth
         }
+        rightDisplacedHeadPx = tickContext.getMetrics().glyphPx / 2
 
         preFormatted = true
     }
@@ -306,33 +325,48 @@ public final class TextNote: Note {
         let ctx = try checkContext()
         setRendered()
 
-        // Calculate x position
-        var x = getAbsoluteX()
+        // Reposition to center of note head.
+        let tickContext = checkTickContext("Can't draw without a TickContext.")
+        var x = getAbsoluteX() + tickContext.getMetrics().glyphPx / 2
+        let width = tickableWidth
         if justification == .center {
-            x -= tickableWidth / 2
+            x -= width / 2
         } else if justification == .right {
-            x -= tickableWidth
+            x -= width
         }
 
-        let y = stave.getYForLine(line + 0.5)  // Center on line
+        let y = stave.getYForLine(line - 3)
 
         if let glyph = noteGlyph {
             glyph.render(ctx: ctx, x: x, y: y)
         } else {
             applyStyle(context: ctx, style: getStyle())
             ctx.setFont(fontInfo)
-            let formatter = TextFormatter.create(font: fontInfo, context: ctx)
-            let textMeasure = formatter.measure(text)
             ctx.fillText(text, x, y)
+            let height = ctx.measureText(text).height
 
             // Render superscript
             if let sup = superscriptText, !sup.isEmpty {
-                ctx.fillText(sup, x + textMeasure.width + 2, y - textMeasure.height / 2.2)
+                let smallerSize = VexFont.scaleSize(fontInfo.size, 0.769231)
+                ctx.setFont(FontInfo(
+                    family: fontInfo.family,
+                    size: smallerSize,
+                    weight: fontInfo.weight,
+                    style: fontInfo.style
+                ))
+                ctx.fillText(sup, x + width + 2, y - height / 2.2)
             }
 
             // Render subscript
             if let sub = subscriptText, !sub.isEmpty {
-                ctx.fillText(sub, x + textMeasure.width + 2, y + textMeasure.height / 2.2 - 1)
+                let smallerSize = VexFont.scaleSize(fontInfo.size, 0.769231)
+                ctx.setFont(FontInfo(
+                    family: fontInfo.family,
+                    size: smallerSize,
+                    weight: fontInfo.weight,
+                    style: fontInfo.style
+                ))
+                ctx.fillText(sub, x + width + 2, y + height / 2.2 - 1)
             }
 
             restoreStyle(context: ctx, style: getStyle())

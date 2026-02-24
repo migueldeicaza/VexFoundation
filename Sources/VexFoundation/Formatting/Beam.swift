@@ -121,6 +121,9 @@ public final class Beam: VexElement {
     private var beamCount: Int
     private var unbeamable: Bool = false
     private var forcedPartialDirections: [Int: PartialBeamDirection] = [:]
+    // Parity hook: beams synthesized by auto-beaming APIs are drawn in a later
+    // pass than tuplets in the reference tests.
+    public var useUnformattedStemExtentsForTuplets: Bool = false
 
     // MARK: - Init
 
@@ -699,6 +702,7 @@ public final class Beam: VexElement {
         var beams: [Beam] = []
         for group in beamedGroups {
             let beam = try Beam(group)
+            beam.useUnformattedStemExtentsForTuplets = true
             if config.showStemlets {
                 beam.renderOptions.showStemlets = true
             }

@@ -18,7 +18,7 @@ public final class GraceTabNote: TabNote {
 
         renderOptions.yShift = 0.3
         renderOptions.scale = 0.6
-        renderOptions.font = "7.5pt \(VexFont.SANS_SERIF)"
+        renderOptions.font = "\(VexFont.SIZE)pt \(VexFont.SANS_SERIF)"
 
         updateWidth()
     }

@@ -24,6 +24,7 @@ public struct AccidentalCode: Sendable {
 /// Properties for a note glyph at a given duration.
 public struct GlyphProps: Sendable {
     public var codeHead: String
+    public var ledgerCodeHead: String? = nil
     public var stem: Bool
     public var flag: Bool
     public var rest: Bool
@@ -412,6 +413,7 @@ public enum Tables {
 
         return GlyphProps(
             codeHead: codeHead,
+            ledgerCodeHead: typeProps?.ledgerCodeHead ?? common.ledgerCodeHead,
             stem: typeProps?.stem ?? common.stem,
             flag: typeProps?.flag ?? common.flag,
             rest: typeProps?.rest ?? false,
@@ -836,6 +838,7 @@ public enum Tables {
     /// Per-type overrides (rest, slash, etc.).
     private struct TypeOverride: Sendable {
         var codeHead: String?
+        var ledgerCodeHead: String?
         var stem: Bool?
         var flag: Bool?
         var rest: Bool?
@@ -850,10 +853,23 @@ public enum Tables {
             "r": TypeOverride(codeHead: "restDoubleWhole", rest: true, position: "B/5", dotShiftY: 0),
         ],
         "1": [
-            "r": TypeOverride(codeHead: "restWhole", rest: true, position: "D/5", dotShiftY: 0.5),
+            "r": TypeOverride(
+                codeHead: "restWhole",
+                ledgerCodeHead: "restWholeLegerLine",
+                rest: true,
+                position: "D/5",
+                dotShiftY: 0.5
+            ),
         ],
         "2": [
-            "r": TypeOverride(codeHead: "restHalf", stem: false, rest: true, position: "B/4", dotShiftY: -0.5),
+            "r": TypeOverride(
+                codeHead: "restHalf",
+                ledgerCodeHead: "restHalfLegerLine",
+                stem: false,
+                rest: true,
+                position: "B/4",
+                dotShiftY: -0.5
+            ),
         ],
         "4": [
             "r": TypeOverride(codeHead: "restQuarter", stem: false, rest: true, position: "B/4",

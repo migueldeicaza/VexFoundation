@@ -4,7 +4,13 @@ import Testing
 extension UpstreamSVGParityTests {
     @Test("TextFormatter.Accuracy")
     func textFormatterAccuracyMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "TextFormatter", test: "Accuracy", width: 600, height: 500) { _, context in
+        try runCategorySVGParityCase(
+            module: "TextFormatter",
+            test: "Accuracy",
+            width: 600,
+            height: 500,
+            referenceFontsOverride: ["Bravura"]
+        ) { _, context in
             let lineHeight = 30.0
             let startX = 50.0
             var startY = 20.0
@@ -61,7 +67,13 @@ extension UpstreamSVGParityTests {
 
     @Test("TextFormatter.Box_Text")
     func textFormatterBoxTextMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "TextFormatter", test: "Box_Text", width: 600, height: 800) { _, context in
+        try runCategorySVGParityCase(
+            module: "TextFormatter",
+            test: "Box_Text",
+            width: 600,
+            height: 800,
+            referenceFontsOverride: ["Bravura"]
+        ) { _, context in
             var startY = 35.0
             let boxBorder = 2.0
             let boxPadding = 3.0

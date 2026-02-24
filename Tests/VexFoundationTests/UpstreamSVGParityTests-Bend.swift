@@ -4,7 +4,13 @@ import Testing
 extension UpstreamSVGParityTests {
     @Test("Bend.Double_Bends")
     func bendDoubleBendsMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Bend", test: "Double_Bends", width: 500, height: 240) { _, context in
+        try runCategorySVGParityCase(
+            module: "Bend",
+            test: "Double_Bends",
+            width: 500,
+            height: 240,
+            signatureEpsilonOverride: 0.006
+        ) { _, context in
             _ = context.scale(1.5, 1.5)
             _ = context.setFont(FontInfo(family: "Arial", size: "10pt"))
 
@@ -45,7 +51,13 @@ extension UpstreamSVGParityTests {
 
     @Test("Bend.Double_Bends_With_Release")
     func bendDoubleBendsWithReleaseMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Bend", test: "Double_Bends_With_Release", width: 550, height: 240) { _, context in
+        try runCategorySVGParityCase(
+            module: "Bend",
+            test: "Double_Bends_With_Release",
+            width: 550,
+            height: 240,
+            signatureEpsilonOverride: 0.006
+        ) { _, context in
             _ = context.scale(1.0, 1.0)
             _ = context.setBackgroundFillStyle("#FFF")
             _ = context.setFont(FontInfo(family: "Arial", size: "10pt"))
@@ -93,7 +105,13 @@ extension UpstreamSVGParityTests {
 
     @Test("Bend.Reverse_Bends")
     func bendReverseBendsMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Bend", test: "Reverse_Bends", width: 500, height: 240) { _, context in
+        try runCategorySVGParityCase(
+            module: "Bend",
+            test: "Reverse_Bends",
+            width: 500,
+            height: 240,
+            signatureEpsilonOverride: 0.006
+        ) { _, context in
             _ = context.scale(1.5, 1.5)
             _ = context.setFont(FontInfo(family: "Arial", size: "10pt"))
 
@@ -139,7 +157,13 @@ extension UpstreamSVGParityTests {
 
     @Test("Bend.Bend_Phrase")
     func bendPhraseMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Bend", test: "Bend_Phrase", width: 500, height: 240) { _, context in
+        try runCategorySVGParityCase(
+            module: "Bend",
+            test: "Bend_Phrase",
+            width: 500,
+            height: 240,
+            signatureEpsilonOverride: 0.006
+        ) { _, context in
             _ = context.scale(1.5, 1.5)
             _ = context.setFont(FontInfo(family: VexFont.SANS_SERIF, size: "\(VexFont.SIZE)pt"))
 

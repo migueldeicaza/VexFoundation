@@ -94,8 +94,13 @@ public struct SystemOptions {
         self.debugFormatter = debugFormatter
         self.spaceBetweenStaves = spaceBetweenStaves
         self.formatIterations = formatIterations
-        // Match JS: autoWidth when width is not explicitly provided
-        self.autoWidth = width == nil ? (noJustification ? false : true) : autoWidth
+        // Preserve Swift convenience: when width is omitted, default to auto-width
+        // unless explicitly disabled by `noJustification` with no autoWidth request.
+        if width == nil {
+            self.autoWidth = autoWidth || !noJustification
+        } else {
+            self.autoWidth = autoWidth
+        }
         self.x = x
         self.width = width ?? 500
         self.y = y
@@ -123,6 +128,7 @@ public final class System: VexElement {
     private var partStaves: [Stave] = []
     private var partStaveInfos: [StaveInfo] = []
     private var partVoices: [Voice] = []
+    private var debugNoteMetricsYs: [(y: Double, stave: Stave)] = []
     private var connector: StaveConnector?
 
     // MARK: - Init
@@ -247,12 +253,17 @@ public final class System: VexElement {
 
             var y = options.y
             var startX: Double = 0
+            var debugNoteMetricsYs: [(y: Double, stave: Stave)] = []
 
             for (index, part) in partStaves.enumerated() {
                 y += part.space(partStaveInfos[index].spaceAbove)
                 _ = part.setStaveY(y)
                 y += part.space(partStaveInfos[index].spaceBelow)
                 y += part.space(options.spaceBetweenStaves)
+                if partStaveInfos[index].debugNoteMetrics {
+                    debugNoteMetricsYs.append((y: y, stave: part))
+                    y += 15
+                }
                 startX = max(startX, part.getNoteStartX())
             }
 
@@ -301,6 +312,7 @@ public final class System: VexElement {
             }
 
             self.startX = startX
+            self.debugNoteMetricsYs = debugNoteMetricsYs
             self.lastY = y
             self.boundingBox = BoundingBox(
                 x: options.x, y: options.y,
@@ -318,6 +330,33 @@ public final class System: VexElement {
                 throw SystemError.drawRequiresFormat
             }
             setRendered()
+
+            guard let formatter,
+                  let startX,
+                  let lastY,
+                  let ctx = getContext() ?? factory.getContext()
+            else {
+                throw SystemError.drawRequiresFormat
+            }
+
+            if options.debugFormatter {
+                Formatter.plotDebugging(
+                    ctx: ctx,
+                    formatter: formatter,
+                    xPos: startX,
+                    y1: options.y,
+                    y2: lastY
+                )
+            }
+
+            for debugRow in debugNoteMetricsYs {
+                for voice in partVoices {
+                    for tickable in voice.getTickables() {
+                        guard let stave = tickable.getStave(), stave === debugRow.stave else { continue }
+                        Note.plotMetrics(ctx: ctx, note: tickable, yPos: debugRow.y)
+                    }
+                }
+            }
         }
     }
 }

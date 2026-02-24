@@ -55,6 +55,20 @@ public final class ChordSymbol: Modifier {
 
     override public class var category: String { "ChordSymbol" }
 
+    /// Match upstream `ChordSymbol.TEXT_FONT`.
+    override public class var textFont: FontInfo {
+        let musicFontName = Glyph.MUSIC_FONT_STACK.first?.name.lowercased() ?? ""
+        let family = (musicFontName == "petaluma")
+            ? "PetalumaScript, Arial, sans-serif"
+            : "Roboto Slab, Times, serif"
+        return FontInfo(
+            family: family,
+            size: "12pt",
+            weight: VexFontWeight.normal.rawValue,
+            style: VexFontStyle.normal.rawValue
+        )
+    }
+
     // MARK: - Static Glyph Data
 
     public static let glyphs: [String: String] = [
@@ -193,14 +207,13 @@ public final class ChordSymbol: Modifier {
         var maxRightGlyphWidth: Double = 0
 
         for symbol in symbols {
-            let fontSize = symbol.fontSizeInPixels
-            let fontAdj = fontSize * 0.05
+            let pointSize = VexFont.convertSizeToPointValue(symbol.fontInfo.size)
+            let fontAdj = pointSize * 0.05
             let glyphAdj = fontAdj * 2
             let note = symbol.checkAttachedNote()
             var symbolWidth: Double = 0
             var lineSpaces: Double = 1
             var vAlign = false
-
             for j in 0..<symbol.symbolBlocks.count {
                 var block = symbol.symbolBlocks[j]
                 let sup = ChordSymbol.isSuperscript(block)
@@ -213,7 +226,8 @@ public final class ChordSymbol: Modifier {
                     lineSpaces = 2
                 }
 
-                let superSubFontSize = fontSize * superSubScale
+                let fontSizePx = symbol.fontSizeInPixels
+                let superSubFontSize = fontSizePx * superSubScale
                 if block.symbolType == .glyph, let glyph = block.glyph {
                     block.width = ChordSymbol.getWidthForGlyph(glyph) * superSubFontSize
                     block.yShift += ChordSymbol.getYShiftForGlyph(glyph) * superSubFontSize
@@ -229,7 +243,7 @@ public final class ChordSymbol: Modifier {
                    glyph.code == ChordSymbol.glyphs["over"] {
                     lineSpaces = 2
                 }
-                block.width += ChordSymbol.spacingBetweenBlocks * fontSize * superSubScale
+                block.width += ChordSymbol.spacingBetweenBlocks * fontSizePx * superSubScale
 
                 if sup && j > 0 {
                     let prev = symbol.symbolBlocks[j - 1]
@@ -361,13 +375,20 @@ public final class ChordSymbol: Modifier {
     // MARK: - Text Measurement
 
     public func getYOffsetForText(_ text: String) -> Double {
-        let formatter = TextFormatter.create(font: fontInfo, context: getContext())
-        let extent = formatter.getYForStringInPx(text)
-        return extent.yMax / max(fontSizeInPixels, 1)
+        let formatter = TextFormatter.create(font: fontInfo)
+        var minYMaxPx: Double = 0
+        var count = 0
+        for character in text {
+            let extent = formatter.getYForCharacterInPx(character)
+            minYMaxPx = min(minYMaxPx, extent.yMax)
+            count += 1
+        }
+        let px = max(fontSizeInPixels, 1)
+        return count > 0 ? (-1 * (minYMaxPx / px)) : 0
     }
 
     private func getWidthForTextInEm(_ text: String) -> Double {
-        let formatter = TextFormatter.create(font: fontInfo, context: getContext())
+        let formatter = TextFormatter.create(font: fontInfo)
         return formatter.getWidthForTextInEm(text)
     }
 
@@ -476,8 +497,9 @@ public final class ChordSymbol: Modifier {
 
         if symbolType == .glyph, let glyphName,
            let glyphCode = ChordSymbol.glyphs[glyphName] {
-            block.glyph = Glyph(code: glyphCode, point: 20,
-                                options: GlyphOptions(category: "chordSymbol"))
+            let glyph = Glyph(code: glyphCode, point: 20,
+                              options: GlyphOptions(category: "chordSymbol"))
+            block.glyph = glyph
         } else if symbolType == .text {
             block.width = getWidthForTextInEm(text)
         } else if symbolType == .line, let width {
@@ -561,7 +583,7 @@ public final class ChordSymbol: Modifier {
     override public func draw() throws {
         let ctx = try checkContext()
         let note = checkAttachedNote()
-        guard let stemmable = note as? StemmableNote else { return }
+        let stemmable = note as? StemmableNote
         setRendered()
 
         ctx.save()
@@ -572,12 +594,12 @@ public final class ChordSymbol: Modifier {
         if let font = textFont { ctx.setFont(font) }
 
         var y: Double
-        let hasStem = stemmable.hasStem()
+        let hasStem = note.hasStem()
         let stave = note.checkStave()
 
         if vertical == .bottom {
             y = stave.getYForBottomText(textLine + Tables.TEXT_HEIGHT_OFFSET_HACK)
-            if hasStem {
+            if hasStem, let stemmable {
                 let stemExt = stemmable.checkStem().getExtents()
                 let spacing = stave.getSpacingBetweenLines()
                 let stemBase = stemmable.getStemDirection() == .up ? stemExt.baseY : stemExt.topY
@@ -586,7 +608,7 @@ public final class ChordSymbol: Modifier {
         } else {
             let topY = note.getYs().min() ?? start.y
             y = min(stave.getYForTopText(textLine), topY - 10)
-            if hasStem {
+            if hasStem, let stemmable {
                 let stemExt = stemmable.checkStem().getExtents()
                 let spacing = stave.getSpacingBetweenLines()
                 y = min(y, stemExt.topY - 5 - spacing * textLine)
@@ -602,7 +624,11 @@ public final class ChordSymbol: Modifier {
             x = start.x - getWidth() / 2
         } else {
             // centerStem
-            x = stemmable.getStemX() - getWidth() / 2
+            if let stemmable {
+                x = stemmable.getStemX() - getWidth() / 2
+            } else {
+                x = start.x - getWidth() / 2
+            }
         }
 
         for symbol in symbolBlocks {
