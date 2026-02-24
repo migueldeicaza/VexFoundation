@@ -331,6 +331,14 @@ public final class TextNote: Note {
         let width = tickableWidth
         if justification == .center {
             x -= width / 2
+            // Align with VexFlow reference SVGs when this tick context's left modifier
+            // space comes from other simultaneous voices (e.g. accidentals).
+            if noteModifiers.isEmpty {
+                let contextModLeft = tickContext.getMetrics().modLeftPx
+                if contextModLeft > 0 {
+                    x -= contextModLeft / 2
+                }
+            }
         } else if justification == .right {
             x -= width
         }

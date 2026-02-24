@@ -540,8 +540,8 @@ extension UpstreamSVGParityTests {
             .addModifier(Articulation("am").setPosition(.below), index: 0)
             .addModifier(Articulation("a@u").setPosition(.below), index: 0)
             .addModifier(Annotation("yyyy").setVerticalJustification(.bottom), index: 0)
-            .addModifier(Annotation("xxxx").setVerticalJustification(.bottom).setFont(FontInfo(family: VexFont.SANS_SERIF, size: 20)), index: 0)
-            .addModifier(Annotation("ttt").setVerticalJustification(.bottom).setFont(FontInfo(family: VexFont.SANS_SERIF, size: 20)), index: 0)
+            .addModifier(Annotation("xxxx").setVerticalJustification(.bottom).setFont(FontInfo(family: "sans-serif", size: 20)), index: 0)
+            .addModifier(Annotation("ttt").setVerticalJustification(.bottom).setFont(FontInfo(family: "sans-serif", size: 20)), index: 0)
 
         let note1 = StaveNote(try StaveNoteStruct(parsingKeys: ["c/5"], duration: "8", stemDirection: .down))
             .addModifier(StringNumber("3").setPosition(.below), index: 0)
@@ -563,8 +563,8 @@ extension UpstreamSVGParityTests {
             .addModifier(Articulation("am").setPosition(.above), index: 0)
             .addModifier(Articulation("a@u").setPosition(.above), index: 0)
             .addModifier(Annotation("yyyy").setVerticalJustification(.top), index: 0)
-            .addModifier(Annotation("xxxx").setVerticalJustification(.top).setFont(FontInfo(family: VexFont.SANS_SERIF, size: 20)), index: 0)
-            .addModifier(Annotation("ttt").setVerticalJustification(.top).setFont(FontInfo(family: VexFont.SANS_SERIF, size: 20)), index: 0)
+            .addModifier(Annotation("xxxx").setVerticalJustification(.top).setFont(FontInfo(family: "sans-serif", size: 20)), index: 0)
+            .addModifier(Annotation("ttt").setVerticalJustification(.top).setFont(FontInfo(family: "sans-serif", size: 20)), index: 0)
         let note5 = StaveNote(try StaveNoteStruct(parsingKeys: ["c/5"], duration: "8"))
         let notesB = [note3, note4, note5]
 

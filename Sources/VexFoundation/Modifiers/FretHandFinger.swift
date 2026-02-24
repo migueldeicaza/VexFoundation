@@ -63,6 +63,15 @@ public final class FretHandFinger: Modifier {
             let pos = num.getPosition()
             let index = num.checkIndex()
             let props = note.getKeyProps()[index]
+            let textFormatter = TextFormatter.create(font: num.textFont ?? FretHandFinger.textFont)
+            let textHeight = textFormatter.maxHeight
+
+            if num.position == .above {
+                state.topTextLine += textHeight / Tables.STAVE_LINE_DISTANCE + 0.5
+            }
+            if num.position == .below {
+                state.textLine += textHeight / Tables.STAVE_LINE_DISTANCE + 0.5
+            }
 
             if note !== prevNote {
                 for _ in 0..<note.keys.count {
