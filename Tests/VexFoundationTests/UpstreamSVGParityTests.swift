@@ -21,7 +21,6 @@ struct UpstreamSVGParityTests {
         "Annotation.Harmonics": 0.418,
         "Annotation.Simple_Annotation": 0.418,
         "Annotation.TabNote_Annotations": 0.829,
-        "Bach_Demo.Minuet_1": 3.8,
         "Beam.TabNote_Auto_Create_Beams": 0.381,
         "Beam.TabNote_Beams_Auto_Stem": 0.381,
         "Beam.TabNote_Beams_Down": 0.414,
@@ -56,7 +55,7 @@ struct UpstreamSVGParityTests {
         "TextNote.TextNote_Superscript_and_Subscript": 0.003,
         "Vibrato.Harsh_Vibrato": 0.418,
         "Vibrato.Simple_Vibrato": 0.418,
-        "Vibrato.Vibrato_with_Bend": 2.648,
+        "Vibrato.Vibrato_with_Bend": 0.018,
     ]
     private static let caseFontSignatureEpsilonOverrides: [String: [String: Double]] = [
         "ChordSymbol.Bottom_Chord_Symbols": ["Petaluma": 6.672],
@@ -68,7 +67,6 @@ struct UpstreamSVGParityTests {
         "ChordSymbol.Top_Chord_Symbols": ["Petaluma": 1.854],
         "ChordSymbol.Top_Chord_Symbols_Justified": ["Petaluma": 3.278],
         "GlyphNote.GlyphNote_with_ChordSymbols": ["Petaluma": 1.854],
-        "Vibrato.Vibrato_with_Bend": ["Gonville": 22.849],
     ]
 
     private let defaultFonts = ["Bravura", "Gonville", "Petaluma", "Leland"]

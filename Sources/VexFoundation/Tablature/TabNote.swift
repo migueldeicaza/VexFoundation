@@ -372,10 +372,14 @@ open class TabNote: StemmableNote {
                 glyphPropsArr[i] = gp
                 measuredMax = max(gp.getWidth(), measuredMax)
             }
-            // Upstream fixture parity:
-            // formatter spacing effectively uses initial estimate widths,
-            // while draw-time placement uses measured fret text widths.
-            if preFormatted {
+            // Most current parity fixtures expect formatter spacing to use the
+            // initial table estimate, except bend/vibrato tab notes where
+            // measured fret width feeds the modifier spacing path.
+            let hasBendOrVibratoModifier = getModifiers().contains { modifier in
+                let category = modifier.getCategory()
+                return category == Bend.category || category == Vibrato.category
+            }
+            if preFormatted || hasBendOrVibratoModifier {
                 tickableWidth = measuredMax
             }
         }

@@ -104,7 +104,7 @@ public final class StaveTempo: StaveModifier {
         let y = stave.getYForTopText(1) + tempoShiftY
 
         ctx.save()
-        let textFormatter = TextFormatter.create(font: fontInfo, context: ctx)
+        let textFormatter = TextFormatter.create(font: fontInfo)
 
         if let name {
             ctx.setFont(fontInfo)
@@ -117,7 +117,7 @@ public final class StaveTempo: StaveModifier {
             noteTextFont.weight = VexFontWeight.normal.rawValue
             noteTextFont.style = VexFontStyle.normal.rawValue
             ctx.setFont(noteTextFont)
-            let noteTextFormatter = TextFormatter.create(font: noteTextFont, context: ctx)
+            let noteTextFormatter = TextFormatter.create(font: noteTextFont)
 
             if name != nil {
                 x += noteTextFormatter.getWidthForTextInPx("|")
