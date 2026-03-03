@@ -104,6 +104,8 @@ public final class Tuplet: VexElement {
     public var yPos: Double = 16
     public var xPos: Double = 100
     public var tupletWidth: Double = 200
+    /// VexFlowPatch: option to not render tuplet numbers
+    public var renderTupletNumber: Bool = true
 
     private var point: Double
     private var numeratorGlyphs: [Glyph] = []
@@ -376,36 +378,39 @@ public final class Tuplet: VexElement {
             }
         }
 
-        // Draw numerator glyphs
-        let shiftY = (Glyph.MUSIC_FONT_STACK.first?.lookupMetric("digits.shiftY") as? Double) ?? 0
+        // VexFlowPatch: conditionally render tuplet numbers
+        if renderTupletNumber {
+            // Draw numerator glyphs
+            let shiftY = (Glyph.MUSIC_FONT_STACK.first?.lookupMetric("digits.shiftY") as? Double) ?? 0
 
-        var xOffset: Double = 0
-        for glyph in numeratorGlyphs {
-            glyph.render(ctx: ctx, x: notationStartX + xOffset,
-                        y: yPos + point / 3 - 2 + shiftY)
-            xOffset += glyph.getMetrics().width
-        }
-
-        // Display colon and denominator if ratio is shown
-        if ratioed {
-            let colonX = notationStartX + xOffset + point * 0.16
-            let colonRadius = point * 0.06
-
-            ctx.beginPath()
-            ctx.arc(colonX, yPos - point * 0.08, colonRadius, 0, .pi * 2, false)
-            ctx.closePath()
-            ctx.fill()
-
-            ctx.beginPath()
-            ctx.arc(colonX, yPos + point * 0.12, colonRadius, 0, .pi * 2, false)
-            ctx.closePath()
-            ctx.fill()
-
-            xOffset += point * 0.32
-            for glyph in denomGlyphs {
+            var xOffset: Double = 0
+            for glyph in numeratorGlyphs {
                 glyph.render(ctx: ctx, x: notationStartX + xOffset,
                             y: yPos + point / 3 - 2 + shiftY)
                 xOffset += glyph.getMetrics().width
+            }
+
+            // Display colon and denominator if ratio is shown
+            if ratioed {
+                let colonX = notationStartX + xOffset + point * 0.16
+                let colonRadius = point * 0.06
+
+                ctx.beginPath()
+                ctx.arc(colonX, yPos - point * 0.08, colonRadius, 0, .pi * 2, false)
+                ctx.closePath()
+                ctx.fill()
+
+                ctx.beginPath()
+                ctx.arc(colonX, yPos + point * 0.12, colonRadius, 0, .pi * 2, false)
+                ctx.closePath()
+                ctx.fill()
+
+                xOffset += point * 0.32
+                for glyph in denomGlyphs {
+                    glyph.render(ctx: ctx, x: notationStartX + xOffset,
+                                y: yPos + point / 3 - 2 + shiftY)
+                    xOffset += glyph.getMetrics().width
+                }
             }
         }
     }

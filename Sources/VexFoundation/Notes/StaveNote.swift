@@ -342,6 +342,8 @@ public class StaveNote: StemmableNote {
     public var noteHeads: [NoteHead] = []
     public var sortedKeyProps: [(keyProps: KeyProps, index: Int)] = []
     public private(set) var staveInitError: StaveNoteError?
+    /// VexFlowPatch: optional padding to the right (e.g. for large lyrics), default 0.
+    public var paddingRight: Double = 0
 
     private static func fallbackGlyphProps() -> GlyphProps {
         Tables.getGlyphProps(duration: .quarter, type: .note) ?? GlyphProps(
@@ -416,10 +418,16 @@ public class StaveNote: StemmableNote {
     @discardableResult
     public func reset() -> Self {
         let noteHeadStyles = noteHeads.map { $0.getStyle() }
+        // VexFlowPatch: save notehead types (e.g. slash noteheads) before rebuild
+        let noteHeadTypes = noteHeads.map { $0.noteType }
         buildNoteHeads()
         for (index, noteHead) in noteHeads.enumerated() {
             if index < noteHeadStyles.count, let style = noteHeadStyles[index] {
                 noteHead.setStyle(style)
+            }
+            // VexFlowPatch: restore notehead types
+            if index < noteHeadTypes.count {
+                noteHead.noteType = noteHeadTypes[index]
             }
         }
         if let stave = noteStave {
@@ -478,6 +486,10 @@ public class StaveNote: StemmableNote {
                 duration: noteValue,
                 line: noteProps.line,
                 glyphFontScale: renderOptions.glyphFontScale,
+                stemDownXOffset: noteProps.stemDownXOffset,
+                stemUpXOffset: noteProps.stemUpXOffset,
+                stemUpYShift: noteProps.stemUpYShift,
+                stemDownYShift: noteProps.stemDownYShift,
                 customGlyphCode: (noteProps.code?.isEmpty ?? true) ? nil : noteProps.code,
                 xShift: noteProps.shiftRight,
                 stemDirection: dir,
@@ -1014,7 +1026,8 @@ public class StaveNote: StemmableNote {
             }
         }
 
-        var width = getGlyphWidth() + leftDisplacedHeadPx + rightDisplacedHeadPx + noteHeadPadding
+        // VexFlowPatch: add optional paddingRight (e.g. for large lyrics), default 0.
+        var width = getGlyphWidth() + leftDisplacedHeadPx + rightDisplacedHeadPx + noteHeadPadding + paddingRight
 
         if shouldDrawFlag() && stemDirection == Stem.UP {
             width += getGlyphWidth()
@@ -1039,7 +1052,8 @@ public class StaveNote: StemmableNote {
         }
 
         let metrics = try getMetricsThrowing()
-        let x = getAbsoluteX() - metrics.modLeftPx - metrics.leftDisplacedHeadPx
+        // VexFlowPatch: subtract paddingRight to not shift note bbox
+        let x = getAbsoluteX() - metrics.modLeftPx - metrics.leftDisplacedHeadPx - paddingRight
         let halfLineSpacing = (noteStave?.getSpacingBetweenLines() ?? 0) / 2
         let lineSpacing = halfLineSpacing * 2
 
@@ -1417,6 +1431,14 @@ public class StaveNote: StemmableNote {
         let bounds = getNoteHeadBounds()
         if bounds.highestLine < 6 && bounds.lowestLine > 0 { return }
 
+        // VexFlowPatch: apply ledger line style and wrap in SVG group
+        let ledgerStyle = ledgerLineStyle ?? stave.getDefaultLedgerLineStyle()
+        applyStyle(context: ctx, style: ledgerStyle)
+        let ledgerLinesDrawn = bounds.highestLine >= 6 || bounds.lowestLine <= 0
+        if ledgerLinesDrawn {
+            _ = ctx.openGroup("ledgers", (getAttribute("id") ?? "") + "ledgers")
+        }
+
         let minX = min(bounds.displacedX ?? 0, bounds.nonDisplacedX ?? 0)
 
         func drawLine(y: Double, normal: Bool, displaced: Bool) {
@@ -1449,6 +1471,12 @@ public class StaveNote: StemmableNote {
             drawLine(y: stave.getYForNote(line), normal: normal, displaced: disp)
             line -= 1
         }
+
+        // VexFlowPatch: close ledger lines SVG group
+        if ledgerLinesDrawn {
+            ctx.closeGroup()
+        }
+        restoreStyle(context: ctx, style: ledgerStyle)
     }
 
     // MARK: - Draw NoteHeads

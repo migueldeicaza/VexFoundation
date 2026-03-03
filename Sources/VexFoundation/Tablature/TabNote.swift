@@ -202,6 +202,9 @@ open class TabNote: StemmableNote {
     public var glyphPropsArr: [TabGlyphProps] = []
     public var positions: [TabNotePosition]
     public private(set) var tabInitError: TabNoteError?
+    /// VexFlowPatch: configurable background color for tab notes
+    /// (prevents black rectangles in viewers that render transparent as black)
+    public var backgroundColor: String?
 
     private static func fallbackGlyphProps() -> GlyphProps {
         Tables.getGlyphProps(duration: .quarter, type: .note) ?? GlyphProps(
@@ -332,7 +335,7 @@ open class TabNote: StemmableNote {
         for i in 0..<positions.count {
             var fret = positions[i].fret
             if ghost { fret = "(\(fret))" }
-            let tabGlyph = Tables.tabToGlyphProps(fret, scale: renderOptions.scale)
+            let tabGlyph = Tables.tabToGlyphProps(fret, scale: renderOptions.scale, useAlternativeXGlyph: renderOptions.useAlternativeXNoteheadGlyph)
             glyphPropsArr.append(tabGlyph)
             w = max(tabGlyph.getWidth(), w)
         }
@@ -546,7 +549,16 @@ open class TabNote: StemmableNote {
             let noteGlyphWidth = tickableWidth
             let tabX = x + noteGlyphWidth / 2 - glyphProps.getWidth() / 2
 
-            ctx.clearRect(tabX - 2, y - 3, glyphProps.getWidth() + 4, 6)
+            // VexFlowPatch: use backgroundColor if set, otherwise clearRect
+            if let bgColor = backgroundColor {
+                ctx.save()
+                ctx.setFillStyle(bgColor)
+                ctx.setLineWidth(0)
+                ctx.fillRect(tabX - 2, y - 3, glyphProps.getWidth() + 4, 6)
+                ctx.restore()
+            } else {
+                ctx.clearRect(tabX - 2, y - 3, glyphProps.getWidth() + 4, 6)
+            }
 
             if let code = glyphProps.code {
                 Glyph.renderGlyph(

@@ -56,6 +56,10 @@ public struct NoteHeadStruct {
     public var style: ElementStyle?
     public var stemDownXOffset: Double
     public var stemUpXOffset: Double
+    /// VexFlowPatch: vertical shift for notehead when stem is up (independent of stem length)
+    public var stemUpYShift: Double
+    /// VexFlowPatch: vertical shift for notehead when stem is down (independent of stem length)
+    public var stemDownYShift: Double
     public var customGlyphCode: String?
     public var xShift: Double
     public var stemDirection: StemDirection
@@ -75,6 +79,8 @@ public struct NoteHeadStruct {
         style: ElementStyle? = nil,
         stemDownXOffset: Double = 0,
         stemUpXOffset: Double = 0,
+        stemUpYShift: Double = 0,
+        stemDownYShift: Double = 0,
         customGlyphCode: String? = nil,
         xShift: Double = 0,
         stemDirection: StemDirection = .up,
@@ -93,6 +99,8 @@ public struct NoteHeadStruct {
         self.style = style
         self.stemDownXOffset = stemDownXOffset
         self.stemUpXOffset = stemUpXOffset
+        self.stemUpYShift = stemUpYShift
+        self.stemDownYShift = stemDownYShift
         self.customGlyphCode = customGlyphCode
         self.xShift = xShift
         self.stemDirection = stemDirection
@@ -114,6 +122,8 @@ public struct NoteHeadStruct {
         style: ElementStyle? = nil,
         stemDownXOffset: Double = 0,
         stemUpXOffset: Double = 0,
+        stemUpYShift: Double = 0,
+        stemDownYShift: Double = 0,
         customGlyphCode: String? = nil,
         xShift: Double = 0,
         stemDirection: StemDirection = .up,
@@ -146,6 +156,8 @@ public struct NoteHeadStruct {
             style: style,
             stemDownXOffset: stemDownXOffset,
             stemUpXOffset: stemUpXOffset,
+            stemUpYShift: stemUpYShift,
+            stemDownYShift: stemDownYShift,
             customGlyphCode: customGlyphCode,
             xShift: xShift,
             stemDirection: stemDirection,
@@ -168,6 +180,8 @@ public struct NoteHeadStruct {
         style: ElementStyle? = nil,
         stemDownXOffset: Double = 0,
         stemUpXOffset: Double = 0,
+        stemUpYShift: Double = 0,
+        stemDownYShift: Double = 0,
         customGlyphCode: String? = nil,
         xShift: Double = 0,
         stemDirection: StemDirection = .up,
@@ -187,6 +201,8 @@ public struct NoteHeadStruct {
             style: style,
             stemDownXOffset: stemDownXOffset,
             stemUpXOffset: stemUpXOffset,
+            stemUpYShift: stemUpYShift,
+            stemDownYShift: stemDownYShift,
             customGlyphCode: customGlyphCode,
             xShift: xShift,
             stemDirection: stemDirection,
@@ -213,6 +229,10 @@ public final class NoteHead: Note {
     public var customGlyph: Bool = false
     public var stemUpXOffset: Double = 0
     public var stemDownXOffset: Double = 0
+    /// VexFlowPatch: vertical shift for notehead when stem is up
+    public var stemUpYShift: Double = 0
+    /// VexFlowPatch: vertical shift for notehead when stem is down
+    public var stemDownYShift: Double = 0
     public var displaced: Bool
     public var headStemDirection: StemDirection
     public var headX: Double
@@ -254,6 +274,10 @@ public final class NoteHead: Note {
 
         self.glyphCode = glyphProps.codeHead
         self.xShift = noteHeadStruct.xShift
+
+        // VexFlowPatch: store y-shift values
+        stemUpYShift = noteHeadStruct.stemUpYShift
+        stemDownYShift = noteHeadStruct.stemDownYShift
 
         if let customCode = noteHeadStruct.customGlyphCode {
             customGlyph = true
@@ -371,13 +395,21 @@ public final class NoteHead: Note {
 
         let categorySuffix = "\(glyphCode)Stem\(headStemDirection == Stem.UP ? "Up" : "Down")"
 
+        // VexFlowPatch: apply notehead y-shift independent of stem length
+        var drawY = headY
+        if headStemDirection == Stem.UP {
+            drawY += stemUpYShift
+        } else if headStemDirection == Stem.DOWN {
+            drawY += stemDownYShift
+        }
+
         if noteType == NoteType.slash.rawValue {
             let staveSpace = checkStave().getSpacingBetweenLines()
             drawSlashNoteHead(
                 ctx: ctx,
                 duration: noteDuration,
                 x: drawX,
-                y: headY,
+                y: drawY,
                 stemDirection: headStemDirection,
                 staveSpace: staveSpace
             )
@@ -385,7 +417,7 @@ public final class NoteHead: Note {
             Glyph.renderGlyph(
                 ctx: ctx,
                 xPos: drawX,
-                yPos: headY,
+                yPos: drawY,
                 point: renderOptions.glyphFontScale,
                 code: glyphCode,
                 category: "noteHead.\(categorySuffix)"

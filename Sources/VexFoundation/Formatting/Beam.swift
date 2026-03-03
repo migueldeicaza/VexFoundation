@@ -463,6 +463,15 @@ public final class Beam: VexElement {
     public func postFormat() {
         if postFormatted { return }
 
+        // VexFlowPatch: reset stem extensions to base values before recalculating.
+        // This ensures idempotent beam rendering when beams are recreated
+        // but notes/stems are reused (prevents extension accumulation).
+        for note in notes {
+            if let stem = note.getStem() {
+                stem.setExtension(note.getStemExtension())
+            }
+        }
+
         if isTabNote(notes[0]) || renderOptions.flatBeams {
             calculateFlatSlope()
         } else {
@@ -505,8 +514,9 @@ public final class Beam: VexElement {
                     ctx.beginPath()
                     ctx.moveTo(startX, startY)
                     ctx.lineTo(startX, startY + beamThickness)
-                    ctx.lineTo(endX + 1, endY + beamThickness)
-                    ctx.lineTo(endX + 1, endY)
+                    // VexFlowPatch: use Stem.WIDTH instead of hardcoded 1 to properly cover the last stem
+                    ctx.lineTo(endX + Stem.WIDTH, endY + beamThickness)
+                    ctx.lineTo(endX + Stem.WIDTH, endY)
                     ctx.closePath()
                     ctx.fill()
                 }

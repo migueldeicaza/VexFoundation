@@ -163,6 +163,8 @@ public struct NoteRenderOptions {
     public var scale: Double = 1
     public var strokePx: Double = 1
     public var font: String?
+    /// VexFlowPatch: use classical-style X notehead glyph for tab notes
+    public var useAlternativeXNoteheadGlyph: Bool = false
 }
 
 // MARK: - Note

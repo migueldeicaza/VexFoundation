@@ -714,13 +714,28 @@ open class Stave: VexElement {
         for i in 0..<begModifiers.count {
             let modifier = begModifiers[i]
             let pad = modifier.getPadding(i + offset)
-            let width = modifier.getModifierWidth()
+            var width = modifier.getModifierWidth()
+            // VexFlowPatch: prevent modifier width being NaN
+            if width.isNaN {
+                modifier.setModifierWidth(10)
+                width = 10
+            }
             x += pad
-            modifier.setModifierX(x)
+            // VexFlowPatch: don't overwrite modifier.x when it was already shifted further
+            // (e.g. to align time signatures via formatBegModifiers)
+            let modifierX = modifier.getModifierX()
+            if modifierX > x {
+                x = modifierX
+            } else {
+                modifier.setModifierX(x)
+            }
             x += width
             if pad + width == 0 { offset -= 1 }
         }
-        startX = x
+        // VexFlowPatch: don't overwrite start_x if it's already bigger (alignment)
+        if x > startX {
+            startX = x
+        }
 
         // Layout end modifiers (right to left)
         x = staveX + staveWidth

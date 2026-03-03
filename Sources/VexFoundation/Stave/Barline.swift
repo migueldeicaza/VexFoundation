@@ -14,6 +14,8 @@ public enum BarlineType: Int, Sendable {
     case repeatEnd = 5
     case repeatBoth = 6
     case none = 7
+    /// VexFlowPatch: double heavy barline
+    case doubleHeavy = 8
 }
 
 // MARK: - Barline
@@ -32,6 +34,7 @@ public final class Barline: StaveModifier {
         "repeatEnd": .repeatEnd,
         "repeatBoth": .repeatBoth,
         "none": .none,
+        "doubleHeavy": .doubleHeavy,
     ]
 
     // MARK: - Properties
@@ -42,11 +45,13 @@ public final class Barline: StaveModifier {
     private static let widths: [BarlineType: Double] = [
         .single: 5, .double: 5, .end: 5,
         .repeatBegin: 5, .repeatEnd: 5, .repeatBoth: 5, .none: 5,
+        .doubleHeavy: 5,
     ]
 
     private static let paddings: [BarlineType: Double] = [
         .single: 0, .double: 0, .end: 0,
         .repeatBegin: 15, .repeatEnd: 15, .repeatBoth: 15, .none: 0,
+        .doubleHeavy: 0,
     ]
 
     private static let layoutMetricsMap: [BarlineType: LayoutMetrics] = [
@@ -57,6 +62,7 @@ public final class Barline: StaveModifier {
         .repeatBegin: LayoutMetrics(xMin: -2, xMax: 10, paddingLeft: 5, paddingRight: 5),
         .repeatBoth: LayoutMetrics(xMin: -10, xMax: 10, paddingLeft: 5, paddingRight: 5),
         .none: LayoutMetrics(xMin: 0, xMax: 0, paddingLeft: 5, paddingRight: 5),
+        .doubleHeavy: LayoutMetrics(xMin: -5, xMax: 1, paddingLeft: 5, paddingRight: 5),
     ]
 
     // MARK: - Init
@@ -108,6 +114,8 @@ public final class Barline: StaveModifier {
         case .repeatBoth:
             try drawRepeatBar(stave: stave, x: modifierX, begin: false)
             try drawRepeatBar(stave: stave, x: modifierX, begin: true)
+        case .doubleHeavy:
+            try drawVerticalBar(stave: stave, x: modifierX, doubleBar: true, doubleHeavy: true)
         case .none:
             break
         }
@@ -118,14 +126,19 @@ public final class Barline: StaveModifier {
 
     // MARK: - Drawing Helpers
 
-    private func drawVerticalBar(stave: Stave, x: Double, doubleBar: Bool = false) throws {
+    private func drawVerticalBar(stave: Stave, x: Double, doubleBar: Bool = false, doubleHeavy: Bool = false) throws {
         let ctx = try stave.checkContext()
         let topY = stave.getTopLineTopY()
         let botY = stave.getBottomLineBottomY()
+        // VexFlowPatch: support double heavy barline with thicker strokes
+        let widthBar1: Double = doubleHeavy ? 3 : 1
+        let widthBar2: Double = doubleHeavy ? 3 : 1
+        let startXBar1: Double = doubleHeavy ? x - 5 : x - 3
+        let startXBar2: Double = x
         if doubleBar {
-            ctx.fillRect(x - 3, topY, 1, botY - topY)
+            ctx.fillRect(startXBar1, topY, widthBar1, botY - topY)
         }
-        ctx.fillRect(x, topY, 1, botY - topY)
+        ctx.fillRect(startXBar2, topY, widthBar2, botY - topY)
     }
 
     private func drawVerticalEndBar(stave: Stave, x: Double) throws {

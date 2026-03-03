@@ -9,6 +9,11 @@ public enum PedalMarkingType: Int {
     case text = 1
     case bracket = 2
     case mixed = 3
+    /// VexFlowPatch: extended pedal styles
+    case mixedOpenEnd = 4
+    case bracketOpenBegin = 5
+    case bracketOpenEnd = 6
+    case bracketOpenBoth = 7
 }
 
 // MARK: - Pedal Marking Render Options
@@ -54,6 +59,14 @@ public final class PedalMarking: VexElement {
     public var customDepressText: String = ""
     public var customReleaseText: String = ""
     public var pedalRenderOptions = PedalMarkingRenderOptions()
+    /// VexFlowPatch: track pedal marking spanning staves
+    public var endsStave: Bool = false
+    public var beginsStave: Bool = false
+    public var changeBegin: Bool = false
+    public var endStave: Stave?
+    public var endStaveAddedWidth: Double = 0
+    public var startMargin: Double = 0
+    public var endMargin: Double = 0
 
     // MARK: - Init
 
@@ -100,6 +113,22 @@ public final class PedalMarking: VexElement {
     @discardableResult
     public func setLine(_ line: Double) -> Self {
         pedalLine = line
+        return self
+    }
+
+    /// VexFlowPatch: set ending stave and calculate width adjustments for
+    /// pedal markings spanning multiple staves.
+    @discardableResult
+    public func setEndStave(_ stave: Stave) -> Self {
+        endStave = stave
+        endStaveAddedWidth = 0
+        startMargin = 0
+        endMargin = 0
+        for modifier in stave.modifiers {
+            if modifier.getPosition() == .end {
+                endStaveAddedWidth += modifier.getModifierWidth()
+            }
+        }
         return self
     }
 
@@ -218,10 +247,12 @@ public final class PedalMarking: VexElement {
         _ = ctx.setFillStyle(pedalRenderOptions.color)
         ctx.setFont(getFont())
 
-        if pedalType == .bracket || pedalType == .mixed {
+        // VexFlowPatch: handle extended pedal types
+        switch pedalType {
+        case .bracket, .mixed, .mixedOpenEnd, .bracketOpenBegin, .bracketOpenEnd, .bracketOpenBoth:
             _ = ctx.setLineWidth(pedalRenderOptions.bracketLineWidth)
             try drawBracketed()
-        } else {
+        case .text:
             try drawText()
         }
 

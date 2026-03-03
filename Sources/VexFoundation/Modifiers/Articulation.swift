@@ -98,6 +98,8 @@ public final class Articulation: Modifier {
     public let type: String
     public var fontScale: Double = Tables.NOTATION_FONT_SCALE
     public var articulationData: Tables.ArticulationStruct
+    /// VexFlowPatch: % distance to next note or end of stave for breath marks (0.8 = 80%)
+    public var breathMarkDistance: Double = 0.8
 
     private var glyph: Glyph!
 
@@ -241,7 +243,28 @@ public final class Articulation: Modifier {
         let staffSpace = stave.getSpacingBetweenLines()
         let isTab = note is TabNote
 
-        let x = note.getModifierStartXY(position: position, index: index).x
+        var x = note.getModifierStartXY(position: position, index: index).x
+
+        // VexFlowPatch: breath mark positioning
+        if type == "abr", let noteTickContext = note.tickContext {
+            var delayXShift: Double = 0
+            let noteX = noteTickContext.getX()
+            if let nextContext = TickContext.getNextContext(noteTickContext),
+               nextContext.getX() > noteTickContext.getX() {
+                delayXShift = (nextContext.getX() - noteX) * breathMarkDistance
+            } else {
+                delayXShift = (stave.getX() + stave.getWidth() - noteX + stave.getNoteStartX() - stave.getX()) * breathMarkDistance
+            }
+            x += delayXShift
+            // Clamp to not exceed end of stave
+            if x > stave.getNoteEndX() {
+                let noteXAbsolute = stave.getNoteStartX() - stave.getX() + noteX + stave.getX()
+                x = noteXAbsolute + (stave.getNoteEndX() - noteXAbsolute) * breathMarkDistance
+            }
+            if xShift != 0 {
+                x += xShift
+            }
+        }
 
         let shouldSitOutsideStaff = !canSitBetweenLines || isTab
         let initialOffset = getInitialOffset(note, position)
@@ -282,6 +305,11 @@ public final class Articulation: Modifier {
                     y += abs(snappedLine - articLine) * staffSpace * offsetDirection + padding * offsetDirection
                 }
             }
+        }
+
+        // VexFlowPatch: respect modifier y_shift
+        if yShift != 0 {
+            y += yShift
         }
 
         glyph.render(ctx: ctx, x: x, y: y)

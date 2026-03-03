@@ -68,6 +68,9 @@ public struct KeyProps {
     public var displaced: Bool
     public var stemDownXOffset: Double = 0
     public var stemUpXOffset: Double = 0
+    /// VexFlowPatch: vertical shift for notehead independent of stem length
+    public var stemUpYShift: Double = 0
+    public var stemDownYShift: Double = 0
 }
 
 public enum TablesError: Error, LocalizedError, Equatable, Sendable {
@@ -485,10 +488,12 @@ public enum Tables {
     // MARK: - Tab Glyph Properties
 
     /// Get glyph properties for a tab fret number/symbol.
-    public static func tabToGlyphProps(_ fret: String, scale: Double = 1.0) -> TabGlyphProps {
+    /// VexFlowPatch: added useAlternativeXGlyph parameter to use a classical-style X notehead glyph for tabs
+    public static func tabToGlyphProps(_ fret: String, scale: Double = 1.0, useAlternativeXGlyph: Bool = false) -> TabGlyphProps {
         if fret.uppercased() == "X" {
-            let metrics = Glyph(code: "accidentalDoubleSharp", point: TABLATURE_FONT_SCALE).getMetrics()
-            return TabGlyphProps(text: fret, code: "accidentalDoubleSharp",
+            let glyphCode = useAlternativeXGlyph ? "noteheadXBlack" : "accidentalDoubleSharp"
+            let metrics = Glyph(code: glyphCode, point: TABLATURE_FONT_SCALE).getMetrics()
+            return TabGlyphProps(text: fret, code: glyphCode,
                                  width: metrics.width, shiftY: -metrics.height / 2, scale: scale)
         } else {
             let width = textWidth(fret)
@@ -686,16 +691,26 @@ public enum Tables {
         let intValue: Int? = value.intVal != nil ? octave * 12 + value.intVal! : nil
 
         var code = value.code
+        var glyphType: String?
         if pieces.count > 2 && !pieces[2].isEmpty {
-            code = codeNoteHead(pieces[2].uppercased(), duration: duration)
+            glyphType = pieces[2].uppercased()
+            code = codeNoteHead(glyphType!, duration: duration)
         }
 
-        return KeyProps(
+        var props = KeyProps(
             key: key, octave: octave, line: line,
             intValue: intValue, accidental: value.accidental,
             code: code, stroke: stroke,
             shiftRight: value.shiftRight ?? 0, displaced: false
         )
+        /// VexFlowPatch: inverted triangle notehead needs custom shift properties
+        if glyphType == "TI" {
+            props.stemUpYShift = 5
+            props.stemDownYShift = 5
+            props.stemUpXOffset = 6
+            props.stemDownXOffset = 4
+        }
+        return props
     }
 
     /// Convert an integer (0-11) to a note name.

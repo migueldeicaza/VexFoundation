@@ -191,12 +191,10 @@ public final class Formatter {
             throw FormatterError.noVoicesToFormat
         }
 
-        let totalTicks = voices[0].getTotalTicks()
         var resolutionMultiplier = 1
         for voice in voices {
-            guard voice.getTotalTicks() == totalTicks else {
-                throw FormatterError.tickMismatch
-            }
+            // VexFlowPatch: removed tick mismatch error to allow voices with different
+            // total ticks (e.g. whole measure rests alongside notes in 12/8).
             if voice.getMode() == .strict && !voice.isComplete() {
                 throw FormatterError.incompleteVoice
             }
@@ -379,6 +377,12 @@ public final class Formatter {
             context.setX(x)
 
             shift = width - metrics.totalLeftPx
+        }
+
+        // VexFlowPatch: guard against zero totalTicks (e.g. faulty tab scores)
+        // to prevent leftoverPxPerTick becoming Infinity and x being set to NaN.
+        if totalTicks == 0 {
+            totalTicks = 1
         }
 
         let softmaxFactor = formatterOptions.softmaxFactor
@@ -749,9 +753,12 @@ public final class Formatter {
                     )
                 } else {
                     let prevTickable = tickables[index - 1]
+                    // VexFlowPatch: guard against GhostNotes which don't have getKeyProps
                     if let prev = prevTickable as? StaveNote {
-                        if prev.isRest() {
+                        if prev.isRest() && !prev.getKeyProps().isEmpty {
                             restLine = prev.getKeyProps()[0].line
+                        } else if prev.isRest() {
+                            restLine = prev.getLineForRest()
                         } else {
                             let prevRestLine = prev.getLineForRest()
                             restLine = getRestLineForNextNoteGroup(

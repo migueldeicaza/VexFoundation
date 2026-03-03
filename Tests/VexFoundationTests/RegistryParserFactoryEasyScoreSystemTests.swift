@@ -868,16 +868,14 @@ struct RegistryParserFactoryEasyScoreSystemTests {
             #expect(error as? FormatterError == .noVoicesToFormat)
         }
 
+        // VexFlowPatch: tick mismatch is no longer an error — voices with different
+        // total ticks are allowed (e.g. whole measure rests alongside notes in 12/8).
         let voice44 = Voice(time: VoiceTime(numBeats: 4, beatValue: 4))
         let voice34 = Voice(time: VoiceTime(numBeats: 3, beatValue: 4))
         _ = voice44.setMode(.soft)
         _ = voice34.setMode(.soft)
-        do {
-            _ = try Formatter.getResolutionMultiplierThrowing([voice44, voice34])
-            #expect(Bool(false))
-        } catch {
-            #expect(error as? FormatterError == .tickMismatch)
-        }
+        let multiplier = try Formatter.getResolutionMultiplierThrowing([voice44, voice34])
+        #expect(multiplier > 0)
 
         let incomplete = Voice(time: VoiceTime(numBeats: 4, beatValue: 4))
         do {

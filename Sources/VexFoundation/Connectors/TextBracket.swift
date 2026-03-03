@@ -204,11 +204,19 @@ public final class TextBracket: VexElement {
         }
 
         if bracketRenderOptions.dashed {
+            // VexFlowPatch: prevent bracket from going backwards, also preventing overlap with text
+            var clampedEndX = endX
+            if clampedEndX < lineStartX + 5 && bracketPosition == .top {
+                clampedEndX = lineStartX + 5
+            } else if clampedEndX < lineStartX + superWidth && bracketPosition == .bottom {
+                clampedEndX = lineStartX + superWidth
+            }
+
             drawDashedLine(
                 context: ctx,
                 fromX: lineStartX,
                 fromY: lineY,
-                toX: endX,
+                toX: clampedEndX,
                 toY: lineY,
                 dashPattern: bracketRenderOptions.dash
             )
@@ -216,9 +224,9 @@ public final class TextBracket: VexElement {
             if bracketRenderOptions.showBracket {
                 drawDashedLine(
                     context: ctx,
-                    fromX: endX,
+                    fromX: clampedEndX,
                     fromY: lineY + 1 * posValue,
-                    toX: endX,
+                    toX: clampedEndX,
                     toY: lineY + bracketHeight,
                     dashPattern: bracketRenderOptions.dash
                 )

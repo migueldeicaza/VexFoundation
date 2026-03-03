@@ -104,6 +104,8 @@ public final class StaveTempo: StaveModifier {
         let y = stave.getYForTopText(1) + tempoShiftY
 
         ctx.save()
+        /// VexFlowPatch: wrap entire tempo marking in an SVG group for DOM access
+        _ = ctx.openGroup("stavetempo", nil)
         let textFormatter = TextFormatter.create(font: fontInfo)
 
         if let name {
@@ -165,9 +167,13 @@ public final class StaveTempo: StaveModifier {
                 }
             }
 
+            /// VexFlowPatch: wrap BPM text in its own SVG group
+            _ = ctx.openGroup("bpm", nil)
             ctx.fillText(" = \(bpm)\(name != nil ? ")" : "")", x + 3 * scale, y)
+            ctx.closeGroup()
         }
 
+        ctx.closeGroup()
         ctx.restore()
     }
 }
