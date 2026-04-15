@@ -151,6 +151,7 @@ public final class Curve: VexElement {
     override public func draw() throws {
         _ = try checkContext()
         setRendered()
+        applyStyle()
 
         guard from != nil || to != nil else {
             throw CurveError.requiresStartOrEndNote
@@ -202,6 +203,7 @@ public final class Curve: VexElement {
             lastY: lastY,
             direction: direction
         )
+        restoreStyle()
     }
 }
 

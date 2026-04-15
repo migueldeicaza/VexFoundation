@@ -536,9 +536,11 @@ public final class Beam: VexElement {
         }
 
         drawStems(ctx)
+        applyStyle()
         _ = ctx.openGroup("beam", getAttribute("id"))
         drawBeamLines(ctx)
         ctx.closeGroup()
+        restoreStyle()
     }
 
     // MARK: - Static Helpers

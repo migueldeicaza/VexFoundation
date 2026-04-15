@@ -328,6 +328,7 @@ public final class Tuplet: VexElement {
     override public func draw() throws {
         let ctx = try checkContext()
         setRendered()
+        applyStyle()
 
         let firstNote = notes[0]
         let lastNote = notes[notes.count - 1]
@@ -413,6 +414,7 @@ public final class Tuplet: VexElement {
                 }
             }
         }
+        restoreStyle()
     }
 }
 

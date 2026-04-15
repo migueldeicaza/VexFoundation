@@ -620,7 +620,21 @@ public final class Factory {
         return group
     }
 
-    // MARK: - Draw
+    // MARK: - Format & Draw
+
+    private var systemsFormatted = false
+
+    /// Format all systems without drawing.
+    /// Call this before `draw()` when you need to inspect or modify
+    /// formatted elements (e.g. applying dimmed styles) prior to rendering.
+    public func formatSystems() {
+        guard let ctx = context else { return }
+        for system in systems {
+            _ = system.setContext(ctx)
+            system.format()
+        }
+        systemsFormatted = true
+    }
 
     /// Render the complete score.
     public func draw() throws {
@@ -628,9 +642,11 @@ public final class Factory {
             throw FactoryError.missingRenderContext
         }
 
-        for system in systems {
-            _ = system.setContext(ctx)
-            system.format()
+        if !systemsFormatted {
+            for system in systems {
+                _ = system.setContext(ctx)
+                system.format()
+            }
         }
         for stave in staves {
             _ = stave.setContext(ctx)
