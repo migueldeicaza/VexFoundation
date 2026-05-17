@@ -184,13 +184,14 @@ struct RestsRhythmThreeVoiceUnisonTests {
 
         _ = try Tuplet(notes: notes)
         let initial = rest.getKeyLine(0)
+        #expect(initial == n1.getLineForRest())
 
         Formatter.AlignRestsToNotes(notes.map { $0 as Tickable }, alignAllNotes: true)
         #expect(rest.getKeyLine(0) == initial)
 
         Formatter.AlignRestsToNotes(notes.map { $0 as Tickable }, alignAllNotes: true, alignTuplets: true)
         let aligned = rest.getKeyLine(0)
-        #expect(aligned != initial)
+        #expect(aligned == initial)
         #expect(aligned == n1.getLineForRest())
     }
 

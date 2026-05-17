@@ -63,6 +63,10 @@ struct TablatureAndChordSymbolTests {
         opts.spacingBetweenLinesPx = 10
         let ts = TabStave(x: 0, y: 0, width: 200, options: opts)
         #expect(ts.getSpacingBetweenLines() == 10)
+
+        let initOpts = StaveOptions(spacingBetweenLinesPx: 10)
+        let initTs = TabStave(x: 0, y: 0, width: 200, options: initOpts)
+        #expect(initTs.getSpacingBetweenLines() == 10)
     }
 
     @Test func tabStaveYForGlyphs() {

@@ -53,9 +53,12 @@ public struct StaveOptions {
     public var fillStyle: String
     public var leftBar: Bool
     public var rightBar: Bool
-    public var spacingBetweenLinesPx: Double
+    public var spacingBetweenLinesPx: Double {
+        didSet { spacingBetweenLinesPxWasSpecified = true }
+    }
     public var topTextPosition: Int
     public var numLines: Int
+    var spacingBetweenLinesPxWasSpecified: Bool
 
     public init(
         bottomTextPosition: Int = 4,
@@ -66,7 +69,7 @@ public struct StaveOptions {
         fillStyle: String = "#999999",
         leftBar: Bool = true,
         rightBar: Bool = true,
-        spacingBetweenLinesPx: Double = Tables.STAVE_LINE_DISTANCE,
+        spacingBetweenLinesPx: Double? = nil,
         topTextPosition: Int = 1,
         numLines: Int = 5
     ) {
@@ -78,9 +81,10 @@ public struct StaveOptions {
         self.fillStyle = fillStyle
         self.leftBar = leftBar
         self.rightBar = rightBar
-        self.spacingBetweenLinesPx = spacingBetweenLinesPx
+        self.spacingBetweenLinesPx = spacingBetweenLinesPx ?? Tables.STAVE_LINE_DISTANCE
         self.topTextPosition = topTextPosition
         self.numLines = numLines
+        self.spacingBetweenLinesPxWasSpecified = spacingBetweenLinesPx != nil
     }
 }
 

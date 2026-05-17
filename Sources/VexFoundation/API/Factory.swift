@@ -102,7 +102,7 @@ public final class Factory {
     ) -> Stave {
         let w = width ?? (self.options.width - self.options.staveSpace)
         var opts = options ?? StaveOptions()
-        if options?.spacingBetweenLinesPx == nil {
+        if options == nil || !(options?.spacingBetweenLinesPxWasSpecified ?? false) {
             opts.spacingBetweenLinesPx = self.options.staveSpace
         }
         let stave = inRuntimeContext {
@@ -122,11 +122,9 @@ public final class Factory {
     ) -> VexFoundation.TabStave {
         let w = width ?? (self.options.width - self.options.staveSpace)
         var opts = options ?? StaveOptions(numLines: 6)
-        // Swift `StaveOptions` is fully-materialized with defaults, so callers
-        // cannot omit `spacingBetweenLinesPx` the way upstream JS options objects can.
-        // Preserve upstream TabStave behavior by treating the base stave default
-        // line spacing as "unspecified" for this factory bridge.
-        if options == nil || options?.spacingBetweenLinesPx == Tables.STAVE_LINE_DISTANCE {
+        // Swift materializes StaveOptions eagerly, so preserve upstream TabStave
+        // behavior by only applying the factory default when spacing was omitted.
+        if options == nil || !(options?.spacingBetweenLinesPxWasSpecified ?? false) {
             opts.spacingBetweenLinesPx = self.options.staveSpace * 1.3
         }
         let stave = inRuntimeContext {

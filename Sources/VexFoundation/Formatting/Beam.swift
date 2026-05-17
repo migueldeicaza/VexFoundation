@@ -514,9 +514,8 @@ public final class Beam: VexElement {
                     ctx.beginPath()
                     ctx.moveTo(startX, startY)
                     ctx.lineTo(startX, startY + beamThickness)
-                    // VexFlowPatch: use Stem.WIDTH instead of hardcoded 1 to properly cover the last stem
-                    ctx.lineTo(endX + Stem.WIDTH, endY + beamThickness)
-                    ctx.lineTo(endX + Stem.WIDTH, endY)
+                    ctx.lineTo(endX + 1, endY + beamThickness)
+                    ctx.lineTo(endX + 1, endY)
                     ctx.closePath()
                     ctx.fill()
                 }

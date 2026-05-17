@@ -146,7 +146,8 @@ struct OrnamentTremoloHairpinConnectorTests {
         var state = ModifierContextState()
         let result = Ornament.format([orn], state: &state)
         #expect(result == true)
-        #expect(state.topTextLine == 1)
+        #expect(state.textLine == 2)
+        #expect(state.topTextLine == 0)
     }
 
     @Test func ornamentFormatMultiple() {
@@ -161,7 +162,8 @@ struct OrnamentTremoloHairpinConnectorTests {
 
         var state = ModifierContextState()
         Ornament.format([orn1, orn2], state: &state)
-        #expect(state.topTextLine == 2)
+        #expect(state.textLine == 4)
+        #expect(state.topTextLine == 0)
     }
 
     @Test func ornamentFormatAttackShiftsLeft() {
