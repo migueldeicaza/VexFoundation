@@ -703,8 +703,8 @@ public enum Tables {
             code: code, stroke: stroke,
             shiftRight: value.shiftRight ?? 0, displaced: false
         )
-        /// VexFlowPatch: inverted triangle notehead needs custom shift properties
-        if glyphType == "TI" {
+        /// VexFlowPatch: inverted triangle notehead needs custom shift properties.
+        if glyphType == "TI", ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_SVG_PARITY"] != "1" {
             props.stemUpYShift = 5
             props.stemDownYShift = 5
             props.stemUpXOffset = 6
