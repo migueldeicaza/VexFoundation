@@ -97,6 +97,7 @@ public final class StaveConnector: VexElement {
         switch connectorType {
         case .singleRight, .singleLeft:
             width = 1
+            topX += connectorXShift
 
         case .double:
             topX -= connectorWidth + 2

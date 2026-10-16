@@ -30,6 +30,25 @@ struct GraceNoteDynamicsBracketsLinesTests {
 
     // MARK: - GraceNote Creation
 
+    @Test(arguments: [0, 1, 2, 3])
+    func openPedalBracketOmitsContinuationHooks(variant: Int) throws {
+        let stave = Stave(x: 10, y: 20, width: 300)
+        let first = StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter))
+        let last = StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter))
+        _ = first.setStave(stave).setTickContext(TickContext().setX(40))
+        _ = last.setStave(stave).setTickContext(TickContext().setX(200))
+        let types: [PedalMarkingType] = [.bracket, .bracketOpenBegin, .bracketOpenEnd, .bracketOpenBoth]
+        let pedal = PedalMarking(notes: [first, last]).setType(types[variant])
+        let context = SVGRenderContext(width: 400, height: 200)
+        _ = pedal.setContext(context)
+        try pedal.draw()
+        let y = Int(stave.getYForBottomText(3) - pedal.pedalRenderOptions.bracketHeight)
+        let beginHook = "M \(Int(first.getAbsoluteX())) \(y) "
+        let endHook = "L \(Int(last.getAbsoluteX())) \(y)"
+        #expect(context.getSVG().contains(beginHook) == (variant == 0 || variant == 2))
+        #expect(context.getSVG().contains(endHook) == (variant == 0 || variant == 1))
+    }
+
     @Test func graceNoteCategory() {
         #expect(GraceNote.category == "GraceNote")
     }

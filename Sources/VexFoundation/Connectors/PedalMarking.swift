@@ -171,7 +171,7 @@ public final class PedalMarking: VexElement {
             if isPedalDepressed {
                 xShift = prevIsSame ? 5 : 0
 
-                if pedalType == .mixed && !prevIsSame {
+                if (pedalType == .mixed || pedalType == .mixedOpenEnd) && !prevIsSame {
                     if !customDepressText.isEmpty {
                         let textWidth = ctx.measureText(customDepressText).width
                         _ = ctx.fillText(customDepressText, x - textWidth / 2, y)
@@ -182,7 +182,8 @@ public final class PedalMarking: VexElement {
                     }
                 } else {
                     ctx.beginPath()
-                    ctx.moveTo(x, y - pedalRenderOptions.bracketHeight)
+                    let openBegin = index == 0 && (pedalType == .bracketOpenBegin || pedalType == .bracketOpenBoth)
+                    ctx.moveTo(x, openBegin ? y : y - pedalRenderOptions.bracketHeight)
                     ctx.lineTo(x + xShift, y)
                     ctx.stroke()
                     ctx.closePath()
@@ -193,7 +194,9 @@ public final class PedalMarking: VexElement {
                 ctx.beginPath()
                 ctx.moveTo(prevX, prevY)
                 ctx.lineTo(x + xShift, y)
-                ctx.lineTo(x, y - pedalRenderOptions.bracketHeight)
+                let openEnd = index == notes.count - 1 && (pedalType == .bracketOpenEnd
+                    || pedalType == .bracketOpenBoth || pedalType == .mixedOpenEnd)
+                if !openEnd { ctx.lineTo(x, y - pedalRenderOptions.bracketHeight) }
                 ctx.stroke()
                 ctx.closePath()
             }

@@ -10,6 +10,20 @@ struct OrnamentTremoloHairpinConnectorTests {
         FontLoader.loadDefaultFonts()
     }
 
+    @Test(arguments: [false, true])
+    func shiftedSingleConnectorDrawsAtShiftedX(right: Bool) throws {
+        let type: ConnectorType = right ? .singleRight : .singleLeft
+        let context = SVGRenderContext(width: 500, height: 300)
+        let top = Stave(x: 25, y: 10, width: 300)
+        let bottom = Stave(x: 25, y: 120, width: 300)
+        let connector = StaveConnector(topStave: top, bottomStave: bottom)
+        _ = connector.setType(type).setXShift(47).setContext(context)
+        try connector.draw()
+        let x = type == .singleLeft ? 72 : 372
+        #expect(context.getSVG().contains("x=\"\(x)\""))
+        #expect(!context.getSVG().contains("x=\"25\""))
+    }
+
     // MARK: - Helper
 
     private func makeNote(keys: NonEmptyArray<StaffKeySpec> = NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: NoteDurationSpec = .quarter) -> StaveNote {
