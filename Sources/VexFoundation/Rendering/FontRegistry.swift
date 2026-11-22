@@ -38,6 +38,7 @@ public final class FontRegistry: @unchecked Sendable {
     }
 
     private let lock = NSRecursiveLock()
+    private static let systemLookupLock = NSLock()
     private var faces: [FaceKey: CTFontDescriptor] = [:]
     private var fontCache: [FontKey: CTFont?] = [:]
     private var bundledLoaded = false
@@ -105,10 +106,12 @@ public final class FontRegistry: @unchecked Sendable {
 
     /// Load the fonts bundled in the package resources.
     public func loadBundledFontsIfNeeded() {
+        // Hold the (recursive) lock for the whole load, so that no thread sees a
+        // half-loaded registry and falls back to a system font lookup.
         lock.lock()
-        if bundledLoaded { lock.unlock(); return }
+        defer { lock.unlock() }
+        if bundledLoaded { return }
         bundledLoaded = true
-        lock.unlock()
         for entry in Self.bundledFonts {
             guard let url = Bundle.module.url(forResource: entry.resource, withExtension: "otf", subdirectory: "fonts")
                 ?? Bundle.module.url(forResource: entry.resource, withExtension: "otf")
@@ -157,7 +160,10 @@ public final class FontRegistry: @unchecked Sendable {
             return applyTraits(base, bold: bold, italic: italic) ?? base
         }
 
-        // System font lookup by family name.
+        // System font lookup by family name. Serialize these lookups: they go
+        // through the font server and can stall under heavy concurrency.
+        Self.systemLookupLock.lock()
+        defer { Self.systemLookupLock.unlock() }
         let systemName = Self.genericFamilies[family] ?? family
         let candidate = CTFontCreateWithName(systemName as CFString, size, nil)
         let resolvedFamily = (CTFontCopyFamilyName(candidate) as String).lowercased()
