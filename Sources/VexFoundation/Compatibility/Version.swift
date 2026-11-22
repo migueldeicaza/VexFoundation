@@ -1,48 +1,64 @@
-// VexFoundation - Lightweight compatibility metadata for VexFlow-style version/build access.
+// VexFoundation - Ported from VexFlow (https://vexflow.com)
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/version.ts` and `VexFlow.BUILD` from `src/vexflow.ts` (VexFlow 5.0.0).
 
 import Foundation
 
-/// Build metadata exposed through compatibility surfaces.
+/// Build metadata (upstream `VexFlow.BUILD`).
 public struct VexBuildInfo: Sendable, Equatable {
+    /// Version number.
     public let version: String
+    /// Git commit ID that this library was built from.
     public let gitCommitID: String
+    /// The date when this library was built.
     public let buildDate: String
+    /// The name of the build (upstream: vexflow, vexflow-bravura, vexflow-core).
+    public let info: String
 
-    public init(version: String, gitCommitID: String, buildDate: String) {
+    public init(version: String, gitCommitID: String, buildDate: String, info: String = "") {
         self.version = version
         self.gitCommitID = gitCommitID
         self.buildDate = buildDate
+        self.info = info
     }
+
+    /// Upstream `BUILD.VERSION`.
+    public var VERSION: String { version }
+    /// Upstream `BUILD.ID`.
+    public var ID: String { gitCommitID }
+    /// Upstream `BUILD.DATE`.
+    public var DATE: String { buildDate }
+    /// Upstream `BUILD.INFO`.
+    public var INFO: String { info }
 }
 
-/// Canonical build/version source for VexFoundation.
+/// Build and version source for VexFoundation.
+///
+/// The values identify the upstream VexFlow release that this code ports.
 public enum VexVersion {
-    private static func env(_ key: String, fallback: String) -> String {
-        let value = ProcessInfo.processInfo.environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let value, !value.isEmpty {
-            return value
-        }
-        return fallback
-    }
+    /// The upstream VexFlow version that this code ports.
+    public static let version: String = "5.0.0"
 
-    /// Semantic version for this build. Override with `VEXFOUNDATION_VERSION` when packaging.
-    public static let version: String = env("VEXFOUNDATION_VERSION", fallback: "development")
+    /// The upstream VexFlow commit of tag `5.0.0`.
+    public static let gitCommitID: String = "8879d095b29b14dad1f605e0b24b2f1acf1b1e78"
 
-    /// Git commit id for this build. Override with `VEXFOUNDATION_GIT_COMMIT` when packaging.
-    public static let gitCommitID: String = env("VEXFOUNDATION_GIT_COMMIT", fallback: "unknown")
+    /// The date of the upstream VexFlow `5.0.0` commit.
+    public static let buildDate: String = "2025-03-05T18:06:41+01:00"
 
-    /// Build timestamp for this build. Override with `VEXFOUNDATION_BUILD_DATE` when packaging.
-    public static let buildDate: String = env("VEXFOUNDATION_BUILD_DATE", fallback: "unknown")
+    /// The build name.
+    public static let info: String = "vexfoundation"
 
     /// Aggregated build metadata.
     public static let build = VexBuildInfo(
         version: version,
         gitCommitID: gitCommitID,
-        buildDate: buildDate
+        buildDate: buildDate,
+        info: info
     )
 }
 
-/// VexFlow-like compatibility constants (`VERSION`, `ID`, `DATE`).
+/// Upstream `version.ts` constants (`VERSION`, `ID`, `DATE`).
 public enum Version {
     public static let VERSION: String = VexVersion.version
     public static let ID: String = VexVersion.gitCommitID

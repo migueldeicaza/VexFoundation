@@ -1,9 +1,22 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/tuplet.ts` (VexFlow 5.0.0).
+//
+// Create a new tuplet from the specified notes. The notes must
+// be part of the same voice. If they are of different rhythmic
+// values, then `options.numNotes` must be set.
+//
+// - numNotes: fit this many notes into...
+// - notesOccupied: ...the space of this many notes.
+//   Together, these two properties make up the tuplet ratio in the form of
+//   numNotes : notesOccupied. numNotes defaults to the number of notes passed
+//   in. notesOccupied defaults to 2.
+// - location: `.top` (default) is above the notes, `.bottom` below them.
+// - bracketed: draw a bracket. Default: true if any note is not beamed.
+// - ratioed: show the ratio (n:m). Default: true if |notesOccupied - numNotes| > 1.
 
 import Foundation
-
-// MARK: - Tuplet Location
 
 public enum TupletError: Error, LocalizedError, Equatable, Sendable {
     case noNotesProvided
@@ -16,7 +29,9 @@ public enum TupletError: Error, LocalizedError, Equatable, Sendable {
     }
 }
 
-public enum TupletLocation: Int {
+// MARK: - Tuplet Location
+
+public enum TupletLocation: Int, Sendable {
     case bottom = -1
     case top = 1
 }
@@ -30,6 +45,7 @@ public struct TupletOptions {
     public var ratioed: Bool?
     public var location: TupletLocation?
     public var yOffset: Double?
+    public var textYOffset: Double?
 
     public init(
         numNotes: Int? = nil,
@@ -37,7 +53,8 @@ public struct TupletOptions {
         bracketed: Bool? = nil,
         ratioed: Bool? = nil,
         location: TupletLocation? = nil,
-        yOffset: Double? = nil
+        yOffset: Double? = nil,
+        textYOffset: Double? = nil
     ) {
         self.numNotes = numNotes
         self.notesOccupied = notesOccupied
@@ -45,27 +62,7 @@ public struct TupletOptions {
         self.ratioed = ratioed
         self.location = location
         self.yOffset = yOffset
-    }
-}
-
-// MARK: - Tuplet Metrics
-
-public struct TupletMetrics {
-    public var noteHeadOffset: Double
-    public var stemOffset: Double
-    public var bottomLine: Double
-    public var topModifierOffset: Double
-
-    public init(
-        noteHeadOffset: Double = 20,
-        stemOffset: Double = 10,
-        bottomLine: Double = 4,
-        topModifierOffset: Double = 15
-    ) {
-        self.noteHeadOffset = noteHeadOffset
-        self.stemOffset = stemOffset
-        self.bottomLine = bottomLine
-        self.topModifierOffset = topModifierOffset
+        self.textYOffset = textYOffset
     }
 }
 
@@ -76,40 +73,37 @@ public final class Tuplet: VexElement {
 
     override public class var category: String { "Tuplet" }
 
+    public static let LOCATION_TOP: TupletLocation = .top
+    public static let LOCATION_BOTTOM: TupletLocation = .bottom
     public static let NESTING_OFFSET: Double = 15
-
-    public static var metrics: TupletMetrics {
-        if let font = Glyph.MUSIC_FONT_STACK.first,
-           let m = font.lookupMetric("tuplet") as? [String: Any] {
-            return TupletMetrics(
-                noteHeadOffset: m["noteHeadOffset"] as? Double ?? 20,
-                stemOffset: m["stemOffset"] as? Double ?? 10,
-                bottomLine: m["bottomLine"] as? Double ?? 4,
-                topModifierOffset: m["topModifierOffset"] as? Double ?? 15
-            )
-        }
-        return TupletMetrics()
-    }
 
     // MARK: - Properties
 
     public let notes: [Note]
-    public let options: TupletOptions
     public var numNotes: Int
     public var notesOccupied: Int
     public var bracketed: Bool
     public var ratioed: Bool
     public var location: TupletLocation
+    public var yOffset: Double
+    public var textYOffset: Double
+    public let textElement: VexElement
 
-    public var yPos: Double = 16
-    public var xPos: Double = 100
-    public var tupletWidth: Double = 200
     /// VexFlowPatch: option to not render tuplet numbers
     public var renderTupletNumber: Bool = true
 
-    private var point: Double
-    private var numeratorGlyphs: [Glyph] = []
-    private var denomGlyphs: [Glyph] = []
+    /// The resolved options (upstream `Required<TupletOptions>`).
+    public var options: TupletOptions {
+        TupletOptions(
+            numNotes: numNotes,
+            notesOccupied: notesOccupied,
+            bracketed: bracketed,
+            ratioed: ratioed,
+            location: location,
+            yOffset: yOffset,
+            textYOffset: textYOffset
+        )
+    }
 
     // MARK: - Init
 
@@ -119,28 +113,30 @@ public final class Tuplet: VexElement {
         }
 
         self.notes = notes
-        self.options = options
-        self.numNotes = options.numNotes ?? notes.count
-        self.notesOccupied = options.notesOccupied ?? 2
-
-        if let b = options.bracketed {
-            self.bracketed = b
+        let numNotes = options.numNotes ?? notes.count
+        let notesOccupied = (options.notesOccupied ?? 0) != 0 ? (options.notesOccupied ?? 2) : 2
+        self.numNotes = numNotes
+        self.notesOccupied = notesOccupied
+        self.bracketed = options.bracketed ?? notes.contains { !$0.hasBeam() }
+        self.ratioed = options.ratioed ?? (abs(notesOccupied - numNotes) > 1)
+        let location = options.location ?? .top
+        self.location = location
+        if let y = options.yOffset, y != 0 {
+            self.yOffset = y
         } else {
-            self.bracketed = notes.contains { !$0.hasBeam() }
+            self.yOffset = Metrics.getDouble("Tuplet.yOffset")
         }
-
-        if let r = options.ratioed {
-            self.ratioed = r
+        if let t = options.textYOffset, t != 0 {
+            self.textYOffset = t
         } else {
-            self.ratioed = abs(notesOccupied - numNotes) > 1
+            self.textYOffset = Metrics.getDouble("Tuplet.textYOffset")
         }
-
-        self.point = (Tables.NOTATION_FONT_SCALE * 3) / 5
-        self.location = options.location ?? .top
+        self.textElement = VexElement(category: "Tuplet")
 
         super.init()
 
-        // Match upstream: tuplet initialization realigns rests within the tuplet group.
+        setTupletLocation(location)
+
         Formatter.AlignRestsToNotes(notes, alignAllNotes: true, alignTuplets: true)
         resolveGlyphs()
         attach()
@@ -162,18 +158,21 @@ public final class Tuplet: VexElement {
 
     // MARK: - Setters
 
+    /// Set whether or not the bracket is drawn.
     @discardableResult
     public func setBracketed(_ bracketed: Bool) -> Self {
         self.bracketed = bracketed
         return self
     }
 
+    /// Set whether or not the ratio is shown.
     @discardableResult
     public func setRatioed(_ ratioed: Bool) -> Self {
         self.ratioed = ratioed
         return self
     }
 
+    /// Set the tuplet indicator to be displayed either on the top or bottom of the stave.
     @discardableResult
     public func setTupletLocation(_ location: TupletLocation) -> Self {
         self.location = location
@@ -199,222 +198,183 @@ public final class Tuplet: VexElement {
 
     // MARK: - Resolve Glyphs
 
-    private func resolveGlyphs() {
-        numeratorGlyphs = []
+    private static func tupletDigit(_ d: Int) -> String {
+        guard let scalar = Unicode.Scalar(UInt32(0xE880 + d)) else { return "" } // tuplet0
+        return String(Character(scalar))
+    }
+
+    public func resolveGlyphs() {
+        var numerator = ""
+        var denominator = ""
         var n = numNotes
         while n >= 1 {
-            numeratorGlyphs.insert(
-                Glyph(code: "timeSig\(n % 10)", point: point), at: 0
-            )
+            numerator = Self.tupletDigit(n % 10) + numerator
             n = n / 10
         }
-
-        denomGlyphs = []
-        n = notesOccupied
-        while n >= 1 {
-            denomGlyphs.insert(
-                Glyph(code: "timeSig\(n % 10)", point: point), at: 0
-            )
-            n = n / 10
+        if ratioed {
+            n = notesOccupied
+            while n >= 1 {
+                denominator = Self.tupletDigit(n % 10) + denominator
+                n = n / 10
+            }
+            denominator = Glyphs.tupletColon + denominator
         }
+        textElement.setText(numerator + denominator)
     }
 
     // MARK: - Nested Tuplet Count
 
+    /// Determine how many tuplets are nested within this tuplet
+    /// on the same side (above/below), to calculate a y
+    /// offset for this tuplet.
     public func getNestedTupletCount() -> Int {
-        let loc = location
+        let location = self.location
+        let firstNote = notes[0]
 
-        func countTuplets(_ note: Note, _ loc: TupletLocation) -> Int {
-            note.getTupletStack().filter { $0.location == loc }.count
+        // Count the tuplets that are on the same side (above/below)
+        // as this tuplet:
+        func countTuplets(_ note: Note, _ location: TupletLocation) -> Int {
+            note.getTupletStack().filter { $0.location == location }.count
         }
 
-        var maxCount = countTuplets(notes[0], loc)
-        var minCount = maxCount
+        var maxTupletCount = countTuplets(firstNote, location)
+        var minTupletCount = countTuplets(firstNote, location)
 
         for note in notes {
-            let c = countTuplets(note, loc)
-            maxCount = max(maxCount, c)
-            minCount = min(minCount, c)
+            let tupletCount = countTuplets(note, location)
+            maxTupletCount = tupletCount > maxTupletCount ? tupletCount : maxTupletCount
+            minTupletCount = tupletCount < minTupletCount ? tupletCount : minTupletCount
         }
 
-        return maxCount - minCount
+        return maxTupletCount - minTupletCount
     }
 
     // MARK: - Y Position
 
+    /// Determine the y position of the tuplet.
     public func getYPosition() -> Double {
-        // Upstream tuplets are positioned from the note's base stem metrics,
-        // not from post-beam extension adjustments.
-        func tupletStemExtents(for note: Note) -> (topY: Double, baseY: Double) {
-            guard let beam = note.beam,
-                  beam.useUnformattedStemExtentsForTuplets,
-                  let stemmable = note as? StemmableNote,
-                  let stem = stemmable.getStem()
-            else {
-                return note.getStemExtents()
-            }
+        // offset the tuplet for any nested tuplets between
+        // it and the notes:
+        let nestedTupletYOffset = Double(getNestedTupletCount()) * Tuplet.NESTING_OFFSET * Double(-location.rawValue)
 
-            let isStemUp = stemmable.getStemDirection() == Stem.UP
-            let ys = [stem.yTop, stem.yBottom]
-            let innerMost = isStemUp ? (ys.min() ?? 0) : (ys.max() ?? 0)
-            let outerMost = isStemUp ? (ys.max() ?? 0) : (ys.min() ?? 0)
-            let stemHeight = Stem.HEIGHT + stemmable.getStemExtension()
-            let stemTipY = innerMost + stemHeight * -stemmable.getStemDirection().signDouble
-            return (topY: stemTipY, baseY: outerMost)
-        }
+        // offset the tuplet for any manual yOffset:
+        let yOffset = self.yOffset
 
-        let nestedOffset = Double(getNestedTupletCount()) * Tuplet.NESTING_OFFSET * Double(-location.rawValue)
-        let yOffset = options.yOffset ?? 0
-
+        // now iterate through the notes and find our highest
+        // or lowest locations, to form a base yPosition
         let firstNote = notes[0]
-        let m = Tuplet.metrics
-        var yPos: Double
-
+        var yPosition: Double
         if location == .top {
-            yPos = firstNote.checkStave().getYForLine(0) - m.topModifierOffset
+            yPosition = firstNote.checkStave().getYForLine(0) - 1.5 * Tables.STAVE_LINE_DISTANCE
 
+            // check modifiers above note to see if they will collide with tuplet beam
             for note in notes {
                 var modLines: Double = 0
                 if let mc = note.getModifierContext() {
                     modLines = max(modLines, mc.getState().topTextLine)
                 }
-                let modY = note.getYForTopText(modLines) - m.noteHeadOffset
-
+                let modY = note.getYForTopText(modLines) - 2 * Tables.STAVE_LINE_DISTANCE
                 if note.hasStem() || note.isRest() {
-                    let topY: Double
-                    let extents = tupletStemExtents(for: note)
-                    if note.getStemDirection() == Stem.UP {
-                        topY = extents.topY - m.stemOffset
-                    } else {
-                        topY = extents.baseY - m.noteHeadOffset
-                    }
-                    yPos = min(topY, yPos)
+                    let topY = note.getStemDirection() == Stem.UP
+                        ? note.getStemExtents().topY - Tables.STAVE_LINE_DISTANCE
+                        : note.getStemExtents().baseY - 2 * Tables.STAVE_LINE_DISTANCE
+                    yPosition = min(topY, yPosition)
                     if modLines > 0 {
-                        yPos = min(modY, yPos)
+                        yPosition = min(modY, yPosition)
                     }
                 }
             }
         } else {
-            var lineCheck = m.bottomLine
-
-            for note in notes {
-                if let mc = note.getModifierContext() {
+            var lineCheck: Double = 4 // tuplet default on line 4
+            // check modifiers below note to see if they will collide with tuplet beam
+            for nn in notes {
+                if let mc = nn.getModifierContext() {
                     lineCheck = max(lineCheck, mc.getState().textLine + 1)
                 }
             }
-            yPos = firstNote.checkStave().getYForLine(lineCheck) + m.noteHeadOffset
+            yPosition = firstNote.checkStave().getYForLine(lineCheck) + 2 * Tables.STAVE_LINE_DISTANCE
 
             for note in notes {
                 if note.hasStem() || note.isRest() {
-                    let bottomY: Double
-                    let extents = tupletStemExtents(for: note)
-                    if note.getStemDirection() == Stem.UP {
-                        bottomY = extents.baseY + m.noteHeadOffset
-                    } else {
-                        bottomY = extents.topY + m.stemOffset
-                    }
-                    if bottomY > yPos {
-                        yPos = bottomY
+                    let bottomY = note.getStemDirection() == Stem.UP
+                        ? note.getStemExtents().baseY + 2 * Tables.STAVE_LINE_DISTANCE
+                        : note.getStemExtents().topY + Tables.STAVE_LINE_DISTANCE
+                    if bottomY > yPosition {
+                        yPosition = bottomY
                     }
                 }
             }
         }
 
-        return yPos + nestedOffset + yOffset
+        return yPosition + nestedTupletYOffset + yOffset
     }
 
     // MARK: - Draw
 
     override public func draw() throws {
+        let location = self.location
+        let bracketed = self.bracketed
+        let textYOffset = self.textYOffset
         let ctx = try checkContext()
-        setRendered()
-        applyStyle()
+        var xPos: Double = 0
+        var yPos: Double = 0
 
+        // Local change (1af03ba): apply the element style in draw().
+        ctx.save()
+        defer { ctx.restore() }
+        applyStyle(context: ctx)
+
+        // determine x value of left bound of tuplet
         let firstNote = notes[0]
         let lastNote = notes[notes.count - 1]
 
         if !bracketed {
-            if let stem = firstNote as? StemmableNote {
-                xPos = stem.getStemX()
-            }
-            if let stem = lastNote as? StemmableNote {
-                tupletWidth = stem.getStemX() - xPos
-            }
+            xPos = (firstNote as? StemmableNote)?.getStemX() ?? firstNote.getTieLeftX()
+            width = ((lastNote as? StemmableNote)?.getStemX() ?? lastNote.getTieRightX()) - xPos
         } else {
             xPos = firstNote.getTieLeftX() - 5
-            tupletWidth = lastNote.getTieRightX() - xPos + 5
+            width = lastNote.getTieRightX() - xPos + 5
         }
 
+        // determine y value for tuplet
         yPos = getYPosition()
 
-        // Calculate total width of tuplet notation
-        var notationWidth = numeratorGlyphs.reduce(0.0) { $0 + $1.getMetrics().width }
-        if ratioed {
-            notationWidth = denomGlyphs.reduce(notationWidth) { $0 + $1.getMetrics().width }
-            notationWidth += point * 0.32
-        }
+        let notationCenterX = xPos + width / 2
+        let notationStartX = notationCenterX - textElement.getWidth() / 2
 
-        let notationCenterX = xPos + tupletWidth / 2
-        let notationStartX = notationCenterX - notationWidth / 2
+        // start grouping
+        _ = ctx.openGroup("tuplet", getAttribute("id"))
 
-        // Draw bracket if the tuplet is not beamed
+        // draw bracket if the tuplet is not beamed
         if bracketed {
-            let lineWidth = tupletWidth / 2 - notationWidth / 2 - 5
+            let lineWidth = width / 2 - textElement.getWidth() / 2 - 5
 
+            // only draw the bracket if it has positive length
             if lineWidth > 0 {
+                let loc = Double(location.rawValue)
                 ctx.fillRect(xPos, yPos, lineWidth, 1)
-                ctx.fillRect(xPos + tupletWidth / 2 + notationWidth / 2 + 5, yPos, lineWidth, 1)
-                ctx.fillRect(
-                    xPos,
-                    yPos + (location == .bottom ? 1 : 0),
-                    1,
-                    Double(location.rawValue) * 10
-                )
-                ctx.fillRect(
-                    xPos + tupletWidth,
-                    yPos + (location == .bottom ? 1 : 0),
-                    1,
-                    Double(location.rawValue) * 10
-                )
+                ctx.fillRect(xPos + width / 2 + textElement.getWidth() / 2 + 5, yPos, lineWidth, 1)
+                ctx.fillRect(xPos, yPos + (location == .bottom ? 1 : 0), 1, loc * 10)
+                ctx.fillRect(xPos + width, yPos + (location == .bottom ? 1 : 0), 1, loc * 10)
             }
         }
 
         // VexFlowPatch: conditionally render tuplet numbers
         if renderTupletNumber {
-            // Draw numerator glyphs
-            let shiftY = (Glyph.MUSIC_FONT_STACK.first?.lookupMetric("digits.shiftY") as? Double) ?? 0
-
-            var xOffset: Double = 0
-            for glyph in numeratorGlyphs {
-                glyph.render(ctx: ctx, x: notationStartX + xOffset,
-                            y: yPos + point / 3 - 2 + shiftY)
-                xOffset += glyph.getMetrics().width
-            }
-
-            // Display colon and denominator if ratio is shown
-            if ratioed {
-                let colonX = notationStartX + xOffset + point * 0.16
-                let colonRadius = point * 0.06
-
-                ctx.beginPath()
-                ctx.arc(colonX, yPos - point * 0.08, colonRadius, 0, .pi * 2, false)
-                ctx.closePath()
-                ctx.fill()
-
-                ctx.beginPath()
-                ctx.arc(colonX, yPos + point * 0.12, colonRadius, 0, .pi * 2, false)
-                ctx.closePath()
-                ctx.fill()
-
-                xOffset += point * 0.32
-                for glyph in denomGlyphs {
-                    glyph.render(ctx: ctx, x: notationStartX + xOffset,
-                                y: yPos + point / 3 - 2 + shiftY)
-                    xOffset += glyph.getMetrics().width
-                }
-            }
+            // draw text
+            textElement.renderText(
+                ctx,
+                xPos: notationStartX,
+                yPos: yPos + textElement.getHeight() / 2 + (location == .top ? -1 : 1) * textYOffset
+            )
         }
-        restoreStyle()
+
+        // Set up an interactive bounding box and finalize the tuplet rendering
+        if let bb = getBoundingBox() {
+            ctx.pointerRect(bb.x, bb.y, bb.w, bb.h)
+        }
+        ctx.closeGroup()
+        setRendered()
     }
 }
 
@@ -427,7 +387,6 @@ import SwiftUI
 #Preview("Tuplet", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)

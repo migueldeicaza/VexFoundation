@@ -194,7 +194,7 @@ public final class SVGRenderContext: RenderContext {
     private var fontCSSString: String = ""
 
     /// Prefix for `class` and `id` attributes (`VexFlow` uses `vf-`).
-    public static var idPrefix = "vf-"
+    public nonisolated(unsafe) static var idPrefix = "vf-"
 
     public init(width: Double, height: Double, options: SVGRenderOptions = SVGRenderOptions()) {
         self.options = options

@@ -1,6 +1,10 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010.
-// Author: Raffaele Viglianti. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Raffaele Viglianti, 2012 http://itisnotsound.wordpress.com/
+//
+// Port of `src/stavehairpin.ts` (VexFlow 5.0.0).
+// This class implements hairpins between notes.
+// Hairpins can be either crescendo or decrescendo.
 
 import Foundation
 
@@ -13,14 +17,14 @@ public enum StaveHairpinError: Error, LocalizedError, Equatable, Sendable {
         case .requiresStartOrEndNote:
             return "Hairpin needs to have either firstNote or lastNote set."
         case .requiresBothNotesForDraw:
-            return "Notes required to draw hairpin."
+            return "Notes required to draw"
         }
     }
 }
 
 // MARK: - Hairpin Type
 
-public enum HairpinType: Int {
+public enum HairpinType: Int, Sendable {
     case crescendo = 1
     case decrescendo = 2
 }
@@ -28,23 +32,32 @@ public enum HairpinType: Int {
 // MARK: - Hairpin Render Options
 
 public struct HairpinRenderOptions {
-    public var leftShiftPx: Double = 0
-    public var rightShiftPx: Double = 0
-    public var height: Double = 10
-    public var yShift: Double = 0
+    public var rightShiftTicks: Double?
+    public var leftShiftTicks: Double?
+    public var leftShiftPx: Double
+    public var rightShiftPx: Double
+    public var height: Double
+    public var yShift: Double
 
     public init(
         leftShiftPx: Double = 0,
         rightShiftPx: Double = 0,
         height: Double = 10,
-        yShift: Double = 0
+        yShift: Double = 0,
+        rightShiftTicks: Double? = 0,
+        leftShiftTicks: Double? = 0
     ) {
         self.leftShiftPx = leftShiftPx
         self.rightShiftPx = rightShiftPx
         self.height = height
         self.yShift = yShift
+        self.rightShiftTicks = rightShiftTicks
+        self.leftShiftTicks = leftShiftTicks
     }
 }
+
+/// Upstream name of the render options.
+public typealias StaveHairpinRenderOptions = HairpinRenderOptions
 
 // MARK: - StaveHairpin
 
@@ -55,23 +68,84 @@ public final class StaveHairpin: VexElement {
 
     // MARK: - Properties
 
-    public var hairpinType: HairpinType
-    public var hairpinPosition: ModifierPosition = .below
-    public var renderOptions = HairpinRenderOptions()
+    public var hairpin: HairpinType
+    public private(set) var position: ModifierPosition = .below
+    public var renderOptions: HairpinRenderOptions
     public var firstNote: Note?
     public var lastNote: Note?
     public private(set) var initError: StaveHairpinError?
 
+    @available(*, deprecated, renamed: "hairpin")
+    public var hairpinType: HairpinType {
+        get { hairpin }
+        set { hairpin = newValue }
+    }
+
+    @available(*, deprecated, renamed: "position")
+    public var hairpinPosition: ModifierPosition { position }
+
+    // MARK: - Format By Ticks
+
+    /// Helper function to convert ticks into pixels.
+    /// Requires a Formatter with voices joined and formatted (to get pixels per tick).
+    /// Upstream takes `formatter: { pixelsPerTick }`; pass the value here.
+    ///
+    /// `options` has `height`, `yShift` (vertical offset), `leftShiftTicks` (left
+    /// horizontal offset expressed in ticks) and `rightShiftTicks` (right horizontal
+    /// offset expressed in ticks).
+    public static func FormatByTicksAndDraw(
+        _ ctx: RenderContext,
+        pixelsPerTick: Double,
+        firstNote: Note?,
+        lastNote: Note?,
+        type: HairpinType,
+        position: ModifierPosition,
+        options: HairpinRenderOptions
+    ) throws {
+        let ppt = pixelsPerTick
+        if ppt.isNaN {
+            throw VexError("BadArguments", "A valid Formatter must be provide to draw offsets by ticks.")
+        }
+
+        let leftShiftPx = ppt * (options.leftShiftTicks ?? 0)
+        let rightShiftPx = ppt * (options.rightShiftTicks ?? 0)
+
+        let hairpinOptions = HairpinRenderOptions(
+            leftShiftPx: leftShiftPx,
+            rightShiftPx: rightShiftPx,
+            height: options.height,
+            yShift: options.yShift,
+            rightShiftTicks: 0,
+            leftShiftTicks: 0
+        )
+
+        try StaveHairpin(validating: firstNote, lastNote: lastNote, type: type)
+            .setContext(ctx)
+            .setRenderOptions(hairpinOptions)
+            .setPosition(position)
+            .drawWithStyle()
+    }
+
     // MARK: - Init
 
+    /// Create a new hairpin from the specified notes.
     public init(firstNote: Note?, lastNote: Note?, type: HairpinType) {
-        if firstNote == nil && lastNote == nil {
-            self.initError = .requiresStartOrEndNote
+        self.hairpin = type
+        self.renderOptions = HairpinRenderOptions(
+            leftShiftPx: 0, // left horizontal offset
+            rightShiftPx: 0, // right horizontal offset
+            height: 10,
+            yShift: 0, // vertical offset
+            rightShiftTicks: 0,
+            leftShiftTicks: 0
+        )
+        super.init(category: nil)
+        do {
+            _ = try setNotesThrowing(firstNote: firstNote, lastNote: lastNote)
+        } catch {
+            initError = .requiresStartOrEndNote
         }
-        self.firstNote = firstNote
-        self.lastNote = lastNote
-        self.hairpinType = type
-        super.init()
+        position = .below
     }
 
     public convenience init(validating firstNote: Note?, lastNote: Note?, type: HairpinType) throws {
@@ -86,7 +160,7 @@ public final class StaveHairpin: VexElement {
     @discardableResult
     public func setPosition(_ position: ModifierPosition) -> Self {
         if position == .above || position == .below {
-            hairpinPosition = position
+            self.position = position
         }
         return self
     }
@@ -97,17 +171,20 @@ public final class StaveHairpin: VexElement {
         return self
     }
 
+    /// Set the notes to attach this hairpin to. Invalid input is ignored.
     @discardableResult
     public func setNotes(firstNote: Note?, lastNote: Note?) -> Self {
         _ = try? setNotesThrowing(firstNote: firstNote, lastNote: lastNote)
         return self
     }
 
+    /// Set the notes to attach this hairpin to.
     @discardableResult
     public func setNotesThrowing(firstNote: Note?, lastNote: Note?) throws -> Self {
-        guard firstNote != nil || lastNote != nil else {
+        if firstNote == nil && lastNote == nil {
             throw StaveHairpinError.requiresStartOrEndNote
         }
+
         self.firstNote = firstNote
         self.lastNote = lastNote
         return self
@@ -115,35 +192,31 @@ public final class StaveHairpin: VexElement {
 
     // MARK: - Render
 
-    private func renderHairpin(
-        firstX: Double,
-        lastX: Double,
-        firstY: Double,
-        staffHeight: Double
-    ) throws {
+    public func renderHairpin(firstX: Double, lastX: Double, firstY: Double, lastY: Double,
+                              staffHeight: Double) throws {
         let ctx = try checkContext()
         var dis = renderOptions.yShift + 20
         var yShift = firstY
 
-        if hairpinPosition == .above {
+        if position == .above {
             dis = -dis + 30
             yShift = firstY - staffHeight
         }
 
-        let lShift = renderOptions.leftShiftPx
-        let rShift = renderOptions.rightShiftPx
+        let leftShiftPx = renderOptions.leftShiftPx
+        let rightShiftPx = renderOptions.rightShiftPx
 
         ctx.beginPath()
 
-        switch hairpinType {
+        switch hairpin {
         case .crescendo:
-            ctx.moveTo(lastX + rShift, yShift + dis)
-            ctx.lineTo(firstX + lShift, yShift + renderOptions.height / 2 + dis)
-            ctx.lineTo(lastX + rShift, yShift + renderOptions.height + dis)
+            ctx.moveTo(lastX + rightShiftPx, yShift + dis)
+            ctx.lineTo(firstX + leftShiftPx, yShift + renderOptions.height / 2 + dis)
+            ctx.lineTo(lastX + rightShiftPx, yShift + renderOptions.height + dis)
         case .decrescendo:
-            ctx.moveTo(firstX + lShift, yShift + dis)
-            ctx.lineTo(lastX + rShift, yShift + renderOptions.height / 2 + dis)
-            ctx.lineTo(firstX + lShift, yShift + renderOptions.height + dis)
+            ctx.moveTo(firstX + leftShiftPx, yShift + dis)
+            ctx.lineTo(lastX + rightShiftPx, yShift + renderOptions.height / 2 + dis)
+            ctx.lineTo(firstX + leftShiftPx, yShift + renderOptions.height + dis)
         }
 
         ctx.stroke()
@@ -160,16 +233,18 @@ public final class StaveHairpin: VexElement {
             throw StaveHairpinError.requiresBothNotesForDraw
         }
 
-        let start = firstNote.getModifierStartXY(position: hairpinPosition, index: 0)
-        let end = lastNote.getModifierStartXY(position: hairpinPosition, index: 0)
+        let start = firstNote.getModifierStartXY(position: position, index: 0)
+        let end = lastNote.getModifierStartXY(position: position, index: 0)
 
-        let stave = firstNote.checkStave()
+        let firstStave = try firstNote.checkStaveThrowing()
+        let lastStave = try lastNote.checkStaveThrowing()
 
         try renderHairpin(
             firstX: start.x,
             lastX: end.x,
-            firstY: stave.getY() + stave.getHeight(),
-            staffHeight: stave.getHeight()
+            firstY: firstStave.getY() + firstStave.getHeight(),
+            lastY: lastStave.getY() + lastStave.getHeight(),
+            staffHeight: firstStave.getHeight()
         )
     }
 }
@@ -183,7 +258,6 @@ import SwiftUI
 #Preview("StaveHairpin", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 150) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)

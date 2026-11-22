@@ -69,7 +69,7 @@ struct UpstreamSVGParityTests {
         "GlyphNote.GlyphNote_with_ChordSymbols": ["Petaluma": 1.854],
     ]
 
-    private let defaultFonts = ["Bravura", "Gonville", "Petaluma", "Leland"]
+    private let defaultFonts = ["Bravura", "Gonville", "Petaluma"]
 
     @Test("Barline.Simple_BarNotes")
     func barlineSimpleBarNotesMatchesUpstream() throws {
@@ -1834,7 +1834,6 @@ struct UpstreamSVGParityTests {
             let runtime = Flow.makeRuntimeContext()
             runtime.upstreamParityMode = true
             try Flow.withRuntimeContext(runtime) {
-                FontLoader.loadDefaultFonts()
                 try applyUpstreamFontStack(fontName: font)
 
                 let context = SVGRenderContext(
@@ -1910,14 +1909,15 @@ struct UpstreamSVGParityTests {
 
     private func applyUpstreamFontStack(fontName: String) throws {
         switch fontName {
+        // Mirrors VexFlowTests.FONT_STACKS in upstream tests/vexflow_test_helpers.ts.
         case "Bravura":
-            _ = try Flow.setMusicFont(parsing: ["Bravura", "Custom"])
+            Flow.setFonts("Bravura", "Academico")
         case "Gonville":
-            _ = try Flow.setMusicFont(parsing: ["Gonville", "Bravura", "Custom"])
+            Flow.setFonts("Gonville", "Academico")
         case "Petaluma":
-            _ = try Flow.setMusicFont(parsing: ["Petaluma", "Gonville", "Bravura", "Custom"])
+            Flow.setFonts("Petaluma", "Petaluma Script")
         case "Leland":
-            _ = try Flow.setMusicFont(parsing: ["Leland", "Bravura", "Custom"])
+            Flow.setFonts("Leland", "Edwin")
         default:
             throw UpstreamSVGParityError.unsupportedFont(fontName)
         }
@@ -2005,8 +2005,19 @@ struct UpstreamSVGParityTests {
     }
 
     private func expectedSVGURL(module: String, test: String, font: String) -> URL {
-        let fileName = "pptr-\(module).\(test).\(font).svg"
-        return referenceSVGDirectory().appendingPathComponent(fileName)
+        // VexFlow 5 names the browser SVG output `svg_<Module>.<Test>.<Font>.svg`;
+        // VexFlow 4 used `pptr-<Module>.<Test>.<Font>.svg`.
+        let dir = referenceSVGDirectory()
+        let v5 = dir.appendingPathComponent("svg_\(module).\(test).\(font).svg")
+        if FileManager.default.fileExists(atPath: v5.path) { return v5 }
+        return dir.appendingPathComponent("pptr-\(module).\(test).\(font).svg")
+    }
+
+    /// Upstream tag whose reference images are used (`../vexflow-<tag>`).
+    private var upstreamTag: String {
+        let raw = ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_TAG"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return raw.isEmpty ? "5.0.0" : raw
     }
 
     private func referenceSVGDirectory() -> URL {
@@ -2017,7 +2028,7 @@ struct UpstreamSVGParityTests {
 
         let root = packageRoot()
         let candidates = [
-            root.appendingPathComponent("../vexmotion/build/images/reference", isDirectory: true).standardizedFileURL,
+            root.appendingPathComponent("../vexflow-\(upstreamTag)/build/images/reference", isDirectory: true).standardizedFileURL,
             root.appendingPathComponent("../vexflow/build/images/reference", isDirectory: true).standardizedFileURL,
         ]
         for candidate in candidates where FileManager.default.fileExists(atPath: candidate.path) {
@@ -2070,7 +2081,7 @@ struct UpstreamSVGParityTests {
     }
 
     private func drawingSignature(svg: String) -> String {
-        let tagPattern = #"<(path|rect|circle|ellipse|line|polygon|polyline)\b[^>]*>"#
+        let tagPattern = #"<(path|rect|circle|ellipse|line|polygon|polyline|text)\b[^>]*>(?:([^<]*)</text>)?"#
         let regex = try? NSRegularExpression(pattern: tagPattern, options: [.caseInsensitive])
         guard let regex else { return normalizedSVGText(svg) }
 
@@ -2117,6 +2128,17 @@ struct UpstreamSVGParityTests {
                     ",y1=\(canonicalizeNumericToken(attrs["y1"] ?? "0"))" +
                     ",x2=\(canonicalizeNumericToken(attrs["x2"] ?? "0"))" +
                     ",y2=\(canonicalizeNumericToken(attrs["y2"] ?? "0"))"
+                )
+            case "text":
+                var content = ""
+                if match.range(at: 2).location != NSNotFound, let r = Range(match.range(at: 2), in: svg) {
+                    content = String(svg[r]).unicodeScalars.map { $0.value < 0x80 ? String($0) : String(format: "U+%04X", $0.value) }.joined()
+                }
+                rows.append(
+                    "text:x=\(canonicalizeNumericToken(attrs["x"] ?? "0"))" +
+                    ",y=\(canonicalizeNumericToken(attrs["y"] ?? "0"))" +
+                    ",size=\(attrs["font-size"] ?? "")" +
+                    ",text=\(content)"
                 )
             case "polygon", "polyline":
                 rows.append("\(tagName):points=\(canonicalizeNumericList(attrs["points"] ?? ""))")

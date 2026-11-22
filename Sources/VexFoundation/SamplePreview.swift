@@ -7,7 +7,6 @@ import SwiftUI
 #Preview("Two-Voice Stave", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 500, height: 200) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory()
         _ = f.setContext(ctx)

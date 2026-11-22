@@ -1,5 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author: Larry Kuhns 2011
+//
+// Port of `src/stavevolta.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -36,73 +39,66 @@ public final class Volta: StaveModifier {
 
     override public class var category: String { "Volta" }
 
-    override public class var textFont: FontInfo {
-        FontInfo(
-            family: VexFont.SANS_SERIF,
-            size: 9,
-            weight: VexFontWeight.bold.rawValue,
-            style: VexFontStyle.normal.rawValue
-        )
-    }
-
     // MARK: - Properties
 
-    public var voltaType: VoltaType
-    public var number: String
-    public var voltaYShift: Double
+    public var type: VoltaType
 
     // MARK: - Init
 
-    public init(type: VoltaType, number: String, x: Double, yShift: Double) {
-        self.voltaType = type
-        self.number = number
-        self.voltaYShift = yShift
+    public init(type: VoltaType, number label: String, x: Double, yShift: Double) {
+        self.type = type
         super.init()
-        self.modifierX = x
-        resetFont()
+
+        self.x = x
+        self.yShift = yShift
+        text = label
     }
 
-    @discardableResult
-    public func setShiftY(_ y: Double) -> Self {
-        voltaYShift = y
-        return self
+    // MARK: - Deprecated 4.x API
+
+    @available(*, deprecated, renamed: "type")
+    public var voltaType: VoltaType {
+        get { type }
+        set { type = newValue }
     }
+
+    @available(*, deprecated, message: "Use text / getText().")
+    public var number: String { getText() }
+
+    @available(*, deprecated, renamed: "setYShift(_:)")
+    @discardableResult
+    public func setShiftY(_ y: Double) -> Self { setYShift(y) }
 
     // MARK: - Draw
 
-    override public func drawStave(stave: Stave, xShift: Double = 0) throws {
+    override public func draw() throws {
+        let stave = try checkStaveThrowing()
+        let x = stave.getModifierXShift(getPosition().rawValue)
         let ctx = try stave.checkContext()
         setRendered()
 
-        let topY = stave.getYForTopText(Double(stave.getNumLines())) + voltaYShift
+        var width = stave.getWidth() - x // don't include x (offset) for width
+        let topY = stave.getYForTopText(Double(stave.getNumLines())) + yShift
         let vertHeight = 1.5 * stave.getSpacingBetweenLines()
-        var width = stave.getWidth() - xShift
-
-        // Vertical lines
-        switch voltaType {
+        switch type {
         case .begin:
-            ctx.fillRect(modifierX + xShift, topY, 1, vertHeight)
+            ctx.fillRect(self.x + x, topY, 1, vertHeight)
         case .end:
             width -= 5
-            ctx.fillRect(modifierX + xShift + width, topY, 1, vertHeight)
+            ctx.fillRect(self.x + x + width, topY, 1, vertHeight)
         case .beginEnd:
             width -= 3
-            ctx.fillRect(modifierX + xShift, topY, 1, vertHeight)
-            ctx.fillRect(modifierX + xShift + width, topY, 1, vertHeight)
+            ctx.fillRect(self.x + x, topY, 1, vertHeight)
+            ctx.fillRect(self.x + x + width, topY, 1, vertHeight)
         default:
             break
         }
-
-        // Number text for BEGIN or BEGIN_END
-        if voltaType == .begin || voltaType == .beginEnd {
-            ctx.save()
-            ctx.setFont(fontInfo)
-            ctx.fillText(number, modifierX + xShift + 5, topY + 15)
-            ctx.restore()
+        // If the beginning of a volta, draw measure number
+        if type == .begin || type == .beginEnd {
+            renderText(ctx, xPos: x + 5, yPos: topY - yShift + 15)
         }
 
-        // Horizontal line
-        ctx.fillRect(modifierX + xShift, topY, width, 1)
+        ctx.fillRect(self.x + x, topY, width, 1)
     }
 }
 
@@ -115,7 +111,6 @@ import SwiftUI
 #Preview("Volta", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 140) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory()
         _ = f.setContext(ctx)

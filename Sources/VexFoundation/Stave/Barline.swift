@@ -1,5 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. Author Larry Kuhns 2011.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Larry Kuhns 2011
+//
+// Port of `src/stavebarline.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -34,153 +37,196 @@ public final class Barline: StaveModifier {
         "repeatEnd": .repeatEnd,
         "repeatBoth": .repeatBoth,
         "none": .none,
+        // VexFlowPatch: double heavy barline
         "doubleHeavy": .doubleHeavy,
     ]
 
     // MARK: - Properties
 
-    private var barlineType: BarlineType = .single
-    private var thickness: Double
+    private var widths: [BarlineType: Double] = [:]
+    private var paddings: [BarlineType: Double] = [:]
+    private var layoutMetricsMap: [BarlineType: LayoutMetrics] = [:]
 
-    private static let widths: [BarlineType: Double] = [
-        .single: 5, .double: 5, .end: 5,
-        .repeatBegin: 5, .repeatEnd: 5, .repeatBoth: 5, .none: 5,
-        .doubleHeavy: 5,
-    ]
-
-    private static let paddings: [BarlineType: Double] = [
-        .single: 0, .double: 0, .end: 0,
-        .repeatBegin: 15, .repeatEnd: 15, .repeatBoth: 15, .none: 0,
-        .doubleHeavy: 0,
-    ]
-
-    private static let layoutMetricsMap: [BarlineType: LayoutMetrics] = [
-        .single: LayoutMetrics(xMin: 0, xMax: 1, paddingLeft: 5, paddingRight: 5),
-        .double: LayoutMetrics(xMin: -3, xMax: 1, paddingLeft: 5, paddingRight: 5),
-        .end: LayoutMetrics(xMin: -5, xMax: 1, paddingLeft: 5, paddingRight: 5),
-        .repeatEnd: LayoutMetrics(xMin: -10, xMax: 1, paddingLeft: 5, paddingRight: 5),
-        .repeatBegin: LayoutMetrics(xMin: -2, xMax: 10, paddingLeft: 5, paddingRight: 5),
-        .repeatBoth: LayoutMetrics(xMin: -10, xMax: 10, paddingLeft: 5, paddingRight: 5),
-        .none: LayoutMetrics(xMin: 0, xMax: 0, paddingLeft: 5, paddingRight: 5),
-        .doubleHeavy: LayoutMetrics(xMin: -5, xMax: 1, paddingLeft: 5, paddingRight: 5),
-    ]
+    public private(set) var thickness: Double
+    private var type: BarlineType = .single
 
     // MARK: - Init
 
     public init(_ type: BarlineType) {
         self.thickness = Tables.STAVE_LINE_THICKNESS
         super.init()
+
+        widths[.single] = 5
+        widths[.double] = 5
+        widths[.end] = 5
+        widths[.repeatBegin] = 5
+        widths[.repeatEnd] = 5
+        widths[.repeatBoth] = 5
+        widths[.none] = 5
+        widths[.doubleHeavy] = 5 // VexFlowPatch
+
+        paddings[.single] = 0
+        paddings[.double] = 0
+        paddings[.end] = 0
+        paddings[.repeatBegin] = 15
+        paddings[.repeatEnd] = 15
+        paddings[.repeatBoth] = 15
+        paddings[.none] = 0
+        paddings[.doubleHeavy] = 0 // VexFlowPatch
+
+        layoutMetricsMap[.single] = LayoutMetrics(xMin: 0, xMax: 1, paddingLeft: 5, paddingRight: 5)
+        layoutMetricsMap[.double] = LayoutMetrics(xMin: -3, xMax: 1, paddingLeft: 5, paddingRight: 5)
+        layoutMetricsMap[.end] = LayoutMetrics(xMin: -5, xMax: 1, paddingLeft: 5, paddingRight: 5)
+        layoutMetricsMap[.repeatEnd] = LayoutMetrics(xMin: -10, xMax: 1, paddingLeft: 5, paddingRight: 5)
+        layoutMetricsMap[.repeatBegin] = LayoutMetrics(xMin: -2, xMax: 10, paddingLeft: 5, paddingRight: 5)
+        layoutMetricsMap[.repeatBoth] = LayoutMetrics(xMin: -10, xMax: 10, paddingLeft: 5, paddingRight: 5)
+        layoutMetricsMap[.none] = LayoutMetrics(xMin: 0, xMax: 0, paddingLeft: 5, paddingRight: 5)
+        // VexFlowPatch: double heavy barline
+        layoutMetricsMap[.doubleHeavy] = LayoutMetrics(xMin: -5, xMax: 1, paddingLeft: 5, paddingRight: 5)
+
         setPosition(.begin)
-        setBarlineType(type)
+        setType(type)
+    }
+
+    /// Create a barline from a type string (see `typeString`). Unknown strings give `.single`.
+    public convenience init(parsing type: String) {
+        self.init(Barline.typeString[type] ?? .single)
     }
 
     // MARK: - Type
 
-    public func getBarlineType() -> BarlineType { barlineType }
+    public func getType() -> BarlineType { type }
 
     @discardableResult
-    public func setBarlineType(_ type: BarlineType) -> Self {
-        self.barlineType = type
-        self.modifierWidth = Barline.widths[type] ?? 5
-        self.padding = Barline.paddings[type] ?? 0
-        if let metrics = Barline.layoutMetricsMap[type] {
-            self.layoutMetrics = metrics
+    public func setType(_ type: BarlineType) -> Self {
+        self.type = type
+
+        setWidth(widths[type] ?? 5)
+        setPadding(paddings[type] ?? 0)
+        if let metrics = layoutMetricsMap[type] {
+            setLayoutMetrics(metrics)
         }
         return self
     }
 
+    /// Set the type from a type string (see `typeString`). Unknown strings are ignored.
+    @discardableResult
+    public func setType(_ type: String) -> Self {
+        guard let parsed = Barline.typeString[type] else { return self }
+        return setType(parsed)
+    }
+
+    /// Swift alias of `getType()`.
+    public func getBarlineType() -> BarlineType { getType() }
+
+    /// Swift alias of `setType(_:)`.
+    @discardableResult
+    public func setBarlineType(_ type: BarlineType) -> Self { setType(type) }
+
     // MARK: - Draw
 
-    override public func drawStave(stave: Stave, xShift: Double = 0) throws {
+    override public func draw() throws {
+        let stave = try checkStaveThrowing()
         let ctx = try stave.checkContext()
         setRendered()
-        applyStyle(context: ctx)
-        _ = ctx.openGroup("stavebarline", getAttribute("id"))
 
-        switch barlineType {
+        _ = ctx.openGroup("stavebarline", getAttribute("id"))
+        switch type {
         case .single:
-            try drawVerticalBar(stave: stave, x: modifierX)
+            try drawVerticalBar(stave, x, false)
         case .double:
-            try drawVerticalBar(stave: stave, x: modifierX, doubleBar: true)
+            try drawVerticalBar(stave, x, true)
         case .end:
-            try drawVerticalEndBar(stave: stave, x: modifierX)
+            try drawVerticalEndBar(stave, x)
         case .repeatBegin:
-            try drawRepeatBar(stave: stave, x: modifierX, begin: true)
-            if stave.getX() != modifierX {
-                try drawVerticalBar(stave: stave, x: stave.getX())
+            // If the barline is shifted over (in front of clef/time/key)
+            // Draw vertical bar at the beginning.
+            try drawRepeatBar(stave, x, true)
+            if stave.getX() != x {
+                try drawVerticalBar(stave, stave.getX())
             }
         case .repeatEnd:
-            try drawRepeatBar(stave: stave, x: modifierX, begin: false)
+            try drawRepeatBar(stave, x, false)
         case .repeatBoth:
-            try drawRepeatBar(stave: stave, x: modifierX, begin: false)
-            try drawRepeatBar(stave: stave, x: modifierX, begin: true)
+            try drawRepeatBar(stave, x, false)
+            try drawRepeatBar(stave, x, true)
         case .doubleHeavy:
-            try drawVerticalBar(stave: stave, x: modifierX, doubleBar: true, doubleHeavy: true)
+            // VexFlowPatch: double heavy barline
+            try drawVerticalBar(stave, x, true, doubleHeavy: true)
         case .none:
+            // Default is NONE, so nothing to draw
             break
         }
-
         ctx.closeGroup()
-        restoreStyle(context: ctx)
     }
 
     // MARK: - Drawing Helpers
 
-    private func drawVerticalBar(stave: Stave, x: Double, doubleBar: Bool = false, doubleHeavy: Bool = false) throws {
-        let ctx = try stave.checkContext()
+    public func drawVerticalBar(_ stave: Stave, _ x: Double, _ doubleBar: Bool = false) throws {
+        try drawVerticalBar(stave, x, doubleBar, doubleHeavy: false)
+    }
+
+    private func drawVerticalBar(_ stave: Stave, _ x: Double, _ doubleBar: Bool, doubleHeavy: Bool) throws {
+        let staveCtx = try stave.checkContext()
         let topY = stave.getTopLineTopY()
         let botY = stave.getBottomLineBottomY()
         // VexFlowPatch: support double heavy barline with thicker strokes
-        let widthBar1: Double = doubleHeavy ? 3 : 1
-        let widthBar2: Double = doubleHeavy ? 3 : 1
-        let startXBar1: Double = doubleHeavy ? x - 5 : x - 3
-        let startXBar2: Double = x
+        let widthBar = doubleHeavy ? 3.0 : 1.0
+        let startXBar1 = doubleHeavy ? x - 5 : x - 3
         if doubleBar {
-            ctx.fillRect(startXBar1, topY, widthBar1, botY - topY)
+            staveCtx.fillRect(startXBar1, topY, widthBar, botY - topY)
         }
-        ctx.fillRect(startXBar2, topY, widthBar2, botY - topY)
+        staveCtx.fillRect(x, topY, widthBar, botY - topY)
     }
 
-    private func drawVerticalEndBar(stave: Stave, x: Double) throws {
-        let ctx = try stave.checkContext()
+    public func drawVerticalEndBar(_ stave: Stave, _ x: Double) throws {
+        let staveCtx = try stave.checkContext()
         let topY = stave.getTopLineTopY()
         let botY = stave.getBottomLineBottomY()
-        ctx.fillRect(x - 5, topY, 1, botY - topY)
-        ctx.fillRect(x - 2, topY, 3, botY - topY)
+        staveCtx.fillRect(x - 5, topY, 1, botY - topY)
+        staveCtx.fillRect(x - 2, topY, 3, botY - topY)
     }
 
-    private func drawRepeatBar(stave: Stave, x: Double, begin: Bool) throws {
-        let ctx = try stave.checkContext()
+    public func drawRepeatBar(_ stave: Stave, _ x: Double, _ begin: Bool) throws {
+        let staveCtx = try stave.checkContext()
+
         let topY = stave.getTopLineTopY()
         let botY = stave.getBottomLineBottomY()
+        var xShift: Double = 3
 
-        var xShift: Double = begin ? 3 : -5
+        if !begin {
+            xShift = -5
+        }
 
-        ctx.fillRect(x + xShift, topY, 1, botY - topY)
-        ctx.fillRect(x - 2, topY, 3, botY - topY)
+        staveCtx.fillRect(x + xShift, topY, 1, botY - topY)
+        staveCtx.fillRect(x - 2, topY, 3, botY - topY)
 
         let dotRadius: Double = 2
+
+        // Shift dots left or right
         if begin {
             xShift += 4
         } else {
             xShift -= 4
         }
+
         let dotX = x + xShift + dotRadius / 2
 
+        // calculate the y offset based on number of stave lines
         var yOffset = Double(stave.getNumLines() - 1) * stave.getSpacingBetweenLines()
         yOffset = yOffset / 2 - stave.getSpacingBetweenLines() / 2
         var dotY = topY + yOffset + dotRadius / 2
 
-        // Top repeat dot
-        ctx.beginPath()
-        ctx.arc(dotX, dotY, dotRadius, 0, .pi * 2, false)
-        ctx.fill()
+        // draw the top repeat dot
+        staveCtx.beginPath()
+        staveCtx.arc(dotX, dotY, dotRadius, 0, .pi * 2, false)
+        staveCtx.fill()
 
-        // Bottom repeat dot
+        // draw the bottom repeat dot
         dotY += stave.getSpacingBetweenLines()
-        ctx.beginPath()
-        ctx.arc(dotX, dotY, dotRadius, 0, .pi * 2, false)
-        ctx.fill()
+        staveCtx.beginPath()
+        staveCtx.arc(dotX, dotY, dotRadius, 0, .pi * 2, false)
+        staveCtx.fill()
     }
 }
 
@@ -193,7 +239,6 @@ import SwiftUI
 #Preview("Barline", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 120) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory()
         _ = f.setContext(ctx)

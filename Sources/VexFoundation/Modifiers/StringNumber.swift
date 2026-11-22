@@ -1,6 +1,9 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010.
-// Author: Larry Kuhns 2013. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Larry Kuhns
+//
+// Port of `src/stringnumber.ts` (VexFlow 5.0.0). The `StringNumber` class
+// renders string number annotations beside notes.
 
 import Foundation
 
@@ -20,46 +23,25 @@ public enum StringNumberError: Error, LocalizedError, Equatable, Sendable {
 
 // MARK: - Line End Type
 
-public enum LineEndType: Int {
+/// Port of `Renderer.LineEndType`.
+public enum LineEndType: Int, Sendable {
+    /// No leg.
     case none = 1
+    /// Upward leg.
     case up = 2
+    /// Downward leg.
     case down = 3
 }
 
 // MARK: - StringNumber
 
-/// Renders circled string number annotations beside notes.
 public final class StringNumber: Modifier {
 
     override public class var category: String { "StringNumber" }
-    override public class var textFont: FontInfo {
-        FontInfo(
-            family: VexFont.SANS_SERIF,
-            size: VexFont.SIZE,
-            weight: VexFontWeight.bold.rawValue,
-            style: VexFontStyle.normal.rawValue
-        )
-    }
-
-    private struct StringNumberMetrics {
-        var verticalPadding: Double
-        var stemPadding: Double
-        var leftPadding: Double
-        var rightPadding: Double
-    }
-
-    private static var metrics: StringNumberMetrics {
-        let musicFont = Glyph.MUSIC_FONT_STACK.first
-        return StringNumberMetrics(
-            verticalPadding: (musicFont?.lookupMetric("stringNumber.verticalPadding") as? Double) ?? 0,
-            stemPadding: (musicFont?.lookupMetric("stringNumber.stemPadding") as? Double) ?? 0,
-            leftPadding: (musicFont?.lookupMetric("stringNumber.leftPadding") as? Double) ?? 0,
-            rightPadding: (musicFont?.lookupMetric("stringNumber.rightPadding") as? Double) ?? 0
-        )
-    }
 
     // MARK: - Static Format
 
+    /// Arrange string numbers inside a `ModifierContext`.
     @discardableResult
     public static func format(
         _ nums: [StringNumber],
@@ -73,7 +55,9 @@ public final class StringNumber: Modifier {
         _ nums: [StringNumber],
         state: inout ModifierContextState
     ) throws -> Bool {
+        /// The modifier context's leftShift state.
         let leftShift = state.leftShift
+        /// The modifier context's rightShift state.
         let rightShift = state.rightShift
         let numSpacing: Double = 1
 
@@ -86,38 +70,43 @@ public final class StringNumber: Modifier {
             var line: Double
             var shiftL: Double
             var shiftR: Double
-            var order: Int
         }
 
         var numsList: [NumInfo] = []
-        var prevNote: Note? = nil
-        var extraXSpaceForDisplaced: Double = 0
+        var prevNote: Note?
+        var extraXSpaceForDisplacedNotehead: Double = 0
         var shiftRight: Double = 0
+        let modLines: Double = 0
 
-        for (order, num) in nums.enumerated() {
+        for num in nums {
             let note = num.getNote()
             let pos = num.getPosition()
-            guard let staveNote = note as? StaveNote else {
+            guard note is StaveNote else {
                 throw StringNumberError.requiresStaveNote
             }
             let index = num.checkIndex()
-            let props = staveNote.getKeyProps()[index]
+            let props = note.getKeyProps()[index]
             let verticalSpaceNeeded = (num.radius * 2) / Tables.STAVE_LINE_DISTANCE + 0.5
 
-            if pos == .above {
-                // Use the active formatting state passed by ModifierContext to avoid
-                // overlapping read/write access through note.modifierContext.state.
-                num.textLine = state.topTextLine
-                state.topTextLine += verticalSpaceNeeded
-            } else if pos == .below {
-                num.textLine = state.textLine
-                state.textLine += verticalSpaceNeeded
+            // Upstream reads `note.getModifierContext().getState()`. The
+            // ModifierContext passes its own state here as `inout`, so read the
+            // same values from `state` (avoids overlapping access).
+            if note.getModifierContext() != nil {
+                if pos == .above {
+                    num.textLine = state.topTextLine
+                    state.topTextLine += verticalSpaceNeeded
+                } else if pos == .below {
+                    num.textLine = state.textLine
+                    state.textLine += verticalSpaceNeeded
+                }
             }
 
             if note !== prevNote {
                 for _ in 0..<note.keys.count {
                     if pos == .left {
-                        extraXSpaceForDisplaced = max(note.getLeftDisplacedHeadPx(), extraXSpaceForDisplaced)
+                        extraXSpaceForDisplacedNotehead = max(
+                            note.getLeftDisplacedHeadPx(), extraXSpaceForDisplacedNotehead
+                        )
                     }
                     if rightShift == 0 {
                         shiftRight = max(note.getRightDisplacedHeadPx(), shiftRight)
@@ -126,37 +115,44 @@ public final class StringNumber: Modifier {
                 prevNote = note
             }
 
+            let glyphLine = modLines == 0 ? props.line : modLines
+
             numsList.append(NumInfo(
-                pos: pos, note: note, num: num, line: props.line,
-                shiftL: extraXSpaceForDisplaced, shiftR: shiftRight, order: order
+                pos: pos,
+                note: note,
+                num: num,
+                line: glyphLine,
+                shiftL: extraXSpaceForDisplacedNotehead,
+                shiftR: shiftRight
             ))
         }
 
-        numsList.sort {
-            if $0.line == $1.line {
-                return $0.order < $1.order
-            }
-            return $0.line > $1.line
-        }
+        // Sort string numbers by line number (stable, like Array.prototype.sort).
+        numsList = numsList.enumerated()
+            .sorted { $0.element.line != $1.element.line ? $0.element.line > $1.element.line : $0.offset < $1.offset }
+            .map(\.element)
 
         var numShiftR: Double = 0
         var xWidthL: Double = 0
         var xWidthR: Double = 0
-        var lastLine: Double? = nil
-        var lastNote: Note? = nil
-
+        var lastLine: Double?
+        var lastNote: Note?
         for item in numsList {
+            // Reset the position of the string number every line.
             if item.line != lastLine || item.note !== lastNote {
                 numShiftR = rightShift + item.shiftR
             }
 
             let numWidth = item.num.getWidth() + numSpacing
+            var numXShift: Double = 0
             if item.pos == .left {
-                _ = item.num.setXShift(leftShift + extraXSpaceForDisplaced)
-                xWidthL = max(numWidth, xWidthL)
+                _ = item.num.setXShift(leftShift + extraXSpaceForDisplacedNotehead)
+                numXShift = numWidth // spacing
+                xWidthL = max(numXShift, xWidthL)
             } else if item.pos == .right {
                 _ = item.num.setXShift(numShiftR)
-                xWidthR = max(numWidth, xWidthR)
+                numXShift += numWidth // spacing
+                xWidthR = numXShift > xWidthR ? numXShift : xWidthR
             }
             lastLine = item.line
             lastNote = item.note
@@ -169,24 +165,38 @@ public final class StringNumber: Modifier {
 
     // MARK: - Properties
 
-    public var radius: Double = 8
-    public var drawCircle: Bool = true
-    public var stringNumber: String
-    public var xOffset: Double = 0
-    public var yOffset: Double = 0
-    public var stemOffset: Double = 0
-    public var dashed: Bool = true
-    public var leg: LineEndType = .none
+    public var radius: Double
+    public var drawCircle: Bool
     public var lastNote: Note?
+    public var stringNumber: String
+    /// Horizontal offset from default.
+    public var xOffset: Double
+    /// Vertical offset from default.
+    public var yOffset: Double
+    public var stemOffset: Double
+    /// true: draw dashed extension. false: no extension.
+    public var dashed: Bool
+    /// Draw upward/downward leg at the end of the extension line.
+    public var leg: LineEndType
 
     // MARK: - Init
 
     public init(_ number: String) {
-        self.stringNumber = number
+        stringNumber = number
+        stemOffset = 0
+        xOffset = 0
+        yOffset = 0
+        dashed = true
+        leg = .none
+        radius = 8
+        drawCircle = true
         super.init()
-        position = .above
+
+        position = .above // Default position above stem or note head
+        xShift = 0
+        yShift = 0
+        textLine = 0
         _ = setWidth(radius * 2 + 4)
-        resetFont()
     }
 
     // MARK: - Setters
@@ -235,13 +245,14 @@ public final class StringNumber: Modifier {
 
     // MARK: - Draw
 
-    private func drawDashedLine(
+    /// Port of `Renderer.drawDashedLine`.
+    private static func drawDashedLine(
         _ ctx: any RenderContext,
-        fromX: Double,
-        fromY: Double,
-        toX: Double,
-        toY: Double,
-        dashPattern: [Double]
+        _ fromX: Double,
+        _ fromY: Double,
+        _ toX: Double,
+        _ toY: Double,
+        _ dashPattern: [Double]
     ) {
         ctx.beginPath()
 
@@ -251,19 +262,15 @@ public final class StringNumber: Modifier {
         var x = fromX
         var y = fromY
         ctx.moveTo(fromX, fromY)
-
-        var index = 0
+        var idx = 0
         var draw = true
         while !((dx < 0 ? x <= toX : x >= toX) && (dy < 0 ? y <= toY : y >= toY)) {
-            let dashLength = dashPattern[index % dashPattern.count]
-            index += 1
-
+            let dashLength = dashPattern[idx % dashPattern.count]
+            idx += 1
             let nx = x + cos(angle) * dashLength
             x = dx < 0 ? max(toX, nx) : min(toX, nx)
-
             let ny = y + sin(angle) * dashLength
             y = dy < 0 ? max(toY, ny) : min(toY, ny)
-
             if draw {
                 ctx.lineTo(x, y)
             } else {
@@ -278,12 +285,16 @@ public final class StringNumber: Modifier {
 
     override public func draw() throws {
         let ctx = try checkContext()
-        let note = checkAttachedNote()
+        let note = try checkAttachedNoteThrowing()
         setRendered()
-
-        let start = note.getModifierStartXY(position: position, index: checkIndex())
+        let start = note.getModifierStartXY(position: position, index: index ?? 0)
         let stemDirection = note.hasStem() ? note.getStemDirection() : Stem.UP
         var dotX = start.x + xShift + xOffset
+        var stemExt: (topY: Double, baseY: Double) = (0, 0)
+        if note.hasStem(), let stemmable = note as? StemmableNote {
+            stemExt = try stemmable.checkStemThrowing().getExtents()
+        }
+
         var dotY = start.y + yShift + yOffset
 
         switch position {
@@ -291,78 +302,61 @@ public final class StringNumber: Modifier {
             let ys = note.getYs()
             dotY = ys.min() ?? dotY
             if note.hasStem() && stemDirection == Stem.UP {
-                if let stemmable = note as? StemmableNote {
-                    dotY = stemmable.checkStem().getExtents().topY + Self.metrics.stemPadding
-                }
+                dotY = stemExt.topY + Metrics.getDouble("StringNumber.stemPadding")
             }
-            dotY -= radius + Self.metrics.verticalPadding + textLine * Tables.STAVE_LINE_DISTANCE
+            dotY -= radius + Metrics.getDouble("StringNumber.verticalPadding")
+                + textLine * Tables.STAVE_LINE_DISTANCE
         case .below:
             let ys = note.getYs()
             dotY = ys.max() ?? dotY
             if note.hasStem() && stemDirection == Stem.DOWN {
-                if let stemmable = note as? StemmableNote {
-                    dotY = stemmable.checkStem().getExtents().topY - Self.metrics.stemPadding
-                }
+                dotY = stemExt.topY - Metrics.getDouble("StringNumber.stemPadding")
             }
-            dotY += radius + Self.metrics.verticalPadding + textLine * Tables.STAVE_LINE_DISTANCE
+            dotY += radius + Metrics.getDouble("StringNumber.verticalPadding")
+                + textLine * Tables.STAVE_LINE_DISTANCE
         case .left:
-            dotX -= radius / 2 + Self.metrics.leftPadding
+            dotX -= radius / 2 + Metrics.getDouble("StringNumber.leftPadding")
         case .right:
-            dotX += radius / 2 + Self.metrics.rightPadding
+            dotX += radius / 2 + Metrics.getDouble("StringNumber.rightPadding")
         default:
             throw StringNumberError.invalidPosition(position)
         }
 
-        ctx.save()
         if drawCircle {
             ctx.beginPath()
             ctx.arc(dotX, dotY, radius, 0, Double.pi * 2, false)
             ctx.setLineWidth(1.5)
             ctx.stroke()
         }
-        if let font = textFont { ctx.setFont(font) }
+        ctx.setFont(fontInfo)
         let x = dotX - ctx.measureText(stringNumber).width / 2
         ctx.fillText(stringNumber, x, dotY + 4.5)
 
-        if let ln = lastNote, let stemmable = ln as? StemmableNote {
-            let endX = stemmable.getStemX() - note.getX() + 5
+        // Only StemmableNote objects have getStemX().
+        if let lastNote = lastNote as? StemmableNote {
+            let end = lastNote.getStemX() - note.getX() + 5
             ctx.setStrokeStyle("#000000")
             ctx.setLineCap(.round)
             ctx.setLineWidth(0.6)
-            drawDashedLine(
-                ctx,
-                fromX: dotX + 10,
-                fromY: dotY,
-                toX: dotX + endX,
-                toY: dotY,
-                dashPattern: dashed ? [3, 3] : [3, 0]
-            )
+            if dashed {
+                Self.drawDashedLine(ctx, dotX + 10, dotY, dotX + end, dotY, [3, 3])
+            } else {
+                Self.drawDashedLine(ctx, dotX + 10, dotY, dotX + end, dotY, [3, 0])
+            }
 
             switch leg {
             case .up:
-                drawDashedLine(
-                    ctx,
-                    fromX: dotX + endX,
-                    fromY: dotY,
-                    toX: dotX + endX,
-                    toY: dotY - 10,
-                    dashPattern: dashed ? [3, 3] : [3, 0]
-                )
+                let len: Double = -10
+                let pattern: [Double] = dashed ? [3, 3] : [3, 0]
+                Self.drawDashedLine(ctx, dotX + end, dotY, dotX + end, dotY + len, pattern)
             case .down:
-                drawDashedLine(
-                    ctx,
-                    fromX: dotX + endX,
-                    fromY: dotY,
-                    toX: dotX + endX,
-                    toY: dotY + 10,
-                    dashPattern: dashed ? [3, 3] : [3, 0]
-                )
+                let len: Double = 10
+                let pattern: [Double] = dashed ? [3, 3] : [3, 0]
+                Self.drawDashedLine(ctx, dotX + end, dotY, dotX + end, dotY + len, pattern)
             case .none:
                 break
             }
         }
-
-        ctx.restore()
     }
 }
 
@@ -375,7 +369,6 @@ import SwiftUI
 #Preview("StringNumber", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 180) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500, height: 170))
         _ = f.setContext(ctx)

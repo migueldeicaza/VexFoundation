@@ -1,5 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/parser.ts` (VexFlow 5.0.0).
 
 import Foundation
 

@@ -1,12 +1,14 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010.
-// Author: Balazs Forian-Szabo. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Balazs Forian-Szabo
+//
+// Port of `src/gracetabnote.ts` (VexFlow 5.0.0). A basic grace note for a tab stave.
 
 import Foundation
 
 // MARK: - GraceTabNote
 
-/// A grace note rendered on a tab stave with reduced scale.
+/// A grace note on a tab stave.
 public final class GraceTabNote: TabNote {
 
     override public class var category: String { "GraceTabNote" }
@@ -16,9 +18,8 @@ public final class GraceTabNote: TabNote {
     public override init(_ noteStruct: TabNoteStruct, drawStem: Bool = false) {
         super.init(noteStruct, drawStem: false)
 
+        // Vertical shift from the stave line.
         renderOptions.yShift = 0.3
-        renderOptions.scale = 0.6
-        renderOptions.font = "7.5pt \(VexFont.SANS_SERIF)"
 
         updateWidth()
     }
@@ -33,7 +34,6 @@ import SwiftUI
 #Preview("GraceTabNote", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 500, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)

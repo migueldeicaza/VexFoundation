@@ -1,5 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/bend.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -34,27 +36,18 @@ public struct BendPhrase {
 // MARK: - Bend Render Options
 
 public struct BendRenderOptions {
-    public var lineWidth: Double = 1.5
     public var releaseWidth: Double = 8
     public var bendWidth: Double = 8
-    public var lineStyle: String = "#777777"
 
-    public init(
-        lineWidth: Double = 1.5,
-        releaseWidth: Double = 8,
-        bendWidth: Double = 8,
-        lineStyle: String = "#777777"
-    ) {
-        self.lineWidth = lineWidth
+    public init(releaseWidth: Double = 8, bendWidth: Double = 8) {
         self.releaseWidth = releaseWidth
         self.bendWidth = bendWidth
-        self.lineStyle = lineStyle
     }
 }
 
 // MARK: - Bend
 
-/// Renders tablature bends on notes with up/down arrows and text.
+/// Bend implements tablature bends.
 public final class Bend: Modifier {
 
     override public class var category: String { "Bend" }
@@ -64,6 +57,7 @@ public final class Bend: Modifier {
 
     // MARK: - Static Format
 
+    /// Arrange bends in `ModifierContext`.
     @discardableResult
     public static func format(
         _ bends: [Bend],
@@ -72,10 +66,12 @@ public final class Bend: Modifier {
         if bends.isEmpty { return false }
 
         var lastWidth: Double = 0
+        // Format Bends
         for bend in bends {
             let note = bend.checkAttachedNote()
+
             if let tabNote = note as? TabNote {
-                let stringPos = Double(tabNote.leastString() - 1)
+                let stringPos = Double(tabNote.leastString()) - 1
                 if state.topTextLine < stringPos {
                     state.topTextLine = stringPos
                 }
@@ -92,35 +88,64 @@ public final class Bend: Modifier {
 
     // MARK: - Properties
 
-    public var text: String
-    public var tap: String = ""
-    public var release: Bool
+    public var tap: String
     public var phrase: [BendPhrase]
-    public var bendRenderOptions = BendRenderOptions()
+    public var styleLine: ElementStyle = Metrics.getStyle("Bend.line")
+    public var renderOptions: BendRenderOptions
+
+    @available(*, deprecated, renamed: "renderOptions")
+    public var bendRenderOptions: BendRenderOptions {
+        get { renderOptions }
+        set { renderOptions = newValue }
+    }
 
     // MARK: - Init
 
-    public init(_ text: String, release: Bool = false, phrase: [BendPhrase]? = nil) {
-        self.text = text
-        self.release = release
+    /// Example of a phrase:
+    /// ```
+    /// [BendPhrase(type: Bend.UP, text: "whole", width: 8),
+    ///  BendPhrase(type: Bend.DOWN, text: "whole", width: 8),
+    ///  BendPhrase(type: Bend.UP, text: "half", width: 8)]
+    /// ```
+    public init(_ phrase: [BendPhrase]) {
+        tap = ""
+        renderOptions = BendRenderOptions(releaseWidth: 8, bendWidth: 8)
+        self.phrase = phrase
+        super.init()
 
+        xShift = 0
+        updateWidth()
+    }
+
+    /// VexFlow 4 constructor: one bend with `text`, plus a release if `release` is true.
+    @available(*, deprecated, message: "Use Bend(_ phrase: [BendPhrase]).")
+    public convenience init(_ text: String, release: Bool = false, phrase: [BendPhrase]? = nil) {
         if let phrase {
-            self.phrase = phrase
+            self.init(phrase)
         } else {
             var phrases: [BendPhrase] = [BendPhrase(type: Bend.UP, text: text)]
             if release {
                 phrases.append(BendPhrase(type: Bend.DOWN, text: ""))
             }
-            self.phrase = phrases
+            self.init(phrases)
         }
-
-        super.init()
-        resetFont()
-        updateWidth()
     }
 
     // MARK: - Setters
 
+    /// Set the element style used for rendering the lines.
+    @discardableResult
+    public func setStyleLine(_ style: ElementStyle) -> Self {
+        styleLine = style
+        return self
+    }
+
+    /// Get the element style used for rendering the lines.
+    public func getStyleLine() -> ElementStyle {
+        styleLine
+    }
+
+    /// Set horizontal shift in pixels.
     @discardableResult
     public override func setXShift(_ value: Double) -> Self {
         xShift = value
@@ -134,156 +159,159 @@ public final class Bend: Modifier {
         return self
     }
 
-    public func getText() -> String { text }
-
     public func getTextHeight() -> Double {
-        let formatter = TextFormatter.create(font: fontInfo)
-        return formatter.maxHeight
+        let element = VexElement(category: "Bend")
+        element.setText(phrase.first?.text ?? "")
+        return element.getHeight()
     }
 
     // MARK: - Update Width
 
-    private func updateWidth() {
-        let textFormatter = TextFormatter.create(font: fontInfo)
+    /// Recalculate width.
+    @discardableResult
+    func updateWidth() -> Self {
+        func measureText(_ text: String) -> Double {
+            let element = VexElement(category: "Bend")
+            element.setText(text)
+            return element.getWidth()
+        }
+
         var totalWidth: Double = 0
         for i in 0..<phrase.count {
             if let w = phrase[i].width {
                 totalWidth += w
             } else {
                 let additionalWidth = phrase[i].type == Bend.UP
-                    ? bendRenderOptions.bendWidth
-                    : bendRenderOptions.releaseWidth
-                let textWidth = textFormatter.getWidthForTextInPx(phrase[i].text)
-                let w = max(additionalWidth, textWidth) + 3
+                    ? renderOptions.bendWidth
+                    : renderOptions.releaseWidth
+
+                let w = max(additionalWidth, measureText(phrase[i].text)) + 3
                 phrase[i].width = w
                 phrase[i].drawWidth = w / 2
                 totalWidth += w
             }
         }
+
         _ = setWidth(totalWidth + xShift)
+        return self
     }
 
     // MARK: - Draw
 
+    /// Draw the bend on the rendering context.
     override public func draw() throws {
         let ctx = try checkContext()
-        let note = checkAttachedNote()
+        let note = try checkAttachedNoteThrowing()
         setRendered()
 
-        var start = note.getModifierStartXY(position: .right, index: checkIndex())
+        var start = note.getModifierStartXY(position: .right, index: index ?? 0)
         start.x += 3
         start.y += 0.5
-        let xShiftVal = xShift
+        let xShift = self.xShift
 
-        let stave = note.checkStave()
+        let stave = try note.checkStaveThrowing()
         let spacing = stave.getSpacingBetweenLines()
-        let lowestY = note.getYs().min() ?? start.y
+        let lowestY = note.getYs().min() ?? 0
+        // this.textLine is relative to top string in the group.
         let bendHeight = start.y - ((textLine + 1) * spacing + start.y - lowestY) + 3
         let annotationY = start.y - ((textLine + 1) * spacing + start.y - lowestY) - 1
 
-        if !tap.isEmpty {
-            let tapStart = note.getModifierStartXY(position: .center, index: checkIndex())
-            ctx.save()
-            if let font = textFont { ctx.setFont(font) }
-            let tw = ctx.measureText(tap).width
-            ctx.fillText(tap, tapStart.x - tw / 2, annotationY)
-            ctx.restore()
+        let styleLine = self.styleLine
+        let fontInfo = self.fontInfo
+
+        func renderBend(_ x: Double, _ y: Double, _ width: Double, _ height: Double) {
+            let cpX = x + width
+            let cpY = y
+
+            applyStyle(context: ctx, style: styleLine)
+            ctx.beginPath()
+            ctx.moveTo(x, y)
+            ctx.quadraticCurveTo(cpX, cpY, x + width, height)
+            ctx.stroke()
         }
 
-        var lastBend: BendPhrase? = nil
+        func renderRelease(_ x: Double, _ y: Double, _ width: Double, _ height: Double) {
+            applyStyle(context: ctx, style: styleLine)
+            ctx.beginPath()
+            ctx.moveTo(x, height)
+            ctx.quadraticCurveTo(x + width, height, x + width, y)
+            ctx.stroke()
+        }
+
+        func renderArrowHead(_ x: Double, _ y: Double, _ direction: Double) {
+            let width: Double = 4
+            let yBase = y + width * direction
+
+            ctx.beginPath()
+            ctx.moveTo(x, y) // tip of the arrow
+            ctx.lineTo(x - width, yBase)
+            ctx.lineTo(x + width, yBase)
+            ctx.closePath()
+            ctx.fill()
+        }
+
+        func renderText(_ x: Double, _ text: String) {
+            ctx.setFont(fontInfo)
+            let renderX = x - ctx.measureText(text).width / 2
+            ctx.fillText(text, renderX, annotationY)
+        }
+
+        var lastBend: BendPhrase?
         var lastBendDrawWidth: Double = 0
         var lastDrawnWidth: Double = 0
+        if !tap.isEmpty {
+            let tapStart = note.getModifierStartXY(position: .center, index: index ?? 0)
+            renderText(tapStart.x, tap)
+        }
 
         for i in 0..<phrase.count {
             if phrase[i].drawWidth == nil { phrase[i].drawWidth = 0 }
-            if i == 0 { phrase[i].drawWidth! += xShiftVal }
+            if i == 0 { phrase[i].drawWidth = (phrase[i].drawWidth ?? 0) + xShift }
+            let bendDrawWidth = phrase[i].drawWidth ?? 0
 
-            lastDrawnWidth = phrase[i].drawWidth! + lastBendDrawWidth - (i == 1 ? xShiftVal : 0)
-
+            lastDrawnWidth = bendDrawWidth + lastBendDrawWidth - (i == 1 ? xShift : 0)
             if phrase[i].type == Bend.UP {
                 if let lb = lastBend, lb.type == Bend.UP {
-                    renderArrowHead(ctx: ctx, x: start.x, y: bendHeight, direction: 1)
+                    renderArrowHead(start.x, bendHeight, +1)
                 }
-                renderBend(ctx: ctx, x: start.x, y: start.y, width: lastDrawnWidth, height: bendHeight)
+
+                renderBend(start.x, start.y, lastDrawnWidth, bendHeight)
             }
 
             if phrase[i].type == Bend.DOWN {
                 if let lb = lastBend, lb.type == Bend.UP {
-                    renderRelease(ctx: ctx, x: start.x, y: start.y, width: lastDrawnWidth, height: bendHeight)
+                    renderRelease(start.x, start.y, lastDrawnWidth, bendHeight)
                 }
+
                 if let lb = lastBend, lb.type == Bend.DOWN {
-                    renderArrowHead(ctx: ctx, x: start.x, y: start.y, direction: -1)
-                    renderRelease(ctx: ctx, x: start.x, y: start.y, width: lastDrawnWidth, height: bendHeight)
+                    renderArrowHead(start.x, start.y, -1)
+                    renderRelease(start.x, start.y, lastDrawnWidth, bendHeight)
                 }
+
                 if lastBend == nil {
-                    lastDrawnWidth = phrase[i].drawWidth!
-                    renderRelease(ctx: ctx, x: start.x, y: start.y, width: lastDrawnWidth, height: bendHeight)
+                    lastDrawnWidth = bendDrawWidth
+                    renderRelease(start.x, start.y, lastDrawnWidth, bendHeight)
                 }
             }
 
-            renderText(ctx: ctx, x: start.x + lastDrawnWidth, text: phrase[i].text, y: annotationY)
+            renderText(start.x + lastDrawnWidth, phrase[i].text)
             phrase[i].x = start.x
             lastBend = phrase[i]
-            lastBendDrawWidth = phrase[i].drawWidth!
+            lastBendDrawWidth = bendDrawWidth
 
             start.x += lastDrawnWidth
         }
 
-        guard let lb = lastBend, lb.x != nil else {
+        guard let lb = lastBend, let lastBendX = lb.x else {
             throw BendError.missingLastBendState
         }
 
+        // Final arrowhead and text
         if lb.type == Bend.UP {
-            renderArrowHead(ctx: ctx, x: lb.x! + lastDrawnWidth, y: bendHeight, direction: 1)
+            renderArrowHead(lastBendX + lastDrawnWidth, bendHeight, +1)
         } else if lb.type == Bend.DOWN {
-            renderArrowHead(ctx: ctx, x: lb.x! + lastDrawnWidth, y: start.y, direction: -1)
+            renderArrowHead(lastBendX + lastDrawnWidth, start.y, -1)
         }
-    }
-
-    // MARK: - Private Render Helpers
-
-    private func renderBend(ctx: any RenderContext, x: Double, y: Double, width: Double, height: Double) {
-        ctx.save()
-        ctx.beginPath()
-        ctx.setLineWidth(bendRenderOptions.lineWidth)
-        ctx.setStrokeStyle(bendRenderOptions.lineStyle)
-        ctx.setFillStyle(bendRenderOptions.lineStyle)
-        ctx.moveTo(x, y)
-        ctx.quadraticCurveTo(x + width, y, x + width, height)
-        ctx.stroke()
-        ctx.restore()
-    }
-
-    private func renderRelease(ctx: any RenderContext, x: Double, y: Double, width: Double, height: Double) {
-        ctx.save()
-        ctx.beginPath()
-        ctx.setLineWidth(bendRenderOptions.lineWidth)
-        ctx.setStrokeStyle(bendRenderOptions.lineStyle)
-        ctx.setFillStyle(bendRenderOptions.lineStyle)
-        ctx.moveTo(x, height)
-        ctx.quadraticCurveTo(x + width, height, x + width, y)
-        ctx.stroke()
-        ctx.restore()
-    }
-
-    private func renderArrowHead(ctx: any RenderContext, x: Double, y: Double, direction: Double) {
-        let w: Double = 4
-        let yBase = y + w * direction
-
-        ctx.beginPath()
-        ctx.moveTo(x, y)
-        ctx.lineTo(x - w, yBase)
-        ctx.lineTo(x + w, yBase)
-        ctx.closePath()
-        ctx.fill()
-    }
-
-    private func renderText(ctx: any RenderContext, x: Double, text: String, y: Double) {
-        ctx.save()
-        if let font = textFont { ctx.setFont(font) }
-        let renderX = x - ctx.measureText(text).width / 2
-        ctx.fillText(text, renderX, y)
-        ctx.restore()
     }
 }
 
@@ -296,15 +324,14 @@ import SwiftUI
 #Preview("Bend", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 200) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500, height: 190))
         _ = f.setContext(ctx)
         let score = f.EasyScore()
 
         let notes = score.notes("C5/q, D5, E5, F5")
-        _ = notes[0].addModifier(Bend("Full"), index: 0)
-        _ = notes[2].addModifier(Bend("1/2", release: true), index: 0)
+        _ = notes[0].addModifier(Bend([BendPhrase(type: Bend.UP, text: "Full")]), index: 0)
+        _ = notes[2].addModifier(Bend([BendPhrase(type: Bend.UP, text: "1/2"), BendPhrase(type: Bend.DOWN, text: "")]), index: 0)
 
         let system = f.System(options: SystemOptions(
             factory: f, x: 10, width: 500, y: 10

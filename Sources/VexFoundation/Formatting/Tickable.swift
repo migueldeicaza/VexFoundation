@@ -1,9 +1,9 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/tickable.ts` (VexFlow 5.0.0).
 
 import Foundation
-
-// MARK: - Formatter Metrics
 
 public enum TickableError: Error, LocalizedError, Equatable, Sendable {
     case unformattedWidth
@@ -14,7 +14,7 @@ public enum TickableError: Error, LocalizedError, Equatable, Sendable {
     public var errorDescription: String? {
         switch self {
         case .unformattedWidth:
-            return "Can't call getWidth on an unformatted tickable."
+            return "Can't call GetWidth on an unformatted note."
         case .noVoice:
             return "Tickable has no voice."
         case .noTickContext(let message):
@@ -25,18 +25,33 @@ public enum TickableError: Error, LocalizedError, Equatable, Sendable {
     }
 }
 
-/// Metrics maintained by the formatter during layout.
-public struct FormatterMetrics {
+// MARK: - Formatter Metrics
+
+/// Formatter metrics. A reference type, so that formatters can change
+/// `getFormatterMetrics().space.used` (and so on) in place, as upstream does.
+public final class FormatterMetrics {
+    /// The simplified rational duration of this tick as a string. It can be
+    /// used as an index to a map or hashtable.
     public var duration: String = ""
+    /// The freedom of a tickable is the distance it can move without colliding
+    /// with neighboring elements. A formatter can set these values during its
+    /// formatting pass, which a different formatter can then use to fine tune.
     public var freedom: (left: Double, right: Double) = (0, 0)
+    /// The number of formatting iterations undergone.
     public var iterations: Int = 0
+    /// The space in pixels allocated by this formatter, along with the mean space
+    /// for tickables of this duration, and the deviation from the mean.
     public var space: (used: Double, mean: Double, deviation: Double) = (0, 0, 0)
+
+    public init() {}
 }
 
 // MARK: - Tickable
 
-/// Base class for elements that sit on a score and have a duration.
-/// Tickables occupy space in the musical rendering dimension.
+/// Tickable represents a element that sit on a score and
+/// has a duration, i.e., Tickables occupy space in the musical rendering dimension.
+///
+/// `x`, `xShift`, `yShift` and `width` are inherited from `VexElement`.
 open class Tickable: VexElement {
 
     override open class var category: String { "Tickable" }
@@ -44,29 +59,74 @@ open class Tickable: VexElement {
     // MARK: - Properties
 
     public var ignoreTicks: Bool = false
+    public var tupletStack: [Tuplet] = []
+    public var tuplet: Tuplet?
+    /// Fractional value of ticks.
     public var ticks: Fraction = Fraction(0, 1)
+    /// Shift from tick context if center aligned.
     public var centerXShift: Double = 0
     public weak var voice: Voice?
-    public var tickableWidth: Double = 0
-    public var xShift: Double = 0
+    public var modifierContext: ModifierContext?
     public var tickContext: TickContext?
-    public var noteModifiers: [Modifier] = []
+    public var modifiers: [Modifier] = []
     public var tickMultiplier: Fraction = Fraction(1, 1)
+    /// This is a space for an external formatting class or function to maintain metrics.
     public var formatterMetrics = FormatterMetrics()
+    /// Floating point value of ticks.
     public var intrinsicTicks: Double = 0
     public var alignCenter: Bool = false
-    public var modifierContext: ModifierContext?
-    public var tupletStack: [Tuplet] = []
 
     private var _preFormatted: Bool = false
     private var _postFormatted: Bool = false
 
+    // MARK: - Init
+
+    public override init() {
+        super.init(category: nil)
+    }
+
+    // MARK: - Source compatibility
+
+    @available(*, deprecated, renamed: "modifiers")
+    public var noteModifiers: [Modifier] {
+        get { modifiers }
+        set { modifiers = newValue }
+    }
+
+    @available(*, deprecated, renamed: "width")
+    public var tickableWidth: Double {
+        get { width }
+        set { width = newValue }
+    }
+
+    @available(*, deprecated, renamed: "setWidth(_:)")
+    public func setTickableWidth(_ width: Double) {
+        self.width = width
+    }
+
+    @available(*, deprecated, renamed: "getWidth()")
+    public func getTickableWidth() -> Double { getWidth() }
+
+    @available(*, deprecated, renamed: "getWidthThrowing()")
+    public func getTickableWidthThrowing() throws -> Double { try getWidthThrowing() }
+
+    // MARK: - Reset
+
+    /// Reset the Tickable, this function will be overloaded.
+    @discardableResult
+    open func reset() -> Self {
+        self
+    }
+
     // MARK: - Ticks
 
+    /// Return the ticks.
     public func getTicks() -> Fraction { ticks }
 
-    public func shouldIgnoreTicks() -> Bool { ignoreTicks }
+    /// Check if it ignores the ticks.
+    open func shouldIgnoreTicks() -> Bool { ignoreTicks }
 
+    /// Ignore the ticks.
     @discardableResult
     public func setIgnoreTicks(_ flag: Bool) -> Self {
         ignoreTicks = flag
@@ -75,89 +135,176 @@ open class Tickable: VexElement {
 
     // MARK: - Width
 
-    public func setTickableWidth(_ width: Double) {
-        tickableWidth = width
+    /// Get width of note. Used by the formatter for positioning.
+    /// Upstream throws when the note is not pre-formatted; this returns the
+    /// same value without the check. See `getWidthThrowing()`.
+    override open func getWidth() -> Double {
+        width + (modifierContext?.getWidth() ?? 0)
     }
 
-    public func getTickableWidth() -> Double {
-        (try? getTickableWidthThrowing()) ?? (tickableWidth + (modifierContext?.getWidth() ?? 0))
-    }
-
-    public func getTickableWidthThrowing() throws -> Double {
+    /// Get width of note. Throws when the note is not pre-formatted (upstream behavior).
+    open func getWidthThrowing() throws -> Double {
         guard _preFormatted else {
             throw TickableError.unformattedWidth
         }
-        return tickableWidth + (modifierContext?.getWidth() ?? 0)
+        return width + (modifierContext?.getWidth() ?? 0)
     }
 
     // MARK: - X Position
 
-    @discardableResult
-    public func setXShift(_ x: Double) -> Self {
-        xShift = x
-        return self
-    }
-
-    public func getXShift() -> Double { xShift }
-
-    public func getX() -> Double {
-        let tc = (try? checkTickContextThrowing("Can't getX() without a TickContext.")) ?? TickContext()
+    /// Get `x` position of this tick context.
+    override open func getX() -> Double {
+        let tc = checkTickContext("Can't getX() without a TickContext.")
         return tc.getX() + xShift
     }
 
-    public func getAbsoluteX() -> Double {
-        let tc = (try? checkTickContextThrowing("Can't getAbsoluteX() without a TickContext.")) ?? TickContext()
+    open func getAbsoluteX() -> Double {
+        let tc = checkTickContext("Can't getAbsoluteX() without a TickContext.")
         return tc.getX()
     }
 
     // MARK: - Formatter Metrics
 
+    /// Return the formatterMetrics.
     public func getFormatterMetrics() -> FormatterMetrics { formatterMetrics }
 
     // MARK: - Center Alignment
 
+    /// Return the center `x` shift.
     public func getCenterXShift() -> Double {
         isCenterAligned() ? centerXShift : 0
     }
 
+    /// Set the center `x` shift.
     @discardableResult
-    public func setCenterXShift(_ shift: Double) -> Self {
-        centerXShift = shift
+    public func setCenterXShift(_ centerXShift: Double) -> Self {
+        self.centerXShift = centerXShift
         return self
     }
 
+    /// Check if tickable is center aligned.
     public func isCenterAligned() -> Bool { alignCenter }
 
+    /// Set/unset center alignment.
     @discardableResult
-    public func setCenterAlignment(_ align: Bool) -> Self {
-        alignCenter = align
+    public func setCenterAlignment(_ alignCenter: Bool) -> Self {
+        self.alignCenter = alignCenter
         return self
     }
 
     // MARK: - Voice
 
-    public func getVoice() -> Voice {
+    /// Return the associated voice. Every tickable must be associated with a voice.
+    /// This allows formatters and preFormatter to associate them with the right modifierContexts.
+    open func getVoice() -> Voice {
         (try? getVoiceThrowing()) ?? Voice()
     }
 
-    public func getVoiceThrowing() throws -> Voice {
+    open func getVoiceThrowing() throws -> Voice {
         guard let voice else {
             throw TickableError.noVoice
         }
         return voice
     }
 
-    public func setVoice(_ voice: Voice) {
+    /// Set the associated voice.
+    /// Swift: returns `Self` (upstream `void`) so that `Note` can override it.
+    @discardableResult
+    open func setVoice(_ voice: Voice) -> Self {
         self.voice = voice
+        return self
     }
+
+    // MARK: - Tuplets
+
+    /// Get the tuplet.
+    public func getTuplet() -> Tuplet? { tuplet }
+
+    /// Return a list of Tuplets.
+    public func getTupletStack() -> [Tuplet] { tupletStack }
+
+    /// Reset the specific Tuplet (if this is not provided, all tuplets are reset).
+    /// Remove any prior tuplets from the tick calculation and
+    /// reset the intrinsic tick value.
+    @discardableResult
+    open func resetTuplet(_ tuplet: Tuplet? = nil) -> Self {
+        if let tuplet {
+            if let i = tupletStack.firstIndex(where: { $0 === tuplet }) {
+                tupletStack.remove(at: i)
+                let noteCount = tuplet.getNoteCount()
+                let notesOccupied = tuplet.getNotesOccupied()
+
+                // Revert old multiplier by inverting numerator & denom.:
+                applyTickMultiplier(noteCount, notesOccupied)
+            }
+            return self
+        }
+
+        while let last = tupletStack.popLast() {
+            let noteCount = last.getNoteCount()
+            let notesOccupied = last.getNotesOccupied()
+
+            // Revert old multiplier by inverting numerator & denom.:
+            applyTickMultiplier(noteCount, notesOccupied)
+        }
+        return self
+    }
+
+    /// Attach to new tuplet.
+    @discardableResult
+    open func setTuplet(_ tuplet: Tuplet?) -> Self {
+        if let tuplet {
+            tupletStack.append(tuplet)
+
+            let noteCount = tuplet.getNoteCount()
+            let notesOccupied = tuplet.getNotesOccupied()
+
+            applyTickMultiplier(notesOccupied, noteCount)
+        }
+
+        self.tuplet = tuplet
+        return self
+    }
+
+    // MARK: - Modifier Context
+
+    /// Add self to the provided ModifierContext `mc`.
+    /// If this tickable has modifiers, set modifierContext.
+    @discardableResult
+    open func addToModifierContext(_ mc: ModifierContext) -> Self {
+        modifierContext = mc
+        for modifier in modifiers {
+            mc.addMember(modifier)
+        }
+        mc.addMember(self)
+        _preFormatted = false
+        return self
+    }
+
+    /// Optional, if tickable has modifiers, associate a Modifier.
+    @discardableResult
+    open func addModifier(_ modifier: Modifier, index: Int = 0) -> Self {
+        modifiers.append(modifier)
+        _preFormatted = false
+        return self
+    }
+
+    /// Get the list of associated modifiers.
+    public func getModifiers() -> [Modifier] { modifiers }
 
     // MARK: - Tick Context
 
-    public func setTickContext(_ tc: TickContext) {
+    /// Set the Tick Context.
+    /// Swift: returns `Self` (upstream `void`) so that `Note` can override it.
+    @discardableResult
+    open func setTickContext(_ tc: TickContext) -> Self {
         tickContext = tc
         _preFormatted = false
+        return self
     }
 
+    /// Check and get the tick context. Returns an empty `TickContext` when
+    /// none is attached; see `checkTickContextThrowing(_:)`.
     public func checkTickContext(_ message: String = "Tickable has no tick context.") -> TickContext {
         (try? checkTickContextThrowing(message)) ?? TickContext()
     }
@@ -169,16 +316,79 @@ open class Tickable: VexElement {
         return tickContext
     }
 
-    // MARK: - Modifier Context
+    // MARK: - PreFormat / PostFormat
 
+    /// Preformat the Tickable.
+    open func preFormat() {
+        if _preFormatted { return }
+
+        width = 0
+        if let mc = modifierContext {
+            mc.preFormat()
+            width += mc.getWidth()
+        }
+    }
+
+    /// Preformatted status.
+    public var preFormatted: Bool {
+        get { _preFormatted }
+        set { _preFormatted = newValue }
+    }
+
+    /// Postformat the Tickable.
+    @discardableResult
+    open func postFormat() -> Self {
+        if _postFormatted { return self }
+        _postFormatted = true
+        return self
+    }
+
+    /// Postformatted status.
+    public var postFormatted: Bool {
+        get { _postFormatted }
+        set { _postFormatted = newValue }
+    }
+
+    // MARK: - Intrinsic Ticks
+
+    /// Return the intrinsic ticks.
+    public func getIntrinsicTicks() -> Double { intrinsicTicks }
+
+    /// Set the intrinsic ticks.
+    open func setIntrinsicTicks(_ intrinsicTicks: Double) {
+        self.intrinsicTicks = intrinsicTicks
+        ticks = tickMultiplier.clone().multiply(Int(intrinsicTicks))
+    }
+
+    /// Get the tick multiplier.
+    public func getTickMultiplier() -> Fraction { tickMultiplier }
+
+    /// Apply a tick multiplier.
+    open func applyTickMultiplier(_ numerator: Int, _ denominator: Int) {
+        tickMultiplier.multiply(numerator, denominator)
+        ticks = tickMultiplier.clone().multiply(Int(intrinsicTicks))
+    }
+
+    /// Set the duration.
+    open func setDuration(_ duration: Fraction) {
+        let t = duration.numerator * (Tables.RESOLUTION / duration.denominator)
+        ticks = tickMultiplier.clone().multiply(t)
+        intrinsicTicks = ticks.value()
+    }
+
+    // MARK: - Modifier Context accessors
+
+    /// Attach this note to a modifier context.
     @discardableResult
     public func setModifierContext(_ mc: ModifierContext?) -> Self {
         modifierContext = mc
         return self
     }
 
+    /// Get `ModifierContext`.
     public func getModifierContext() -> ModifierContext? { modifierContext }
 
+    /// Check and get `ModifierContext`.
     public func checkModifierContext() -> ModifierContext {
         (try? checkModifierContextThrowing()) ?? ModifierContext()
     }
@@ -190,113 +400,16 @@ open class Tickable: VexElement {
         return modifierContext
     }
 
-    @discardableResult
-    public func addToModifierContext(_ mc: ModifierContext) -> Self {
-        modifierContext = mc
-        for modifier in noteModifiers {
-            mc.addMember(modifier)
-        }
-        mc.addMember(self)
-        _preFormatted = false
-        return self
-    }
-
-    // MARK: - Modifiers
-
-    @discardableResult
-    public func addModifier(_ modifier: Modifier, index: Int = 0) -> Self {
-        noteModifiers.append(modifier)
-        _preFormatted = false
-        return self
-    }
-
-    public func getModifiers() -> [Modifier] { noteModifiers }
-
-    // MARK: - PreFormat / PostFormat
-
-    open func preFormat() {
-        if _preFormatted { return }
-        tickableWidth = 0
-        if let mc = modifierContext {
-            mc.preFormat()
-            tickableWidth += mc.getWidth()
-        }
-    }
-
-    public var preFormatted: Bool {
-        get { _preFormatted }
-        set { _preFormatted = newValue }
-    }
-
-    @discardableResult
-    open func postFormat() -> Self {
-        if _postFormatted { return self }
-        _postFormatted = true
-        return self
-    }
-
-    public var postFormatted: Bool {
-        get { _postFormatted }
-        set { _postFormatted = newValue }
-    }
-
-    // MARK: - Intrinsic Ticks
-
-    public func getIntrinsicTicks() -> Double { intrinsicTicks }
-
-    public func getTuplet() -> Tuplet? { tupletStack.last }
-
-    public func getTupletStack() -> [Tuplet] { tupletStack }
-
-    @discardableResult
-    public func setTuplet(_ tuplet: Tuplet) -> Self {
-        // Remove any existing instance of this tuplet
-        tupletStack.removeAll { $0 === tuplet }
-        tupletStack.append(tuplet)
-
-        let newNoteCount = Double(tuplet.numNotes)
-        let notesOccupied = Double(tuplet.notesOccupied)
-        applyTickMultiplier(Int(notesOccupied), Int(newNoteCount))
-        return self
-    }
-
-    public func resetTuplet(_ tuplet: Tuplet) {
-        tupletStack.removeAll { $0 === tuplet }
-
-        let newNoteCount = Double(tuplet.numNotes)
-        let notesOccupied = Double(tuplet.notesOccupied)
-        // Reverse the tick multiplier
-        applyTickMultiplier(Int(newNoteCount), Int(notesOccupied))
-    }
-
-    public func setIntrinsicTicks(_ ticks: Double) {
-        intrinsicTicks = ticks
-        self.ticks = tickMultiplier.clone().multiply(Int(ticks))
-    }
-
-    public func getTickMultiplier() -> Fraction { tickMultiplier }
-
-    public func applyTickMultiplier(_ numerator: Int, _ denominator: Int) {
-        tickMultiplier.multiply(numerator, denominator)
-        ticks = tickMultiplier.clone().multiply(Int(intrinsicTicks))
-    }
-
-    public func setDuration(_ duration: Fraction) {
-        let t = duration.numerator * (Tables.RESOLUTION / duration.denominator)
-        ticks = tickMultiplier.clone().multiply(t)
-        intrinsicTicks = ticks.value()
-    }
-
     // MARK: - Abstract (subclasses must implement)
 
+    /// Get the target stave.
     open func getStave() -> Stave? { nil }
 
+    /// Set the target stave.
     @discardableResult
     open func setStave(_ stave: Stave) -> Self { self }
 
     open func getMetrics() -> NoteMetrics {
         NoteMetrics()
     }
-
-    open func getBoundingBox() -> BoundingBox? { nil }
 }

@@ -1,9 +1,12 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author: Taehoon Moon 2014
+//
+// Port of `src/stavetext.ts` (VexFlow 5.0.0).
 
 import Foundation
 
-/// Text justification for StaveText.
+/// Text justification for StaveText. Same values as `TextJustification` (TextNote).
 public enum StaveTextJustification: Int, Sendable {
     case left = 1
     case center = 2
@@ -30,20 +33,8 @@ public final class StaveText: StaveModifier {
 
     override public class var category: String { "StaveText" }
 
-    override public class var textFont: FontInfo {
-        FontInfo(
-            family: VexFont.SERIF,
-            size: 16,
-            weight: VexFontWeight.normal.rawValue,
-            style: VexFontStyle.normal.rawValue
-        )
-    }
-
     // MARK: - Properties
 
-    public var text: String
-    public var textShiftX: Double
-    public var textShiftY: Double
     public var justification: StaveTextJustification
 
     // MARK: - Init
@@ -51,72 +42,65 @@ public final class StaveText: StaveModifier {
     public init(text: String, position: StaveModifierPosition,
                 shiftX: Double = 0, shiftY: Double = 0,
                 justification: StaveTextJustification = .center) {
-        self.text = text
-        self.textShiftX = shiftX
-        self.textShiftY = shiftY
         self.justification = justification
         super.init()
-        self.modifierWidth = 16
+
+        setText(text)
+        setXShift(shiftX)
+        setYShift(shiftY)
         self.position = position
-        resetFont()
+        self.justification = justification
     }
 
-    @discardableResult
-    public func setStaveText(_ text: String) -> Self {
-        self.text = text
-        return self
-    }
+    // MARK: - Deprecated 4.x API
 
+    @available(*, deprecated, renamed: "setText(_:)")
     @discardableResult
-    public func setShiftX(_ x: Double) -> Self {
-        textShiftX = x
-        return self
-    }
+    public func setStaveText(_ text: String) -> Self { setText(text) }
 
+    @available(*, deprecated, renamed: "setXShift(_:)")
     @discardableResult
-    public func setShiftY(_ y: Double) -> Self {
-        textShiftY = y
-        return self
-    }
+    public func setShiftX(_ x: Double) -> Self { setXShift(x) }
+
+    @available(*, deprecated, renamed: "setYShift(_:)")
+    @discardableResult
+    public func setShiftY(_ y: Double) -> Self { setYShift(y) }
 
     // MARK: - Draw
 
-    override public func drawStave(stave: Stave, xShift: Double = 0) throws {
+    override public func draw() throws {
+        let stave = try checkStaveThrowing()
         let ctx = try stave.checkContext()
         setRendered()
 
-        ctx.save()
-        ctx.setLineWidth(2)
-        ctx.setFont(fontInfo)
-
-        let textWidth = ctx.measureText(text).width
         var x: Double
         var y: Double
-
         switch position {
-        case .left:
-            x = stave.getX() - textWidth - 24 + textShiftX
-            y = (stave.getYForLine(0) + stave.getBottomLineY()) / 2 + textShiftY
-        case .right:
-            x = stave.getX() + stave.getWidth() + 24 + textShiftX
-            y = (stave.getYForLine(0) + stave.getBottomLineY()) / 2 + textShiftY
-        case .above:
-            x = stave.getX() + textShiftX
-            if justification == .center { x += stave.getWidth() / 2 - textWidth / 2 }
-            else if justification == .right { x += stave.getWidth() - textWidth }
-            y = stave.getYForTopText(2) + textShiftY
-        case .below:
-            x = stave.getX() + textShiftX
-            if justification == .center { x += stave.getWidth() / 2 - textWidth / 2 }
-            else if justification == .right { x += stave.getWidth() - textWidth }
-            y = stave.getYForBottomText(2) + textShiftY
+        case .left, .right:
+            y = (stave.getYForLine(0) + stave.getBottomLineY()) / 2
+            if position == .left {
+                x = stave.getX() - width - 24
+            } else {
+                x = stave.getX() + stave.getWidth() + 24
+            }
+        case .above, .below:
+            x = stave.getX()
+            if justification == .center {
+                x += stave.getWidth() / 2 - width / 2
+            } else if justification == .right {
+                x += stave.getWidth() - width
+            }
+
+            if position == .above {
+                y = stave.getYForTopText(2)
+            } else {
+                y = stave.getYForBottomText(2)
+            }
         default:
-            x = stave.getX() + textShiftX
-            y = stave.getYForTopText(2) + textShiftY
+            throw VexError("InvalidPosition", "Value Must be in Modifier.Position.")
         }
 
-        ctx.fillText(text, x, y + 4)
-        ctx.restore()
+        renderText(ctx, xPos: x, yPos: y + 4)
     }
 }
 
@@ -129,7 +113,6 @@ import SwiftUI
 #Preview("StaveText", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 140) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory()
         _ = f.setContext(ctx)

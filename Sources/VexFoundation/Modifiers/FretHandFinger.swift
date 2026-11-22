@@ -1,6 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010.
-// Author: Larry Kuhns 2013. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Larry Kuhns 2013
+//
+// Port of `src/frethandfinger.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -21,17 +23,10 @@ public enum FretHandFingerError: Error, LocalizedError, Equatable, Sendable {
 public final class FretHandFinger: Modifier {
 
     override public class var category: String { "FretHandFinger" }
-    override public class var textFont: FontInfo {
-        FontInfo(
-            family: VexFont.SANS_SERIF,
-            size: 9,
-            weight: VexFontWeight.bold.rawValue,
-            style: VexFontStyle.normal.rawValue
-        )
-    }
 
     // MARK: - Static Format
 
+    /// Arrange fingerings inside a ModifierContext.
     @discardableResult
     public static func format(
         _ nums: [FretHandFinger],
@@ -50,22 +45,19 @@ public final class FretHandFinger: Modifier {
             var line: Double
             var shiftL: Double
             var shiftR: Double
-            var order: Int
         }
 
         var numsList: [NumInfo] = []
-        var prevNote: Note? = nil
+        var prevNote: Note?
         var shiftLeft: Double = 0
         var shiftRight: Double = 0
 
-        for (order, num) in nums.enumerated() {
+        for num in nums {
             let note = num.getNote()
             let pos = num.getPosition()
             let index = num.checkIndex()
             let props = note.getKeyProps()[index]
-            let textFormatter = TextFormatter.create(font: num.textFont ?? FretHandFinger.textFont)
-            let textHeight = textFormatter.maxHeight
-
+            let textHeight = Metrics.getDouble("FretHandFinger.fontSize")
             if num.position == .above {
                 state.topTextLine += textHeight / Tables.STAVE_LINE_DISTANCE + 0.5
             }
@@ -86,26 +78,31 @@ public final class FretHandFinger: Modifier {
             }
 
             numsList.append(NumInfo(
-                note: note, num: num, pos: pos, line: props.line,
-                shiftL: shiftLeft, shiftR: shiftRight, order: order
+                note: note,
+                num: num,
+                pos: pos,
+                line: props.line,
+                shiftL: shiftLeft,
+                shiftR: shiftRight
             ))
         }
 
-        numsList.sort {
-            if $0.line == $1.line {
-                return $0.order < $1.order
-            }
-            return $0.line > $1.line
-        }
+        // Sort fingernumbers by line number (stable, like Array.prototype.sort).
+        numsList = numsList.enumerated()
+            .sorted { $0.element.line != $1.element.line ? $0.element.line > $1.element.line : $0.offset < $1.offset }
+            .map(\.element)
 
         var numShiftL: Double = 0
         var numShiftR: Double = 0
         var xWidthL: Double = 0
         var xWidthR: Double = 0
-        var lastLine: Double? = nil
-        var lastNote: Note? = nil
+        var lastLine: Double?
+        var lastNote: Note?
 
         for item in numsList {
+            var numShift: Double = 0
+
+            // Reset the position of the string number every line.
             if item.line != lastLine || item.note !== lastNote {
                 numShiftL = leftShift + item.shiftL
                 numShiftR = rightShift + item.shiftR
@@ -114,12 +111,12 @@ public final class FretHandFinger: Modifier {
             let numWidth = item.num.getWidth() + numSpacing
             if item.pos == .left {
                 _ = item.num.setXShift(leftShift + numShiftL)
-                let numShift = leftShift + numWidth
-                xWidthL = max(numShift, xWidthL)
+                numShift = leftShift + numWidth // spacing
+                xWidthL = numShift > xWidthL ? numShift : xWidthL
             } else if item.pos == .right {
                 _ = item.num.setXShift(numShiftR)
-                let numShift = item.shiftR + numWidth
-                xWidthR = max(numShift, xWidthR)
+                numShift = shiftRight + numWidth // spacing
+                xWidthR = numShift > xWidthR ? numShift : xWidthR
             }
             lastLine = item.line
             lastNote = item.note
@@ -131,31 +128,57 @@ public final class FretHandFinger: Modifier {
         return true
     }
 
+    // MARK: - EasyScore Hook
+
+    /// Commit hook for EasyScore to auto-add fingerings.
+    public static func easyScoreHook(
+        options: [String: String],
+        note: StemmableNote,
+        builder: Builder
+    ) {
+        guard let fingeringsStr = options["fingerings"] else { return }
+
+        for (index, fingeringString) in fingeringsStr.split(separator: ",").enumerated() {
+            let parts = fingeringString.trimmingCharacters(in: .whitespaces).split(separator: ".")
+            guard let first = parts.first else { continue }
+            let fingering = FretHandFinger(String(first))
+            if parts.count > 1, let pos = Modifier.positionString[String(parts[1])] {
+                _ = fingering.setPosition(pos)
+            }
+            _ = note.addModifier(fingering, index: index)
+        }
+    }
+
     // MARK: - Properties
 
-    public var finger: String
-    public var xOffset: Double = 0
-    public var yOffset: Double = 0
+    /// Horizontal offset from default.
+    public var xOffset: Double
+    /// Vertical offset from default.
+    public var yOffset: Double
+
+    @available(*, deprecated, renamed: "getFretHandFinger()")
+    public var finger: String { text }
 
     // MARK: - Init
 
     public init(_ finger: String) {
-        self.finger = finger
+        xOffset = 0
+        yOffset = 0
         super.init()
-        _ = setWidth(7)
-        position = .left
-        resetFont()
+
+        setFretHandFinger(finger)
+        position = .left // Default position above stem or note head
     }
 
     // MARK: - Setters
 
     @discardableResult
     public func setFretHandFinger(_ finger: String) -> Self {
-        self.finger = finger
+        text = finger
         return self
     }
 
-    public func getFretHandFinger() -> String { finger }
+    public func getFretHandFinger() -> String { text }
 
     @discardableResult
     public func setOffsetX(_ x: Double) -> Self {
@@ -173,12 +196,12 @@ public final class FretHandFinger: Modifier {
 
     override public func draw() throws {
         let ctx = try checkContext()
-        let note = checkAttachedNote()
+        let note = try checkAttachedNoteThrowing()
         setRendered()
 
-        let start = note.getModifierStartXY(position: position, index: checkIndex())
-        var dotX = start.x + xShift + xOffset
-        var dotY = start.y + yShift + yOffset + 5
+        let start = note.getModifierStartXY(position: position, index: index ?? 0)
+        var dotX = start.x + xOffset
+        var dotY = start.y + yOffset + 5
 
         switch position {
         case .above:
@@ -188,40 +211,14 @@ public final class FretHandFinger: Modifier {
             dotX -= 2
             dotY += 10
         case .left:
-            dotX -= getWidth()
+            dotX -= width
         case .right:
             dotX += 1
         default:
             throw FretHandFingerError.invalidPosition(position)
         }
 
-        ctx.save()
-        if let font = textFont { ctx.setFont(font) }
-        ctx.fillText(finger, dotX, dotY)
-        ctx.restore()
-    }
-
-    // MARK: - EasyScore Hook
-
-    /// Commit hook for EasyScore to auto-add fingerings.
-    public static func easyScoreHook(
-        options: [String: String],
-        note: StemmableNote,
-        builder: Builder
-    ) {
-        guard let fingeringsStr = options["fingerings"] else { return }
-
-        for (index, fingeringString) in fingeringsStr.split(separator: ",").enumerated() {
-            let parts = fingeringString.trimmingCharacters(in: .whitespaces).split(separator: ".")
-            let number = String(parts[0])
-            let fingering = FretHandFinger(number)
-            if parts.count > 1 {
-                if let pos = Modifier.positionString[String(parts[1])] {
-                    _ = fingering.setPosition(pos)
-                }
-            }
-            _ = note.addModifier(fingering, index: index)
-        }
+        renderText(ctx, xPos: dotX, yPos: dotY)
     }
 }
 
@@ -234,7 +231,6 @@ import SwiftUI
 #Preview("FretHandFinger", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500, height: 150))
         _ = f.setContext(ctx)

@@ -1,5 +1,13 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/modifiercontext.ts` (VexFlow 5.0.0).
+//
+// This class implements various types of members to notes (e.g. bends,
+// fingering positions etc.). The ModifierContext works with tickables
+// that are at the same tick to ensure that they and their modifiers
+// all have proper alignment. (Note that the ModifierContext also
+// runs the spacing of the tickable).
 
 import Foundation
 
@@ -35,6 +43,13 @@ public struct ModifierContextMetrics {
 /// Coordinates formatting of all modifiers at a single tick position.
 /// Groups modifiers by category and formats them in the correct order.
 public final class ModifierContext {
+    public nonisolated(unsafe) static var DEBUG: Bool = false
+
+    private static func L(_ args: Any...) {
+        if DEBUG { vexLog("VexFlow.ModifierContext", args) }
+    }
+
+    public init() {}
 
     // MARK: - Properties
 
@@ -48,24 +63,34 @@ public final class ModifierContext {
 
     // MARK: - Members
 
+    @available(*, deprecated, renamed: "addMember(_:)")
+    @discardableResult
+    public func addModifier(_ member: VexElement) -> Self {
+        Self.L("addModifier is deprecated, use addMember instead.")
+        return addMember(member)
+    }
+
+    /// `members` maps category strings to arrays of Tickable | Modifier | StaveNote | TabNote.
+    /// Add a new member to `members`, and create a new array if needed.
     @discardableResult
     public func addMember(_ member: VexElement) -> Self {
         let category = member.getCategory()
-        if members[category] == nil {
-            members[category] = []
-        }
-        members[category]!.append(member)
+        members[category, default: []].append(member)
 
-        // Set modifier context on the member
         if let tickable = member as? Tickable {
-            tickable.modifierContext = self
-        }
-        if let modifier = member as? Modifier {
-            modifier.modifierContext = self
+            tickable.setModifierContext(self)
+        } else if let modifier = member as? Modifier {
+            modifier.setModifierContext(self)
         }
 
         preFormatted = false
         return self
+    }
+
+    @available(*, deprecated, renamed: "getMembers(_:)")
+    public func getModifiers(_ category: String) -> [VexElement] {
+        Self.L("getModifiers is deprecated, use getMembers instead.")
+        return getMembers(category)
     }
 
     public func getMembers(_ category: String) -> [VexElement] {
@@ -105,6 +130,7 @@ public final class ModifierContext {
     /// The ordering determines when different modifier types are formatted and rendered.
     public func preFormat() {
         if preFormatted { return }
+        Self.L("Preformatting ModifierContext")
 
         // Format StaveNote first (calculates note displacements)
         StaveNote.format(getMembers("StaveNote") as? [StaveNote] ?? [], state: &state)
@@ -161,16 +187,18 @@ public final class ModifierContext {
             getMembers("Vibrato") as? [Vibrato] ?? [], state: &state, context: self
         )
 
+        // Update width of this member context
         width = state.leftShift + state.rightShift
         preFormatted = true
-        formatted = true
     }
 
     // MARK: - PostFormat
 
     public func postFormat() {
         if postFormatted { return }
+        Self.L("Postformatting ModifierContext")
+
+        // If post-formatting is required for an element, add more lines below.
         StaveNote.postFormat(getMembers("StaveNote") as? [Note] ?? [])
-        postFormatted = true
     }
 }

@@ -1,22 +1,22 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna Cheppudira 2013. Co-author: Benjamin W. Bohl. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// Co-author: Benjamin W. Bohl
+//
+// Port of `src/clef.ts` (VexFlow 5.0.0).
 
 import Foundation
 
 // MARK: - Clef Type Definition
 
-/// Defines a clef's glyph code and default staff line.
+/// A clef glyph code (SMuFL code point string) and the default stave line.
 public struct ClefType: Sendable {
     public var code: String
     public var line: Double
-}
 
-/// Annotation for 8va/8vb clef markings.
-public struct ClefAnnotationType: Sendable {
-    public var code: String
-    public var point: Double
-    public var line: Double
-    public var xShift: Double
+    public init(code: String, line: Double) {
+        self.code = code
+        self.line = line
+    }
 }
 
 public enum ClefSize: String, Sendable {
@@ -31,130 +31,133 @@ public enum ClefAnnotation: String, Sendable {
 
 // MARK: - Clef
 
-/// Renders clefs (treble, bass, alto, tenor, percussion, tab, etc.) on a stave.
+/// Clef implements various types of clefs that can be rendered on a stave.
 public final class Clef: StaveModifier {
+
+    /// To enable logging for this class, set `Clef.DEBUG` to `true`.
+    nonisolated(unsafe) public static var DEBUG: Bool = false
 
     override public class var category: String { "Clef" }
 
     // MARK: - Clef Types
 
-    /// Maps clef name to glyph code and default line.
-    public static let types: [ClefName: ClefType] = [
-        .treble: ClefType(code: "gClef", line: 3),
-        .bass: ClefType(code: "fClef", line: 1),
-        .alto: ClefType(code: "cClef", line: 2),
-        .tenor: ClefType(code: "cClef", line: 1),
-        .percussion: ClefType(code: "unpitchedPercussionClef1", line: 2),
-        .soprano: ClefType(code: "cClef", line: 4),
-        .mezzoSoprano: ClefType(code: "cClef", line: 3),
-        .baritoneC: ClefType(code: "cClef", line: 0),
-        .baritoneF: ClefType(code: "fClef", line: 2),
-        .subbass: ClefType(code: "fClef", line: 0),
-        .french: ClefType(code: "gClef", line: 4),
-        .tab: ClefType(code: "6stringTabClef", line: 2.5),
-    ]
-
-    /// Maps annotation names to SMuFL glyph codes.
-    public static let annotationSmufl: [ClefAnnotation: String] = [
-        .octaveUp: "timeSig8",
-        .octaveDown: "timeSig8",
-    ]
-
-    /// Get font point size for a clef size.
-    public static func getPoint(_ size: ClefSize) -> Double {
-        size == .default
-            ? Tables.NOTATION_FONT_SCALE
-            : (Tables.NOTATION_FONT_SCALE / 3) * 2
+    /// Every clef name is associated with a glyph code from the font file
+    /// and a default stave line number.
+    public static var types: [ClefName: ClefType] {
+        [
+            .treble: ClefType(code: Glyphs.gClef, line: 3),
+            .bass: ClefType(code: Glyphs.fClef, line: 1),
+            .alto: ClefType(code: Glyphs.cClef, line: 2),
+            .tenor: ClefType(code: Glyphs.cClef, line: 1),
+            .percussion: ClefType(code: Glyphs.unpitchedPercussionClef1, line: 2),
+            .soprano: ClefType(code: Glyphs.cClef, line: 4),
+            .mezzoSoprano: ClefType(code: Glyphs.cClef, line: 3),
+            .baritoneC: ClefType(code: Glyphs.cClef, line: 0),
+            .baritoneF: ClefType(code: Glyphs.fClef, line: 2),
+            .subbass: ClefType(code: Glyphs.fClef, line: 0),
+            .french: ClefType(code: Glyphs.gClef, line: 4),
+            .tab: ClefType(code: Glyphs.sixStringTabClef, line: 2.5),
+        ]
     }
 
     // MARK: - Properties
 
-    public var clefDef: ClefType
-    public var annotation: ClefAnnotationType?
-    public var attachment: Glyph?
-    public var size: ClefSize
-    public var clefTypeName: ClefName?
+    /// The glyph code of the clef.
+    public var code: String = Glyphs.gClef
+    /// The default stave line of the clef.
+    public var line: Double = 3
+
+    public internal(set) var size: ClefSize = .default
+    public internal(set) var type: ClefName = .treble
 
     // MARK: - Init
 
+    /// Create a new clef.
     public init(type: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil) {
-        self.clefDef = Clef.types[.treble]!
-        self.size = size
         super.init()
+
         setPosition(.begin)
-        setClefType(type, size: size, annotation: annotation)
-        self.modifierWidth = Glyph.getWidth(
-            code: clefDef.code,
-            point: Clef.getPoint(self.size),
-            category: "clef_\(self.size.rawValue)"
+        setType(type, size: size, annotation: annotation)
+        if Clef.DEBUG { print("VexFlow.Clef", "Creating clef:", type.rawValue) }
+    }
+
+    /// Create a clef from a clef name string (for example `"treble"`). Return nil for unknown names.
+    public convenience init?(parsing type: String, size: String = "default", annotation: String? = nil) {
+        guard let clefName = ClefName(parsing: type) else { return nil }
+        self.init(
+            type: clefName,
+            size: ClefSize(rawValue: size) ?? .default,
+            annotation: annotation.flatMap(ClefAnnotation.init(rawValue:))
         )
     }
 
     // MARK: - Methods
 
-    /// Set clef type, size, and optional annotation (e.g. "8va").
+    /// Set clef type, size and annotation.
     @discardableResult
-    public func setClefType(_ type: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil) -> Self {
-        self.clefTypeName = type
-        self.clefDef = Clef.types[type] ?? Clef.types[.treble]!
+    public func setType(_ type: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil) -> Self {
+        self.type = type
+        let clefType = Clef.types[type] ?? ClefType(code: Glyphs.gClef, line: 3)
+        code = clefType.code
+        line = clefType.line
         self.size = size
 
-        if let annotation {
-            let code = Clef.annotationSmufl[annotation] ?? "timeSig8"
-            let point = (Clef.getPoint(self.size) / 5) * 3
-
-            // Look up annotation positioning from font metrics
-            let musicFont = Glyph.MUSIC_FONT_STACK.first!
-            let lineKey = "clef_\(self.size.rawValue).annotations.\(annotation.rawValue).\(type.rawValue).line"
-            let shiftKey = "clef_\(self.size.rawValue).annotations.\(annotation.rawValue).\(type.rawValue).shiftX"
-            let line = (musicFont.lookupMetric(lineKey) as? Double) ?? 0
-            let xShift = (musicFont.lookupMetric(shiftKey) as? Double) ?? 0
-
-            self.annotation = ClefAnnotationType(code: code, point: point, line: line, xShift: xShift)
-            self.attachment = Glyph(code: code, point: point)
-            self.attachment?.setXShift(xShift)
-        } else {
-            self.annotation = nil
-            self.attachment = nil
+        // If an annotation, such as 8va, is specified, add it to the Clef object.
+        if annotation == .octaveUp {
+            if code == Glyphs.gClef {
+                code = Glyphs.gClef8va
+            }
+            if code == Glyphs.fClef {
+                code = Glyphs.fClef8va
+            }
         }
+        if annotation == .octaveDown {
+            if code == Glyphs.gClef {
+                code = Glyphs.gClef8vb
+            }
+            if code == Glyphs.fClef {
+                code = Glyphs.fClef8vb
+            }
+        }
+        text = code
+        fontInfo.size = "\(formatJSNumber(floor(Clef.getPoint(self.size))))pt"
 
         return self
     }
 
-    override public func getModifierWidth() -> Double {
-        if clefTypeName == .tab {
-            _ = checkStave()
-        }
-        return modifierWidth
+    /// Swift alias of `setType(_:size:annotation:)`.
+    @discardableResult
+    public func setClefType(_ type: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil) -> Self {
+        setType(type, size: size, annotation: annotation)
+    }
+
+    /// Get point for clefs.
+    public static func getPoint(_ size: ClefSize?) -> Double {
+        // for sizes other than 'default', clef is 2/3 of the default value
+        let fontSize = Metrics.getDouble("fontSize", 30)
+        return size == .default ? fontSize : (fontSize * 2) / 3
+    }
+
+    /// Set associated stave.
+    @discardableResult
+    override public func setStave(_ stave: Stave) -> Self {
+        self.stave = stave
+        return self
     }
 
     // MARK: - Draw
 
-    override public func drawStave(stave: Stave, xShift: Double = 0) throws {
+    /// Render clef.
+    override public func draw() throws {
+        let stave = try checkStaveThrowing()
         let ctx = try stave.checkContext()
         setRendered()
 
-        applyStyle(context: ctx)
         _ = ctx.openGroup("clef", getAttribute("id"))
 
-        Glyph.renderGlyph(
-            ctx: ctx,
-            xPos: modifierX,
-            yPos: stave.getYForLine(clefDef.line),
-            point: Clef.getPoint(size),
-            code: clefDef.code,
-            category: "clef_\(size.rawValue)"
-        )
-
-        if let ann = annotation, let attach = attachment {
-            placeGlyphOnLine(attach, stave: stave, line: ann.line)
-            attach.setStave(stave)
-            attach.setContext(ctx)
-            attach.renderToStave(x: modifierX)
-        }
-
+        y = stave.getYForLine(line)
+        renderText(ctx, xPos: 0, yPos: 0)
         ctx.closeGroup()
-        restoreStyle(context: ctx)
     }
 }
 
@@ -167,7 +170,6 @@ import SwiftUI
 #Preview("Clef", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 120) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory()
         _ = f.setContext(ctx)

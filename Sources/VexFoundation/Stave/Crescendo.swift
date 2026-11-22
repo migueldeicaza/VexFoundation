@@ -1,11 +1,20 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/crescendo.ts` (VexFlow 5.0.0).
+//
+// This file implements the `Crescendo` object which draws crescendos and
+// decrescendo dynamics markings. A `Crescendo` is initialized with a
+// duration and formatted as part of a `Voice` like any other `Note`
+// type in VexFlow. This object would most likely be formatted in a Voice
+// with `TextNotes` - which are used to represent other dynamics markings.
 
 import Foundation
 
 // MARK: - Crescendo Options
 
 public struct CrescendoOptions {
+    // Extensions to the length of the crescendo on either side
     public var extendLeft: Double = 0
     public var extendRight: Double = 0
     public var yShift: Double = 0
@@ -27,20 +36,33 @@ public struct CrescendoOptions {
 /// Formatted as part of a Voice like any other Note type.
 public final class Crescendo: Note {
 
+    /// To enable logging for this class, set `Crescendo.DEBUG` to `true`.
+    nonisolated(unsafe) public static var DEBUG: Bool = false
+
     override public class var category: String { "Crescendo" }
 
     // MARK: - Properties
 
+    /// Whether the object is a decrescendo.
     public var decrescendo: Bool = false
-    public var height: Double = 15
+    /// The staff line to be placed on.
     public var line: Double = 0
     public var crescendoOptions = CrescendoOptions()
 
     // MARK: - Init
 
+    /// Initialize the crescendo's properties.
     public override init(_ noteStruct: NoteStruct) {
-        self.line = noteStruct.line ?? 0
         super.init(noteStruct)
+
+        // Whether the object is a decrescendo
+        decrescendo = false
+
+        // The staff line to be placed on
+        line = noteStruct.line ?? 0
+
+        // The height at the open end of the cresc/decresc
+        height = 15
     }
 
     // MARK: - Setters
@@ -73,15 +95,19 @@ public final class Crescendo: Note {
 
     override public func draw() throws {
         let ctx = try checkContext()
-        let stave = checkStave()
+        let stave = try checkStaveThrowing()
         setRendered()
 
-        let tickContext = checkTickContext()
+        let tickContext = try checkTickContextThrowing()
         let nextContext = TickContext.getNextContext(tickContext)
 
         let beginX = getAbsoluteX()
-        let endX = nextContext != nil ? nextContext!.getX() : stave.getX() + stave.getWidth()
-        let y = stave.getYForLine(line + (-3)) + 1
+        let endX = nextContext.map { $0.getX() } ?? stave.getX() + stave.getWidth()
+        let y = stave.getYForLine(line + -3) + 1
+
+        if Crescendo.DEBUG {
+            print("VexFlow.Crescendo", "Drawing ", decrescendo ? "decrescendo " : "crescendo ", height, "x", beginX - endX)
+        }
 
         Crescendo.renderHairpin(
             ctx: ctx,
@@ -95,6 +121,7 @@ public final class Crescendo: Note {
 
     // MARK: - Static Render
 
+    /// Helper to draw the hairpin.
     private static func renderHairpin(
         ctx: any RenderContext,
         beginX: Double,
@@ -131,7 +158,6 @@ import SwiftUI
 #Preview("Crescendo", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 150) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)

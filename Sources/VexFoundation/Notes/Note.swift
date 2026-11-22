@@ -1,43 +1,135 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/note.ts` (VexFlow 5.0.0).
 
 import Foundation
-
-// MARK: - Note Metrics
 
 public enum NoteError: Error, LocalizedError, Equatable, Sendable {
     case invalidInitializationData(String)
     case noStave
     case noYValues
     case unformattedMetrics
+    case unformattedNote
     case noStem
+    case noBeam
 
     public var errorDescription: String? {
         switch self {
         case .invalidInitializationData(let duration):
-            return "Invalid note initialization data: \(duration)"
+            return "Invalid note initialization object: \(duration)"
         case .noStave:
-            return "No stave attached to note."
+            return "No stave attached to instance."
         case .noYValues:
-            return "No Y-values calculated for note."
+            return "No Y-values calculated for this note."
         case .unformattedMetrics:
             return "Can't call getMetrics on an unformatted note."
+        case .unformattedNote:
+            return "Can't call GetModifierStartXY on an unformatted note"
         case .noStem:
             return "No stem attached to this note."
+        case .noBeam:
+            return "No beam attached to instance"
         }
     }
 }
 
+// MARK: - Glyph Properties
+
+/// Properties for a note glyph at a given duration (upstream `GlyphProps` in `note.ts`).
+public struct GlyphProps: Sendable, Equatable {
+    public var codeHead: String
+    public var stemBeamExtension: Double
+    public var stem: Bool
+    public var codeFlagUp: String?
+    public var beamCount: Int
+
+    public init(
+        codeHead: String = "",
+        stemBeamExtension: Double = 0,
+        stem: Bool = false,
+        codeFlagUp: String? = nil,
+        beamCount: Int = 0
+    ) {
+        self.codeHead = codeHead
+        self.stemBeamExtension = stemBeamExtension
+        self.stem = stem
+        self.codeFlagUp = codeFlagUp
+        self.beamCount = beamCount
+    }
+}
+
+// MARK: - Key Properties
+
+/// Properties for a note key (pitch/octave) on a staff (upstream `KeyProps` in `note.ts`).
+public struct KeyProps: Sendable, Equatable {
+    public var key: String
+    public var octave: Int
+    public var line: Double
+    public var intValue: Int?
+    public var code: String?
+    public var displaced: Bool
+    /// VexFlowPatch: notehead shifts independent of stem length (see `docs/local-deviations.md`).
+    public var stemDownXOffset: Double = 0
+    public var stemUpXOffset: Double = 0
+    public var stemUpYShift: Double = 0
+    public var stemDownYShift: Double = 0
+
+    public init(
+        key: String,
+        octave: Int,
+        line: Double,
+        intValue: Int? = nil,
+        code: String? = nil,
+        displaced: Bool = false
+    ) {
+        self.key = key
+        self.octave = octave
+        self.line = line
+        self.intValue = intValue
+        self.code = code
+        self.displaced = displaced
+    }
+}
+
+// MARK: - Note Metrics
+
 /// Metrics for a rendered note.
 public struct NoteMetrics {
+    /// The total width of the note (including modifiers).
     public var width: Double = 0
     public var glyphWidth: Double?
+    /// The width of the note head only.
     public var notePx: Double = 0
+    /// Start `X` for left modifiers.
     public var modLeftPx: Double = 0
+    /// Start `X` for right modifiers.
     public var modRightPx: Double = 0
+    /// Extra space on left of note.
     public var leftDisplacedHeadPx: Double = 0
+    /// Extra space on right of note.
     public var rightDisplacedHeadPx: Double = 0
     public var glyphPx: Double = 0
+
+    public init(
+        width: Double = 0,
+        glyphWidth: Double? = nil,
+        notePx: Double = 0,
+        modLeftPx: Double = 0,
+        modRightPx: Double = 0,
+        leftDisplacedHeadPx: Double = 0,
+        rightDisplacedHeadPx: Double = 0,
+        glyphPx: Double = 0
+    ) {
+        self.width = width
+        self.glyphWidth = glyphWidth
+        self.notePx = notePx
+        self.modLeftPx = modLeftPx
+        self.modRightPx = modRightPx
+        self.leftDisplacedHeadPx = leftDisplacedHeadPx
+        self.rightDisplacedHeadPx = rightDisplacedHeadPx
+        self.glyphPx = glyphPx
+    }
 }
 
 // MARK: - Note Duration
@@ -150,6 +242,8 @@ public struct NoteStruct {
 // MARK: - Note Render Options
 
 /// Rendering options for a note.
+/// Upstream optional flags (`draw`, `drawDots`, `drawStem`, `drawStemThroughStave`)
+/// are `Bool` with the default that upstream `undefined` has at the use sites.
 public struct NoteRenderOptions {
     public var drawStemThroughStave: Bool = false
     public var draw: Bool = true
@@ -158,24 +252,106 @@ public struct NoteRenderOptions {
     public var yShift: Double = 0
     public var extendLeft: Double?
     public var extendRight: Double?
-    public var glyphFontScale: Double = 1
     public var annotationSpacing: Double = 5
-    public var scale: Double = 1
     public var strokePx: Double = 1
-    public var font: String?
     /// VexFlowPatch: use classical-style X notehead glyph for tab notes
     public var useAlternativeXNoteheadGlyph: Bool = false
+
+    public init() {}
 }
 
 // MARK: - Note
 
-/// Abstract base class for notes and chords rendered on a stave.
-/// Notes have a value (pitch, fret, etc.) and a duration (quarter, half, etc.).
+/// Note implements an abstract interface for notes and chords that
+/// are rendered on a stave. Notes have some common properties: All of them
+/// have a value (e.g., pitch, fret, etc.) and a duration (quarter, half, etc.)
+///
+/// Some notes have stems, heads, dots, etc. Most notational elements that
+/// surround a note are called *modifiers*, and every note has an associated
+/// array of them. All notes also have a rendering context and belong to a stave.
 open class Note: Tickable {
 
     override open class var category: String { "Note" }
 
-    // MARK: - Static Parsing
+    // MARK: - Static
+
+    /// Return a glyph given duration and type. The type can be a custom glyph code from customNoteHeads.
+    /// The default type is a regular note ('n').
+    public static func getGlyphProps(_ duration: String, _ type: String = "n") -> GlyphProps {
+        let duration = Tables.sanitizeDuration(duration)
+
+        // Lookup duration for default glyph head code
+        var code = Tables.durationCodes[duration] ?? Tables.durationCodes["4"] ?? GlyphProps(stem: true)
+
+        // Try and get the note head
+        let codeNoteHead = Tables.codeNoteHead(type.uppercased(), duration: duration)
+        // Merge duration props for 'duration' with the note head properties.
+        if codeNoteHead != Glyphs.null {
+            code.codeHead = codeNoteHead
+        }
+
+        return code
+    }
+
+    /// Typed variant of `getGlyphProps(_:_:)`.
+    public static func getGlyphProps(_ duration: NoteValue, _ type: NoteType = .note) -> GlyphProps {
+        getGlyphProps(duration.rawValue, type.rawValue)
+    }
+
+    private static func jsRound(_ value: Double) -> Int {
+        Int((value + 0.5).rounded(.down))
+    }
+
+    /// Debug helper. Displays various note metrics for the given note.
+    public static func plotMetrics(_ ctx: RenderContext, _ note: Tickable, _ yPos: Double) {
+        let metrics = note.getMetrics()
+        let xStart = note.getAbsoluteX() - metrics.modLeftPx - metrics.leftDisplacedHeadPx
+        let xPre1 = note.getAbsoluteX() - metrics.leftDisplacedHeadPx
+        let xAbs = note.getAbsoluteX()
+        let xPost1 = note.getAbsoluteX() + metrics.notePx
+        let xPost2 = note.getAbsoluteX() + metrics.notePx + metrics.rightDisplacedHeadPx
+        let xEnd = note.getAbsoluteX() + metrics.notePx + metrics.rightDisplacedHeadPx + metrics.modRightPx
+        let xFreedomRight = xEnd + note.getFormatterMetrics().freedom.right
+
+        let xWidth = xEnd - xStart
+        ctx.save()
+        ctx.setFont(Metrics.getString("fontFamily"), 8, nil, nil)
+        ctx.fillText("\(jsRound(xWidth))px", xStart + note.getXShift(), yPos)
+
+        let y = yPos + 7
+        func stroke(_ x1: Double, _ x2: Double, _ color: String, _ yy: Double = y) {
+            ctx.beginPath()
+            ctx.setStrokeStyle(color)
+            ctx.setFillStyle(color)
+            ctx.setLineWidth(3)
+            ctx.moveTo(x1 + note.getXShift(), yy)
+            ctx.lineTo(x2 + note.getXShift(), yy)
+            ctx.stroke()
+        }
+
+        stroke(xStart, xPre1, "red")
+        stroke(xPre1, xAbs, "#999")
+        stroke(xAbs, xPost1, "green")
+        stroke(xPost1, xPost2, "#999")
+        stroke(xPost2, xEnd, "red")
+        stroke(xEnd, xFreedomRight, "#DD0")
+        stroke(xStart - note.getXShift(), xStart, "#BBB") // Shift
+        drawDot(ctx, x: xAbs + note.getXShift(), y: y, color: "blue")
+
+        let formatterMetrics = note.getFormatterMetrics()
+        if formatterMetrics.iterations > 0 {
+            let spaceDeviation = formatterMetrics.space.deviation
+            let prefix = spaceDeviation >= 0 ? "+" : ""
+            ctx.setFillStyle("red")
+            ctx.fillText("\(prefix)\(jsRound(spaceDeviation))", xAbs + note.getXShift(), yPos - 10)
+        }
+        ctx.restore()
+    }
+
+    @available(*, deprecated, renamed: "plotMetrics(_:_:_:)")
+    public static func plotMetrics(ctx: RenderContext, note: Tickable, yPos: Double) {
+        plotMetrics(ctx, note, yPos)
+    }
 
     /// Parse a duration string like "4d", "8", "qr" into components.
     public static func parseDuration(_ durationString: String?) -> NoteDuration? {
@@ -186,24 +362,32 @@ open class Note: Tickable {
 
     /// Parse a NoteStruct into a ParsedNote.
     public static func parseNoteStruct(_ noteStruct: NoteStruct) -> ParsedNote? {
-        let type = noteStruct.type ?? noteStruct.duration.type
-
+        // If no type specified, check duration or custom types
         var customTypes: [String] = []
-        for (i, k) in noteStruct.keys.enumerated() {
-            let result = k.split(separator: "/").map(String.init)
-            if result.count == 3 {
-                customTypes.append(result[2])
-            } else {
-                customTypes.append(contentsOf: Array(repeating: type.rawValue, count: max(0, i + 1 - customTypes.count)))
+        let type: NoteType
+        if let explicitType = noteStruct.type {
+            type = explicitType
+        } else {
+            type = noteStruct.duration.type
+
+            // If we have keys, try and check if we've got a custom glyph
+            for k in noteStruct.keys {
+                let result = k.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+                // We have a custom glyph specified after the note eg. /X2
+                customTypes.append(result.count == 3 ? result[2] : type.rawValue)
             }
         }
 
+        // Calculate the tick duration of the note
         var ticks = Tables.durationToTicks(noteStruct.duration.value)
+        if ticks == 0 { return nil }
 
+        // Are there any dots?
         let dots = noteStruct.dots ?? noteStruct.duration.dots
 
+        // Add ticks as necessary depending on the number of dots
         var currentTicks = ticks
-        for _ in 0..<dots {
+        for _ in 0..<max(0, dots) {
             if currentTicks <= 1 { return nil }
             currentTicks = currentTicks / 2
             ticks += currentTicks
@@ -216,60 +400,6 @@ open class Note: Tickable {
             dots: dots,
             ticks: ticks
         )
-    }
-
-    private static func jsRound(_ value: Double) -> Int {
-        if value >= 0 {
-            return Int(floor(value + 0.5))
-        }
-        return Int(ceil(value - 0.5))
-    }
-
-    /// Debug helper. Displays formatter metrics for a tickable.
-    public static func plotMetrics(ctx: RenderContext, note: Tickable, yPos: Double) {
-        let metrics = note.getMetrics()
-        let xStart = note.getAbsoluteX() - metrics.modLeftPx - metrics.leftDisplacedHeadPx
-        let xPre1 = note.getAbsoluteX() - metrics.leftDisplacedHeadPx
-        let xAbs = note.getAbsoluteX()
-        let xPost1 = note.getAbsoluteX() + metrics.notePx
-        let xPost2 = note.getAbsoluteX() + metrics.notePx + metrics.rightDisplacedHeadPx
-        let xEnd = note.getAbsoluteX() + metrics.notePx + metrics.rightDisplacedHeadPx + metrics.modRightPx
-        let xFreedomRight = xEnd + note.getFormatterMetrics().freedom.right
-        let xWidth = xEnd - xStart
-
-        _ = ctx.save()
-        _ = ctx.setFont(VexFont.SANS_SERIF, 8, nil, nil)
-        _ = ctx.fillText("\(jsRound(xWidth))px", xStart + note.getXShift(), yPos)
-
-        let y = yPos + 7
-        func stroke(_ x1: Double, _ x2: Double, _ color: String, _ yy: Double = y) {
-            _ = ctx.beginPath()
-            _ = ctx.setStrokeStyle(color)
-            _ = ctx.setFillStyle(color)
-            _ = ctx.setLineWidth(3)
-            _ = ctx.moveTo(x1 + note.getXShift(), yy)
-            _ = ctx.lineTo(x2 + note.getXShift(), yy)
-            _ = ctx.stroke()
-        }
-
-        stroke(xStart, xPre1, "red")
-        stroke(xPre1, xAbs, "#999")
-        stroke(xAbs, xPost1, "green")
-        stroke(xPost1, xPost2, "#999")
-        stroke(xPost2, xEnd, "red")
-        stroke(xEnd, xFreedomRight, "#DD0")
-        stroke(xStart - note.getXShift(), xStart, "#BBB")
-        drawDot(ctx, x: xAbs + note.getXShift(), y: y, color: "blue")
-
-        let formatterMetrics = note.getFormatterMetrics()
-        if formatterMetrics.iterations > 0 {
-            let deviation = formatterMetrics.space.deviation
-            let prefix = deviation >= 0 ? "+" : ""
-            _ = ctx.setFillStyle("red")
-            _ = ctx.fillText("\(prefix)\(jsRound(deviation))", xAbs + note.getXShift(), yPos - 10)
-        }
-
-        _ = ctx.restore()
     }
 
     /// Strict parse variant that throws when the input is invalid.
@@ -286,7 +416,9 @@ open class Note: Tickable {
         return ParsedNote(
             duration: noteStruct.duration.value,
             type: resolvedType,
-            customTypes: Array(repeating: resolvedType.rawValue, count: noteStruct.keys.count),
+            customTypes: noteStruct.type == nil
+                ? Array(repeating: resolvedType.rawValue, count: noteStruct.keys.count)
+                : [],
             dots: 0,
             ticks: tickBase
         )
@@ -294,14 +426,15 @@ open class Note: Tickable {
 
     // MARK: - Instance Properties
 
-    public var glyphProps: GlyphProps!
+    public var glyphProps: GlyphProps
     public var keys: [String]
+    /// Per-pitch properties.
     public var keyProps: [KeyProps] = []
-    public var noteStave: Stave?
+
+    public var stave: Stave?
     public var renderOptions = NoteRenderOptions()
-    public var noteValue: NoteValue
-    public var noteTypeValue: NoteType
-    public var noteDuration: String
+    /// The duration (sanitized, e.g. "4", "8", "1/2").
+    public var duration: String
     public var leftDisplacedHeadPx: Double = 0
     public var rightDisplacedHeadPx: Double = 0
     public var noteType: String
@@ -310,14 +443,36 @@ open class Note: Tickable {
     public var customTypes: [String] = []
     public weak var playNote: Note?
     public weak var beam: Beam?
+
+    /// Swift typed views of `duration` and `noteType`.
+    public var noteValue: NoteValue
+    public var noteTypeValue: NoteType
+    /// Set when the note struct did not parse (the note uses fallback values).
     public private(set) var initError: NoteError?
+
+    // MARK: - Source compatibility
+
+    @available(*, deprecated, renamed: "stave")
+    public var noteStave: Stave? {
+        get { stave }
+        set { stave = newValue }
+    }
+
+    @available(*, deprecated, renamed: "duration")
+    public var noteDuration: String {
+        get { duration }
+        set { duration = newValue }
+    }
 
     // MARK: - Init
 
+    /// Every note is a tickable, i.e., it can be mutated by the `Formatter` class for
+    /// positioning and layout.
     public init(_ noteStruct: NoteStruct) {
+        // Parses `noteStruct` and get note properties.
         let parsed: ParsedNote
         let parsedError: NoteError?
-        if let strict = try? Note.parseNoteStructThrowing(noteStruct) {
+        if let strict = Note.parseNoteStruct(noteStruct) {
             parsed = strict
             parsedError = nil
         } else {
@@ -325,36 +480,52 @@ open class Note: Tickable {
             parsedError = .invalidInitializationData(noteStruct.duration.rawValue)
         }
 
+        // Set note properties from parameters.
         self.keys = noteStruct.keys
+        self.duration = parsed.duration.rawValue
+        self.noteType = parsed.type.rawValue
         self.noteValue = parsed.duration
         self.noteTypeValue = parsed.type
-        self.noteDuration = parsed.duration.rawValue
-        self.noteType = parsed.type.rawValue
         self.customTypes = parsed.customTypes
         self.initError = parsedError
 
+        // Get the glyph code for this note from the font.
+        self.glyphProps = Note.getGlyphProps(parsed.duration.rawValue, parsed.type.rawValue)
+
         super.init()
 
-        if let override = noteStruct.durationOverride {
-            setDuration(override)
+        if let durationOverride = noteStruct.durationOverride {
+            // Custom duration
+            setDuration(durationOverride)
         } else {
+            // Default duration
             setIntrinsicTicks(Double(parsed.ticks))
         }
 
-        noteModifiers = []
+        modifiers = []
 
-        self.glyphProps = Tables.getGlyphProps(duration: noteDuration, type: noteType)
-        self.customGlyphs = customTypes.compactMap { Tables.getGlyphProps(duration: noteDuration, type: $0) }
+        customGlyphs = customTypes.map { Note.getGlyphProps(duration, $0) }
 
+        // Note to play for audio players.
+        playNote = nil
+
+        // Positioning contexts used by the Formatter.
         ignoreTicks = false
-        tickableWidth = 0
-        leftDisplacedHeadPx = 0
-        rightDisplacedHeadPx = 0
-        xShift = 0
+
+        // Positioning variables
+        width = 0 // Width in pixels calculated after preFormat
+        leftDisplacedHeadPx = 0 // Extra room on left for displaced note head
+        rightDisplacedHeadPx = 0 // Extra room on right for displaced note head
+        xShift = 0 // X shift from tick context X
+        ys = [] // list of y coordinates for each note
+        // we need to hold on to these for ties and beams.
 
         if noteStruct.alignCenter == true {
             setCenterAlignment(true)
         }
+
+        // The render surface.
+        renderOptions = NoteRenderOptions()
     }
 
     /// Strict validation initializer for call sites that require parse failures as errors.
@@ -365,8 +536,10 @@ open class Note: Tickable {
 
     // MARK: - Play Note
 
+    /// Get the play note, which is arbitrary data that can be used by an audio player.
     public func getPlayNote() -> Note? { playNote }
 
+    /// Set the play note, which is arbitrary data that can be used by an audio player.
     @discardableResult
     public func setPlayNote(_ note: Note) -> Self {
         playNote = note
@@ -375,48 +548,214 @@ open class Note: Tickable {
 
     // MARK: - Rest
 
+    /// Return true if this note is a type of rest.
+    ///
+    /// Rests don't have pitches, but take up space in the score.
+    /// Subclasses should override this default implementation.
     open func isRest() -> Bool { false }
+
+    // MARK: - Stroke
+
+    /// Add stroke.
+    @discardableResult
+    open func addStroke(_ index: Int, _ stroke: Stroke) -> Self {
+        stroke.setNote(self)
+        stroke.setIndex(index)
+        modifiers.append(stroke)
+        preFormatted = false
+        return self
+    }
 
     // MARK: - Stave
 
-    override public func getStave() -> Stave? { noteStave }
+    /// Get the target stave.
+    override open func getStave() -> Stave? { stave }
 
+    /// Check and get the target stave.
     public func checkStave() -> Stave {
         (try? checkStaveThrowing()) ?? Stave(x: 0, y: 0, width: 0)
     }
 
     public func checkStaveThrowing() throws -> Stave {
-        guard let noteStave else {
+        guard let stave else {
             throw NoteError.noStave
         }
-        return noteStave
+        return stave
     }
 
+    /// Set the target stave.
     @discardableResult
-    override public func setStave(_ stave: Stave) -> Self {
-        noteStave = stave
-        setYs([stave.getYForLine(0)])
-        if let ctx = stave.getContext() {
-            setContext(ctx)
-        }
+    override open func setStave(_ stave: Stave) -> Self {
+        self.stave = stave
+        setYs([stave.getYForLine(0)]) // Update Y values if the stave is changed.
+        setContext(stave.getContext())
         return self
     }
 
     // MARK: - Displaced Head Pixels
 
+    /// Get spacing to the left of the notes.
     public func getLeftDisplacedHeadPx() -> Double { leftDisplacedHeadPx }
+
+    /// Get spacing to the right of the notes.
     public func getRightDisplacedHeadPx() -> Double { rightDisplacedHeadPx }
 
+    /// Set spacing to the left of the notes.
     @discardableResult
     public func setLeftDisplacedHeadPx(_ x: Double) -> Self {
         leftDisplacedHeadPx = x
         return self
     }
 
+    /// Set spacing to the right of the notes.
     @discardableResult
     public func setRightDisplacedHeadPx(_ x: Double) -> Self {
         rightDisplacedHeadPx = x
         return self
+    }
+
+    // MARK: - Line Numbers
+
+    /// Get the stave line number for the note.
+    open func getLineNumber(isTopNote: Bool = false) -> Double { 0 }
+
+    /// Get the stave line number for rest.
+    open func getLineForRest() -> Double { 0 }
+
+    // MARK: - Glyph Properties
+
+    /// Get the glyph associated with this note.
+    public func getGlyphProps() -> GlyphProps { glyphProps }
+
+    /// Get the glyph width.
+    open func getGlyphWidth() -> Double { 0 }
+
+    // MARK: - Y Values
+
+    /// Set Y positions for this note. Each Y value is associated with
+    /// an individual pitch/key within the note/chord.
+    @discardableResult
+    open func setYs(_ ys: [Double]) -> Self {
+        self.ys = ys
+        return self
+    }
+
+    /// Get Y positions for this note. Each Y value is associated with
+    /// an individual pitch/key within the note/chord.
+    /// Returns `[0]` when there are no Y values; see `getYsThrowing()`.
+    open func getYs() -> [Double] {
+        (try? getYsThrowing()) ?? [0]
+    }
+
+    public func getYsThrowing() throws -> [Double] {
+        guard !ys.isEmpty else {
+            throw NoteError.noYValues
+        }
+        return ys
+    }
+
+    /// Get the Y position of the space above the stave onto which text can
+    /// be rendered.
+    open func getYForTopText(_ textLine: Double) -> Double {
+        checkStave().getYForTopText(textLine)
+    }
+
+    // MARK: - Voice / Tick Context
+
+    /// Attach this note to `voice`.
+    @discardableResult
+    override open func setVoice(_ voice: Voice) -> Self {
+        self.voice = voice
+        preFormatted = false
+        return self
+    }
+
+    /// Get the `TickContext` for this note.
+    public func getTickContext() -> TickContext {
+        checkTickContext()
+    }
+
+    // MARK: - Duration
+
+    /// Accessor to duration.
+    public func getDuration() -> String { duration }
+    public func getNoteValue() -> NoteValue { noteValue }
+
+    /// Accessor to isDotted.
+    public func isDotted() -> Bool {
+        !getModifiersByType("Dot").isEmpty
+    }
+
+    /// Accessor to hasStem.
+    open func hasStem() -> Bool { false }
+
+    /// Accessor to note type.
+    public func getNoteType() -> String { noteType }
+    public func getNoteTypeValue() -> NoteType { noteTypeValue }
+
+    // MARK: - Beam
+
+    /// Get the beam.
+    public func getBeam() -> Beam? { beam }
+
+    /// Check and get the beam.
+    public func checkBeam() throws -> Beam {
+        guard let beam else {
+            throw NoteError.noBeam
+        }
+        return beam
+    }
+
+    /// Check it has a beam.
+    public func hasBeam() -> Bool { beam != nil }
+
+    /// Set the beam.
+    @discardableResult
+    open func setBeam(_ beam: Beam) -> Self {
+        self.beam = beam
+        return self
+    }
+
+    // MARK: - Modifiers
+
+    /// Attach a modifier to this note.
+    /// - Parameters:
+    ///   - modifier: the Modifier to add.
+    ///   - index: of the key to modify.
+    @discardableResult
+    override open func addModifier(_ modifier: Modifier, index: Int = 0) -> Self {
+        modifier.setNote(self)
+        modifier.setIndex(index)
+        super.addModifier(modifier, index: index)
+        return self
+    }
+
+    /// Get all modifiers of a specific type in `modifiers`.
+    public func getModifiersByType(_ type: String) -> [Modifier] {
+        modifiers.filter { $0.getCategory() == type }
+    }
+
+    /// Get the coordinates for where modifiers begin.
+    /// `forceFlagRight` is upstream `options.forceFlagRight` (used by `StaveNote`).
+    /// Does not throw for an unformatted note; see `getModifierStartXYThrowing`.
+    open func getModifierStartXY(
+        position: ModifierPosition,
+        index: Int,
+        forceFlagRight: Bool = false
+    ) -> (x: Double, y: Double) {
+        (x: getAbsoluteX(), y: ys.first ?? 0)
+    }
+
+    /// Throws when the note is not pre-formatted (upstream behavior).
+    open func getModifierStartXYThrowing(
+        position: ModifierPosition,
+        index: Int,
+        forceFlagRight: Bool = false
+    ) throws -> (x: Double, y: Double) {
+        guard preFormatted else {
+            throw NoteError.unformattedNote
+        }
+        return getModifierStartXY(position: position, index: index, forceFlagRight: forceFlagRight)
     }
 
     // MARK: - Parenthesis Positioning
@@ -431,112 +770,51 @@ open class Note: Tickable {
         return props.displaced ? getLeftDisplacedHeadPx() - xShift : -xShift
     }
 
-    // MARK: - Line Numbers
+    open func getFirstDotPx() -> Double {
+        var px = getRightDisplacedHeadPx()
+        let parentheses = checkModifierContext().getMembers("Parenthesis")
 
-    open func getLineNumber(isTopNote: Bool = false) -> Double { 0 }
-
-    open func getLineForRest() -> Double { 0 }
-
-    // MARK: - Glyph Properties
-
-    public func getGlyphProps() -> GlyphProps { glyphProps }
-
-    public func getGlyphWidth() -> Double {
-        if noteTypeValue == .slash {
-            return Tables.SLASH_NOTEHEAD_WIDTH
+        // consider parentheses on noteheads, dots should be to the right of them
+        if let first = parentheses.first {
+            px += first.getWidth() + 1
         }
-        return Glyph.getWidth(code: glyphProps.codeHead, point: renderOptions.glyphFontScale)
-    }
-
-    // MARK: - Y Values
-
-    @discardableResult
-    public func setYs(_ ys: [Double]) -> Self {
-        self.ys = ys
-        return self
-    }
-
-    public func getYs() -> [Double] {
-        (try? getYsThrowing()) ?? [0]
-    }
-
-    public func getYsThrowing() throws -> [Double] {
-        guard !ys.isEmpty else {
-            throw NoteError.noYValues
-        }
-        return ys
-    }
-
-    public func getYForTopText(_ textLine: Double) -> Double {
-        checkStave().getYForTopText(textLine)
-    }
-
-    // MARK: - Duration
-
-    public func getDuration() -> String { noteDuration }
-    public func getNoteValue() -> NoteValue { noteValue }
-
-    public func getNoteType() -> String { noteType }
-    public func getNoteTypeValue() -> NoteType { noteTypeValue }
-
-    open func hasStem() -> Bool { false }
-
-    // MARK: - Beam
-
-    public func hasBeam() -> Bool { beam != nil }
-
-    @discardableResult
-    public func setBeam(_ beam: Beam) -> Self {
-        self.beam = beam
-        return self
-    }
-
-    // MARK: - Modifiers
-
-    @discardableResult
-    override public func addModifier(_ modifier: Modifier, index: Int = 0) -> Self {
-        modifier.setNote(self)
-        modifier.setIndex(index)
-        _ = super.addModifier(modifier)
-        return self
-    }
-
-    public func getModifiersByType(_ type: String) -> [Modifier] {
-        noteModifiers.filter { $0.getCategory() == type }
+        return px
     }
 
     // MARK: - Metrics
 
+    /// Get the metrics for this note.
+    /// Does not throw for an unformatted note; see `getMetricsThrowing()`.
     override open func getMetrics() -> NoteMetrics {
-        (try? getMetricsThrowing()) ?? NoteMetrics(
-            width: tickableWidth,
-            glyphWidth: getGlyphWidth(),
-            notePx: tickableWidth,
-            modLeftPx: 0,
-            modRightPx: 0,
-            leftDisplacedHeadPx: leftDisplacedHeadPx,
-            rightDisplacedHeadPx: rightDisplacedHeadPx,
-            glyphPx: 0
-        )
+        (try? getMetricsThrowing()) ?? computeMetrics()
     }
 
     open func getMetricsThrowing() throws -> NoteMetrics {
         guard preFormatted else {
             throw NoteError.unformattedMetrics
         }
+        return computeMetrics()
+    }
 
+    private func computeMetrics() -> NoteMetrics {
         let modLeftPx = modifierContext?.getState().leftShift ?? 0
         let modRightPx = modifierContext?.getState().rightShift ?? 0
-        let width = try getTickableWidthThrowing()
+        let width = getWidth()
         let glyphWidth = getGlyphWidth()
-        let notePx = width - modLeftPx - modRightPx - leftDisplacedHeadPx - rightDisplacedHeadPx
+        let notePx = width
+            - modLeftPx // subtract left modifiers
+            - modRightPx // subtract right modifiers
+            - leftDisplacedHeadPx // subtract left displaced head
+            - rightDisplacedHeadPx // subtract right displaced head
 
         return NoteMetrics(
             width: width,
             glyphWidth: glyphWidth,
             notePx: notePx,
+            // Modifier spacing.
             modLeftPx: modLeftPx,
             modRightPx: modRightPx,
+            // Displaced note head on left or right.
             leftDisplacedHeadPx: leftDisplacedHeadPx,
             rightDisplacedHeadPx: rightDisplacedHeadPx,
             glyphPx: 0
@@ -545,12 +823,15 @@ open class Note: Tickable {
 
     // MARK: - Absolute X
 
-    override public func getAbsoluteX() -> Double {
-        let tc = checkTickContext("Can't getAbsoluteX() without a TickContext.")
-        var x = tc.getX()
-        if let stave = noteStave {
-            let padding = (Glyph.MUSIC_FONT_STACK.first?.lookupMetric("stave.padding") as? Double) ?? 0
-            x += stave.getNoteStartX() + padding
+    /// Get the absolute `X` position of this note's tick context. This
+    /// excludes xShift, so you'll need to factor it in if you're
+    /// looking for the post-formatted x-position.
+    override open func getAbsoluteX() -> Double {
+        let tickContext = checkTickContext("Can't getAbsoluteX() without a TickContext.")
+        // Position note to left edge of tick context.
+        var x = tickContext.getX()
+        if let stave {
+            x += stave.getNoteStartX() + Metrics.getDouble("Stave.padding", 0)
         }
         if isCenterAligned() {
             x += getCenterXShift()
@@ -558,13 +839,9 @@ open class Note: Tickable {
         return x
     }
 
-    /// Get point size for notes.
-    public static func getPoint(_ size: String? = nil) -> Double {
-        size == "default" ? Tables.NOTATION_FONT_SCALE : (Tables.NOTATION_FONT_SCALE / 5) * 3
-    }
-
     // MARK: - Stem (default - overridden by StemmableNote)
 
+    /// Get the direction of the stem.
     open func getStemDirection() -> StemDirection {
         (try? getStemDirectionThrowing()) ?? Stem.UP
     }
@@ -573,6 +850,7 @@ open class Note: Tickable {
         throw NoteError.noStem
     }
 
+    /// Get the top and bottom `y` values of the stem.
     open func getStemExtents() -> (topY: Double, baseY: Double) {
         (try? getStemExtentsThrowing()) ?? (topY: 0, baseY: 0)
     }
@@ -581,36 +859,44 @@ open class Note: Tickable {
         throw NoteError.noStem
     }
 
-    // MARK: - Modifier Start Position
-
-    /// Get the coordinates for where modifiers begin.
-    /// Overridden by StaveNote with more precise positioning.
-    open func getModifierStartXY(position: ModifierPosition, index: Int) -> (x: Double, y: Double) {
-        let x = getAbsoluteX()
-        let y = ys.isEmpty ? 0 : ys[0]
-        return (x, y)
-    }
-
     // MARK: - Tie Positions
 
-    public func getTieRightX() -> Double {
+    /// Get the `x` coordinate to the right of the note.
+    open func getTieRightX() -> Double {
         var tieStartX = getAbsoluteX()
         let noteGlyphWidth = getGlyphWidth()
         tieStartX += noteGlyphWidth / 2
-        tieStartX += -tickableWidth / 2 + tickableWidth + 2
+        tieStartX += -width / 2 + width + 2
         return tieStartX
     }
 
-    public func getTieLeftX() -> Double {
+    /// Get the `x` coordinate to the left of the note.
+    open func getTieLeftX() -> Double {
         var tieEndX = getAbsoluteX()
         let noteGlyphWidth = getGlyphWidth()
         tieEndX += noteGlyphWidth / 2
-        tieEndX -= tickableWidth / 2 + 2
+        tieEndX -= width / 2 + 2
         return tieEndX
     }
 
     // MARK: - Keys
 
+    /// Get the pitches in the note.
     public func getKeys() -> [String] { keys }
+
+    /// Get the properties for all the keys in the note.
     public func getKeyProps() -> [KeyProps] { keyProps }
+
+    // MARK: - Bounding Box
+
+    /// Get the `BoundingBox` for the entire note.
+    override open func getBoundingBox() -> BoundingBox? {
+        guard var boundingBox = super.getBoundingBox() else { return nil }
+        for modifier in modifiers {
+            if let bb = modifier.getBoundingBox() {
+                boundingBox.mergeWith(bb)
+            }
+        }
+        return boundingBox
+    }
 }

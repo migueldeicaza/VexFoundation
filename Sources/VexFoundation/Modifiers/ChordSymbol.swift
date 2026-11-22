@@ -1,203 +1,146 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010.
-// Author: Aaron (@AaronDavidNewman). MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Aaron (@AaronDavidNewman)
+//
+// Port of `src/chordsymbol.ts` (VexFlow 5.0.0).
+//
+// This implements chord symbols above/below a chord.
+// Chord symbols are modifiers that can be attached to notes.
+// They can contain multiple 'blocks' which represent text or
+// glyphs with various positioning options.
 
 import Foundation
 
-// MARK: - Chord Symbol Types
+// MARK: - Enums
 
-public struct ChordSymbolBlock {
-    public var text: String
-    public var symbolType: SymbolType
-    public var symbolModifier: SymbolModifier
-    public var xShift: Double
-    public var yShift: Double
-    public var vAlign: Bool
-    public var width: Double
-    public var glyph: Glyph?
-}
-
-public struct ChordSymbolGlyphMetrics {
-    public var leftSideBearing: Double
-    public var advanceWidth: Double
-    public var yOffset: Double
-}
-
-public enum ChordSymbolHorizontalJustify: Int {
+public enum ChordSymbolHorizontalJustify: Int, Sendable {
     case left = 1
     case center = 2
     case right = 3
     case centerStem = 4
 }
 
-public enum ChordSymbolVerticalJustify: Int {
+public enum ChordSymbolVerticalJustify: Int, Sendable {
     case top = 1
     case bottom = 2
 }
 
-public enum SymbolType: Int {
+/// Upstream `SymbolModifiers`.
+public enum SymbolModifier: Int, Sendable {
+    case none = 1
+    /// Subscript.
+    case sub = 2
+    /// Superscript.
+    case sup = 3
+}
+
+/// Upstream name of `SymbolModifier`.
+public typealias SymbolModifiers = SymbolModifier
+
+/// VexFlow 4 block type. VexFlow 5 blocks are all text (glyphs are SMuFL text).
+@available(*, deprecated, message: "VexFlow 5 chord symbol blocks are text. Use addText/addGlyph/addLine.")
+public enum SymbolType: Int, Sendable {
     case glyph = 1
     case text = 2
     case line = 3
 }
 
-public enum SymbolModifier: Int {
-    case none = 1
-    case sub = 2
-    case sup = 3
+// MARK: - ChordSymbolBlock
+
+/// One block of a chord symbol: text (glyphs are SMuFL text) with a symbol modifier.
+public final class ChordSymbolBlock: VexElement {
+    public var symbolModifier: SymbolModifier
+    public var vAlign: Bool
+
+    public init(_ text: String, symbolModifier: SymbolModifier, xShift: Double, yShift: Double, vAlign: Bool) {
+        self.symbolModifier = symbolModifier
+        self.vAlign = vAlign
+        super.init(category: nil)
+        self.text = text
+        self.xShift = xShift
+        self.yShift = yShift
+    }
+
+    public func isSuperscript() -> Bool {
+        symbolModifier == .sup
+    }
+
+    public func isSubscript() -> Bool {
+        symbolModifier == .sub
+    }
 }
 
 // MARK: - ChordSymbol
 
-/// Renders chord symbols (e.g. Cmaj7, Dm, G7) above or below notes.
-/// Supports mixed text and glyph blocks with super/subscript positioning.
+/// ChordSymbol is a modifier that creates a chord symbol above/below a chord.
+/// As a modifier, it is attached to an existing note.
 public final class ChordSymbol: Modifier {
 
     override public class var category: String { "ChordSymbol" }
 
-    /// Match upstream `ChordSymbol.TEXT_FONT`.
-    override public class var textFont: FontInfo {
-        let musicFontName = Glyph.MUSIC_FONT_STACK.first?.name.lowercased() ?? ""
-        let parityMode = VexRuntime.getCurrentContext().upstreamParityMode
-        let family: String
-        if musicFontName == "petaluma" {
-            // Upstream SVG fixtures for Petaluma chord symbols are generated with text fallback
-            // behavior closer to Roboto Slab/serif metrics than PetalumaScript glyph metrics.
-            family = parityMode ? "Roboto Slab, Times, serif" : "PetalumaScript, Arial, sans-serif"
-        } else {
-            family = "Roboto Slab, Times, serif"
-        }
-        return FontInfo(
-            family: family,
-            size: "12pt",
-            weight: VexFontWeight.normal.rawValue,
-            style: VexFontStyle.normal.rawValue
-        )
-    }
-
-    // MARK: - Static Glyph Data
-
-    public static let glyphs: [String: String] = [
-        "diminished": "csymDiminished",
-        "dim": "csymDiminished",
-        "halfDiminished": "csymHalfDiminished",
-        "+": "csymAugmented",
-        "augmented": "csymAugmented",
-        "majorSeventh": "csymMajorSeventh",
-        "minor": "csymMinor",
-        "-": "csymMinor",
-        "(": "csymParensLeftTall",
-        "leftParen": "csymParensLeftTall",
-        ")": "csymParensRightTall",
-        "rightParen": "csymParensRightTall",
-        "leftBracket": "csymBracketLeftTall",
-        "rightBracket": "csymBracketRightTall",
-        "leftParenTall": "csymParensLeftVeryTall",
-        "rightParenTall": "csymParensRightVeryTall",
-        "/": "csymDiagonalArrangementSlash",
-        "over": "csymDiagonalArrangementSlash",
-        "#": "accidentalSharp",
-        "b": "accidentalFlat",
+    // Chord symbols can be positioned and justified relative to the note.
+    public static let horizontalJustifyString: [String: ChordSymbolHorizontalJustify] = [
+        "left": .left,
+        "right": .right,
+        "center": .center,
+        "centerStem": .centerStem,
     ]
 
-    // MARK: - Static Metrics
-
-    private static func getMetricsGlobal() -> [String: Any] {
-        let runtime = VexRuntime.getCurrentContext()
-        let cacheKey = Glyph.CURRENT_CACHE_KEY
-
-        if let cached = runtime.getChordSymbolGlobalMetrics(cacheKey: cacheKey) {
-            return cached
-        }
-
-        guard let font = Glyph.MUSIC_FONT_STACK.first,
-              let csGlobal = font.lookupMetric("chordSymbol.global") as? [String: Any] else {
-            return [:]
-        }
-
-        runtime.setChordSymbolGlobalMetrics(cacheKey: cacheKey, value: csGlobal)
-        return csGlobal
-    }
+    public static let verticalJustifyString: [String: ChordSymbolVerticalJustify] = [
+        "top": .top,
+        "above": .top,
+        "below": .bottom,
+        "bottom": .bottom,
+    ]
 
     public static var superSubRatio: Double {
-        getMetricsGlobal()["superSubRatio"] as? Double ?? 0.66
-    }
-
-    public static var engravingFontResolution: Double {
-        guard let font = Glyph.MUSIC_FONT_STACK.first else { return 1000 }
-        return (try? font.getResolution()) ?? 1000
+        Metrics.getDouble("ChordSymbol.superSubRatio")
     }
 
     public static var spacingBetweenBlocks: Double {
-        let spacing = getMetricsGlobal()["spacing"] as? Double ?? 100
-        return spacing / engravingFontResolution
-    }
-
-    public static func getMetricForGlyph(_ glyphCode: String) -> ChordSymbolGlyphMetrics? {
-        guard let font = Glyph.MUSIC_FONT_STACK.first,
-              let glyphMetrics = font.lookupMetric("chordSymbol.glyphs.\(glyphCode)") as? [String: Any] else {
-            return nil
-        }
-        return ChordSymbolGlyphMetrics(
-            leftSideBearing: glyphMetrics["leftSideBearing"] as? Double ?? 0,
-            advanceWidth: glyphMetrics["advanceWidth"] as? Double ?? 0,
-            yOffset: glyphMetrics["yOffset"] as? Double ?? 0
-        )
-    }
-
-    public static func getWidthForGlyph(_ glyph: Glyph) -> Double {
-        guard let metric = getMetricForGlyph(glyph.code) else { return 0.65 }
-        return metric.advanceWidth / engravingFontResolution
-    }
-
-    public static func getYShiftForGlyph(_ glyph: Glyph) -> Double {
-        guard let metric = getMetricForGlyph(glyph.code) else { return 0 }
-        return metric.yOffset / engravingFontResolution
-    }
-
-    public static func getXShiftForGlyph(_ glyph: Glyph) -> Double {
-        guard let metric = getMetricForGlyph(glyph.code) else { return 0 }
-        return -1 * metric.leftSideBearing / engravingFontResolution
+        Metrics.getDouble("ChordSymbol.spacing")
     }
 
     public static var superscriptOffset: Double {
-        let offset = getMetricsGlobal()["superscriptOffset"] as? Double ?? -400
-        return offset / engravingFontResolution
+        Metrics.getDouble("ChordSymbol.superscriptOffset")
     }
 
     public static var subscriptOffset: Double {
-        let offset = getMetricsGlobal()["subscriptOffset"] as? Double ?? 300
-        return offset / engravingFontResolution
+        Metrics.getDouble("ChordSymbol.subscriptOffset")
     }
 
-    public static var kerningOffset: Double {
-        let offset = getMetricsGlobal()["kerningOffset"] as? Double ?? -250
-        return offset / engravingFontResolution
-    }
-
-    public static var lowerKerningText: [String] {
-        getMetricsGlobal()["lowerKerningText"] as? [String] ?? []
-    }
-
-    public static var upperKerningText: [String] {
-        getMetricsGlobal()["upperKerningText"] as? [String] ?? []
-    }
+    /// Glyph data.
+    public static let glyphs: [String: String] = [
+        "diminished": Glyphs.csymDiminished,
+        "dim": Glyphs.csymDiminished,
+        "halfDiminished": Glyphs.csymHalfDiminished,
+        "+": Glyphs.csymAugmented,
+        "augmented": Glyphs.csymAugmented,
+        "majorSeventh": Glyphs.csymMajorSeventh,
+        "minor": Glyphs.csymMinor,
+        "-": Glyphs.csymMinor,
+        "(": "(", // Glyphs.csymParensLeftTall
+        "leftParen": "(", // Glyphs.csymParensLeftTall
+        ")": ")", // Glyphs.csymParensRightTall
+        "rightParen": ")", // Glyphs.csymParensRightTall
+        "leftBracket": Glyphs.csymBracketLeftTall,
+        "rightBracket": Glyphs.csymBracketRightTall,
+        "leftParenTall": "(", // Glyphs.csymParensLeftVeryTall
+        "rightParenTall": ")", // Glyphs.csymParensRightVeryTall
+        "/": Glyphs.csymDiagonalArrangementSlash,
+        "over": Glyphs.csymDiagonalArrangementSlash,
+        "#": Glyphs.csymAccidentalSharp,
+        "b": Glyphs.csymAccidentalFlat,
+    ]
 
     public static var minPadding: Double {
-        guard let font = Glyph.MUSIC_FONT_STACK.first else { return 2 }
-        return font.lookupMetric("noteHead.minPadding") as? Double ?? 2
-    }
-
-    public static func isSuperscript(_ block: ChordSymbolBlock) -> Bool {
-        block.symbolModifier == .sup
-    }
-
-    public static func isSubscript(_ block: ChordSymbolBlock) -> Bool {
-        block.symbolModifier == .sub
+        Metrics.getDouble("NoteHead.minPadding")
     }
 
     // MARK: - Static Format
 
+    /// Estimate the width of the whole chord symbol, based on the sum of the widths of the individual blocks.
+    /// Estimate how many lines above/below the staff we need.
     @discardableResult
     public static func format(
         _ symbols: [ChordSymbol],
@@ -206,102 +149,70 @@ public final class ChordSymbol: Modifier {
         if symbols.isEmpty { return false }
 
         var width: Double = 0
-        var nonSuperWidth: Double = 0
         var leftWidth: Double = 0
         var rightWidth: Double = 0
         var maxLeftGlyphWidth: Double = 0
         var maxRightGlyphWidth: Double = 0
 
         for symbol in symbols {
-            let pointSize = VexFont.convertSizeToPointValue(symbol.fontInfo.size)
-            let fontAdj = pointSize * 0.05
-            let glyphAdj = fontAdj * 2
             let note = symbol.checkAttachedNote()
-            var symbolWidth: Double = 0
             var lineSpaces: Double = 1
-            var vAlign = false
-            for j in 0..<symbol.symbolBlocks.count {
-                var block = symbol.symbolBlocks[j]
-                let sup = ChordSymbol.isSuperscript(block)
-                let sub = ChordSymbol.isSubscript(block)
-                let superSubScale = (sup || sub) ? ChordSymbol.superSubRatio : 1
-                let adj = block.symbolType == .glyph
-                    ? glyphAdj * superSubScale : fontAdj * superSubScale
 
+            for j in 0..<symbol.symbolBlocks.count {
+                let block = symbol.symbolBlocks[j]
+                let sup = block.isSuperscript()
+                let sub = block.isSubscript()
+                block.setXShift(width)
+
+                // If there are super/subscripts, they extend beyond the line so
+                // assume they take up 2 lines
                 if sup || sub {
                     lineSpaces = 2
                 }
 
-                let fontSizePx = symbol.fontSizeInPixels
-                let superSubFontSize = fontSizePx * superSubScale
-                if block.symbolType == .glyph, let glyph = block.glyph {
-                    block.width = ChordSymbol.getWidthForGlyph(glyph) * superSubFontSize
-                    block.yShift += ChordSymbol.getYShiftForGlyph(glyph) * superSubFontSize
-                    block.xShift += ChordSymbol.getXShiftForGlyph(glyph) * superSubFontSize
-                    glyph.glyphScale = glyph.glyphScale * adj
-                } else if block.symbolType == .text {
-                    block.width = block.width * superSubFontSize
-                    block.yShift += symbol.getYOffsetForText(block.text) * adj
-                }
-
-                if block.symbolType == .glyph,
-                   let glyph = block.glyph,
-                   glyph.code == ChordSymbol.glyphs["over"] {
-                    lineSpaces = 2
-                }
-                block.width += ChordSymbol.spacingBetweenBlocks * fontSizePx * superSubScale
-
-                if sup && j > 0 {
+                // If a subscript immediately follows a superscript block, try to
+                // overlay them.
+                if sub && j > 0 {
                     let prev = symbol.symbolBlocks[j - 1]
-                    if !ChordSymbol.isSuperscript(prev) {
-                        nonSuperWidth = width
+                    if prev.isSuperscript() {
+                        // slide the symbol over so it lines up with superscript
+                        block.setXShift(width - prev.getWidth() - ChordSymbol.minPadding)
+                        block.vAlign = true
+                        width += -prev.getWidth()
+                            - ChordSymbol.minPadding
+                            + (prev.getWidth() > block.getWidth() ? prev.getWidth() - block.getWidth() : 0)
                     }
                 }
-                if sub && nonSuperWidth > 0 {
-                    vAlign = true
-                    block.xShift = block.xShift + (nonSuperWidth - width)
-                    width = nonSuperWidth
-                    nonSuperWidth = 0
-                    symbol.setEnableKerning(false)
-                }
-                if !sup && !sub {
-                    nonSuperWidth = 0
-                }
-                block.vAlign = vAlign
-                symbol.symbolBlocks[j] = block
-                width += block.width
-                symbolWidth = width
+                width += block.getWidth() + ChordSymbol.minPadding
             }
 
-            symbol.updateKerningAdjustments()
-            symbol.updateOverBarAdjustments()
-
-            if symbol.vertical == .top {
-                symbol.setTextLine(state.topTextLine)
+            if symbol.getVertical() == .top {
+                _ = symbol.setTextLine(state.topTextLine)
                 state.topTextLine += lineSpaces
             } else {
-                symbol.setTextLine(state.textLine + 1)
+                _ = symbol.setTextLine(state.textLine + 1)
                 state.textLine += lineSpaces + 1
             }
-
-            if symbol.reportWidth, let stemmable = note as? StemmableNote {
-                let glyphWidth = stemmable.getGlyphWidth()
-                if symbol.horizontal == .left {
-                    maxLeftGlyphWidth = max(glyphWidth, maxLeftGlyphWidth)
-                    leftWidth = max(leftWidth, symbolWidth) + ChordSymbol.minPadding
-                } else if symbol.horizontal == .right {
-                    maxRightGlyphWidth = max(glyphWidth, maxRightGlyphWidth)
-                    rightWidth = max(rightWidth, symbolWidth)
-                } else {
-                    leftWidth = max(leftWidth, symbolWidth / 2) + ChordSymbol.minPadding
-                    rightWidth = max(rightWidth, symbolWidth / 2)
-                    maxLeftGlyphWidth = max(glyphWidth / 2, maxLeftGlyphWidth)
-                    maxRightGlyphWidth = max(glyphWidth / 2, maxRightGlyphWidth)
+            if symbol.getReportWidth() {
+                if note is StemmableNote {
+                    let glyphWidth = note.getGlyphWidth()
+                    if symbol.getHorizontal() == .right {
+                        maxLeftGlyphWidth = max(glyphWidth, maxLeftGlyphWidth)
+                        leftWidth = max(leftWidth, width) + ChordSymbol.minPadding
+                    } else if symbol.getHorizontal() == .left {
+                        maxRightGlyphWidth = max(glyphWidth, maxRightGlyphWidth)
+                        rightWidth = max(rightWidth, width)
+                    } else {
+                        leftWidth = max(leftWidth, width / 2) + ChordSymbol.minPadding
+                        rightWidth = max(rightWidth, width / 2)
+                        maxLeftGlyphWidth = max(glyphWidth / 2, maxLeftGlyphWidth)
+                        maxRightGlyphWidth = max(glyphWidth / 2, maxRightGlyphWidth)
+                    }
                 }
+                symbol.width = width
             }
-            width = 0
+            width = 0 // reset symbol width
         }
-
         let rightOverlap = min(
             max(rightWidth - maxRightGlyphWidth, 0),
             max(rightWidth - state.rightShift, 0)
@@ -321,7 +232,6 @@ public final class ChordSymbol: Modifier {
     public var symbolBlocks: [ChordSymbolBlock] = []
     public var horizontal: ChordSymbolHorizontalJustify = .left
     public var vertical: ChordSymbolVerticalJustify = .top
-    public var useKerning: Bool = true
     public var reportWidth: Bool = true
 
     // MARK: - Init
@@ -330,15 +240,24 @@ public final class ChordSymbol: Modifier {
         super.init()
     }
 
-    // MARK: - Accessors
+    // MARK: - Offsets
 
-    public var superscriptOffsetValue: Double {
-        ChordSymbol.superscriptOffset * fontSizeInPixels
+    /// The offset is specified in `em`. Scale this value by the font size in pixels.
+    public var superscriptOffset: Double {
+        ChordSymbol.superscriptOffset * VexFont.convertSizeToPixelValue(fontInfo.size)
     }
 
-    public var subscriptOffsetValue: Double {
-        ChordSymbol.subscriptOffset * fontSizeInPixels
+    public var subscriptOffset: Double {
+        ChordSymbol.subscriptOffset * VexFont.convertSizeToPixelValue(fontInfo.size)
     }
+
+    @available(*, deprecated, renamed: "superscriptOffset")
+    public var superscriptOffsetValue: Double { superscriptOffset }
+
+    @available(*, deprecated, renamed: "subscriptOffset")
+    public var subscriptOffsetValue: Double { subscriptOffset }
+
+    // MARK: - Report Width
 
     @discardableResult
     public func setReportWidth(_ value: Bool) -> Self {
@@ -348,342 +267,240 @@ public final class ChordSymbol: Modifier {
 
     public func getReportWidth() -> Bool { reportWidth }
 
+    // MARK: - Symbol Blocks
+
+    /// ChordSymbol allows multiple blocks so we can mix glyphs and font text.
+    /// Each block can have its own vertical orientation.
+    public func getSymbolBlock(text: String? = nil, symbolModifier: SymbolModifier? = nil) -> ChordSymbolBlock {
+        let symbolBlock = ChordSymbolBlock(
+            text ?? "",
+            symbolModifier: symbolModifier ?? .none,
+            xShift: 0,
+            yShift: 0,
+            vAlign: false
+        )
+
+        if symbolBlock.isSubscript() {
+            symbolBlock.setYShift(subscriptOffset)
+        }
+        if symbolBlock.isSuperscript() {
+            symbolBlock.setYShift(superscriptOffset)
+        }
+        if symbolBlock.isSubscript() || symbolBlock.isSuperscript() {
+            let font = fontInfo
+            let smallerFontSize = VexFont.scaleSize(font.size, ChordSymbol.superSubRatio)
+            symbolBlock.setFont(family: font.family, size: smallerFontSize, weight: font.weight, style: font.style)
+        } else {
+            symbolBlock.setFont(fontInfo)
+        }
+
+        return symbolBlock
+    }
+
+    /// Add a symbol to this chord, could be text, glyph or line.
     @discardableResult
-    public func setEnableKerning(_ val: Bool) -> Self {
-        useKerning = val
+    public func addSymbolBlock(text: String? = nil, symbolModifier: SymbolModifier? = nil) -> Self {
+        symbolBlocks.append(getSymbolBlock(text: text, symbolModifier: symbolModifier))
         return self
     }
 
+    /// VexFlow 4 form. `.glyph` looks up `glyphName` in `ChordSymbol.glyphs`;
+    /// `.line` adds a line (the width is ignored).
+    @available(*, deprecated, message: "Use addText/addGlyph/addLine.")
+    @discardableResult
+    public func addSymbolBlock(
+        text: String = "",
+        symbolType: SymbolType,
+        symbolModifier: SymbolModifier = .none,
+        glyphName: String? = nil,
+        width: Double? = nil
+    ) -> Self {
+        switch symbolType {
+        case .glyph:
+            return addText(glyphName.flatMap { ChordSymbol.glyphs[$0] } ?? "", symbolModifier: symbolModifier)
+        case .line:
+            return addLine(symbolModifier: symbolModifier)
+        case .text:
+            return addText(text, symbolModifier: symbolModifier)
+        }
+    }
+
+    // MARK: - Convenience Add Methods
+
+    /// Add a text block.
+    @discardableResult
+    public func addText(_ text: String, symbolModifier: SymbolModifier? = nil) -> Self {
+        addSymbolBlock(text: text, symbolModifier: symbolModifier)
+    }
+
+    /// Add a text block with superscript modifier.
+    @discardableResult
+    public func addTextSuperscript(_ text: String) -> Self {
+        addSymbolBlock(text: text, symbolModifier: .sup)
+    }
+
+    /// Add a text block with subscript modifier.
+    @discardableResult
+    public func addTextSubscript(_ text: String) -> Self {
+        addSymbolBlock(text: text, symbolModifier: .sub)
+    }
+
+    /// Add a glyph block with superscript modifier.
+    @discardableResult
+    public func addGlyphSuperscript(_ glyph: String) -> Self {
+        addTextSuperscript(ChordSymbol.glyphs[glyph] ?? "")
+    }
+
+    /// Add a glyph block.
+    @discardableResult
+    public func addGlyph(_ glyph: String, symbolModifier: SymbolModifier? = nil) -> Self {
+        addText(ChordSymbol.glyphs[glyph] ?? "", symbolModifier: symbolModifier)
+    }
+
+    /// Add a glyph for each character in 'text'. If the glyph is not available, use text from the font.
+    /// e.g. `addGlyphOrText("(+5#11)")` will use text for the '5' and '11', and glyphs for everything else.
+    @discardableResult
+    public func addGlyphOrText(_ text: String, symbolModifier: SymbolModifier? = nil) -> Self {
+        var str = ""
+        for char in text {
+            let s = String(char)
+            if let glyph = ChordSymbol.glyphs[s] {
+                str += glyph
+            } else {
+                // Collect consecutive characters with no glyphs.
+                str += s
+            }
+        }
+        if !str.isEmpty {
+            addText(str, symbolModifier: symbolModifier)
+        }
+        return self
+    }
+
+    /// Add a line of the given width, used as a continuation of the previous symbol in analysis, or lyrics, etc.
+    @discardableResult
+    public func addLine(symbolModifier: SymbolModifier? = nil) -> Self {
+        // Two csymMinor glyphs next to each other.
+        addText("\u{E874}\u{E874}" /* {csymMinor}{csymMinor} */, symbolModifier: symbolModifier)
+    }
+
+    @available(*, deprecated, message: "VexFlow 5 lines have a fixed width. Use addLine().")
+    @discardableResult
+    public func addLine(_ width: Double) -> Self {
+        addLine()
+    }
+
+    // MARK: - Justification
+
+    /// Set vertical position of text (above or below stave).
     @discardableResult
     public func setVertical(_ vj: ChordSymbolVerticalJustify) -> Self {
         vertical = vj
         return self
     }
 
+    /// Set vertical position from a string (`top`, `above`, `below`, `bottom`).
+    /// Unknown strings leave the position unchanged.
+    @discardableResult
+    public func setVertical(_ vj: String) -> Self {
+        if let value = ChordSymbol.verticalJustifyString[vj] {
+            vertical = value
+        }
+        return self
+    }
+
     public func getVertical() -> ChordSymbolVerticalJustify { vertical }
 
+    /// Set horizontal justification.
     @discardableResult
     public func setHorizontal(_ hj: ChordSymbolHorizontalJustify) -> Self {
         horizontal = hj
         return self
     }
 
+    /// Set horizontal justification from a string (`left`, `right`, `center`, `centerStem`).
+    /// Unknown strings leave the justification unchanged.
+    @discardableResult
+    public func setHorizontal(_ hj: String) -> Self {
+        if let value = ChordSymbol.horizontalJustifyString[hj] {
+            horizontal = value
+        }
+        return self
+    }
+
     public func getHorizontal() -> ChordSymbolHorizontalJustify { horizontal }
-
-    override public func getWidth() -> Double {
-        var w: Double = 0
-        for symbol in symbolBlocks {
-            w += symbol.vAlign ? 0 : symbol.width
-        }
-        return w
-    }
-
-    // MARK: - Text Measurement
-
-    public func getYOffsetForText(_ text: String) -> Double {
-        let formatter = TextFormatter.create(font: fontInfo)
-        var minYMaxPx: Double = 0
-        var count = 0
-        for character in text {
-            let extent = formatter.getYForCharacterInPx(character)
-            minYMaxPx = min(minYMaxPx, extent.yMax)
-            count += 1
-        }
-        let px = max(fontSizeInPixels, 1)
-        return count > 0 ? (-1 * (minYMaxPx / px)) : 0
-    }
-
-    private func getWidthForTextInEm(_ text: String) -> Double {
-        let formatter = TextFormatter.create(font: fontInfo)
-        return formatter.getWidthForTextInEm(text)
-    }
-
-    // MARK: - Over Bar Adjustments
-
-    public func updateOverBarAdjustments() {
-        let barIndex = symbolBlocks.firstIndex {
-            $0.symbolType == .glyph && $0.glyph?.code == "csymDiagonalArrangementSlash"
-        }
-
-        guard let barIndex else { return }
-        let bar = symbolBlocks[barIndex]
-        let xoff = bar.width / 4
-        let yoff = 0.25 * fontSizeInPixels
-
-        for i in 0..<barIndex {
-            symbolBlocks[i].xShift += xoff
-            symbolBlocks[i].yShift -= yoff
-        }
-        for i in (barIndex + 1)..<symbolBlocks.count {
-            symbolBlocks[i].xShift -= xoff
-            symbolBlocks[i].yShift += yoff
-        }
-    }
-
-    // MARK: - Kerning
-
-    public func updateKerningAdjustments() {
-        var accum: Double = 0
-        for j in 0..<symbolBlocks.count {
-            accum += getKerningAdjustment(j)
-            symbolBlocks[j].xShift += accum
-        }
-    }
-
-    public func getKerningAdjustment(_ j: Int) -> Double {
-        guard useKerning else { return 0 }
-
-        let currSymbol = symbolBlocks[j]
-        let prevSymbol = j > 0 ? symbolBlocks[j - 1] : nil
-        var adjustment: Double = 0
-
-        if currSymbol.symbolType == .glyph,
-           let glyph = currSymbol.glyph,
-           glyph.code == ChordSymbol.glyphs["over"] {
-            let metrics = glyph.getMetrics()
-            adjustment += metrics.xShift
-        }
-
-        if let prevSymbol,
-           prevSymbol.symbolType == .glyph,
-           let glyph = prevSymbol.glyph,
-           glyph.code == ChordSymbol.glyphs["over"] {
-            let metrics = glyph.getMetrics()
-            adjustment += metrics.xShift
-        }
-
-        var preKernUpper = false
-        var preKernLower = false
-        if let prevSymbol, prevSymbol.symbolType == .text, !prevSymbol.text.isEmpty {
-            let lastChar = String(prevSymbol.text.last!)
-            preKernUpper = ChordSymbol.upperKerningText.contains(lastChar)
-            preKernLower = ChordSymbol.lowerKerningText.contains(lastChar)
-        }
-
-        let kerningOffsetPixels = ChordSymbol.kerningOffset * fontSizeInPixels
-
-        if preKernUpper && currSymbol.symbolModifier == .sup {
-            adjustment += kerningOffsetPixels
-        }
-
-        if preKernLower && currSymbol.symbolType == .text && !currSymbol.text.isEmpty {
-            let firstChar = currSymbol.text.first!
-            if firstChar >= "a" && firstChar <= "z" {
-                adjustment += kerningOffsetPixels / 2
-            }
-            if let prevSymbol, !prevSymbol.text.isEmpty {
-                let lastChar = String(prevSymbol.text.last!)
-                if ChordSymbol.upperKerningText.contains(lastChar) {
-                    adjustment += kerningOffsetPixels / 2
-                }
-            }
-        }
-
-        return adjustment
-    }
-
-    // MARK: - Symbol Block Creation
-
-    public func getSymbolBlock(
-        text: String = "",
-        symbolType: SymbolType = .text,
-        symbolModifier: SymbolModifier = .none,
-        glyphName: String? = nil,
-        width: Double? = nil
-    ) -> ChordSymbolBlock {
-        var block = ChordSymbolBlock(
-            text: text,
-            symbolType: symbolType,
-            symbolModifier: symbolModifier,
-            xShift: 0,
-            yShift: 0,
-            vAlign: false,
-            width: 0
-        )
-
-        if symbolType == .glyph, let glyphName,
-           let glyphCode = ChordSymbol.glyphs[glyphName] {
-            let glyph = Glyph(code: glyphCode, point: 20,
-                              options: GlyphOptions(category: "chordSymbol"))
-            block.glyph = glyph
-        } else if symbolType == .text {
-            block.width = getWidthForTextInEm(text)
-        } else if symbolType == .line, let width {
-            block.width = width
-        }
-
-        return block
-    }
-
-    // MARK: - Convenience Add Methods
-
-    @discardableResult
-    public func addSymbolBlock(
-        text: String = "",
-        symbolType: SymbolType = .text,
-        symbolModifier: SymbolModifier = .none,
-        glyphName: String? = nil,
-        width: Double? = nil
-    ) -> Self {
-        symbolBlocks.append(getSymbolBlock(
-            text: text, symbolType: symbolType,
-            symbolModifier: symbolModifier,
-            glyphName: glyphName, width: width
-        ))
-        return self
-    }
-
-    @discardableResult
-    public func addText(_ text: String, symbolModifier: SymbolModifier = .none) -> Self {
-        addSymbolBlock(text: text, symbolType: .text, symbolModifier: symbolModifier)
-    }
-
-    @discardableResult
-    public func addTextSuperscript(_ text: String) -> Self {
-        addSymbolBlock(text: text, symbolType: .text, symbolModifier: .sup)
-    }
-
-    @discardableResult
-    public func addTextSubscript(_ text: String) -> Self {
-        addSymbolBlock(text: text, symbolType: .text, symbolModifier: .sub)
-    }
-
-    @discardableResult
-    public func addGlyphSuperscript(_ glyph: String) -> Self {
-        addSymbolBlock(symbolType: .glyph, symbolModifier: .sup, glyphName: glyph)
-    }
-
-    @discardableResult
-    public func addGlyph(_ glyph: String) -> Self {
-        addSymbolBlock(symbolType: .glyph, glyphName: glyph)
-    }
-
-    @discardableResult
-    public func addGlyphOrText(_ text: String) -> Self {
-        var str = ""
-        for char in text {
-            let s = String(char)
-            if ChordSymbol.glyphs[s] != nil {
-                if !str.isEmpty {
-                    _ = addText(str)
-                    str = ""
-                }
-                _ = addGlyph(s)
-            } else {
-                str += s
-            }
-        }
-        if !str.isEmpty {
-            _ = addText(str)
-        }
-        return self
-    }
-
-    @discardableResult
-    public func addLine(_ width: Double) -> Self {
-        addSymbolBlock(symbolType: .line, width: width)
-    }
 
     // MARK: - Draw
 
+    /// Render text and glyphs above/below the note.
     override public func draw() throws {
         let ctx = try checkContext()
-        let note = checkAttachedNote()
-        let stemmable = note as? StemmableNote
+        let note = try checkAttachedNoteThrowing()
         setRendered()
 
-        ctx.save()
-        applyStyle()
-        _ = ctx.openGroup("chordsymbol", getAttribute("id") ?? "")
+        _ = ctx.openGroup("chordsymbol", getAttribute("id"))
 
         let start = note.getModifierStartXY(position: .above, index: index ?? 0)
-        if let font = textFont { ctx.setFont(font) }
+        ctx.setFont(fontInfo)
 
         var y: Double
+
+        // The position of the text varies based on whether or not the note
+        // has a stem.
         let hasStem = note.hasStem()
-        let stave = note.checkStave()
+        let stave = try note.checkStaveThrowing()
 
         if vertical == .bottom {
+            // HACK: We need to compensate for the text's height since its origin is bottom-right.
             y = stave.getYForBottomText(textLine + Tables.TEXT_HEIGHT_OFFSET_HACK)
-            if hasStem, let stemmable {
-                let stemExt = stemmable.checkStem().getExtents()
+            if hasStem, let stemmable = note as? StemmableNote {
+                let stemExt = try stemmable.checkStemThrowing().getExtents()
                 let spacing = stave.getSpacingBetweenLines()
-                let stemBase = stemmable.getStemDirection() == .up ? stemExt.baseY : stemExt.topY
+                let stemBase = note.getStemDirection() == Stem.UP ? stemExt.baseY : stemExt.topY
                 y = max(y, stemBase + spacing * (textLine + 2))
             }
         } else {
-            let topY = note.getYs().min() ?? start.y
+            // (vertical == .top)
+            let topY = note.getYs().min() ?? 0
             y = min(stave.getYForTopText(textLine), topY - 10)
-            if hasStem, let stemmable {
-                let stemExt = stemmable.checkStem().getExtents()
+            if hasStem, let stemmable = note as? StemmableNote {
+                let stemExt = try stemmable.checkStemThrowing().getExtents()
                 let spacing = stave.getSpacingBetweenLines()
                 y = min(y, stemExt.topY - 5 - spacing * textLine)
             }
         }
 
         var x = start.x
-        if horizontal == .left {
+        switch horizontal {
+        case .left:
             x = start.x
-        } else if horizontal == .right {
+        case .right:
             x = start.x + getWidth()
-        } else if horizontal == .center {
+        case .center:
             x = start.x - getWidth() / 2
-        } else {
-            // centerStem
-            if let stemmable {
-                x = stemmable.getStemX() - getWidth() / 2
-            } else {
-                x = start.x - getWidth() / 2
-            }
+        case .centerStem:
+            x = ((note as? StemmableNote)?.getStemX() ?? start.x) - getWidth() / 2
         }
 
         for symbol in symbolBlocks {
-            let isSuper = ChordSymbol.isSuperscript(symbol)
-            let isSub = ChordSymbol.isSubscript(symbol)
-            var curY = y
+            symbol.setX(x)
+            symbol.setY(y)
+            symbol.renderText(ctx, xPos: 0, yPos: 0)
+        }
+        ctx.closeGroup()
+    }
 
-            if isSuper { curY += superscriptOffsetValue }
-            if isSub { curY += subscriptOffsetValue }
+    // MARK: - Bounding Box
 
-            if symbol.symbolType == .text {
-                if isSuper || isSub {
-                    ctx.save()
-                    if let font = textFont {
-                        let sizeValue = Double(font.size.replacingOccurrences(
-                            of: "[^0-9.]", with: "", options: .regularExpression
-                        )) ?? 12
-                        let smallerSize = sizeValue * ChordSymbol.superSubRatio
-                        let smallerFont = FontInfo(
-                            family: font.family, size: "\(smallerSize)pt",
-                            weight: font.weight, style: font.style
-                        )
-                        ctx.setFont(smallerFont)
-                    }
-                }
-                ctx.fillText(symbol.text, x + symbol.xShift, curY + symbol.yShift)
-                if isSuper || isSub {
-                    ctx.restore()
-                }
-            } else if symbol.symbolType == .glyph, let glyph = symbol.glyph {
-                curY += symbol.yShift
-                glyph.render(ctx: ctx, x: x + symbol.xShift, y: curY)
-            } else if symbol.symbolType == .line {
-                ctx.beginPath()
-                ctx.setLineWidth(1)
-                ctx.moveTo(x, y)
-                ctx.lineTo(x + symbol.width, curY)
-                ctx.stroke()
-            }
-
-            x += symbol.width
-            if symbol.vAlign {
-                x += symbol.xShift
+    /// Get the `BoundingBox` for the entire chord.
+    override public func getBoundingBox() -> BoundingBox? {
+        guard var boundingBox = symbolBlocks.first?.getBoundingBox() else { return nil }
+        for block in symbolBlocks.dropFirst() {
+            if let bb = block.getBoundingBox() {
+                boundingBox.mergeWith(bb)
             }
         }
-
-        ctx.closeGroup()
-        restoreStyle()
-        ctx.restore()
+        return boundingBox
     }
 }
 
@@ -696,7 +513,6 @@ import SwiftUI
 #Preview("ChordSymbol", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 180) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500, height: 170))
         _ = f.setContext(ctx)

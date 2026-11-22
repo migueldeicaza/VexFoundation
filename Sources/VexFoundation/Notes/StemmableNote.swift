@@ -1,5 +1,9 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/stemmablenote.ts` (VexFlow 5.0.0).
+// `StemmableNote` is an abstract interface for notes with optional stems.
+// Examples of stemmable notes are `StaveNote` and `TabNote`.
 
 import Foundation
 
@@ -20,18 +24,25 @@ public enum StemmableNoteError: Error, LocalizedError, Equatable, Sendable {
 // MARK: - StemmableNote
 
 /// Abstract interface for notes with optional stems.
-/// Examples: StaveNote, TabNote.
 open class StemmableNote: Note {
 
     override open class var category: String { "StemmableNote" }
 
     public var stemDirection: StemDirection?
     public var stem: Stem?
-    public var flag: Glyph?
+    /// The flag. Created after the note (upstream field initializer order), so
+    /// the element ids are generated in the upstream order.
+    public var flag: Flag!
     public var stemExtensionOverride: Double?
+
+    public override init(_ noteStruct: NoteStruct) {
+        super.init(noteStruct)
+        flag = Flag()
+    }
 
     // MARK: - Stem
 
+    /// The note stem.
     public func getStem() -> Stem? { stem }
 
     public func checkStem() -> Stem {
@@ -48,27 +59,36 @@ open class StemmableNote: Note {
     @discardableResult
     public func setStem(_ stem: Stem) -> Self {
         self.stem = stem
-        addChildElement(stem)
+        addChild(stem)
         return self
     }
 
+    /// Build and set a new stem.
     @discardableResult
-    public func buildStem() -> Self {
+    open func buildStem() -> Self {
         setStem(Stem())
     }
 
-    public func buildFlag(category: String = "flag") {
+    /// Set the flag glyph from the glyph properties and the stem direction.
+    open func buildFlag() {
         if hasFlag() {
-            let flagCode = getStemDirection() == Stem.DOWN
-                ? glyphProps.codeFlagDownstem
-                : glyphProps.codeFlagUpstem
-            if let flagCode {
-                flag = Glyph(code: flagCode, point: renderOptions.glyphFontScale,
-                             options: GlyphOptions(category: category))
+            let flagCode: String
+            if getStemDirection() == Stem.DOWN {
+                // codeFlagDown = codeFlagUp + 1.
+                // If codeFlagUp is undefined, the code point is 0.
+                let codeFlagUp = Int(glyphProps.codeFlagUp?.unicodeScalars.first?.value ?? 0)
+                let base = glyphProps.codeFlagUp == nil ? -1 : codeFlagUp
+                flagCode = UnicodeScalar(UInt32(base + 1)).map { String(Character($0)) } ?? Glyphs.null
+            } else {
+                flagCode = glyphProps.codeFlagUp ?? Glyphs.null
             }
+
+            flag.setText(flagCode)
+            flag.fontInfo = fontInfo
         }
     }
 
+    /// The custom glyph of the outer notehead at the base of the stem.
     public func getBaseCustomNoteHeadGlyphProps() -> GlyphProps? {
         guard !customGlyphs.isEmpty else { return nil }
         return getStemDirection() == Stem.DOWN ? customGlyphs.last : customGlyphs.first
@@ -76,25 +96,33 @@ open class StemmableNote: Note {
 
     // MARK: - Stem Length
 
+    /// The full length of the stem.
     public func getStemLength() -> Double {
         Stem.HEIGHT + getStemExtension()
     }
 
+    /// The number of beams for this duration.
     public func getBeamCount() -> Int {
-        glyphProps?.beamCount ?? 0
+        glyphProps.beamCount
     }
 
+    /// The minimum length of the stem.
     public func getStemMinimumLength() -> Double {
-        let frac = Tables.durationToFraction(noteDuration)
+        let frac = Tables.durationToFraction(duration)
+        let beamIsUndefined = beam == nil
         var length: Double = frac.value() <= 1 ? 0 : 20
-
-        switch noteDuration {
-        case "8": if beam == nil { length = 35 }
-        case "16": length = beam == nil ? 35 : 25
-        case "32": length = beam == nil ? 45 : 35
-        case "64": length = beam == nil ? 50 : 40
-        case "128": length = beam == nil ? 55 : 45
-        default: break
+        // If the note is flagged, the beam cannot be shorter.
+        switch duration {
+        case "8", "16":
+            length = beamIsUndefined ? 35 : 25
+        case "32":
+            length = beamIsUndefined ? 45 : 35
+        case "64":
+            length = beamIsUndefined ? 50 : 40
+        case "128":
+            length = beamIsUndefined ? 55 : 45
+        default:
+            break
         }
         return length
     }
@@ -106,50 +134,26 @@ open class StemmableNote: Note {
     }
 
     override public func getStemDirectionThrowing() throws -> StemDirection {
-        guard stem != nil else {
-            throw StemmableNoteError.noStem
-        }
         guard let stemDirection else {
-            throw StemmableNoteError.noStemDirection
+            throw StemmableNoteError.noStem
         }
         return stemDirection
     }
 
     @discardableResult
     public func setStemDirection(_ direction: StemDirection = .up) -> Self {
-        let dir = direction
-        stemDirection = dir
+        stemDirection = direction
 
-        if let staveNote = self as? StaveNote {
-            _ = staveNote.reset()
-        } else if let tabNote = self as? TabNote {
-            _ = tabNote.reset()
-        }
+        // Reset and reformat everything. Build the flag before getStemExtension().
+        reset()
         if hasFlag() {
             buildFlag()
         }
         beam = nil
 
         if let stem {
-            stem.setDirection(dir)
+            stem.setDirection(direction)
             stem.setExtension(getStemExtension())
-
-            if let glyphP = getBaseCustomNoteHeadGlyphProps() ?? glyphProps,
-               let musicFont = Glyph.MUSIC_FONT_STACK.first {
-                let key = "stem.noteHead.\(glyphP.codeHead)"
-                let offsets = musicFont.lookupMetric(key)
-                let offsetYBaseStemUp = (offsets as? [String: Any])?["offsetYBaseStemUp"] as? Double ?? 0
-                let offsetYTopStemUp = (offsets as? [String: Any])?["offsetYTopStemUp"] as? Double ?? 0
-                let offsetYBaseStemDown = (offsets as? [String: Any])?["offsetYBaseStemDown"] as? Double ?? 0
-                let offsetYTopStemDown = (offsets as? [String: Any])?["offsetYTopStemDown"] as? Double ?? 0
-
-                stem.setOptions(StemOptions(
-                    stemDownYBaseOffset: offsetYBaseStemDown,
-                    stemUpYBaseOffset: offsetYBaseStemUp,
-                    stemDownYOffset: offsetYTopStemDown,
-                    stemUpYOffset: offsetYTopStemUp
-                ))
-            }
         }
 
         if preFormatted {
@@ -160,30 +164,40 @@ open class StemmableNote: Note {
 
     // MARK: - Stem X
 
-    public func getStemX() -> Double {
+    /// The `x` coordinate of the stem.
+    open func getStemX() -> Double {
         let xBegin = getAbsoluteX() + xShift
         let xEnd = getAbsoluteX() + xShift + getGlyphWidth()
         return stemDirection == Stem.DOWN ? xBegin : xEnd
     }
 
+    /// The `x` coordinate of the glyph center.
+    /// Used for `TabNote` stems and stemlets over rests.
     public func getCenterGlyphX() -> Double {
         getAbsoluteX() + xShift + getGlyphWidth() / 2
     }
 
     // MARK: - Stem Extension
 
-    public func getStemExtension() -> Double {
+    /// The stem extension for the current duration.
+    open func getStemExtension() -> Double {
+        let flagHeight = flag.getHeight()
+        let scale = getFontScale()
+
         if let override = stemExtensionOverride {
             return override
         }
 
+        // Use stemBeamExtension with beams.
         if beam != nil {
-            return glyphProps.stemBeamExtension
+            return glyphProps.stemBeamExtension * scale
         }
 
-        return getStemDirection() == Stem.UP ? glyphProps.stemUpExtension : glyphProps.stemDownExtension
+        // If the flag is longer than the stem, extend the stem by the difference.
+        return flagHeight > Stem.HEIGHT * scale ? flagHeight - Stem.HEIGHT * scale : 0
     }
 
+    /// Set the stem length to a specific value. This overrides the default length.
     @discardableResult
     public func setStemLength(_ height: Double) -> Self {
         stemExtensionOverride = height - Stem.HEIGHT
@@ -192,6 +206,7 @@ open class StemmableNote: Note {
 
     // MARK: - Stem Extents
 
+    /// The top and bottom `y` values of the stem.
     override public func getStemExtents() -> (topY: Double, baseY: Double) {
         (try? getStemExtentsThrowing()) ?? (topY: 0, baseY: 0)
     }
@@ -202,6 +217,7 @@ open class StemmableNote: Note {
 
     // MARK: - Y for Text
 
+    /// The `y` value for the top modifiers at a `textLine`.
     override public func getYForTopText(_ textLine: Double) -> Double {
         let stave = checkStave()
         if hasStem() {
@@ -214,7 +230,8 @@ open class StemmableNote: Note {
         return stave.getYForTopText(textLine)
     }
 
-    public func getYForBottomText(_ textLine: Double) -> Double {
+    /// The `y` value for the bottom modifiers at a `textLine`.
+    open func getYForBottomText(_ textLine: Double) -> Double {
         let stave = checkStave()
         if hasStem() {
             let extents = getStemExtents()
@@ -229,12 +246,12 @@ open class StemmableNote: Note {
     // MARK: - Flag
 
     open func hasFlag() -> Bool {
-        guard let gp = Tables.getGlyphProps(duration: noteDuration) else { return false }
-        return gp.flag && beam == nil
+        glyphProps.codeFlagUp != nil && beam == nil && !isRest()
     }
 
     // MARK: - Post Format
 
+    /// Post-format the note.
     @discardableResult
     override public func postFormat() -> Self {
         beam?.postFormat()
@@ -244,11 +261,12 @@ open class StemmableNote: Note {
 
     // MARK: - Draw Stem
 
-    public func drawStem(_ stemOptions: StemOptions) throws {
+    /// Render the stem.
+    open func drawStem(_ stemOptions: StemOptions? = nil) throws {
         _ = try checkContext()
         setRendered()
+
         setStem(Stem(options: stemOptions))
-        stem?.setContext(getContext())
-        try stem?.draw()
+        try stem?.setContext(getContext()).drawWithStyle()
     }
 }

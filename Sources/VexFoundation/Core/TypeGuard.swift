@@ -1,5 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Ron B. Yeh
+//
+// Port of `src/typeguard.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -19,6 +22,7 @@ public enum VexCategory: String, CaseIterable, Sendable {
     case curve = "Curve"
     case dot = "Dot"
     case element = "Element"
+    case flag = "Flag"
     case fraction = "Fraction"
     case fretHandFinger = "FretHandFinger"
     case ghostNote = "GhostNote"
@@ -73,42 +77,42 @@ public enum VexCategory: String, CaseIterable, Sendable {
     case volta = "Volta"
 }
 
-/// Check whether an object matches a category label.
+/// Use instead of `is` as a more flexible type guard.
 ///
-/// When `checkAncestors` is true, this checks key inheritance categories
-/// (`Element`, `Tickable`, `Note`, `StemmableNote`, `Stave`, `StaveModifier`,
-/// `Modifier`, `StaveNote`, `TabNote`) via Swift `is` checks.
+/// - Parameters:
+///   - obj: check if the class `category` of this object matches `category`.
+///   - category: a category of VexFlow objects.
+///   - checkAncestors: defaults to `true`, so the superclass chain is searched
+///     for a matching `category`. If `false`, only the class of `obj` is checked.
+/// - Returns: true if the (static) `category` of the class of `obj` matches.
 public func isCategory(_ obj: Any?, _ category: VexCategory, checkAncestors: Bool = true) -> Bool {
     guard let obj else { return false }
 
-    if !checkAncestors {
-        return (obj as? VexElement)?.getCategory() == category.rawValue
-    }
-
+    // Types that are not elements.
     switch category {
-    case .element:
-        return obj is VexElement
-    case .tickable:
-        return obj is Tickable
-    case .note:
-        return obj is Note
-    case .stemmableNote:
-        return obj is StemmableNote
-    case .modifier:
-        return obj is Modifier
-    case .staveModifier:
-        return obj is StaveModifier
-    case .stave:
-        return obj is Stave
-    case .staveNote:
-        return obj is StaveNote
-    case .tabNote:
-        return obj is TabNote
     case .renderContext:
         return obj is RenderContext
+    case .fraction:
+        return obj is Fraction
     default:
-        return (obj as? VexElement)?.getCategory() == category.rawValue
+        break
     }
+
+    guard let element = obj as? VexElement else { return false }
+
+    if !checkAncestors {
+        return type(of: element).category == category.rawValue
+    }
+
+    // Walk up the class chain to look for a matching class `category`.
+    var cls: AnyClass? = type(of: element)
+    while let current = cls {
+        if let elementClass = current as? VexElement.Type, elementClass.category == category.rawValue {
+            return true
+        }
+        cls = class_getSuperclass(current)
+    }
+    return false
 }
 
 public func isAccidental(_ obj: Any?) -> Bool { isCategory(obj, .accidental) }

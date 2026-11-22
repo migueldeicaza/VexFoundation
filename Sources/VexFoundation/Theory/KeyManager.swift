@@ -1,5 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/keymanager.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -111,7 +113,7 @@ public class KeyManager {
         scaleMapByValue = [:]
         originalScaleMapByValue = [:]
 
-        guard let noteLocation = Music.rootIndices[keyParts.root] else {
+        guard let noteLocation = Music.rootIndexes[keyParts.root] else {
             throw KeyManagerError.invalidKey(key)
         }
 

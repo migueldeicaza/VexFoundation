@@ -1,5 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author: Larry Kuhns 2011
+//
+// Port of `src/staverepetition.ts` (VexFlow 5.0.0). Upstream class name: `Repetition`.
 
 import Foundation
 
@@ -60,73 +63,65 @@ public final class StaveRepetition: StaveModifier {
 
     override public class var category: String { "Repetition" }
 
-    override public class var textFont: FontInfo {
-        FontInfo(
-            family: VexFont.SERIF,
-            size: Tables.NOTATION_FONT_SCALE / 3,
-            weight: VexFontWeight.bold.rawValue,
-            style: VexFontStyle.normal.rawValue
-        )
-    }
-
     // MARK: - Properties
 
     public var symbolType: RepetitionType
-    public var repXShift: Double = 0
-    public var repYShift: Double
 
     // MARK: - Init
 
     public init(type: RepetitionType, x: Double, yShift: Double) {
         self.symbolType = type
-        self.repYShift = yShift
         super.init()
-        self.modifierX = x
-        resetFont()
+
+        self.x = x
+        self.xShift = 0
+        self.yShift = yShift
     }
 
     @discardableResult
     public func setShiftX(_ x: Double) -> Self {
-        repXShift = x
+        xShift = x
         return self
     }
 
     @discardableResult
     public func setShiftY(_ y: Double) -> Self {
-        repYShift = y
+        yShift = y
         return self
     }
 
     // MARK: - Draw
 
-    override public func drawStave(stave: Stave, xShift: Double = 0) throws {
+    override public func draw() throws {
+        let stave = try checkStaveThrowing()
+        let x = stave.getModifierXShift(getPosition().rawValue)
         setRendered()
 
         switch symbolType {
-        case .codaLeft:
-            try drawSymbolText(stave: stave, xShift: xShift, text: "Coda", drawCoda: true)
         case .codaRight:
-            try drawCodaFixed(stave: stave, x: xShift + stave.getWidth())
+            try drawCodaFixed(stave, x + stave.getWidth())
+        case .codaLeft:
+            try drawSymbolText(stave, x, "Coda", true)
         case .segnoLeft:
-            try drawSegnoFixed(stave: stave, x: xShift)
+            try drawSegnoFixed(stave, x)
         case .segnoRight:
-            try drawSegnoFixed(stave: stave, x: xShift + stave.getWidth())
+            try drawSegnoFixed(stave, x + stave.getWidth())
         case .dc:
-            try drawSymbolText(stave: stave, xShift: xShift, text: "D.C.", drawCoda: false)
+            try drawSymbolText(stave, x, "D.C.", false)
         case .dcAlCoda:
-            try drawSymbolText(stave: stave, xShift: xShift, text: "D.C. al", drawCoda: true)
+            try drawSymbolText(stave, x, "D.C. al", true)
         case .dcAlFine:
-            try drawSymbolText(stave: stave, xShift: xShift, text: "D.C. al Fine", drawCoda: false)
+            try drawSymbolText(stave, x, "D.C. al Fine", false)
         case .ds:
-            try drawSymbolText(stave: stave, xShift: xShift, text: "D.S.", drawCoda: false)
+            try drawSymbolText(stave, x, "D.S.", false)
         case .dsAlCoda:
-            try drawSymbolText(stave: stave, xShift: xShift, text: "D.S. al", drawCoda: true)
+            try drawSymbolText(stave, x, "D.S. al", true)
         case .dsAlFine:
-            try drawSymbolText(stave: stave, xShift: xShift, text: "D.S. al Fine", drawCoda: false)
+            try drawSymbolText(stave, x, "D.S. al Fine", false)
         case .fine:
-            try drawSymbolText(stave: stave, xShift: xShift, text: "Fine", drawCoda: false)
+            try drawSymbolText(stave, x, "Fine", false)
         case .toCoda:
-            try drawSymbolText(stave: stave, xShift: xShift, text: "To", drawCoda: true)
+            try drawSymbolText(stave, x, "To", true)
         case .none:
             break
         }
@@ -134,82 +129,53 @@ public final class StaveRepetition: StaveModifier {
 
     // MARK: - Drawing Helpers
 
-    private func drawCodaFixed(stave: Stave, x: Double) throws {
-        let ctx = try stave.checkContext()
-        let y = stave.getYForTopText(Double(stave.getNumLines())) + repYShift + metric("staveRepetition.coda.offsetY")
-        Glyph.renderGlyph(
-            ctx: ctx,
-            xPos: modifierX + x + repXShift,
-            yPos: y,
-            point: 40,
-            code: "coda",
-            category: "coda"
-        )
+    @discardableResult
+    public func drawCodaFixed(_ stave: Stave, _ x: Double) throws -> Self {
+        let y = stave.getYForTopText(Double(stave.getNumLines()))
+        text = Glyphs.coda
+        renderText(try stave.checkContext(), xPos: x, yPos: y + Metrics.getDouble("Repetition.coda.offsetY"))
+        return self
     }
 
-    private func drawSegnoFixed(stave: Stave, x: Double) throws {
-        let ctx = try stave.checkContext()
-        let y = stave.getYForTopText(Double(stave.getNumLines())) + repYShift + metric("staveRepetition.segno.offsetY")
-        Glyph.renderGlyph(
-            ctx: ctx,
-            xPos: modifierX + x + repXShift,
-            yPos: y,
-            point: 30,
-            code: "segno",
-            category: "segno"
-        )
+    @discardableResult
+    public func drawSegnoFixed(_ stave: Stave, _ x: Double) throws -> Self {
+        let y = stave.getYForTopText(Double(stave.getNumLines()))
+        text = Glyphs.segno
+        renderText(try stave.checkContext(), xPos: x, yPos: y + Metrics.getDouble("Repetition.segno.offsetY"))
+        return self
     }
 
-    private func drawSymbolText(stave: Stave, xShift: Double, text: String, drawCoda: Bool) throws {
+    @discardableResult
+    public func drawSymbolText(_ stave: Stave, _ x: Double, _ text: String, _ drawCoda: Bool) throws -> Self {
         let ctx = try stave.checkContext()
-        let symbolTextOffsetX = metric("staveRepetition.symbolText.offsetX")
-        let symbolTextOffsetY = metric("staveRepetition.symbolText.offsetY")
-        let symbolTextSpacing = metric("staveRepetition.symbolText.spacing")
-        let modifierWidth = stave.getNoteStartX() - modifierX
+        var textX: Double = 0
 
-        ctx.save()
-        ctx.setFont(fontInfo)
-        let textWidth = ctx.measureText(text).width
-
-        let textX: Double
-        let symbolX: Double
-        switch symbolType {
-        case .codaLeft:
-            textX = modifierX + stave.getVerticalBarWidth()
-            let parityCorrection = VexRuntime.getCurrentContext().upstreamParityMode
-                ? -0.0065
-                : 0
-            symbolX = textX + textWidth + symbolTextOffsetX + parityCorrection
-        case .dc, .dcAlFine, .ds, .dsAlFine, .fine:
-            textX = modifierX + xShift + repXShift + stave.getWidth() - symbolTextSpacing - modifierWidth - textWidth
-            symbolX = 0
-        default:
-            textX = modifierX + xShift + repXShift + stave.getWidth() - symbolTextSpacing
-                - modifierWidth - textWidth - symbolTextOffsetX
-            symbolX = textX + textWidth + symbolTextOffsetX
-        }
-
-        let y = stave.getYForTopText(Double(stave.getNumLines())) + repYShift + symbolTextOffsetY
-
+        self.text = text
         if drawCoda {
-            Glyph.renderGlyph(
-                ctx: ctx,
-                xPos: symbolX,
-                yPos: y,
-                point: fontSizeInPoints * 2,
-                code: "coda",
-                category: "coda"
-            )
+            self.text += " \u{E048}" /*coda*/
+        }
+        setFont(Metrics.getFontInfo("Repetition.text"))
+        switch symbolType {
+        // To the left
+        case .codaLeft:
+            // Offset Coda text to right of stave beginning
+            textX = stave.getVerticalBarWidth()
+        // To the right
+        default:
+            textX = x - (stave.getNoteStartX() - self.x) + stave.getWidth() - width
+                - Metrics.getDouble("Repetition.text.offsetX")
         }
 
-        ctx.fillText(text, textX, y + 5)
-        ctx.restore()
-    }
+        let y = stave.getYForTopText(Double(stave.getNumLines())) + Metrics.getDouble("Repetition.text.offsetY")
 
-    private func metric(_ key: String, _ fallback: Double = 0) -> Double {
-        (Glyph.MUSIC_FONT_STACK.first?.lookupMetric(key) as? Double) ?? fallback
+        renderText(ctx, xPos: textX, yPos: y)
+
+        return self
     }
 }
+
+/// Upstream class name.
+public typealias Repetition = StaveRepetition
 
 // MARK: - Preview
 
@@ -220,7 +186,6 @@ import SwiftUI
 #Preview("StaveRepetition", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 120) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory()
         _ = f.setContext(ctx)

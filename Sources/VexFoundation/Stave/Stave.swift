@@ -1,5 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/stave.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -14,10 +16,10 @@ public enum StaveError: Error, LocalizedError, Equatable, Sendable {
 
     public var errorDescription: String? {
         switch self {
-        case .lineNumberOutOfRange(let line):
-            return "Line number out of range: \(line)"
-        case .invalidLineConfigCount(let expected, let actual):
-            return "Config array length must match num_lines (\(actual) vs \(expected))."
+        case .lineNumberOutOfRange:
+            return "The line number must be within the range of the number of lines in the Stave."
+        case .invalidLineConfigCount:
+            return "The length of the lines configuration array must match the number of lines in the Stave"
         case .invalidRepetitionType(let value):
             return "Invalid repetition type: '\(value)'."
         case .invalidVoltaType(let value):
@@ -50,7 +52,6 @@ public struct StaveOptions {
     public var spaceBelowStaffLn: Int
     public var spaceAboveStaffLn: Int
     public var verticalBarWidth: Double
-    public var fillStyle: String
     public var leftBar: Bool
     public var rightBar: Bool
     public var spacingBetweenLinesPx: Double {
@@ -58,6 +59,8 @@ public struct StaveOptions {
     }
     public var topTextPosition: Int
     public var numLines: Int
+    /// True when `spacingBetweenLinesPx` was given (commit 252b9a7). `TabStave` uses
+    /// this to emulate the JavaScript `{ spacingBetweenLinesPx: 13, ...options }` merge.
     var spacingBetweenLinesPxWasSpecified: Bool
 
     public init(
@@ -66,7 +69,6 @@ public struct StaveOptions {
         spaceBelowStaffLn: Int = 4,
         spaceAboveStaffLn: Int = 4,
         verticalBarWidth: Double = 10,
-        fillStyle: String = "#999999",
         leftBar: Bool = true,
         rightBar: Bool = true,
         spacingBetweenLinesPx: Double? = nil,
@@ -78,7 +80,6 @@ public struct StaveOptions {
         self.spaceBelowStaffLn = spaceBelowStaffLn
         self.spaceAboveStaffLn = spaceAboveStaffLn
         self.verticalBarWidth = verticalBarWidth
-        self.fillStyle = fillStyle
         self.leftBar = leftBar
         self.rightBar = rightBar
         self.spacingBetweenLinesPx = spacingBetweenLinesPx ?? Tables.STAVE_LINE_DISTANCE
@@ -103,6 +104,8 @@ public struct StaveTextOptions: Sendable {
 
 // MARK: - Sort Orders
 
+// Used by Stave.format() to sort the modifiers at the beginning and end of a stave.
+// The keys match the category of the Barline, Clef, KeySignature, TimeSignature classes.
 private let SORT_ORDER_BEG_MODIFIERS: [String: Int] = [
     "Barline": 0,
     "Clef": 1,
@@ -120,77 +123,124 @@ private let SORT_ORDER_END_MODIFIERS: [String: Int] = [
 // MARK: - Stave
 
 /// Main stave class. Manages modifiers, calculates layout, and renders staff lines.
+///
+/// `x`, `y`, `width` and `height` are stored in `VexElement`.
 open class Stave: VexElement {
 
     override open class var category: String { "Stave" }
 
-    override public class var textFont: FontInfo {
-        FontInfo(
-            family: VexFont.SANS_SERIF,
-            size: 8,
-            weight: VexFontWeight.normal.rawValue,
-            style: VexFontStyle.normal.rawValue
-        )
-    }
-
-    /// Default left+right padding used to size staves correctly.
+    /// This is the sum of the padding that normally goes on left + right of a stave during
+    /// drawing. Used to size staves correctly with content width.
     public static var defaultPadding: Double {
-        let musicFont = Glyph.MUSIC_FONT_STACK.first
-        let left = (musicFont?.lookupMetric("stave.padding") as? Double) ?? 0
-        let right = (musicFont?.lookupMetric("stave.endPaddingMax") as? Double) ?? 0
-        return left + right
+        Metrics.getDouble("Stave.padding") + Metrics.getDouble("Stave.endPaddingMax")
     }
 
-    /// Right padding only, used when startX is pre-determined.
+    /// Right padding, used by system if startX is already determined.
     public static var rightPadding: Double {
-        let musicFont = Glyph.MUSIC_FONT_STACK.first
-        return (musicFont?.lookupMetric("stave.endPaddingMax") as? Double) ?? 0
+        Metrics.getDouble("Stave.endPaddingMax")
     }
 
     // MARK: - Properties
 
     public var options: StaveOptions
-    public var staveX: Double
-    public var staveY: Double
-    public var staveWidth: Double
-    public var staveHeight: Double = 0
     public var startX: Double
     public var endX: Double
-    public var formatted: Bool = false
-    public var measure: Int = 0
     public var clefName: ClefName = .treble
     public var endClefName: ClefName?
+    public var formatted: Bool = false
+    public var measure: Int = 0
     public var modifiers: [StaveModifier] = []
     public var defaultLedgerLineStyle: ElementStyle
 
     // MARK: - Init
 
     public init(x: Double, y: Double, width: Double, options: StaveOptions? = nil) {
-        self.staveX = x
-        self.staveY = y
-        self.staveWidth = width
         self.startX = x + 5
         self.endX = x + width
-        self.defaultLedgerLineStyle = ElementStyle(strokeStyle: "#444", lineWidth: 1.4)
-
         self.options = options ?? StaveOptions()
-        super.init()
-        resetFont()
+        self.defaultLedgerLineStyle = ElementStyle(strokeStyle: "#444", lineWidth: 2)
+        super.init(category: nil)
+
+        self.x = x
+        self.y = y
+        self.width = width
+        self.formatted = false
+        self.modifiers = [] // stave modifiers (clef, key, time, barlines, coda, segno, etc.)
+        self.measure = 0
+        self.clefName = .treble
+        self.endClefName = nil
 
         resetLines()
 
-        // Add beginning and ending bar lines
+        // beg bar
         addModifier(Barline(self.options.leftBar ? .single : .none))
+        // end bar
         addEndModifier(Barline(self.options.rightBar ? .single : .none))
     }
 
-    // MARK: - Line Configuration
+    // MARK: - Ledger Lines
+
+    /// Set default style for ledger lines.
+    public func setDefaultLedgerLineStyle(_ style: ElementStyle) {
+        defaultLedgerLineStyle = style
+    }
+
+    /// Get default style for ledger lines.
+    public func getDefaultLedgerLineStyle() -> ElementStyle {
+        var s = getStyle() ?? ElementStyle()
+        let d = defaultLedgerLineStyle
+        if let v = d.shadowColor { s.shadowColor = v }
+        if let v = d.shadowBlur { s.shadowBlur = v }
+        if let v = d.fillStyle { s.fillStyle = v }
+        if let v = d.strokeStyle { s.strokeStyle = v }
+        if let v = d.lineWidth { s.lineWidth = v }
+        if let v = d.lineDash { s.lineDash = v }
+        return s
+    }
+
+    // MARK: - Lines
+
+    /// Convert staff line units to pixels.
+    public func space(_ spacing: Double) -> Double {
+        options.spacingBetweenLinesPx * spacing
+    }
 
     public func resetLines() {
-        options.lineConfig = (0..<options.numLines).map { _ in StaveLineConfig(visible: true) }
-        staveHeight = Double(options.numLines + options.spaceAboveStaffLn) * options.spacingBetweenLinesPx
+        options.lineConfig = []
+        for _ in 0..<max(0, options.numLines) {
+            options.lineConfig.append(StaveLineConfig(visible: true))
+        }
+        height = Double(options.numLines + options.spaceAboveStaffLn) * options.spacingBetweenLinesPx
         options.bottomTextPosition = options.numLines
     }
+
+    // MARK: - Note Positions
+
+    @discardableResult
+    public func setNoteStartX(_ x: Double) -> Self {
+        if !formatted { format() }
+
+        startX = x
+        return self
+    }
+
+    public func getNoteStartX() -> Double {
+        if !formatted { format() }
+
+        return startX
+    }
+
+    public func getNoteEndX() -> Double {
+        if !formatted { format() }
+
+        return endX
+    }
+
+    public func getTieStartX() -> Double { startX }
+
+    public func getTieEndX() -> Double { endX }
+
+    public func getNumLines() -> Int { options.numLines }
 
     @discardableResult
     public func setNumLines(_ n: Int) -> Self {
@@ -199,232 +249,81 @@ open class Stave: VexElement {
         return self
     }
 
-    public func getNumLines() -> Int { options.numLines }
-
-    public func getConfigForLines() -> [StaveLineConfig] { options.lineConfig }
-
-    @discardableResult
-    public func setConfigForLine(_ lineNumber: Int, config: StaveLineConfig) -> Self {
-        _ = try? setConfigForLineThrowing(lineNumber, config: config)
-        return self
+    public func getTopLineTopY() -> Double {
+        getYForLine(0)
     }
 
-    @discardableResult
-    public func setConfigForLines(_ configs: [StaveLineConfig]) -> Self {
-        _ = try? setConfigForLinesThrowing(configs)
-        return self
-    }
-
-    @discardableResult
-    public func setConfigForLineThrowing(_ lineNumber: Int, config: StaveLineConfig) throws -> Self {
-        guard lineNumber >= 0 && lineNumber < options.numLines else {
-            throw StaveError.lineNumberOutOfRange(lineNumber)
-        }
-        options.lineConfig[lineNumber] = config
-        return self
-    }
-
-    @discardableResult
-    public func setConfigForLinesThrowing(_ configs: [StaveLineConfig]) throws -> Self {
-        guard configs.count == options.numLines else {
-            throw StaveError.invalidLineConfigCount(expected: options.numLines, actual: configs.count)
-        }
-        options.lineConfig = configs
-        return self
+    public func getBottomLineBottomY() -> Double {
+        getYForLine(Double(getNumLines() - 1)) + (getStyle()?.lineWidth ?? 1)
     }
 
     // MARK: - Position & Dimensions
 
-    public func getX() -> Double { staveX }
-
     @discardableResult
-    public func setStaveX(_ x: Double) -> Self {
-        let shift = x - staveX
+    override open func setX(_ x: Double) -> Self {
+        let shift = x - self.x
         formatted = false
-        staveX = x
+        self.x = x
         startX += shift
         endX += shift
         for mod in modifiers {
-            mod.setModifierX(mod.getModifierX() + shift)
+            mod.setX(mod.getX() + shift)
         }
         return self
     }
 
-    public func getY() -> Double { staveY }
-
     @discardableResult
-    public func setStaveY(_ y: Double) -> Self {
-        staveY = y
-        return self
-    }
-
-    /// Compatibility alias for VexFlow-style `setY`.
-    @discardableResult
-    public func setY(_ y: Double) -> Self {
-        setStaveY(y)
-    }
-
-    public func getWidth() -> Double { staveWidth }
-
-    @discardableResult
-    public func setStaveWidth(_ width: Double) -> Self {
+    override open func setWidth(_ width: Double) -> Self {
         formatted = false
-        staveWidth = width
-        endX = staveX + width
+        self.width = width
+        endX = x + width
+
+        // reset the x position of the end barline (TODO(0xfe): This makes no sense)
+        // this.modifiers[1].setX(this.endX);
         return self
     }
 
-    public func getHeight() -> Double { staveHeight }
-
-    public func getSpacingBetweenLines() -> Double { options.spacingBetweenLinesPx }
-
-    public func getVerticalBarWidth() -> Double { options.verticalBarWidth }
-
-    /// Convert staff line units to pixels.
-    public func space(_ spacing: Double) -> Double {
-        options.spacingBetweenLinesPx * spacing
-    }
-
-    // MARK: - Y Coordinates
-
-    /// Get Y position for the center of a staff line.
-    public func getYForLine(_ line: Double) -> Double {
-        staveY + line * options.spacingBetweenLinesPx + Double(options.spaceAboveStaffLn) * options.spacingBetweenLinesPx
-    }
-
-    /// Get the line number for a given Y position.
-    public func getLineForY(_ y: Double) -> Double {
-        (y - staveY) / options.spacingBetweenLinesPx - Double(options.spaceAboveStaffLn)
-    }
-
-    public func getYForTopText(_ line: Double = 0) -> Double {
-        getYForLine(-line - Double(options.topTextPosition))
-    }
-
-    public func getYForBottomText(_ line: Double = 0) -> Double {
-        getYForLine(Double(options.bottomTextPosition) + line)
-    }
-
-    public func getYForNote(_ line: Double) -> Double {
-        staveY + Double(options.spaceAboveStaffLn) * options.spacingBetweenLinesPx
-            + 5 * options.spacingBetweenLinesPx - line * options.spacingBetweenLinesPx
-    }
-
-    open func getYForGlyphs() -> Double {
-        getYForLine(3)
-    }
-
-    public func getTopLineTopY() -> Double {
-        getYForLine(0) - Tables.STAVE_LINE_THICKNESS / 2
-    }
-
-    public func getBottomLineBottomY() -> Double {
-        getYForLine(Double(getNumLines() - 1)) + Tables.STAVE_LINE_THICKNESS / 2
-    }
-
-    public func getBottomLineY() -> Double {
-        getYForLine(Double(options.numLines))
-    }
-
-    public func getBottomY() -> Double {
-        getYForLine(Double(options.numLines)) + Double(options.spaceBelowStaffLn) * options.spacingBetweenLinesPx
-    }
-
-    override public func getStyle() -> ElementStyle? {
-        var s = super.getStyle() ?? ElementStyle()
-        if s.fillStyle == nil { s.fillStyle = options.fillStyle }
-        if s.strokeStyle == nil { s.strokeStyle = options.fillStyle }
-        if s.lineWidth == nil { s.lineWidth = Tables.STAVE_LINE_THICKNESS }
-        return s
-    }
-
-    public func getBBox() -> BoundingBox {
-        BoundingBox(x: staveX, y: staveY, w: staveWidth, h: getBottomY() - staveY)
-    }
-
-    // MARK: - Note Positions
-
-    @discardableResult
-    public func setNoteStartX(_ x: Double) -> Self {
-        if !formatted { format() }
-        startX = x
-        return self
-    }
-
-    public func getNoteStartX() -> Double {
-        if !formatted { format() }
-        return startX
-    }
-
-    public func getNoteEndX() -> Double {
-        if !formatted { format() }
-        return endX
-    }
-
-    public func getTieStartX() -> Double { startX }
-    public func getTieEndX() -> Double { endX }
-
-    // MARK: - Measure
-
+    /// Set the measure number of this Stave.
     @discardableResult
     public func setMeasure(_ measure: Int) -> Self {
         self.measure = measure
         return self
     }
 
+    /// Return the measure number of this Stave.
     public func getMeasure() -> Int { measure }
 
-    // MARK: - Modifier Management
-
-    @discardableResult
-    public func addModifier(_ modifier: StaveModifier, position: StaveModifierPosition? = nil) -> Self {
-        if let position {
-            modifier.setPosition(position)
-        }
-        modifier.setStave(self)
-        formatted = false
-        modifiers.append(modifier)
-        return self
-    }
-
-    @discardableResult
-    public func addEndModifier(_ modifier: StaveModifier) -> Self {
-        addModifier(modifier, position: .end)
-    }
-
-    public func getModifiers(position: StaveModifierPosition? = nil, category: String? = nil) -> [StaveModifier] {
-        if position == nil && category == nil {
-            return modifiers
-        } else if position == nil {
-            return modifiers.filter { $0.getCategory() == category }
-        } else if category == nil {
-            return modifiers.filter { $0.getPosition() == position }
-        } else {
-            return modifiers.filter { $0.getPosition() == position && $0.getCategory() == category }
-        }
-    }
-
+    /// Gets the pixels to shift from the beginning of the stave
+    /// following the modifier at the provided index.
     public func getModifierXShift(_ index: Int = 0) -> Double {
         if !formatted { format() }
 
-        if getModifiers(position: .begin).count == 1 { return 0 }
-
-        if modifiers[index].getPosition() == .right { return 0 }
-
-        var shiftX = startX - staveX
-        let begBarline = modifiers[0] as! Barline
-        if begBarline.getBarlineType() == .repeatBegin && shiftX > begBarline.getModifierWidth() {
-            shiftX -= begBarline.getModifierWidth()
+        if getModifiers(position: .begin).count == 1 {
+            return 0
         }
-        return shiftX
+
+        // for right position modifiers zero shift seems correct, see 'Volta + Modifier Measure Test'
+        // Upstream reads `this.modifiers[index]` without a range check.
+        if index >= 0 && index < modifiers.count && modifiers[index].getPosition() == .right {
+            return 0
+        }
+
+        var startX = self.startX - x
+        if let begBarline = modifiers.first as? Barline,
+           begBarline.getType() == .repeatBegin && startX > begBarline.getWidth() {
+            startX -= begBarline.getWidth()
+        }
+
+        return startX
     }
 
-    // MARK: - Stave-Level Modifier Helpers
+    // MARK: - Coda & Segno
 
-    /// Add a repetition marker.
+    /// Add a repetition marker (Coda & Segno Symbol functions).
     @discardableResult
     public func setRepetitionType(_ type: RepetitionType, yShift: Double = 0) -> Self {
-        addModifier(StaveRepetition(type: type, x: staveX, yShift: yShift))
+        modifiers.append(StaveRepetition(type: type, x: x, yShift: yShift))
+        return self
     }
 
     /// String convenience variant that throws on invalid repetition labels.
@@ -443,10 +342,13 @@ open class Stave: VexElement {
         return setRepetitionType(parsed, yShift: yShift)
     }
 
+    // MARK: - Volta
+
     /// Add a volta bracket.
     @discardableResult
-    public func setVoltaType(_ type: VoltaType, number: String, yShift: Double) -> Self {
-        addModifier(Volta(type: type, number: number, x: staveX, yShift: yShift))
+    public func setVoltaType(_ type: VoltaType, number label: String, yShift y: Double) -> Self {
+        modifiers.append(Volta(type: type, number: label, x: x, yShift: y))
+        return self
     }
 
     /// String convenience variant that throws on invalid volta labels.
@@ -465,21 +367,27 @@ open class Stave: VexElement {
         return setVoltaType(parsed, number: number, yShift: yShift)
     }
 
+    // MARK: - Section
+
     /// Add a section label.
     @discardableResult
     public func setSection(_ section: String, y: Double, xOffset: Double = 0, fontSize: Double? = nil,
                            drawRect: Bool = true) -> Self {
-        let staveSection = StaveSection(section: section, x: staveX + xOffset, shiftY: y, drawRect: drawRect)
-        if let fontSize {
-            _ = staveSection.setFont(size: fontSize)
+        let staveSection = StaveSection(section: section).setYShift(y).setXShift(xOffset).setDrawRect(drawRect)
+        if let fontSize, fontSize != 0 {
+            staveSection.setFontSize(fontSize)
         }
-        return addModifier(staveSection)
+        addModifier(staveSection)
+        return self
     }
+
+    // MARK: - Tempo
 
     /// Add a tempo marking.
     @discardableResult
     public func setTempo(_ tempo: StaveTempoOptions, y: Double) -> Self {
-        addModifier(StaveTempo(tempo: tempo, x: staveX, shiftY: y))
+        modifiers.append(StaveTempo(tempo: tempo, x: x, shiftY: y))
+        return self
     }
 
     /// String convenience variant that throws on invalid duration tokens.
@@ -505,29 +413,33 @@ open class Stave: VexElement {
         return setTempo(options, y: y)
     }
 
+    // MARK: - Text
+
     /// Add stave text using typed position and options.
     @discardableResult
-    public func setText(_ text: String, position: StaveModifierPosition, options: StaveTextOptions = StaveTextOptions()) -> Self {
-        addModifier(StaveText(
+    public func setStaveText(_ text: String, position: StaveModifierPosition,
+                             options: StaveTextOptions = StaveTextOptions()) -> Self {
+        modifiers.append(StaveText(
             text: text,
             position: position,
             shiftX: options.shiftX,
             shiftY: options.shiftY,
             justification: options.justification
         ))
+        return self
     }
 
     /// String convenience variant that throws on invalid position / justification labels.
     @discardableResult
-    public func setText(_ text: String, parsingPosition position: String, shiftX: Double = 0, shiftY: Double = 0,
-                        parsingJustification justification: String = "center") throws -> Self {
+    public func setStaveText(_ text: String, parsingPosition position: String, shiftX: Double = 0, shiftY: Double = 0,
+                             parsingJustification justification: String = "center") throws -> Self {
         guard let parsedPosition = StaveModifierPosition(parsing: position) else {
             throw StaveError.invalidModifierPosition(position)
         }
         guard let parsedJustification = StaveTextJustification(parsing: justification) else {
             throw StaveError.invalidTextJustification(justification)
         }
-        return setText(text, position: parsedPosition, options: StaveTextOptions(
+        return setStaveText(text, position: parsedPosition, options: StaveTextOptions(
             shiftX: shiftX,
             shiftY: shiftY,
             justification: parsedJustification
@@ -536,23 +448,108 @@ open class Stave: VexElement {
 
     /// String convenience variant that returns nil on invalid position / justification labels.
     @discardableResult
-    public func setText(_ text: String, parsingPositionOrNil position: String, shiftX: Double = 0, shiftY: Double = 0,
-                        parsingJustificationOrNil justification: String = "center") -> Self? {
+    public func setStaveText(_ text: String, parsingPositionOrNil position: String, shiftX: Double = 0,
+                             shiftY: Double = 0, parsingJustificationOrNil justification: String = "center") -> Self? {
         guard let parsedPosition = StaveModifierPosition(parsing: position) else { return nil }
         guard let parsedJustification = StaveTextJustification(parsing: justification) else { return nil }
-        return setText(text, position: parsedPosition, options: StaveTextOptions(
+        return setStaveText(text, position: parsedPosition, options: StaveTextOptions(
             shiftX: shiftX,
             shiftY: shiftY,
             justification: parsedJustification
         ))
     }
 
-    // MARK: - Barline Configuration
+    @available(*, deprecated, renamed: "setStaveText(_:position:options:)")
+    @discardableResult
+    public func setText(_ text: String, position: StaveModifierPosition,
+                        options: StaveTextOptions = StaveTextOptions()) -> Self {
+        setStaveText(text, position: position, options: options)
+    }
+
+    // MARK: - Y Coordinates
+
+    public func getSpacingBetweenLines() -> Double { options.spacingBetweenLinesPx }
+
+    override open func getBoundingBox() -> BoundingBox? {
+        BoundingBox(x: x, y: y, w: width, h: getBottomY() - y)
+    }
+
+    public func getBottomY() -> Double {
+        let spacing = options.spacingBetweenLinesPx
+        let scoreBottom = getYForLine(Double(options.numLines)) + Double(options.spaceBelowStaffLn) * spacing
+        return scoreBottom
+    }
+
+    public func getBottomLineY() -> Double {
+        getYForLine(Double(options.numLines))
+    }
+
+    /// Returns the y for the *center* of a staff line.
+    public func getYForLine(_ line: Double) -> Double {
+        let spacing = options.spacingBetweenLinesPx
+        let headroom = Double(options.spaceAboveStaffLn)
+
+        let y = self.y + line * spacing + headroom * spacing
+
+        return y
+    }
+
+    /// The reverse of `getYForLine`.
+    public func getLineForY(_ y: Double) -> Double {
+        let spacing = options.spacingBetweenLinesPx
+        let headroom = Double(options.spaceAboveStaffLn)
+        return (y - self.y) / spacing - headroom
+    }
+
+    public func getYForTopText(_ line: Double = 0) -> Double {
+        getYForLine(-line - Double(options.topTextPosition))
+    }
+
+    public func getYForBottomText(_ line: Double = 0) -> Double {
+        getYForLine(Double(options.bottomTextPosition) + line)
+    }
+
+    public func getYForNote(_ line: Double) -> Double {
+        let spacing = options.spacingBetweenLinesPx
+        let headroom = Double(options.spaceAboveStaffLn)
+        return y + headroom * spacing + 5 * spacing - line * spacing
+    }
+
+    open func getYForGlyphs() -> Double {
+        getYForLine(3)
+    }
+
+    // MARK: - Modifier Management
+
+    /// Add a stave modifier to the stave. The first two modifiers (barlines)
+    /// are added automatically upon construction.
+    @discardableResult
+    public func addModifier(_ modifier: StaveModifier, position: StaveModifierPosition? = nil) -> Self {
+        if let position {
+            modifier.setPosition(position)
+        }
+
+        modifier.setStave(self)
+        formatted = false
+        modifiers.append(modifier)
+        return self
+    }
+
+    @discardableResult
+    public func addEndModifier(_ modifier: StaveModifier) -> Self {
+        addModifier(modifier, position: .end)
+        return self
+    }
+
+    // MARK: - Barline Functions
 
     @discardableResult
     public func setBegBarType(_ type: BarlineType) -> Self {
+        // Only valid bar types at beginning of stave is none, single or begin repeat
         if type == .single || type == .repeatBegin || type == .none {
-            (modifiers[0] as! Barline).setBarlineType(type)
+            if let barline = modifiers.first as? Barline {
+                barline.setType(type)
+            }
             formatted = false
         }
         return self
@@ -560,8 +557,11 @@ open class Stave: VexElement {
 
     @discardableResult
     public func setEndBarType(_ type: BarlineType) -> Self {
+        // Repeat end not valid at end of stave
         if type != .repeatBegin {
-            (modifiers[1] as! Barline).setBarlineType(type)
+            if modifiers.count > 1, let barline = modifiers[1] as? Barline {
+                barline.setType(type)
+            }
             formatted = false
         }
         return self
@@ -569,15 +569,13 @@ open class Stave: VexElement {
 
     // MARK: - Clef
 
+    /// Treat the stave as if the clef is `clefSpec`, but don't display the clef.
+    /// (4.x fix 7d9bb0d4: key signature on a non-treble stave without a clef glyph.)
     @discardableResult
     public func setClefLines(_ clefSpec: ClefName) -> Self {
         clefName = clefSpec
         return self
     }
-
-    public func getClef() -> ClefName { clefName }
-
-    public func getEndClef() -> ClefName? { endClefName }
 
     @discardableResult
     public func setClef(_ clefSpec: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil,
@@ -592,11 +590,80 @@ open class Stave: VexElement {
         if clefs.isEmpty {
             addClef(clefSpec, size: size, annotation: annotation, position: position)
         } else {
-            clefs[0].setClefType(clefSpec, size: size, annotation: annotation)
+            clefs[0].setType(clefSpec, size: size, annotation: annotation)
         }
+
         return self
     }
 
+    public func getClef() -> ClefName { clefName }
+
+    @discardableResult
+    public func setEndClef(_ clefSpec: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil) -> Self {
+        setClef(clefSpec, size: size, annotation: annotation, position: .end)
+        return self
+    }
+
+    public func getEndClef() -> ClefName? { endClefName }
+
+    // MARK: - Key Signature
+
+    @discardableResult
+    public func setKeySignature(_ keySpec: String, cancelKeySpec: String? = nil,
+                                position: StaveModifierPosition = .begin) -> Self {
+        let keySignatures = getModifiers(position: position, category: KeySignature.category)
+            .compactMap { $0 as? KeySignature }
+        if keySignatures.isEmpty {
+            addKeySignature(keySpec, cancelKeySpec: cancelKeySpec, position: position)
+        } else {
+            keySignatures[0].setKeySig(keySpec, cancelKeySpec: cancelKeySpec)
+        }
+
+        return self
+    }
+
+    @discardableResult
+    public func setEndKeySignature(_ keySpec: String, cancelKeySpec: String? = nil) -> Self {
+        setKeySignature(keySpec, cancelKeySpec: cancelKeySpec, position: .end)
+        return self
+    }
+
+    // MARK: - Time Signature
+
+    @discardableResult
+    public func setTimeSignature(_ timeSpec: TimeSignatureSpec, customPadding: Double? = nil,
+                                 position: StaveModifierPosition = .begin) -> Self {
+        let timeSignatures = getModifiers(position: position, category: TimeSignature.category)
+            .compactMap { $0 as? TimeSignature }
+        if timeSignatures.isEmpty {
+            addTimeSignature(timeSpec, customPadding: customPadding, position: position)
+        } else {
+            timeSignatures[0].setTimeSig(timeSpec)
+        }
+
+        return self
+    }
+
+    @discardableResult
+    public func setEndTimeSignature(_ timeSpec: TimeSignatureSpec, customPadding: Double? = nil) -> Self {
+        setTimeSignature(timeSpec, customPadding: customPadding, position: .end)
+        return self
+    }
+
+    /// Add a key signature to the stave.
+    ///
+    /// Example: `stave.addKeySignature("Db")`
+    @discardableResult
+    public func addKeySignature(_ keySpec: String, cancelKeySpec: String? = nil,
+                                position: StaveModifierPosition = .begin) -> Self {
+        addModifier(KeySignature(keySpec: keySpec, cancelKeySpec: cancelKeySpec).setPosition(position),
+                    position: position)
+        return self
+    }
+
+    /// Add a clef to the stave.
+    ///
+    /// Example: `stave.addClef(.treble)`
     @discardableResult
     public func addClef(_ clef: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil,
                         position: StaveModifierPosition = .begin) -> Self {
@@ -605,93 +672,74 @@ open class Stave: VexElement {
         } else if position == .end {
             endClefName = clef
         }
+
         addModifier(Clef(type: clef, size: size, annotation: annotation), position: position)
         return self
     }
 
     @discardableResult
-    public func setEndClef(_ clefSpec: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil) -> Self {
-        setClef(clefSpec, size: size, annotation: annotation, position: .end)
-    }
-
-    @discardableResult
     public func addEndClef(_ clef: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil) -> Self {
         addClef(clef, size: size, annotation: annotation, position: .end)
-    }
-
-    // MARK: - Key Signature
-
-    @discardableResult
-    public func setKeySignature(_ keySpec: String, cancelKeySpec: String? = nil,
-                                position: StaveModifierPosition = .begin) -> Self {
-        let keySigs = getModifiers(position: position, category: KeySignature.category).compactMap { $0 as? KeySignature }
-        if keySigs.isEmpty {
-            addKeySignature(keySpec, cancelKeySpec: cancelKeySpec, position: position)
-        } else {
-            keySigs[0].setKeySig(keySpec, cancelKeySpec: cancelKeySpec)
-        }
         return self
     }
 
-    @discardableResult
-    public func addKeySignature(_ keySpec: String, cancelKeySpec: String? = nil,
-                                position: StaveModifierPosition = .begin) -> Self {
-        let ks = KeySignature(keySpec: keySpec, cancelKeySpec: cancelKeySpec)
-        ks.setPosition(position)
-        addModifier(ks, position: position)
-        return self
-    }
-
-    @discardableResult
-    public func setEndKeySignature(_ keySpec: String, cancelKeySpec: String? = nil) -> Self {
-        setKeySignature(keySpec, cancelKeySpec: cancelKeySpec, position: .end)
-    }
-
-    // MARK: - Time Signature
-
-    @discardableResult
-    public func setTimeSignature(_ timeSpec: TimeSignatureSpec, customPadding: Double? = nil,
-                                 position: StaveModifierPosition = .begin) -> Self {
-        let timeSigs = getModifiers(position: position, category: TimeSignature.category).compactMap { $0 as? TimeSignature }
-        if timeSigs.isEmpty {
-            addTimeSignature(timeSpec, customPadding: customPadding, position: position)
-        } else {
-            timeSigs[0].setTimeSig(timeSpec)
-        }
-        return self
-    }
-
+    /// Add a time signature to the stave.
+    ///
+    /// Example: `stave.addTimeSignature(.meter(4, 4))`
     @discardableResult
     public func addTimeSignature(_ timeSpec: TimeSignatureSpec, customPadding: Double? = nil,
                                  position: StaveModifierPosition = .begin) -> Self {
-        let ts = TimeSignature(timeSpec: timeSpec, customPadding: customPadding ?? 15)
-        addModifier(ts, position: position)
+        addModifier(TimeSignature(timeSpec: timeSpec, customPadding: customPadding ?? 15), position: position)
         return self
     }
 
     @discardableResult
-    public func setEndTimeSignature(_ timeSpec: TimeSignatureSpec, customPadding: Double? = nil) -> Self {
-        setTimeSignature(timeSpec, customPadding: customPadding, position: .end)
+    public func addEndTimeSignature(_ timeSpec: TimeSignatureSpec, customPadding: Double? = nil) -> Self {
+        addTimeSignature(timeSpec, customPadding: customPadding, position: .end)
+        return self
     }
 
-    // MARK: - Ledger Lines
-
-    public func setDefaultLedgerLineStyle(_ style: ElementStyle) {
-        defaultLedgerLineStyle = style
+    /// Deprecated upstream.
+    @discardableResult
+    public func addTrebleGlyph() -> Self {
+        addClef(.treble)
+        return self
     }
 
-    public func getDefaultLedgerLineStyle() -> ElementStyle {
-        var s = getStyle() ?? ElementStyle()
-        if let ss = defaultLedgerLineStyle.strokeStyle { s.strokeStyle = ss }
-        if let lw = defaultLedgerLineStyle.lineWidth { s.lineWidth = lw }
-        return s
+    /// Return the stave modifiers that match the provided position and category.
+    public func getModifiers(position: StaveModifierPosition? = nil, category: String? = nil) -> [StaveModifier] {
+        if position == nil && category == nil {
+            return modifiers
+        } else if position == nil {
+            // A category was provided.
+            return modifiers.filter { $0.getCategory() == category }
+        } else if category == nil {
+            // A position was provided.
+            return modifiers.filter { $0.getPosition() == position }
+        } else {
+            // Both position and category were provided!
+            return modifiers.filter { $0.getPosition() == position && $0.getCategory() == category }
+        }
+    }
+
+    /// Use the modifier's `getCategory()` as a key for the `order` table.
+    /// The retrieved value is used to sort modifiers from left to right (0 to 3).
+    /// Same bubble sort as upstream: a category missing from `order` is never swapped.
+    public func sortByCategory(_ items: inout [StaveModifier], order: [String: Int]) {
+        guard items.count > 1 else { return }
+        for i in stride(from: items.count - 1, through: 0, by: -1) {
+            for j in 0..<i {
+                if let a = order[items[j].getCategory()], let b = order[items[j + 1].getCategory()], a > b {
+                    items.swapAt(j, j + 1)
+                }
+            }
+        }
     }
 
     // MARK: - Format
 
-    /// Position all modifiers and calculate note area bounds.
     public func format() {
-        let begBarline = modifiers[0] as! Barline
+        let begBarline = modifiers[0] as? Barline
         let endBarline = modifiers[1]
 
         var begModifiers = getModifiers(position: .begin)
@@ -700,217 +748,308 @@ open class Stave: VexElement {
         sortByCategory(&begModifiers, order: SORT_ORDER_BEG_MODIFIERS)
         sortByCategory(&endModifiers, order: SORT_ORDER_END_MODIFIERS)
 
-        // Handle REPEAT_BEGIN: move repeat bar to end of begin modifiers
-        if begModifiers.count > 1 && begBarline.getBarlineType() == .repeatBegin {
-            let first = begModifiers.removeFirst()
-            begModifiers.append(first)
+        if begModifiers.count > 1 && begBarline?.getType() == .repeatBegin {
+            begModifiers.append(begModifiers.remove(at: 0))
             begModifiers.insert(Barline(.single), at: 0)
         }
 
-        // Handle end modifiers barline position
         if let idx = endModifiers.firstIndex(where: { $0 === endBarline }), idx > 0 {
             endModifiers.insert(Barline(.none), at: 0)
         }
 
-        // Layout begin modifiers (left to right)
-        var x = staveX
+        var width: Double
+        var padding: Double
         var offset = 0
+        var x = self.x
+        let parity = VexRuntime.getCurrentContext().upstreamParityMode
         for i in 0..<begModifiers.count {
             let modifier = begModifiers[i]
-            let pad = modifier.getPadding(i + offset)
-            var width = modifier.getModifierWidth()
+            padding = modifier.getPadding(i + offset)
+            width = modifier.getWidth()
             // VexFlowPatch: prevent modifier width being NaN
             if width.isNaN {
-                modifier.setModifierWidth(10)
+                modifier.setWidth(10)
                 width = 10
             }
-            x += pad
-            if VexRuntime.getCurrentContext().upstreamParityMode {
-                modifier.setModifierX(x)
+
+            x += padding
+            if parity {
+                modifier.setX(x)
             } else {
                 // VexFlowPatch: don't overwrite modifier.x when it was already shifted further
                 // (e.g. to align time signatures via formatBegModifiers)
-                let modifierX = modifier.getModifierX()
-                if modifierX > x {
-                    x = modifierX
+                if modifier.getX() > x {
+                    x = modifier.getX()
                 } else {
-                    modifier.setModifierX(x)
+                    modifier.setX(x)
                 }
             }
             x += width
-            if pad + width == 0 { offset -= 1 }
+
+            if padding + width == 0 { offset -= 1 }
         }
-        if VexRuntime.getCurrentContext().upstreamParityMode {
+
+        if parity {
             startX = x
         } else if x > startX {
-            // VexFlowPatch: don't overwrite start_x if it's already bigger (alignment)
+            // VexFlowPatch: don't overwrite startX if it's already bigger (alignment)
             startX = x
         }
+        x = self.x + self.width
 
-        // Layout end modifiers (right to left)
-        x = staveX + staveWidth
+        var widths = (left: 0.0, right: 0.0, paddingRight: 0.0, paddingLeft: 0.0)
 
-        var widths = (left: 0.0, right: 0.0, paddingLeft: 0.0, paddingRight: 0.0)
         var lastBarlineIdx = 0
 
         for i in 0..<endModifiers.count {
             let modifier = endModifiers[i]
-            if modifier is Barline { lastBarlineIdx = i }
+            lastBarlineIdx = modifier is Barline ? i : lastBarlineIdx
 
-            widths = (0, 0, 0, 0)
-            let lm = modifier.getLayoutMetrics()
+            widths.right = 0
+            widths.left = 0
+            widths.paddingRight = 0
+            widths.paddingLeft = 0
+            let layoutMetrics = modifier.getLayoutMetrics()
 
-            if let lm {
+            if let layoutMetrics {
                 if i != 0 {
-                    widths.right = lm.xMax
-                    widths.paddingRight = lm.paddingRight
+                    widths.right = layoutMetrics.xMax
+                    widths.paddingRight = layoutMetrics.paddingRight
                 }
-                widths.left = -lm.xMin
-                widths.paddingLeft = lm.paddingLeft
+                widths.left = -layoutMetrics.xMin
+                widths.paddingLeft = layoutMetrics.paddingLeft
+
                 if i == endModifiers.count - 1 {
                     widths.paddingLeft = 0
                 }
             } else {
                 widths.paddingRight = modifier.getPadding(i - lastBarlineIdx)
                 if i != 0 {
-                    widths.right = modifier.getModifierWidth()
+                    widths.right = modifier.getWidth()
                 }
                 if i == 0 {
-                    widths.left = modifier.getModifierWidth()
+                    widths.left = modifier.getWidth()
                 }
             }
-
             x -= widths.paddingRight
             x -= widths.right
-            modifier.setModifierX(x)
+
+            modifier.setX(x)
+
             x -= widths.left
             x -= widths.paddingLeft
         }
 
-        endX = endModifiers.count == 1 ? staveX + staveWidth : x
+        endX = endModifiers.count == 1 ? self.x + self.width : x
         formatted = true
-    }
-
-    private func sortByCategory(_ items: inout [StaveModifier], order: [String: Int]) {
-        items.sort { a, b in
-            (order[a.getCategory()] ?? 99) < (order[b.getCategory()] ?? 99)
-        }
     }
 
     // MARK: - Draw
 
-    override public func draw() throws {
+    /// All drawing functions below need the context to be set.
+    override open func draw() throws {
         let ctx = try checkContext()
         setRendered()
 
-        applyStyle(context: ctx)
         _ = ctx.openGroup("stave", getAttribute("id"))
         if !formatted { format() }
 
-        // Render staff lines
-        for line in 0..<options.numLines {
-            let y = getYForLine(Double(line))
+        let numLines = options.numLines
+        let width = self.width
+        let x = self.x
+        var y: Double
+
+        let lineWidth = getStyle()?.lineWidth ?? 1
+        let lineWidthCorrection = lineWidth.truncatingRemainder(dividingBy: 2) == 0 ? 0 : 0.5
+
+        // Render lines
+        for line in 0..<numLines {
+            y = getYForLine(Double(line))
+
             if options.lineConfig[line].visible {
                 ctx.beginPath()
-                ctx.moveTo(staveX, y)
-                ctx.lineTo(staveX + staveWidth, y)
+                ctx.moveTo(x, y + lineWidthCorrection)
+                ctx.lineTo(x + width, y + lineWidthCorrection)
                 ctx.stroke()
             }
         }
 
         ctx.closeGroup()
-        restoreStyle(context: ctx)
 
-        // Draw modifiers
-        for i in 0..<modifiers.count {
-            let modifier = modifiers[i]
-            modifier.applyStyle(context: ctx)
-            try modifier.drawStave(stave: self, xShift: getModifierXShift(i))
-            modifier.restoreStyle(context: ctx)
+        // Draw the modifiers (bar lines, coda, segno, repeat brackets, etc.)
+        for modifier in modifiers {
+            modifier.setContext(ctx)
+            modifier.setStave(self)
+            try modifier.drawWithStyle()
         }
 
         // Render measure numbers
         if measure > 0 {
-            ctx.save()
             ctx.setFont(fontInfo)
             let textWidth = ctx.measureText("\(measure)").width
-            let y = getYForTopText(0) + 3
-            ctx.fillText("\(measure)", staveX - textWidth / 2, y)
-            ctx.restore()
+            y = getYForTopText(0) + 3
+            ctx.fillText("\(measure)", self.x - textWidth / 2, y)
         }
+    }
+
+    public func getVerticalBarWidth() -> Double { options.verticalBarWidth }
+
+    // MARK: - Line Configuration
+
+    /// Get the current configuration for the Stave.
+    public func getConfigForLines() -> [StaveLineConfig] { options.lineConfig }
+
+    /// Configure properties of the lines in the Stave. Invalid input is ignored;
+    /// use `setConfigForLineThrowing` to get the upstream `StaveConfigError`.
+    @discardableResult
+    public func setConfigForLine(_ lineNumber: Int, config: StaveLineConfig) -> Self {
+        _ = try? setConfigForLineThrowing(lineNumber, config: config)
+        return self
+    }
+
+    /// Set the staff line configuration array for all of the lines at once.
+    /// Invalid input is ignored; use `setConfigForLinesThrowing` to get the error.
+    @discardableResult
+    public func setConfigForLines(_ configs: [StaveLineConfig]) -> Self {
+        _ = try? setConfigForLinesThrowing(configs)
+        return self
+    }
+
+    @discardableResult
+    public func setConfigForLineThrowing(_ lineNumber: Int, config: StaveLineConfig) throws -> Self {
+        if lineNumber >= options.numLines || lineNumber < 0 {
+            throw StaveError.lineNumberOutOfRange(lineNumber)
+        }
+
+        options.lineConfig[lineNumber] = config
+
+        return self
+    }
+
+    @discardableResult
+    public func setConfigForLinesThrowing(_ configs: [StaveLineConfig]) throws -> Self {
+        if configs.count != options.numLines {
+            throw StaveError.invalidLineConfigCount(expected: options.numLines, actual: configs.count)
+        }
+
+        options.lineConfig = configs
+
+        return self
     }
 
     // MARK: - Format Beginning Modifiers Across Staves
 
     /// Align beginning modifiers across multiple staves.
     public static func formatBegModifiers(_ staves: [Stave]) {
-        // Ensure all staves are formatted
-        for stave in staves {
-            if !stave.formatted { stave.format() }
-        }
-
         func adjustCategoryStartX(_ category: String) {
             var minStartX: Double = 0
+            // Calculate min start X for the category
             for stave in staves {
-                let mods = stave.getModifiers(position: .begin, category: category)
-                if let first = mods.first, first.getModifierX() > minStartX {
-                    minStartX = first.getModifierX()
+                let modifiers = stave.getModifiers(position: .begin, category: category)
+                // Consider only the first instance
+                if let first = modifiers.first, first.getX() > minStartX {
+                    minStartX = first.getX()
                 }
             }
-
+            var adjustX: Double = 0
             for stave in staves {
-                var adjustX: Double = 0
-                let mods = stave.getModifiers(position: .begin, category: category)
-                for mod in mods {
-                    if minStartX - mod.getModifierX() > adjustX {
-                        adjustX = minStartX - mod.getModifierX()
-                    }
+                adjustX = 0
+                let modifiers = stave.getModifiers(position: .begin, category: category)
+                // Calculate adjustement required for the stave
+                for modifier in modifiers where minStartX - modifier.getX() > adjustX {
+                    adjustX = minStartX - modifier.getX()
                 }
-                let allMods = stave.getModifiers(position: .begin)
-                var shouldAdjust = false
-                for mod in allMods {
-                    if mod.getCategory() == category { shouldAdjust = true }
-                    if shouldAdjust && adjustX > 0 {
-                        mod.setModifierX(mod.getModifierX() + adjustX)
-                    }
+                let allModifiers = stave.getModifiers(position: .begin)
+                var bAdjust = false
+                // Apply adjustment to all the modifiers in and beyond the category
+                for modifier in allModifiers {
+                    if modifier.getCategory() == category { bAdjust = true }
+                    if bAdjust && adjustX > 0 { modifier.setX(modifier.getX() + adjustX) }
                 }
+                // Apply adjustment also to note start.
                 stave.setNoteStartX(stave.getNoteStartX() + adjustX)
             }
         }
 
-        adjustCategoryStartX("Clef")
-        adjustCategoryStartX("KeySignature")
-        adjustCategoryStartX("TimeSignature")
+        // Make sure that staves are formatted
+        for stave in staves where !stave.formatted {
+            stave.format()
+        }
+        // Align Clefs
+        adjustCategoryStartX(Clef.category)
+        // Align key signatures
+        adjustCategoryStartX(KeySignature.category)
+        // Align time signatures
+        adjustCategoryStartX(TimeSignature.category)
 
-        // Align note start
         var maxX: Double = 0
-        for stave in staves {
-            maxX = max(maxX, stave.getNoteStartX())
+        // align note start
+        for stave in staves where stave.getNoteStartX() > maxX {
+            maxX = stave.getNoteStartX()
         }
         for stave in staves {
             stave.setNoteStartX(maxX)
         }
 
-        // Align REPEAT_BEGIN
         maxX = 0
+        // align REPEAT_BEGIN
         for stave in staves {
-            let mods = stave.getModifiers(position: .begin, category: "Barline")
-            for mod in mods {
-                if let barline = mod as? Barline, barline.getBarlineType() == .repeatBegin {
-                    maxX = max(maxX, mod.getModifierX())
+            let modifiers = stave.getModifiers(position: .begin, category: Barline.category)
+            for modifier in modifiers {
+                if let barline = modifier as? Barline, barline.getType() == .repeatBegin,
+                   modifier.getX() > maxX {
+                    maxX = modifier.getX()
                 }
             }
         }
-        if maxX > 0 {
-            for stave in staves {
-                let mods = stave.getModifiers(position: .begin, category: "Barline")
-                for mod in mods {
-                    if let barline = mod as? Barline, barline.getBarlineType() == .repeatBegin {
-                        mod.setModifierX(maxX)
-                    }
+        for stave in staves {
+            let modifiers = stave.getModifiers(position: .begin, category: Barline.category)
+            for modifier in modifiers {
+                if let barline = modifier as? Barline, barline.getType() == .repeatBegin {
+                    modifier.setX(maxX)
                 }
             }
         }
+    }
+
+    // MARK: - Deprecated 4.x API
+
+    @available(*, deprecated, message: "Use x / getX().")
+    public var staveX: Double {
+        get { x }
+        set { setX(newValue) }
+    }
+
+    @available(*, deprecated, message: "Use y / getY().")
+    public var staveY: Double {
+        get { y }
+        set { y = newValue }
+    }
+
+    @available(*, deprecated, message: "Use width / getWidth().")
+    public var staveWidth: Double {
+        get { width }
+        set { setWidth(newValue) }
+    }
+
+    @available(*, deprecated, message: "Use height / getHeight().")
+    public var staveHeight: Double { height }
+
+    @available(*, deprecated, renamed: "setX(_:)")
+    @discardableResult
+    public func setStaveX(_ x: Double) -> Self { setX(x) }
+
+    @available(*, deprecated, renamed: "setY(_:)")
+    @discardableResult
+    public func setStaveY(_ y: Double) -> Self { setY(y) }
+
+    @available(*, deprecated, renamed: "setWidth(_:)")
+    @discardableResult
+    public func setStaveWidth(_ width: Double) -> Self { setWidth(width) }
+
+    @available(*, deprecated, message: "Use getBoundingBox().")
+    public func getBBox() -> BoundingBox {
+        BoundingBox(x: x, y: y, w: width, h: getBottomY() - y)
     }
 }
 
@@ -923,7 +1062,6 @@ import SwiftUI
 #Preview("Stave", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 500, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let factory = Factory(options: FactoryOptions(width: 480, height: 150))
         _ = factory.setContext(ctx)

@@ -1,5 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/tabstave.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -52,7 +54,6 @@ import SwiftUI
 #Preview("TabStave", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 500, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory()
         _ = f.setContext(ctx)

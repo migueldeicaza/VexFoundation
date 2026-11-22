@@ -1,72 +1,46 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/dot.ts` (VexFlow 5.0.0).
+// This class implements dot modifiers for notes.
 
 import Foundation
 
 // MARK: - Dot
 
-/// Modifier that adds augmentation dots to notes.
-/// Positioned to the right of the notehead.
+/// Augmentation dot modifier. The dot is the `augmentationDot` glyph,
+/// placed to the right of the notehead.
 public final class Dot: Modifier {
 
     override public class var category: String { "Dot" }
 
     // MARK: - Properties
 
-    public var radius: Double = 2
-    public var dotShiftY: Double = 0
-
-    // MARK: - Init
-
-    public override init() {
-        super.init()
-        position = .right
-        _ = setWidth(5)
-    }
+    public var dotShiftY: Double
 
     // MARK: - Static Helpers
 
-    /// Returns all Dot modifiers attached to a note.
+    /// The dots of a note.
     public static func getDots(_ note: Note) -> [Dot] {
-        note.getModifiersByType("Dot").compactMap { $0 as? Dot }
+        note.getModifiersByType(Dot.category).compactMap { $0 as? Dot }
     }
 
-    /// Create dots and attach them to notes.
+    /// Add a dot to the specified keys of the notes.
     public static func buildAndAttach(_ notes: [Note], index: Int? = nil, all: Bool = false) {
         for note in notes {
             if all {
                 for i in 0..<note.keys.count {
                     let dot = Dot()
-                    dot.setDotShiftY(note.glyphProps.dotShiftY)
-                    _ = note.addModifier(dot, index: i)
+                    note.addModifier(dot, index: i)
                 }
+            } else if let index {
+                let dot = Dot()
+                note.addModifier(dot, index: index)
             } else {
                 let dot = Dot()
-                dot.setDotShiftY(note.glyphProps.dotShiftY)
-                _ = note.addModifier(dot, index: index ?? 0)
+                note.addModifier(dot, index: 0)
             }
         }
-    }
-
-    // MARK: - Set Note
-
-    @discardableResult
-    override public func setNote(_ note: Note) -> Self {
-        self.note = note
-        // Match upstream: grace notes draw smaller augmentation dots.
-        if note is GraceNote {
-            radius *= 0.5
-            _ = setWidth(3)
-        }
-        return self
-    }
-
-    // MARK: - Dot Shift Y
-
-    @discardableResult
-    public func setDotShiftY(_ y: Double) -> Self {
-        dotShiftY = y
-        return self
     }
 
     // MARK: - Static Format
@@ -82,13 +56,12 @@ public final class Dot: Modifier {
         struct DotEntry {
             var line: Double
             var note: Note
-            var noteID: String
+            var noteId: String
             var dot: Dot
         }
 
         var dotList: [DotEntry] = []
         var maxShiftMap: [String: Double] = [:]
-
         for dot in dots {
             let note = dot.getNote()
 
@@ -97,21 +70,22 @@ public final class Dot: Modifier {
 
             if let staveNote = note as? StaveNote {
                 let index = dot.checkIndex()
-                let props = staveNote.getKeyProps()[index]
-                line = props.line
+                line = staveNote.getKeyProps()[index].line
+                // Consider a right displaced head with no previous modifier.
                 shift = staveNote.getFirstDotPx()
             } else {
-                // Default fallback
+                // TabNote: shim key props for dot placement.
+                // Upstream throws 'Internal' for other note types; they use the same shim here.
                 line = 0.5
                 shift = rightShift
             }
 
-            let noteID = note.getAttribute("id") ?? "\(ObjectIdentifier(note))"
-            dotList.append(DotEntry(line: line, note: note, noteID: noteID, dot: dot))
-            maxShiftMap[noteID] = max(maxShiftMap[noteID] ?? shift, shift)
+            let noteId = note.getAttribute("id") ?? "\(ObjectIdentifier(note))"
+            dotList.append(DotEntry(line: line, note: note, noteId: noteId, dot: dot))
+            maxShiftMap[noteId] = max(maxShiftMap[noteId] ?? shift, shift)
         }
 
-        // Sort dots by line number (descending)
+        // Sort dots by line number.
         dotList.sort { $0.line > $1.line }
 
         var dotShift = rightShift
@@ -124,29 +98,32 @@ public final class Dot: Modifier {
         for entry in dotList {
             let dot = entry.dot
             let note = entry.note
-            let noteID = entry.noteID
+            let noteId = entry.noteId
             let line = entry.line
 
-            // Reset dot position every line
+            // Reset the position of the dot every line.
             if line != lastLine || note !== lastNote {
-                dotShift = maxShiftMap[noteID] ?? rightShift
+                dotShift = maxShiftMap[noteId] ?? rightShift
             }
 
             if !note.isRest() && line != lastLine {
                 if abs(line.truncatingRemainder(dividingBy: 1)) == 0.5 {
-                    // Note is on a space
+                    // note is on a space, so no dot shift
                     halfShiftY = 0
                 } else {
-                    // Note is on a line, shift dot to space above
+                    // note is on a line, so shift dot to space above the line
                     halfShiftY = 0.5
                     if let ln = lastNote, !ln.isRest(), let ll = lastLine, ll - line == 0.5 {
+                        // previous note on a space, so shift dot to space below the line
                         halfShiftY = -0.5
                     } else if let pds = prevDottedSpace, line + halfShiftY == pds {
+                        // previous space is dotted, so shift dot to space below the line
                         halfShiftY = -0.5
                     }
                 }
             }
 
+            // Convert halfShiftY to a multiplier for dots.draw().
             if note.isRest() {
                 dot.dotShiftY += -halfShiftY
             } else {
@@ -154,15 +131,43 @@ public final class Dot: Modifier {
             }
             prevDottedSpace = line + halfShiftY
 
-            _ = dot.setXShift(dotShift)
-            dotShift += dot.getWidth() + dotSpacing
-            xWidth = max(dotShift, xWidth)
+            dot.setXShift(dotShift)
+            dotShift += dot.getWidth() + dotSpacing // spacing
+            xWidth = dotShift > xWidth ? dotShift : xWidth
             lastLine = line
             lastNote = note
         }
 
+        // Update state.
         state.rightShift += xWidth
         return true
+    }
+
+    // MARK: - Init
+
+    public override init() {
+        dotShiftY = 0
+        super.init()
+
+        position = .right
+
+        setText(Glyphs.augmentationDot)
+        dotShiftY = 0
+    }
+
+    // MARK: - Note
+
+    @discardableResult
+    override public func setNote(_ note: Note) -> Self {
+        self.note = note
+        fontInfo = note.fontInfo
+        return self
+    }
+
+    @discardableResult
+    public func setDotShiftY(_ y: Double) -> Self {
+        dotShiftY = y
+        return self
     }
 
     // MARK: - Draw
@@ -175,50 +180,16 @@ public final class Dot: Modifier {
         let stave = note.checkStave()
         let lineSpace = stave.getSpacingBetweenLines()
 
-        var start = note.getModifierStartXY(position: position, index: checkIndex())
-        if let staveNote = note as? StaveNote {
-            start = staveNote.getModifierStartXY(position: position, index: checkIndex(), forceFlagRight: true)
-        } else if let tabNote = note as? TabNote {
-            // Upstream: TabNote dots are anchored at the stem base.
+        var start = note.getModifierStartXY(position: position, index: checkIndex(), forceFlagRight: true)
+
+        // Set the starting y coordinate to the base of the stem for TabNotes.
+        if let tabNote = note as? TabNote {
             start.y = tabNote.getStemExtents().baseY
         }
 
-        let x = start.x + xShift + modifierWidth - radius
-        let y = start.y + yShift + dotShiftY * lineSpace
+        x = start.x
+        y = start.y + dotShiftY * lineSpace
 
-        ctx.beginPath()
-        ctx.arc(x, y, radius, 0, Double.pi * 2, false)
-        ctx.fill()
+        renderText(ctx, xPos: 0, yPos: 0)
     }
 }
-
-// MARK: - Preview
-
-#if DEBUG
-import SwiftUI
-
-@available(iOS 17.0, macOS 14.0, *)
-#Preview("Dot", traits: .sizeThatFitsLayout) {
-    VexCanvas(width: 520, height: 160) { ctx in
-        ctx.clear()
-        FontLoader.loadDefaultFonts()
-
-        let f = Factory(options: FactoryOptions(width: 500, height: 150))
-        _ = f.setContext(ctx)
-        let score = f.EasyScore()
-
-        let notes = score.notes("C5/q., D5/h., E5/q, F5/8.")
-        let system = f.System(options: SystemOptions(
-            factory: f, x: 10, width: 500, y: 10
-        ))
-        _ = system.addStave(SystemStave(
-            voices: [score.voice(notes)]
-        ))
-            .addClef(.treble)
-
-        system.format()
-        try? f.draw()
-    }
-    .padding()
-}
-#endif

@@ -1,12 +1,14 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/tabslide.ts` (VexFlow 5.0.0).
 
 import Foundation
 
 // MARK: - TabSlide
 
-/// Implements slide notation between contiguous tab notes.
-/// Renders straight diagonal lines instead of curved ties.
+/// Slides between contiguous tab notes. A slide is a straight diagonal line
+/// instead of a curved tie, with the text "sl.".
 public final class TabSlide: TabTie {
 
     override public class var category: String { "TabSlide" }
@@ -28,16 +30,24 @@ public final class TabSlide: TabTie {
 
     // MARK: - Init
 
+    /// - Parameters:
+    ///   - notes: `firstNote` and `lastNote` are the start and end notes of the
+    ///     slide. `firstIndexes` gives the string and fret positions of the
+    ///     `TabNote` that the slide uses (zero indexed). `lastIndexes` is not
+    ///     used: it is assumed to be the same as `firstIndexes`.
+    ///   - direction: `TabSlide.SLIDE_UP` or `TabSlide.SLIDE_DOWN`.
     public init(notes: TieNotes, direction: TieDirection? = nil) {
         var dir = direction
 
-        // Determine slide direction automatically if not provided
+        // Determine the direction automatically if it is not provided.
         if dir == nil {
             if let firstNote = notes.firstNote as? TabNote,
                let lastNote = notes.lastNote as? TabNote {
                 let firstFret = Int(firstNote.getPositions()[0].fret)
                 let lastFret = Int(lastNote.getPositions()[0].fret)
 
+                // If either fret is 'X', the integer parse fails.
+                // Choose TabSlide.SLIDE_UP by default.
                 if let f = firstFret, let l = lastFret {
                     dir = f > l ? TabSlide.SLIDE_DOWN : TabSlide.SLIDE_UP
                 } else {
@@ -58,94 +68,44 @@ public final class TabSlide: TabTie {
 
     // MARK: - Render Tie
 
+    /// Draw the slide lines. `firstX` and `lastX` are in pixels.
     override public func renderTie(
         direction: TieDirection,
-        firstXPx: Double,
-        lastXPx: Double,
+        firstX: Double,
+        lastX: Double,
         firstYs: [Double],
         lastYs: [Double]
     ) throws {
-        guard !firstYs.isEmpty && !lastYs.isEmpty else {
+        if firstYs.isEmpty || lastYs.isEmpty {
             throw StaveTieError.noYValues
         }
 
         let ctx = try checkContext()
+        let firstX = firstX // pixel units
+        let firstYs = firstYs
+        let lastX = lastX // pixel units
 
-        let firstIndices = notes.firstIndices
-        for i in 0..<firstIndices.count {
-            guard firstIndices[i] >= 0, firstIndices[i] < firstYs.count else {
+        let direction = direction.signDouble
+
+        let firstIndexes = notes.firstIndexes
+        for i in 0..<firstIndexes.count {
+            guard firstIndexes[i] >= 0, firstIndexes[i] < firstYs.count else {
                 throw StaveTieError.badIndices
             }
-            let slideY = firstYs[firstIndices[i]] + renderOptions.yShift
+            let slideY = firstYs[firstIndexes[i]] + renderOptions.yShift
 
-            guard !slideY.isNaN else {
+            if slideY.isNaN {
                 throw StaveTieError.badIndices
             }
 
             ctx.beginPath()
-            ctx.moveTo(firstXPx, slideY + 3 * direction.signDouble)
-            ctx.lineTo(lastXPx, slideY - 3 * direction.signDouble)
+            ctx.moveTo(firstX, slideY + 3 * direction)
+            ctx.lineTo(lastX, slideY - 3 * direction)
             ctx.closePath()
             ctx.stroke()
         }
 
         setRendered()
-    }
-
-    // MARK: - Draw
-
-    override public func draw() throws {
-        _ = try checkContext()
-        setRendered()
-
-        guard notes.firstNote != nil || notes.lastNote != nil else {
-            throw StaveTieError.requiresStartOrEndNote
-        }
-
-        let firstNote = notes.firstNote
-        let lastNote = notes.lastNote
-
-        var firstXPx: Double = 0
-        var lastXPx: Double = 0
-        var firstYs: [Double] = [0]
-        var lastYs: [Double] = [0]
-        var tieDirection: TieDirection?
-
-        if let firstNote {
-            let firstIndex = notes.firstIndices.first ?? 0
-            firstXPx = firstNote.getModifierStartXY(position: .right, index: firstIndex).x + renderOptions.tieSpacing
-            tieDirection = TieDirection(stemDirection: firstNote.getStemDirection())
-            firstYs = firstNote.getYs()
-        } else if let lastNote {
-            let stave = lastNote.checkStave()
-            firstXPx = stave.getTieStartX()
-            firstYs = lastNote.getYs()
-            notes.firstIndices = notes.lastIndices
-        }
-
-        if let lastNote {
-            let lastIndex = notes.lastIndices.first ?? 0
-            lastXPx = lastNote.getModifierStartXY(position: .left, index: lastIndex).x + renderOptions.tieSpacing
-            tieDirection = TieDirection(stemDirection: lastNote.getStemDirection())
-            lastYs = lastNote.getYs()
-        } else if let firstNote {
-            let stave = firstNote.checkStave()
-            lastXPx = stave.getTieEndX()
-            lastYs = firstNote.getYs()
-            notes.lastIndices = notes.firstIndices
-        }
-
-        if let direction {
-            tieDirection = direction
-        }
-
-        try renderTie(
-            direction: tieDirection ?? .up,
-            firstXPx: firstXPx,
-            lastXPx: lastXPx,
-            firstYs: firstYs,
-            lastYs: lastYs
-        )
     }
 }
 
@@ -158,7 +118,6 @@ import SwiftUI
 #Preview("TabSlide", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 500, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)
@@ -180,10 +139,10 @@ import SwiftUI
         _ = formatter.joinVoices([voice])
         _ = formatter.format([voice], justifyWidth: 400)
 
-        let slideUp = TabSlide(notes: TieNotes(firstNote: notes[0], lastNote: notes[1], firstIndices: [0], lastIndices: [0]), direction: TabSlide.SLIDE_UP)
+        let slideUp = TabSlide(notes: TieNotes(firstNote: notes[0], lastNote: notes[1], firstIndexes: [0], lastIndexes: [0]), direction: TabSlide.SLIDE_UP)
         _ = slideUp.setContext(ctx)
 
-        let slideDown = TabSlide(notes: TieNotes(firstNote: notes[2], lastNote: notes[3], firstIndices: [0], lastIndices: [0]), direction: TabSlide.SLIDE_DOWN)
+        let slideDown = TabSlide(notes: TieNotes(firstNote: notes[2], lastNote: notes[3], firstIndexes: [0], lastIndexes: [0]), direction: TabSlide.SLIDE_DOWN)
         _ = slideDown.setContext(ctx)
 
         try? f.draw()

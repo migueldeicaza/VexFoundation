@@ -1,5 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/music.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -95,9 +97,13 @@ public class Music {
 
     public static let rootValues: [Int] = [0, 2, 4, 5, 7, 9, 11]
 
-    public static let rootIndices: [String: Int] = [
+    /// Indexes of the root notes.
+    public static let rootIndexes: [String: Int] = [
         "c": 0, "d": 1, "e": 2, "f": 3, "g": 4, "a": 5, "b": 6,
     ]
+
+    @available(*, deprecated, renamed: "rootIndexes")
+    public static var rootIndices: [String: Int] { rootIndexes }
 
     public static let canonicalNotes: [String] = [
         "c", "c#", "d", "d#", "e", "f", "f#", "g", "g#", "a", "a#", "b",
@@ -437,7 +443,7 @@ public class Music {
         if let acc = keySigParts.accidental { keySigString += acc }
 
         let scale = getScaleTones(try noteValue(parsing: keySigString), intervals: scaleName)
-        guard let noteLocation = Music.rootIndices[keySigParts.root] else {
+        guard let noteLocation = Music.rootIndexes[keySigParts.root] else {
             throw MusicError.invalidKey(keySignature)
         }
 

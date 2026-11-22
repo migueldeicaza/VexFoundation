@@ -164,7 +164,7 @@ public enum Metrics {
     }
 
     /// Default metrics (VexFlow `MetricsDefaults`).
-    public static let defaults: [String: Any] = [
+    public static var defaults: [String: Any] { [
         "fontFamily": "Bravura,Academico",
         "fontSize": 30.0,
         "fontScale": 1.0,
@@ -281,5 +281,5 @@ public enum Metrics {
         "Tuplet": ["yOffset": 0.0, "textYOffset": 2.0],
 
         "Volta": ["fontSize": 9.0, "fontWeight": "bold"] as [String: Any],
-    ]
+    ] }
 }

@@ -1,5 +1,13 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/tables.ts` (VexFlow 5.0.0).
+//
+// Swift notes:
+// - `GlyphProps` and `KeyProps` live in `Notes/Note.swift` (as upstream `note.ts`).
+// - `ArticulationStruct` is declared here (upstream `articulation.ts`), because
+//   the `articulations` table needs it. `Tables.ArticulationStruct` is an alias.
+// - Glyph codes are SMuFL code point strings (`Glyphs.*`), not glyph names.
 
 import Foundation
 
@@ -7,75 +15,47 @@ import Foundation
 
 /// Defines a key signature by accidental type and count.
 public struct KeySignatureSpec: Sendable {
-    public var acc: String?
-    public var num: Int
-}
-
-// MARK: - Accidental Code Entry
-
-/// Maps an accidental type string to its SMuFL glyph code.
-public struct AccidentalCode: Sendable {
-    public var code: String
-    public var parenRightPaddingAdjustment: Double
-}
-
-// MARK: - Glyph Properties
-
-/// Properties for a note glyph at a given duration.
-public struct GlyphProps: Sendable {
-    public var codeHead: String
-    public var ledgerCodeHead: String? = nil
-    public var stem: Bool
-    public var flag: Bool
-    public var rest: Bool
-    public var position: String?
-    public var dotShiftY: Double
-    public var lineAbove: Double
-    public var lineBelow: Double
-    public var beamCount: Int
-    public var codeFlagUpstem: String?
-    public var codeFlagDownstem: String?
-    public var stemUpExtension: Double
-    public var stemDownExtension: Double
-    public var stemBeamExtension: Double
-    public var tabnoteStemUpExtension: Double
-    public var tabnoteStemDownExtension: Double
-}
-
-/// Properties for a tab fret glyph (text or glyph code with dimensions).
-public struct TabGlyphProps {
-    public var text: String
-    public var code: String?
-    public var width: Double
-    public var shiftY: Double
-    public var scale: Double
-
-    public func getWidth() -> Double { width * scale }
-}
-
-// MARK: - Key Properties
-
-/// Properties for a note key (pitch/octave) on a staff.
-public struct KeyProps {
-    public var key: String
-    public var octave: Int
-    public var line: Double
-    public var intValue: Int?
     public var accidental: String?
+    public var num: Int
+
+    public init(accidental: String? = nil, num: Int) {
+        self.accidental = accidental
+        self.num = num
+    }
+
+    @available(*, deprecated, renamed: "accidental")
+    public var acc: String? { accidental }
+}
+
+// MARK: - Articulation Struct
+
+/// Defines an articulation glyph with optional above/below variants (upstream `articulation.ts`).
+public struct ArticulationStruct: Sendable {
     public var code: String?
-    public var stroke: Int
-    public var shiftRight: Double
-    public var displaced: Bool
-    public var stemDownXOffset: Double = 0
-    public var stemUpXOffset: Double = 0
-    /// VexFlowPatch: vertical shift for notehead independent of stem length
-    public var stemUpYShift: Double = 0
-    public var stemDownYShift: Double = 0
+    public var aboveCode: String?
+    public var belowCode: String?
+    public var betweenLines: Bool
+
+    public init(code: String? = nil, aboveCode: String? = nil, belowCode: String? = nil, betweenLines: Bool) {
+        self.code = code
+        self.aboveCode = aboveCode
+        self.belowCode = belowCode
+        self.betweenLines = betweenLines
+    }
+}
+
+/// Clef properties (upstream `{ lineShift: number }`).
+public struct ClefProperties: Sendable, Equatable {
+    public var lineShift: Int
+
+    public init(lineShift: Int) {
+        self.lineShift = lineShift
+    }
 }
 
 public enum TablesError: Error, LocalizedError, Equatable, Sendable {
     case missingDurationTickMapping(String)
-    case invalidClef(ClefName)
+    case invalidClef(String)
     case invalidDuration(String)
     case integerToNoteOutOfRange(Int)
 
@@ -84,11 +64,11 @@ public enum TablesError: Error, LocalizedError, Equatable, Sendable {
         case .missingDurationTickMapping(let duration):
             return "Missing tick mapping for duration \(duration)."
         case .invalidClef(let clef):
-            return "Invalid clef: \(clef.rawValue)."
+            return "Invalid clef: \(clef)"
         case .invalidDuration(let duration):
-            return "The provided duration is not valid: \(duration)."
+            return "The provided duration is not valid: \(duration)"
         case .integerToNoteOutOfRange(let integer):
-            return "integerToNote requires integer [0, 11]: \(integer)."
+            return "integerToNote() requires an integer in the range [0, 11]: \(integer)"
         }
     }
 }
@@ -96,8 +76,17 @@ public enum TablesError: Error, LocalizedError, Equatable, Sendable {
 /// Central constants and lookup tables for VexFlow music notation.
 public enum Tables {
 
-    // MARK: - Rendering Constants
+    public typealias ArticulationStruct = VexFoundation.ArticulationStruct
 
+    // MARK: - Constants
+
+    /// Whether same-line unisons should share head placement when possible.
+    public static var UNISON: Bool {
+        get { VexRuntime.getCurrentContext().getUnisonEnabled() }
+        set { VexRuntime.getCurrentContext().setUnisonEnabled(newValue) }
+    }
+    /// Softmax factor for formatter.
+    public static let SOFTMAX_FACTOR: Double = 10
     /// Stem width in pixels.
     public static let STEM_WIDTH: Double = 1.5
     /// Default stem height in pixels.
@@ -111,27 +100,33 @@ public enum Tables {
     public static let RENDER_PRECISION_PLACES: Int = 3
     /// Ticks per whole note.
     public static let RESOLUTION: Int = 16384
+
     /// Default font scale for standard notation.
     public static let NOTATION_FONT_SCALE: Double = 39
     /// Default font scale for tablature.
     public static let TABLATURE_FONT_SCALE: Double = 39
+
     /// Width of slash noteheads.
     public static let SLASH_NOTEHEAD_WIDTH: Double = 15
     /// Distance between stave lines.
     public static let STAVE_LINE_DISTANCE: Double = 10
-    /// Hack value for text height offset.
+
+    /// HACK:
+    /// Since text origins are positioned at the baseline, we must
+    /// compensate for the ascender of the text. Of course, 1 staff space is
+    /// a very poor approximation.
+    ///
+    /// This will be deprecated in the future. This is a temporary solution until
+    /// we have more robust text metrics.
     public static let TEXT_HEIGHT_OFFSET_HACK: Double = 1
-    /// Whether same-line unisons should share head placement when possible.
-    public static var UNISON: Bool {
-        get { VexRuntime.getCurrentContext().getUnisonEnabled() }
-        set { VexRuntime.getCurrentContext().setUnisonEnabled(newValue) }
-    }
-    /// Softmax factor for formatter.
-    public static let SOFTMAX_FACTOR: Double = 10
+
+    /// Default time signature.
+    public static let TIME4_4: (numBeats: Int, beatValue: Int, resolution: Int) = (4, 4, RESOLUTION)
 
     // MARK: - Duration Tables
 
-    /// Maps duration strings to tick counts.
+    /// Map duration numbers to 'ticks', the unit of duration used throughout VexFlow.
+    /// For example, a quarter note is 4, so it maps to RESOLUTION / 4 = 4096 ticks.
     public static let durations: [String: Int] = [
         "1/2": RESOLUTION * 2,
         "1": RESOLUTION / 1,
@@ -150,30 +145,28 @@ public enum Tables {
         "w": "1",
         "h": "2",
         "q": "4",
+        // This is the default duration used to render bars (BarNote). Bars no longer
+        // consume ticks, so this should be a no-op.
         "b": "256",
     ]
 
-    /// Convert a duration string to ticks.
-    public static func durationToTicks(_ duration: String) -> Int? {
-        guard let value = NoteValue(parsing: duration) else { return nil }
-        return durationToTicks(value)
-    }
-
-    /// Convert a strongly typed duration to ticks.
-    public static func durationToTicksThrowing(_ duration: NoteValue) throws -> Int {
-        if let ticks = durations[duration.rawValue] {
-            return ticks
-        }
-        if let ticks = computedTicks(for: duration.rawValue) {
-            return ticks
-        }
-        throw TablesError.missingDurationTickMapping(duration.rawValue)
-    }
-
-    /// Convert a strongly typed duration to ticks.
-    public static func durationToTicks(_ duration: NoteValue) -> Int {
-        (try? durationToTicksThrowing(duration)) ?? (RESOLUTION / 4)
-    }
+    /// Glyph properties per duration (upstream `Partial<GlyphProps>`: `codeHead` is empty).
+    ///
+    /// 1/2, 1, 2, 4, 8, 16, 32, 64, 128 as upstream 5.0.0.
+    /// 4.x fix kept: a `256` entry (upstream 5.0.0 falls back to `4`).
+    public static let durationCodes: [String: GlyphProps] = [
+        "1/2": GlyphProps(stem: false),
+        "1": GlyphProps(stem: false),
+        "2": GlyphProps(stem: true),
+        "4": GlyphProps(stem: true),
+        "8": GlyphProps(stemBeamExtension: 0, stem: true, codeFlagUp: Glyphs.flag8thUp, beamCount: 1),
+        "16": GlyphProps(stemBeamExtension: 0, stem: true, codeFlagUp: Glyphs.flag16thUp, beamCount: 2),
+        "32": GlyphProps(stemBeamExtension: 7.5, stem: true, codeFlagUp: Glyphs.flag32ndUp, beamCount: 3),
+        "64": GlyphProps(stemBeamExtension: 15, stem: true, codeFlagUp: Glyphs.flag64thUp, beamCount: 4),
+        "128": GlyphProps(stemBeamExtension: 22.5, stem: true, codeFlagUp: Glyphs.flag128thUp, beamCount: 5),
+        // 4.x-branch fix (a0c4d47a): 256th notes.
+        "256": GlyphProps(stemBeamExtension: 25, stem: true, codeFlagUp: Glyphs.flag256thUp, beamCount: 6),
+    ]
 
     // MARK: - Key Signatures
 
@@ -181,34 +174,34 @@ public enum Tables {
     public static let keySignatures: [String: KeySignatureSpec] = [
         "C": KeySignatureSpec(num: 0),
         "Am": KeySignatureSpec(num: 0),
-        "F": KeySignatureSpec(acc: "b", num: 1),
-        "Dm": KeySignatureSpec(acc: "b", num: 1),
-        "Bb": KeySignatureSpec(acc: "b", num: 2),
-        "Gm": KeySignatureSpec(acc: "b", num: 2),
-        "Eb": KeySignatureSpec(acc: "b", num: 3),
-        "Cm": KeySignatureSpec(acc: "b", num: 3),
-        "Ab": KeySignatureSpec(acc: "b", num: 4),
-        "Fm": KeySignatureSpec(acc: "b", num: 4),
-        "Db": KeySignatureSpec(acc: "b", num: 5),
-        "Bbm": KeySignatureSpec(acc: "b", num: 5),
-        "Gb": KeySignatureSpec(acc: "b", num: 6),
-        "Ebm": KeySignatureSpec(acc: "b", num: 6),
-        "Cb": KeySignatureSpec(acc: "b", num: 7),
-        "Abm": KeySignatureSpec(acc: "b", num: 7),
-        "G": KeySignatureSpec(acc: "#", num: 1),
-        "Em": KeySignatureSpec(acc: "#", num: 1),
-        "D": KeySignatureSpec(acc: "#", num: 2),
-        "Bm": KeySignatureSpec(acc: "#", num: 2),
-        "A": KeySignatureSpec(acc: "#", num: 3),
-        "F#m": KeySignatureSpec(acc: "#", num: 3),
-        "E": KeySignatureSpec(acc: "#", num: 4),
-        "C#m": KeySignatureSpec(acc: "#", num: 4),
-        "B": KeySignatureSpec(acc: "#", num: 5),
-        "G#m": KeySignatureSpec(acc: "#", num: 5),
-        "F#": KeySignatureSpec(acc: "#", num: 6),
-        "D#m": KeySignatureSpec(acc: "#", num: 6),
-        "C#": KeySignatureSpec(acc: "#", num: 7),
-        "A#m": KeySignatureSpec(acc: "#", num: 7),
+        "F": KeySignatureSpec(accidental: "b", num: 1),
+        "Dm": KeySignatureSpec(accidental: "b", num: 1),
+        "Bb": KeySignatureSpec(accidental: "b", num: 2),
+        "Gm": KeySignatureSpec(accidental: "b", num: 2),
+        "Eb": KeySignatureSpec(accidental: "b", num: 3),
+        "Cm": KeySignatureSpec(accidental: "b", num: 3),
+        "Ab": KeySignatureSpec(accidental: "b", num: 4),
+        "Fm": KeySignatureSpec(accidental: "b", num: 4),
+        "Db": KeySignatureSpec(accidental: "b", num: 5),
+        "Bbm": KeySignatureSpec(accidental: "b", num: 5),
+        "Gb": KeySignatureSpec(accidental: "b", num: 6),
+        "Ebm": KeySignatureSpec(accidental: "b", num: 6),
+        "Cb": KeySignatureSpec(accidental: "b", num: 7),
+        "Abm": KeySignatureSpec(accidental: "b", num: 7),
+        "G": KeySignatureSpec(accidental: "#", num: 1),
+        "Em": KeySignatureSpec(accidental: "#", num: 1),
+        "D": KeySignatureSpec(accidental: "#", num: 2),
+        "Bm": KeySignatureSpec(accidental: "#", num: 2),
+        "A": KeySignatureSpec(accidental: "#", num: 3),
+        "F#m": KeySignatureSpec(accidental: "#", num: 3),
+        "E": KeySignatureSpec(accidental: "#", num: 4),
+        "C#m": KeySignatureSpec(accidental: "#", num: 4),
+        "B": KeySignatureSpec(accidental: "#", num: 5),
+        "G#m": KeySignatureSpec(accidental: "#", num: 5),
+        "F#": KeySignatureSpec(accidental: "#", num: 6),
+        "D#m": KeySignatureSpec(accidental: "#", num: 6),
+        "C#": KeySignatureSpec(accidental: "#", num: 7),
+        "A#m": KeySignatureSpec(accidental: "#", num: 7),
     ]
 
     /// Staff line positions for flats (in order of key signature).
@@ -221,15 +214,19 @@ public enum Tables {
         guard let keySpec = keySignatures[spec] else {
             throw VexError("BadKeySignature", "Bad key signature spec: '\(spec)'")
         }
-        guard let acc = keySpec.acc, keySpec.num > 0 else {
+        guard let accidental = keySpec.accidental else {
             return []
         }
-        let positions = acc == "b" ? flatPositions : sharpPositions
-        var result: [(type: String, line: Double)] = []
+        let notes = accidental == "b" ? flatPositions : sharpPositions
+        var accList: [(type: String, line: Double)] = []
         for i in 0..<keySpec.num {
-            result.append((type: acc, line: positions[i]))
+            accList.append((type: accidental, line: notes[i]))
         }
-        return result
+        return accList
+    }
+
+    public static func getKeySignatures() -> [String: KeySignatureSpec] {
+        keySignatures
     }
 
     /// Check if a key signature spec is valid.
@@ -237,146 +234,10 @@ public enum Tables {
         keySignatures[spec] != nil
     }
 
-    // MARK: - Accidental Codes
+    // MARK: - Clefs
 
-    /// Maps accidental type strings to their glyph codes.
-    public static let accidentalCodes: [String: AccidentalCode] = [
-        "#": AccidentalCode(code: "accidentalSharp", parenRightPaddingAdjustment: -1),
-        "##": AccidentalCode(code: "accidentalDoubleSharp", parenRightPaddingAdjustment: -1),
-        "b": AccidentalCode(code: "accidentalFlat", parenRightPaddingAdjustment: -2),
-        "bb": AccidentalCode(code: "accidentalDoubleFlat", parenRightPaddingAdjustment: -2),
-        "n": AccidentalCode(code: "accidentalNatural", parenRightPaddingAdjustment: -1),
-        "{": AccidentalCode(code: "accidentalParensLeft", parenRightPaddingAdjustment: -1),
-        "}": AccidentalCode(code: "accidentalParensRight", parenRightPaddingAdjustment: -1),
-        "db": AccidentalCode(code: "accidentalThreeQuarterTonesFlatZimmermann", parenRightPaddingAdjustment: -1),
-        "d": AccidentalCode(code: "accidentalQuarterToneFlatStein", parenRightPaddingAdjustment: 0),
-        "++": AccidentalCode(code: "accidentalThreeQuarterTonesSharpStein", parenRightPaddingAdjustment: -1),
-        "+": AccidentalCode(code: "accidentalQuarterToneSharpStein", parenRightPaddingAdjustment: -1),
-        "+-": AccidentalCode(code: "accidentalKucukMucennebSharp", parenRightPaddingAdjustment: -1),
-        "bs": AccidentalCode(code: "accidentalBakiyeFlat", parenRightPaddingAdjustment: -1),
-        "bss": AccidentalCode(code: "accidentalBuyukMucennebFlat", parenRightPaddingAdjustment: -1),
-        "o": AccidentalCode(code: "accidentalSori", parenRightPaddingAdjustment: -1),
-        "k": AccidentalCode(code: "accidentalKoron", parenRightPaddingAdjustment: -1),
-        "bbs": AccidentalCode(code: "vexAccidentalMicrotonal1", parenRightPaddingAdjustment: -1),
-        "++-": AccidentalCode(code: "accidentalBuyukMucennebSharp", parenRightPaddingAdjustment: -1),
-        "ashs": AccidentalCode(code: "vexAccidentalMicrotonal3", parenRightPaddingAdjustment: -1),
-        "afhf": AccidentalCode(code: "vexAccidentalMicrotonal4", parenRightPaddingAdjustment: -1),
-    ]
-
-    /// Look up an accidental's glyph code.
-    public static func accidentalCode(_ acc: String) -> AccidentalCode? {
-        accidentalCodes[acc]
-    }
-
-    // MARK: - Accidental Columns Table
-
-    /// Pre-computed column layouts for groups of 1-6 accidentals.
-    /// Columns represent horizontal positions (1 = closest to note).
-    public static let accidentalColumnsTable: [Int: [String: [Int]]] = [
-        1: ["a": [1], "b": [1]],
-        2: ["a": [1, 2]],
-        3: [
-            "a": [1, 3, 2],
-            "b": [1, 2, 1],
-            "second_on_bottom": [1, 2, 3],
-        ],
-        4: [
-            "a": [1, 3, 4, 2],
-            "b": [1, 2, 3, 1],
-            "spaced_out_tetrachord": [1, 2, 1, 2],
-        ],
-        5: [
-            "a": [1, 3, 5, 4, 2],
-            "b": [1, 2, 4, 3, 1],
-            "spaced_out_pentachord": [1, 2, 3, 2, 1],
-            "very_spaced_out_pentachord": [1, 2, 1, 2, 1],
-        ],
-        6: [
-            "a": [1, 3, 5, 6, 4, 2],
-            "b": [1, 2, 4, 5, 3, 1],
-            "spaced_out_hexachord": [1, 3, 2, 1, 3, 2],
-            "very_spaced_out_hexachord": [1, 2, 1, 2, 1, 2],
-        ],
-    ]
-
-    // MARK: - Articulation Codes
-
-    /// Defines an articulation glyph with optional above/below variants.
-    public struct ArticulationStruct: Sendable {
-        public var code: String?
-        public var aboveCode: String?
-        public var belowCode: String?
-        public var betweenLines: Bool
-    }
-
-    /// Maps articulation type strings to their glyph codes.
-    public static let articulationCodes: [String: ArticulationStruct] = [
-        "a.": ArticulationStruct(code: "augmentationDot", betweenLines: true),
-        "av": ArticulationStruct(aboveCode: "articStaccatissimoAbove", belowCode: "articStaccatissimoBelow", betweenLines: true),
-        "a>": ArticulationStruct(aboveCode: "articAccentAbove", belowCode: "articAccentBelow", betweenLines: true),
-        "a-": ArticulationStruct(aboveCode: "articTenutoAbove", belowCode: "articTenutoBelow", betweenLines: true),
-        "a^": ArticulationStruct(aboveCode: "articMarcatoAbove", belowCode: "articMarcatoBelow", betweenLines: false),
-        "a+": ArticulationStruct(code: "pluckedLeftHandPizzicato", betweenLines: false),
-        "ao": ArticulationStruct(aboveCode: "pluckedSnapPizzicatoAbove", belowCode: "pluckedSnapPizzicatoBelow", betweenLines: false),
-        "ah": ArticulationStruct(code: "stringsHarmonic", betweenLines: false),
-        "a@": ArticulationStruct(aboveCode: "fermataAbove", belowCode: "fermataBelow", betweenLines: false),
-        "a@a": ArticulationStruct(code: "fermataAbove", betweenLines: false),
-        "a@u": ArticulationStruct(code: "fermataBelow", betweenLines: false),
-        "a@s": ArticulationStruct(aboveCode: "fermataShortAbove", belowCode: "fermataShortBelow", betweenLines: false),
-        "a@as": ArticulationStruct(code: "fermataShortAbove", betweenLines: false),
-        "a@us": ArticulationStruct(code: "fermataShortBelow", betweenLines: false),
-        "a@l": ArticulationStruct(aboveCode: "fermataLongAbove", belowCode: "fermataLongBelow", betweenLines: false),
-        "a@al": ArticulationStruct(code: "fermataLongAbove", betweenLines: false),
-        "a@ul": ArticulationStruct(code: "fermataLongBelow", betweenLines: false),
-        "a@vl": ArticulationStruct(aboveCode: "fermataVeryLongAbove", belowCode: "fermataVeryLongBelow", betweenLines: false),
-        "a@avl": ArticulationStruct(code: "fermataVeryLongAbove", betweenLines: false),
-        "a@uvl": ArticulationStruct(code: "fermataVeryLongBelow", betweenLines: false),
-        "a|": ArticulationStruct(code: "stringsUpBow", betweenLines: false),
-        "am": ArticulationStruct(code: "stringsDownBow", betweenLines: false),
-        "a,": ArticulationStruct(code: "pictChokeCymbal", betweenLines: false),
-    ]
-
-    /// Look up an articulation's glyph data.
-    public static func articulationCode(_ type: String) -> ArticulationStruct? {
-        articulationCodes[type]
-    }
-
-    // MARK: - Ornament Codes
-
-    public static let ornamentCodes: [String: String] = [
-        "mordent": "ornamentShortTrill",
-        "mordent_inverted": "ornamentMordent",
-        "turn": "ornamentTurn",
-        "turn_inverted": "ornamentTurnSlash",
-        "tr": "ornamentTrill",
-        "upprall": "ornamentPrecompSlideTrillDAnglebert",
-        "downprall": "ornamentPrecompDoubleCadenceUpperPrefix",
-        "prallup": "ornamentPrecompTrillSuffixDandrieu",
-        "pralldown": "ornamentPrecompTrillLowerSuffix",
-        "upmordent": "ornamentPrecompSlideTrillBach",
-        "downmordent": "ornamentPrecompDoubleCadenceUpperPrefixTurn",
-        "lineprall": "ornamentPrecompAppoggTrill",
-        "prallprall": "ornamentTremblement",
-        "scoop": "brassScoop",
-        "doit": "brassDoitMedium",
-        "fall": "brassFallLipShort",
-        "doitLong": "brassLiftMedium",
-        "fallLong": "brassFallRoughMedium",
-        "bend": "brassBend",
-        "plungerClosed": "brassMuteClosed",
-        "plungerOpen": "brassMuteOpen",
-        "flip": "brassFlip",
-        "jazzTurn": "brassJazzTurn",
-        "smear": "brassSmear",
-    ]
-
-    public static func ornamentCode(_ type: String) -> String? {
-        ornamentCodes[type]
-    }
-
-    // MARK: - Clef Data
-
-    /// Clef vertical line shifts for key signature positioning.
+    /// Clef vertical line shifts.
+    /// Swift: `.tab` is accepted with shift 0 (upstream `clefs` has no `tab`).
     public static let clefLineShifts: [ClefName: Int] = [
         .treble: 0,
         .bass: 6,
@@ -392,118 +253,23 @@ public enum Tables {
         .tab: 0,
     ]
 
-    // MARK: - Duration Codes (Glyph Properties)
-
-    /// Get glyph properties for a given duration and type.
-    public static func getGlyphProps(duration: NoteValue, type: NoteType = .note) -> GlyphProps? {
-        getGlyphProps(duration: duration.rawValue, type: type.rawValue)
-    }
-
-    /// Get glyph properties for a given duration and type.
-    public static func getGlyphProps(duration: String, type: String = "n") -> GlyphProps? {
-        guard let noteValue = NoteValue(parsing: duration) else { return nil }
-        let dur = noteValue.rawValue
-        guard let common = durationCodes[dur] else { return nil }
-        let typeProps = durationTypeOverrides[dur]?[type]
-        let isSlash = type == NoteType.slash.rawValue
-
-        // Resolve codeHead: try custom note head lookup first, then type override, then common
-        var codeHead = typeProps?.codeHead ?? common.codeHead
-        let noteHeadCode = codeNoteHead(type.uppercased(), duration: dur)
-        if !noteHeadCode.isEmpty {
-            codeHead = noteHeadCode
+    public static func clefPropertiesThrowing(_ clef: ClefName) throws -> ClefProperties {
+        guard let shift = clefLineShifts[clef] else {
+            throw TablesError.invalidClef(clef.rawValue)
         }
-
-        return GlyphProps(
-            codeHead: codeHead,
-            ledgerCodeHead: typeProps?.ledgerCodeHead ?? common.ledgerCodeHead,
-            stem: typeProps?.stem ?? common.stem,
-            flag: typeProps?.flag ?? common.flag,
-            rest: typeProps?.rest ?? false,
-            position: isSlash ? (typeProps?.position ?? "B/4") : (typeProps?.position ?? common.position),
-            dotShiftY: typeProps?.dotShiftY ?? common.dotShiftY,
-            lineAbove: typeProps?.lineAbove ?? common.lineAbove,
-            lineBelow: typeProps?.lineBelow ?? common.lineBelow,
-            beamCount: common.beamCount,
-            codeFlagUpstem: common.codeFlagUpstem,
-            codeFlagDownstem: common.codeFlagDownstem,
-            stemUpExtension: common.stemUpExtension,
-            stemDownExtension: common.stemDownExtension,
-            stemBeamExtension: common.stemBeamExtension,
-            tabnoteStemUpExtension: common.tabnoteStemUpExtension,
-            tabnoteStemDownExtension: common.tabnoteStemDownExtension
-        )
+        return ClefProperties(lineShift: shift)
     }
 
-    /// Common properties per duration.
-    private static let durationCodes: [String: GlyphProps] = [
-        "1/2": GlyphProps(codeHead: "", stem: false, flag: false, rest: false, dotShiftY: 0,
-                          lineAbove: 0, lineBelow: 0, beamCount: 0, stemUpExtension: -STEM_HEIGHT,
-                          stemDownExtension: -STEM_HEIGHT, stemBeamExtension: 0,
-                          tabnoteStemUpExtension: -STEM_HEIGHT, tabnoteStemDownExtension: -STEM_HEIGHT),
-        "1": GlyphProps(codeHead: "", stem: false, flag: false, rest: false, dotShiftY: 0,
-                        lineAbove: 0, lineBelow: 0, beamCount: 0, stemUpExtension: -STEM_HEIGHT,
-                        stemDownExtension: -STEM_HEIGHT, stemBeamExtension: 0,
-                        tabnoteStemUpExtension: -STEM_HEIGHT, tabnoteStemDownExtension: -STEM_HEIGHT),
-        "2": GlyphProps(codeHead: "", stem: true, flag: false, rest: false, dotShiftY: 0,
-                        lineAbove: 0, lineBelow: 0, beamCount: 0, stemUpExtension: 0,
-                        stemDownExtension: 0, stemBeamExtension: 0,
-                        tabnoteStemUpExtension: 0, tabnoteStemDownExtension: 0),
-        "4": GlyphProps(codeHead: "", stem: true, flag: false, rest: false, dotShiftY: 0,
-                        lineAbove: 0, lineBelow: 0, beamCount: 0, stemUpExtension: 0,
-                        stemDownExtension: 0, stemBeamExtension: 0,
-                        tabnoteStemUpExtension: 0, tabnoteStemDownExtension: 0),
-        "8": GlyphProps(codeHead: "", stem: true, flag: true, rest: false, dotShiftY: 0,
-                        lineAbove: 0, lineBelow: 0, beamCount: 1,
-                        codeFlagUpstem: "flag8thUp", codeFlagDownstem: "flag8thDown",
-                        stemUpExtension: 0, stemDownExtension: 0, stemBeamExtension: 0,
-                        tabnoteStemUpExtension: 0, tabnoteStemDownExtension: 0),
-        "16": GlyphProps(codeHead: "", stem: true, flag: true, rest: false, dotShiftY: 0,
-                         lineAbove: 0, lineBelow: 0, beamCount: 2,
-                         codeFlagUpstem: "flag16thUp", codeFlagDownstem: "flag16thDown",
-                         stemUpExtension: 0, stemDownExtension: 0, stemBeamExtension: 0,
-                         tabnoteStemUpExtension: 0, tabnoteStemDownExtension: 0),
-        "32": GlyphProps(codeHead: "", stem: true, flag: true, rest: false, dotShiftY: 0,
-                         lineAbove: 0, lineBelow: 0, beamCount: 3,
-                         codeFlagUpstem: "flag32ndUp", codeFlagDownstem: "flag32ndDown",
-                         stemUpExtension: 9, stemDownExtension: 9, stemBeamExtension: 7.5,
-                         tabnoteStemUpExtension: 9, tabnoteStemDownExtension: 9),
-        "64": GlyphProps(codeHead: "", stem: true, flag: true, rest: false, dotShiftY: 0,
-                         lineAbove: 0, lineBelow: 0, beamCount: 4,
-                         codeFlagUpstem: "flag64thUp", codeFlagDownstem: "flag64thDown",
-                         stemUpExtension: 13, stemDownExtension: 13, stemBeamExtension: 15,
-                         tabnoteStemUpExtension: 13, tabnoteStemDownExtension: 13),
-        "128": GlyphProps(codeHead: "", stem: true, flag: true, rest: false, dotShiftY: 0,
-                          lineAbove: 0, lineBelow: 0, beamCount: 5,
-                          codeFlagUpstem: "flag128thUp", codeFlagDownstem: "flag128thDown",
-                          stemUpExtension: 22, stemDownExtension: 22, stemBeamExtension: 22.5,
-                          tabnoteStemUpExtension: 22, tabnoteStemDownExtension: 22),
-        "256": GlyphProps(codeHead: "", stem: true, flag: true, rest: false, dotShiftY: 0,
-                          lineAbove: 0, lineBelow: 0, beamCount: 6,
-                          codeFlagUpstem: "flag256thUp", codeFlagDownstem: "flag256thDown",
-                          stemUpExtension: 24, stemDownExtension: 24, stemBeamExtension: 25,
-                          tabnoteStemUpExtension: 24, tabnoteStemDownExtension: 24),
-    ]
-
-    // MARK: - Tab Glyph Properties
-
-    /// Get glyph properties for a tab fret number/symbol.
-    /// VexFlowPatch: added useAlternativeXGlyph parameter to use a classical-style X notehead glyph for tabs
-    public static func tabToGlyphProps(_ fret: String, scale: Double = 1.0, useAlternativeXGlyph: Bool = false) -> TabGlyphProps {
-        if fret.uppercased() == "X" {
-            let glyphCode = useAlternativeXGlyph ? "noteheadXBlack" : "accidentalDoubleSharp"
-            let metrics = Glyph(code: glyphCode, point: TABLATURE_FONT_SCALE).getMetrics()
-            return TabGlyphProps(text: fret, code: glyphCode,
-                                 width: metrics.width, shiftY: -metrics.height / 2, scale: scale)
-        } else {
-            let width = textWidth(fret)
-            return TabGlyphProps(text: fret, code: nil, width: width, shiftY: 0, scale: scale)
+    /// Clef properties for a clef name string. Throws for an invalid clef (as upstream).
+    public static func clefProperties(_ clef: String) throws -> ClefProperties {
+        guard let name = ClefName(rawValue: clef) else {
+            throw TablesError.invalidClef(clef)
         }
+        return try clefPropertiesThrowing(name)
     }
 
-    /// Approximate text width for a string (font-independent estimate).
-    public static func textWidth(_ text: String) -> Double {
-        7 * Double(text.count)
+    public static func clefProperties(_ clef: ClefName) -> ClefProperties {
+        (try? clefPropertiesThrowing(clef)) ?? ClefProperties(lineShift: 0)
     }
 
     // MARK: - Note Info
@@ -512,63 +278,56 @@ public enum Tables {
     private struct NoteInfo {
         var index: Int
         var intVal: Int?
-        var accidental: String?
-        var rest: Bool
-        var octave: Int?
-        var code: String?
-        var shiftRight: Double?
     }
 
-    /// Note name → pitch index, integer value, and accidental.
     private static let notesInfo: [String: NoteInfo] = [
-        "C": NoteInfo(index: 0, intVal: 0, rest: false),
-        "CN": NoteInfo(index: 0, intVal: 0, accidental: "n", rest: false),
-        "C#": NoteInfo(index: 0, intVal: 1, accidental: "#", rest: false),
-        "C##": NoteInfo(index: 0, intVal: 2, accidental: "##", rest: false),
-        "CB": NoteInfo(index: 0, intVal: 11, accidental: "b", rest: false),
-        "CBB": NoteInfo(index: 0, intVal: 10, accidental: "bb", rest: false),
-        "D": NoteInfo(index: 1, intVal: 2, rest: false),
-        "DN": NoteInfo(index: 1, intVal: 2, accidental: "n", rest: false),
-        "D#": NoteInfo(index: 1, intVal: 3, accidental: "#", rest: false),
-        "D##": NoteInfo(index: 1, intVal: 4, accidental: "##", rest: false),
-        "DB": NoteInfo(index: 1, intVal: 1, accidental: "b", rest: false),
-        "DBB": NoteInfo(index: 1, intVal: 0, accidental: "bb", rest: false),
-        "E": NoteInfo(index: 2, intVal: 4, rest: false),
-        "EN": NoteInfo(index: 2, intVal: 4, accidental: "n", rest: false),
-        "E#": NoteInfo(index: 2, intVal: 5, accidental: "#", rest: false),
-        "E##": NoteInfo(index: 2, intVal: 6, accidental: "##", rest: false),
-        "EB": NoteInfo(index: 2, intVal: 3, accidental: "b", rest: false),
-        "EBB": NoteInfo(index: 2, intVal: 2, accidental: "bb", rest: false),
-        "F": NoteInfo(index: 3, intVal: 5, rest: false),
-        "FN": NoteInfo(index: 3, intVal: 5, accidental: "n", rest: false),
-        "F#": NoteInfo(index: 3, intVal: 6, accidental: "#", rest: false),
-        "F##": NoteInfo(index: 3, intVal: 7, accidental: "##", rest: false),
-        "FB": NoteInfo(index: 3, intVal: 4, accidental: "b", rest: false),
-        "FBB": NoteInfo(index: 3, intVal: 3, accidental: "bb", rest: false),
-        "G": NoteInfo(index: 4, intVal: 7, rest: false),
-        "GN": NoteInfo(index: 4, intVal: 7, accidental: "n", rest: false),
-        "G#": NoteInfo(index: 4, intVal: 8, accidental: "#", rest: false),
-        "G##": NoteInfo(index: 4, intVal: 9, accidental: "##", rest: false),
-        "GB": NoteInfo(index: 4, intVal: 6, accidental: "b", rest: false),
-        "GBB": NoteInfo(index: 4, intVal: 5, accidental: "bb", rest: false),
-        "A": NoteInfo(index: 5, intVal: 9, rest: false),
-        "AN": NoteInfo(index: 5, intVal: 9, accidental: "n", rest: false),
-        "A#": NoteInfo(index: 5, intVal: 10, accidental: "#", rest: false),
-        "A##": NoteInfo(index: 5, intVal: 11, accidental: "##", rest: false),
-        "AB": NoteInfo(index: 5, intVal: 8, accidental: "b", rest: false),
-        "ABB": NoteInfo(index: 5, intVal: 7, accidental: "bb", rest: false),
-        "B": NoteInfo(index: 6, intVal: 11, rest: false),
-        "BN": NoteInfo(index: 6, intVal: 11, accidental: "n", rest: false),
-        "B#": NoteInfo(index: 6, intVal: 12, accidental: "#", rest: false),
-        "B##": NoteInfo(index: 6, intVal: 13, accidental: "##", rest: false),
-        "BB": NoteInfo(index: 6, intVal: 10, accidental: "b", rest: false),
-        "BBB": NoteInfo(index: 6, intVal: 9, accidental: "bb", rest: false),
-        "R": NoteInfo(index: 6, rest: true),
-        "X": NoteInfo(index: 6, accidental: "", rest: false, octave: 4,
-                      code: "noteheadXBlack", shiftRight: 5.5),
+        "C": NoteInfo(index: 0, intVal: 0),
+        "CN": NoteInfo(index: 0, intVal: 0),
+        "C#": NoteInfo(index: 0, intVal: 1),
+        "C##": NoteInfo(index: 0, intVal: 2),
+        "CB": NoteInfo(index: 0, intVal: 11),
+        "CBB": NoteInfo(index: 0, intVal: 10),
+        "D": NoteInfo(index: 1, intVal: 2),
+        "DN": NoteInfo(index: 1, intVal: 2),
+        "D#": NoteInfo(index: 1, intVal: 3),
+        "D##": NoteInfo(index: 1, intVal: 4),
+        "DB": NoteInfo(index: 1, intVal: 1),
+        "DBB": NoteInfo(index: 1, intVal: 0),
+        "E": NoteInfo(index: 2, intVal: 4),
+        "EN": NoteInfo(index: 2, intVal: 4),
+        "E#": NoteInfo(index: 2, intVal: 5),
+        "E##": NoteInfo(index: 2, intVal: 6),
+        "EB": NoteInfo(index: 2, intVal: 3),
+        "EBB": NoteInfo(index: 2, intVal: 2),
+        "F": NoteInfo(index: 3, intVal: 5),
+        "FN": NoteInfo(index: 3, intVal: 5),
+        "F#": NoteInfo(index: 3, intVal: 6),
+        "F##": NoteInfo(index: 3, intVal: 7),
+        "FB": NoteInfo(index: 3, intVal: 4),
+        "FBB": NoteInfo(index: 3, intVal: 3),
+        "G": NoteInfo(index: 4, intVal: 7),
+        "GN": NoteInfo(index: 4, intVal: 7),
+        "G#": NoteInfo(index: 4, intVal: 8),
+        "G##": NoteInfo(index: 4, intVal: 9),
+        "GB": NoteInfo(index: 4, intVal: 6),
+        "GBB": NoteInfo(index: 4, intVal: 5),
+        "A": NoteInfo(index: 5, intVal: 9),
+        "AN": NoteInfo(index: 5, intVal: 9),
+        "A#": NoteInfo(index: 5, intVal: 10),
+        "A##": NoteInfo(index: 5, intVal: 11),
+        "AB": NoteInfo(index: 5, intVal: 8),
+        "ABB": NoteInfo(index: 5, intVal: 7),
+        "B": NoteInfo(index: 6, intVal: 11),
+        "BN": NoteInfo(index: 6, intVal: 11),
+        "B#": NoteInfo(index: 6, intVal: 12),
+        "B##": NoteInfo(index: 6, intVal: 13),
+        "BB": NoteInfo(index: 6, intVal: 10),
+        "BBB": NoteInfo(index: 6, intVal: 9),
+        "R": NoteInfo(index: 6), // Rest
+        "X": NoteInfo(index: 6),
     ]
 
-    /// Valid note types used during note struct parsing.
+    /// The list of valid note types. Used by note.ts during parseNoteStruct().
     public static let validTypes: [String: String] = [
         "n": "note", "r": "rest", "h": "harmonic", "m": "muted",
         "s": "slash", "g": "ghost", "d": "diamond", "x": "x",
@@ -577,30 +336,347 @@ public enum Tables {
         "tu": "triangle up", "td": "triangle down",
     ]
 
-    /// Clef line shift for note line calculation.
-    /// Get clef properties (line_shift).
-    public static func clefPropertiesThrowing(_ clef: ClefName) throws -> Int {
-        guard let shift = clefLineShifts[clef] else {
+    // MARK: - Key Properties
+
+    /// Get properties for a key/octave string (e.g., "c/4", "g/5/t3").
+    public static func keyProperties(
+        _ key: StaffKeySpec,
+        clef: ClefName = .treble,
+        type: String = "N",
+        octaveShift: Int = 0,
+        duration: NoteValue = .quarter
+    ) throws -> KeyProps {
+        try keyProperties(
+            key.rawValue,
+            clef: clef,
+            type: type,
+            octaveShift: octaveShift,
+            duration: duration.rawValue
+        )
+    }
+
+    /// Get properties for a key/octave string.
+    ///
+    /// - Parameters:
+    ///   - keyOctaveGlyph: a string in the format "key/octave" (e.g., "c/5") or
+    ///     "key/octave/custom-note-head-code" (e.g., "g/5/t3").
+    ///   - clef: the clef.
+    ///   - type: the note type (e.g. "n", "r"). Upstream default "N".
+    ///   - octaveShift: clef ottavation (0 = default; 1 = 8va; -1 = 8vb, etc.).
+    ///   - duration: the note duration (upstream `params.duration`, default "4").
+    /// - Returns: properties for the specified note.
+    public static func keyProperties(
+        _ keyOctaveGlyph: String,
+        clef: ClefName = .treble,
+        type: String = "N",
+        octaveShift: Int = 0,
+        duration: String = "4"
+    ) throws -> KeyProps {
+        let duration = try sanitizeDurationThrowing(duration)
+
+        let pieces = keyOctaveGlyph.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        guard pieces.count >= 2 else {
+            throw VexError("BadArguments",
+                "First argument must be note/octave or note/octave/glyph-code: \(keyOctaveGlyph)")
+        }
+
+        let key = pieces[0].uppercased()
+        let type = type.uppercased()
+        guard let value = notesInfo[key] else {
+            throw VexError("BadArguments", "Invalid key name: \(key)")
+        }
+        guard var octave = Int(pieces[1].trimmingCharacters(in: .whitespaces)) else {
+            throw VexError("BadArguments", "Invalid octave: \(keyOctaveGlyph)")
+        }
+
+        // .octaveShift is the shift to compensate for clef 8va/8vb.
+        octave -= octaveShift
+
+        let baseIndex = octave * 7 - 4 * 7
+        var line = Double(baseIndex + value.index) / 2
+        line += Double(try clefPropertiesThrowing(clef).lineShift)
+
+        // Integer value for note arithmetic.
+        let intValue: Int? = value.intVal.map { octave * 12 + $0 }
+
+        // If the user specified a glyph, overwrite the glyph code.
+        let glyphName: String
+        if pieces.count > 2 && !pieces[2].isEmpty {
+            glyphName = pieces[2].uppercased()
+        } else if type != "N" {
+            glyphName = type
+        } else {
+            glyphName = key
+        }
+        let code = codeNoteHead(glyphName, duration: duration)
+
+        var props = KeyProps(
+            key: key,
+            octave: octave,
+            line: line,
+            intValue: intValue,
+            code: code,
+            displaced: false
+        )
+
+        // VexFlowPatch (gated): inverted triangle notehead needs custom shift properties.
+        if glyphName == "TI", !VexRuntime.getCurrentContext().upstreamParityMode {
+            props.stemUpYShift = 5
+            props.stemDownYShift = 5
+            props.stemUpXOffset = 6
+            props.stemDownXOffset = 4
+        }
+        return props
+    }
+
+    /// Upstream-style overload that takes the clef as a string.
+    public static func keyProperties(
+        _ keyOctaveGlyph: String,
+        clef: String,
+        type: String = "N",
+        octaveShift: Int = 0,
+        duration: String = "4"
+    ) throws -> KeyProps {
+        guard let clefName = ClefName(rawValue: clef) else {
             throw TablesError.invalidClef(clef)
         }
-        return shift
+        return try keyProperties(keyOctaveGlyph, clef: clefName, type: type, octaveShift: octaveShift, duration: duration)
     }
 
-    /// Clef line shift for note line calculation.
-    /// Get clef properties (line_shift).
-    public static func clefProperties(_ clef: ClefName) -> Int {
-        (try? clefPropertiesThrowing(clef)) ?? 0
+    // MARK: - Integer to Note
+
+    /// Convert an integer (0-11) to a note name.
+    public static func integerToNoteThrowing(_ integer: Int) throws -> String {
+        let table: [Int: String] = [
+            0: "C", 1: "C#", 2: "D", 3: "D#", 4: "E", 5: "F",
+            6: "F#", 7: "G", 8: "G#", 9: "A", 10: "A#", 11: "B",
+        ]
+        guard integer >= 0 && integer <= 11, let noteValue = table[integer] else {
+            throw TablesError.integerToNoteOutOfRange(integer)
+        }
+        return noteValue
     }
 
-    /// Sanitize duration: resolve aliases and validate.
+    /// Convert an integer (0-11) to a note name.
+    public static func integerToNote(_ integer: Int) -> String {
+        (try? integerToNoteThrowing(integer)) ?? "C"
+    }
+
+    /// Used by annotation.ts and bend.ts. Clearly this implementation only works for the default font size.
+    /// TODO: The actual width depends on the font family, size, weight, style.
+    public static func textWidth(_ text: String) -> Double {
+        7 * Double(text.count)
+    }
+
+    // MARK: - Articulations
+
+    private static let articulations: [String: ArticulationStruct] = [
+        "a.": ArticulationStruct(code: Glyphs.augmentationDot, betweenLines: true), // Staccato
+        "av": ArticulationStruct(
+            aboveCode: Glyphs.articStaccatissimoAbove,
+            belowCode: Glyphs.articStaccatissimoBelow,
+            betweenLines: true
+        ), // Staccatissimo
+        "a>": ArticulationStruct(
+            aboveCode: Glyphs.articAccentAbove,
+            belowCode: Glyphs.articAccentBelow,
+            betweenLines: true
+        ), // Accent
+        "a-": ArticulationStruct(
+            aboveCode: Glyphs.articTenutoAbove,
+            belowCode: Glyphs.articTenutoBelow,
+            betweenLines: true
+        ), // Tenuto
+        "a^": ArticulationStruct(
+            aboveCode: Glyphs.articMarcatoAbove,
+            belowCode: Glyphs.articMarcatoBelow,
+            betweenLines: false
+        ), // Marcato
+        "a+": ArticulationStruct(code: Glyphs.pluckedLeftHandPizzicato, betweenLines: false), // Left hand pizzicato
+        "ao": ArticulationStruct(
+            aboveCode: Glyphs.pluckedSnapPizzicatoAbove,
+            belowCode: Glyphs.pluckedSnapPizzicatoBelow,
+            betweenLines: false
+        ), // Snap pizzicato
+        "ah": ArticulationStruct(code: Glyphs.stringsHarmonic, betweenLines: false), // Natural harmonic or open note
+        "a@": ArticulationStruct(aboveCode: Glyphs.fermataAbove, belowCode: Glyphs.fermataBelow, betweenLines: false), // Fermata
+        "a@a": ArticulationStruct(code: Glyphs.fermataAbove, betweenLines: false), // Fermata above staff
+        "a@u": ArticulationStruct(code: Glyphs.fermataBelow, betweenLines: false), // Fermata below staff
+        "a@s": ArticulationStruct(
+            aboveCode: Glyphs.fermataShortAbove,
+            belowCode: Glyphs.fermataShortBelow,
+            betweenLines: false
+        ), // Fermata short
+        "a@as": ArticulationStruct(code: Glyphs.fermataShortAbove, betweenLines: false), // Fermata short above staff
+        "a@us": ArticulationStruct(code: Glyphs.fermataShortBelow, betweenLines: false), // Fermata short below staff
+        "a@l": ArticulationStruct(
+            aboveCode: Glyphs.fermataLongAbove,
+            belowCode: Glyphs.fermataLongBelow,
+            betweenLines: false
+        ), // Fermata long
+        "a@al": ArticulationStruct(code: Glyphs.fermataLongAbove, betweenLines: false), // Fermata long above staff
+        "a@ul": ArticulationStruct(code: Glyphs.fermataLongBelow, betweenLines: false), // Fermata long below staff
+        "a@vl": ArticulationStruct(
+            aboveCode: Glyphs.fermataVeryLongAbove,
+            belowCode: Glyphs.fermataVeryLongBelow,
+            betweenLines: false
+        ), // Fermata very long
+        "a@avl": ArticulationStruct(code: Glyphs.fermataVeryLongAbove, betweenLines: false), // Fermata very long above staff
+        "a@uvl": ArticulationStruct(code: Glyphs.fermataVeryLongBelow, betweenLines: false), // Fermata very long below staff
+        "a|": ArticulationStruct(code: Glyphs.stringsUpBow, betweenLines: false), // Bow up - up stroke
+        "am": ArticulationStruct(code: Glyphs.stringsDownBow, betweenLines: false), // Bow down - down stroke
+        "a,": ArticulationStruct(code: Glyphs.pictChokeCymbal, betweenLines: false), // Choked
+    ]
+
+    /// Look up an articulation. Returns nil for an unknown type (upstream `undefined`).
+    public static func articulationCodes(_ artic: String) -> ArticulationStruct? {
+        articulations[artic]
+    }
+
+    @available(*, deprecated, renamed: "articulationCodes(_:)")
+    public static func articulationCode(_ type: String) -> ArticulationStruct? {
+        articulationCodes(type)
+    }
+
+    // MARK: - Accidentals
+
+    private static let accidentals: [String: String] = [
+        "#": Glyphs.accidentalSharp,
+        "##": Glyphs.accidentalDoubleSharp,
+        "b": Glyphs.accidentalFlat,
+        "bb": Glyphs.accidentalDoubleFlat,
+        "n": Glyphs.accidentalNatural,
+        "{": Glyphs.accidentalParensLeft,
+        "}": Glyphs.accidentalParensRight,
+        "db": Glyphs.accidentalThreeQuarterTonesFlatZimmermann,
+        "d": Glyphs.accidentalQuarterToneFlatStein,
+        "++": Glyphs.accidentalThreeQuarterTonesSharpStein,
+        "+": Glyphs.accidentalQuarterToneSharpStein,
+        "+-": Glyphs.accidentalKucukMucennebSharp,
+        "bs": Glyphs.accidentalBakiyeFlat,
+        "bss": Glyphs.accidentalBuyukMucennebFlat,
+        "o": Glyphs.accidentalSori,
+        "k": Glyphs.accidentalKoron,
+        "bbs": Glyphs.accidentalBuyukMucennebSharp,
+        "++-": Glyphs.accidentalBuyukMucennebSharp,
+        "ashs": Glyphs.accidentalBuyukMucennebSharp,
+        "afhf": Glyphs.accidentalBuyukMucennebSharp,
+    ]
+
+    /// Return the glyph code of an accidental type, or `accidental` itself when unknown.
+    public static func accidentalCodes(_ accidental: String) -> String {
+        accidentals[accidental] ?? accidental
+    }
+
+    /// True if `accidental` is a known accidental type (Swift helper).
+    public static func hasAccidentalCode(_ accidental: String) -> Bool {
+        accidentals[accidental] != nil
+    }
+
+    /// Helps determine the layout of accidentals.
+    public static let accidentalColumnsTable: [Int: [String: [Int]]] = [
+        1: ["a": [1], "b": [1]],
+        2: ["a": [1, 2]],
+        3: [
+            "a": [1, 3, 2],
+            "b": [1, 2, 1],
+            "secondOnBottom": [1, 2, 3],
+        ],
+        4: [
+            "a": [1, 3, 4, 2],
+            "b": [1, 2, 3, 1],
+            "spacedOutTetrachord": [1, 2, 1, 2],
+        ],
+        5: [
+            "a": [1, 3, 5, 4, 2],
+            "b": [1, 2, 4, 3, 1],
+            "spacedOutPentachord": [1, 2, 3, 2, 1],
+            "verySpacedOutPentachord": [1, 2, 1, 2, 1],
+        ],
+        6: [
+            "a": [1, 3, 5, 6, 4, 2],
+            "b": [1, 2, 4, 5, 3, 1],
+            "spacedOutHexachord": [1, 3, 2, 1, 3, 2],
+            "verySpacedOutHexachord": [1, 2, 1, 2, 1, 2],
+        ],
+    ]
+
+    // MARK: - Ornaments
+
+    private static let ornaments: [String: String] = [
+        "mordent": Glyphs.ornamentShortTrill,
+        "mordentInverted": Glyphs.ornamentMordent,
+        "turn": Glyphs.ornamentTurn,
+        "turnInverted": Glyphs.ornamentTurnSlash,
+        "tr": Glyphs.ornamentTrill,
+        "upprall": Glyphs.ornamentPrecompSlideTrillDAnglebert,
+        "downprall": Glyphs.ornamentPrecompDoubleCadenceUpperPrefix,
+        "prallup": Glyphs.ornamentPrecompTrillSuffixDandrieu,
+        "pralldown": Glyphs.ornamentPrecompTrillLowerSuffix,
+        "upmordent": Glyphs.ornamentPrecompSlideTrillBach,
+        "downmordent": Glyphs.ornamentPrecompDoubleCadenceUpperPrefixTurn,
+        "lineprall": Glyphs.ornamentPrecompAppoggTrill,
+        "prallprall": Glyphs.ornamentTremblement,
+        "scoop": Glyphs.brassScoop,
+        "doit": Glyphs.brassDoitMedium,
+        "fall": Glyphs.brassFallLipShort,
+        "doitLong": Glyphs.brassLiftMedium,
+        "fallLong": Glyphs.brassFallRoughMedium,
+        "bend": Glyphs.brassBend,
+        "plungerClosed": Glyphs.brassMuteClosed,
+        "plungerOpen": Glyphs.brassMuteOpen,
+        "flip": Glyphs.brassFlip,
+        "jazzTurn": Glyphs.brassJazzTurn,
+        "smear": Glyphs.brassSmear,
+    ]
+
+    /// Return the glyph code of an ornament type, or `ornament` itself when unknown.
+    public static func ornamentCodes(_ ornament: String) -> String {
+        ornaments[ornament] ?? ornament
+    }
+
+    /// True if `ornament` is a known ornament type (Swift helper).
+    public static func hasOrnamentCode(_ ornament: String) -> Bool {
+        ornaments[ornament] != nil
+    }
+
+    // MARK: - Unicode
+
+    /// Non-SMuFL Unicode characters.
+    public static let unicode: [String: String] = [
+        // ♯ accidental sharp
+        "sharp": "\u{266f}",
+        // ♭ accidental flat
+        "flat": "\u{266d}",
+        // ♮ accidental natural
+        "natural": "\u{266e}",
+        // △ major seventh
+        "triangle": "\u{25b3}",
+        // ø half-diminished
+        "o-with-slash": "\u{00f8}",
+        // ° diminished
+        "degrees": "\u{00b0}",
+        // ○ diminished
+        "circle": "\u{25cb}",
+    ]
+
+    // MARK: - Durations
+
+    /// Convert duration aliases to the number based duration.
+    /// If the input isn't an alias, simply return the input.
+    /// Example: 'q' -> '4', '8' -> '8'. Throws for an invalid duration.
     public static func sanitizeDurationThrowing(_ duration: String) throws -> String {
-        guard let value = NoteValue(parsing: duration) else {
+        var duration = duration
+        if let durationNumber = durationAliases[duration] {
+            duration = durationNumber
+        }
+        guard durations[duration] != nil else {
             throw TablesError.invalidDuration(duration)
         }
-        return value.rawValue
+        return duration
     }
 
-    /// Sanitize duration: resolve aliases and validate.
+    /// Non-throwing `sanitizeDuration`: returns "4" for an invalid duration.
     public static func sanitizeDuration(_ duration: String) -> String {
         (try? sanitizeDurationThrowing(duration)) ?? NoteValue.quarter.rawValue
     }
@@ -610,142 +686,59 @@ public enum Tables {
         duration.rawValue
     }
 
-    /// Convert duration to a Fraction.
+    /// Convert the `duration` to a fraction.
     public static func durationToFractionThrowing(_ duration: String) throws -> Fraction {
         Fraction().parse(try sanitizeDurationThrowing(duration))
     }
 
-    /// Convert duration to a Fraction.
+    /// Convert the `duration` to a fraction.
     public static func durationToFraction(_ duration: String) -> Fraction {
         Fraction().parse(sanitizeDuration(duration))
     }
 
-    /// Convert duration to a Fraction.
     public static func durationToFraction(_ duration: NoteValue) -> Fraction {
         Fraction().parse(duration.rawValue)
     }
 
-    /// Convert duration to a number.
+    /// Convert the `duration` to a number.
     public static func durationToNumberThrowing(_ duration: String) throws -> Double {
         try durationToFractionThrowing(duration).value()
     }
 
-    /// Convert duration to a number.
+    /// Convert the `duration` to a number.
     public static func durationToNumber(_ duration: String) -> Double {
         durationToFraction(duration).value()
     }
 
-    /// Convert duration to a number.
     public static func durationToNumber(_ duration: NoteValue) -> Double {
         durationToFraction(duration).value()
     }
 
-    /// Get properties for a key/octave string (e.g., "c/4", "g/5/x2").
-    public static func keyProperties(
-        _ key: StaffKeySpec,
-        clef: ClefName = .treble,
-        octaveShift: Int = 0,
-        duration: NoteValue = .quarter
-    ) throws -> KeyProps {
-        try keyProperties(
-            key.rawValue,
-            clef: clef,
-            octaveShift: octaveShift,
-            duration: duration.rawValue
-        )
+    /// Convert the `duration` to total ticks. Throws for an invalid duration.
+    public static func durationToTicksThrowing(_ duration: String) throws -> Int {
+        let duration = try sanitizeDurationThrowing(duration)
+        guard let ticks = durations[duration] else {
+            throw TablesError.missingDurationTickMapping(duration)
+        }
+        return ticks
     }
 
-    /// Get properties for a key/octave string (e.g., "c/4", "g/5/x2").
-    public static func keyProperties(
-        _ keyOctaveGlyph: String,
-        clef: ClefName = .treble,
-        octaveShift: Int = 0,
-        duration: String = NoteValue.quarter.rawValue
-    ) throws -> KeyProps {
-        let pieces = keyOctaveGlyph.split(separator: "/").map(String.init)
-        guard pieces.count >= 2 else {
-            throw VexError("BadArguments",
-                "First argument must be note/octave or note/octave/glyph-code: \(keyOctaveGlyph)")
-        }
-
-        let key = pieces[0].uppercased()
-        guard let value = notesInfo[key] else {
-            throw VexError("BadArguments", "Invalid key name: \(key)")
-        }
-
-        var octaveStr = pieces[1]
-        if let noteOctave = value.octave {
-            octaveStr = String(noteOctave)
-        }
-        var octave = Int(octaveStr) ?? 4
-        octave -= octaveShift
-
-        let baseIndex = octave * 7 - 4 * 7
-        var line = Double(baseIndex + value.index) / 2.0
-        line += Double(try clefPropertiesThrowing(clef))
-
-        var stroke = 0
-        if line <= 0 && Int(line * 2) % 2 == 0 { stroke = 1 }
-        if line >= 6 && Int(line * 2) % 2 == 0 { stroke = -1 }
-
-        let intValue: Int? = value.intVal != nil ? octave * 12 + value.intVal! : nil
-
-        var code = value.code
-        var glyphType: String?
-        if pieces.count > 2 && !pieces[2].isEmpty {
-            glyphType = pieces[2].uppercased()
-            code = codeNoteHead(glyphType!, duration: duration)
-        }
-
-        var props = KeyProps(
-            key: key, octave: octave, line: line,
-            intValue: intValue, accidental: value.accidental,
-            code: code, stroke: stroke,
-            shiftRight: value.shiftRight ?? 0, displaced: false
-        )
-        /// VexFlowPatch: inverted triangle notehead needs custom shift properties.
-        if glyphType == "TI", !VexRuntime.getCurrentContext().upstreamParityMode {
-            props.stemUpYShift = 5
-            props.stemDownYShift = 5
-            props.stemUpXOffset = 6
-            props.stemDownXOffset = 4
-        }
-        return props
+    /// Convert the `duration` to total ticks. Returns nil for an invalid duration.
+    public static func durationToTicks(_ duration: String) -> Int? {
+        try? durationToTicksThrowing(duration)
     }
 
-    /// Convert an integer (0-11) to a note name.
-    public static func integerToNoteThrowing(_ integer: Int) throws -> String {
-        let table: [Int: String] = [
-            0: "C", 1: "C#", 2: "D", 3: "D#", 4: "E", 5: "F",
-            6: "F#", 7: "G", 8: "G#", 9: "A", 10: "A#", 11: "B",
-        ]
-        guard integer >= 0 && integer <= 11, let note = table[integer] else {
-            throw TablesError.integerToNoteOutOfRange(integer)
-        }
-        return note
+    /// Convert a strongly typed duration to ticks.
+    public static func durationToTicksThrowing(_ duration: NoteValue) throws -> Int {
+        try durationToTicksThrowing(duration.rawValue)
     }
 
-    /// Convert an integer (0-11) to a note name.
-    public static func integerToNote(_ integer: Int) -> String {
-        (try? integerToNoteThrowing(integer)) ?? "C"
+    /// Convert a strongly typed duration to ticks.
+    public static func durationToTicks(_ duration: NoteValue) -> Int {
+        durations[duration.rawValue] ?? (RESOLUTION / 4)
     }
 
-    private static func computedTicks(for duration: String) -> Int? {
-        let parts = duration.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false)
-        if parts.count == 1, let denominator = Int(parts[0]), denominator > 0 {
-            return RESOLUTION / denominator
-        }
-        guard
-            parts.count == 2,
-            let numerator = Int(parts[0]),
-            let denominator = Int(parts[1]),
-            numerator > 0,
-            denominator > 0
-        else {
-            return nil
-        }
-        return (RESOLUTION * denominator) / numerator
-    }
+    // MARK: - Note Heads
 
     /// Get the notehead glyph code for a custom type and duration.
     public static func codeNoteHead(_ type: String, duration: NoteValue) -> String {
@@ -753,166 +746,159 @@ public enum Tables {
     }
 
     /// Get the notehead glyph code for a custom type and duration.
+    /// Returns `Glyphs.null` when there is no glyph (rest of an unknown duration).
     public static func codeNoteHead(_ type: String, duration: String) -> String {
         switch type {
-        case "D0": return "noteheadDiamondWhole"
-        case "D1": return "noteheadDiamondHalf"
-        case "D2", "D3": return "noteheadDiamondBlack"
-        case "T0": return "noteheadTriangleUpWhole"
-        case "T1": return "noteheadTriangleUpHalf"
-        case "T2", "T3": return "noteheadTriangleUpBlack"
-        case "X0": return "noteheadXWhole"
-        case "X1": return "noteheadXHalf"
-        case "X2": return "noteheadXBlack"
-        case "X3": return "noteheadCircleX"
-        case "S1": return "noteheadSquareWhite"
-        case "S2": return "noteheadSquareBlack"
-        case "R1": return "vexNoteHeadRectWhite"
-        case "R2": return "vexNoteHeadRectBlack"
-        case "DO": return "noteheadTriangleUpBlack"
-        case "RE": return "noteheadMoonBlack"
-        case "MI": return "noteheadDiamondBlack"
-        case "FA": return "noteheadTriangleLeftBlack"
-        case "FAUP": return "noteheadTriangleRightBlack"
-        case "SO": return "noteheadBlack"
-        case "LA": return "noteheadSquareBlack"
-        case "TI": return "noteheadTriangleRoundDownBlack"
-        case "D", "H":
+        // Diamond
+        case "D0": return Glyphs.noteheadDiamondWhole
+        case "D1": return Glyphs.noteheadDiamondHalf
+        case "D2": return Glyphs.noteheadDiamondBlack
+        case "D3": return Glyphs.noteheadDiamondBlack
+
+        // Triangle
+        case "T0": return Glyphs.noteheadTriangleUpWhole
+        case "T1": return Glyphs.noteheadTriangleUpHalf
+        case "T2": return Glyphs.noteheadTriangleUpBlack
+        case "T3": return Glyphs.noteheadTriangleUpBlack
+
+        // Cross
+        case "X0": return Glyphs.noteheadXWhole
+        case "X1": return Glyphs.noteheadXHalf
+        case "X2": return Glyphs.noteheadXBlack
+        case "X3": return Glyphs.noteheadCircleX
+
+        // Square
+        case "S1": return Glyphs.noteheadSquareWhite
+        case "S2": return Glyphs.noteheadSquareBlack
+
+        // Rectangle
+        case "R1": return Glyphs.noteheadSquareWhite // no smufl code
+        case "R2": return Glyphs.noteheadSquareWhite // no smufl code
+
+        case "DO": return Glyphs.noteheadTriangleUpBlack
+        case "RE": return Glyphs.noteheadMoonBlack
+        case "MI": return Glyphs.noteheadDiamondBlack
+        case "FA": return Glyphs.noteheadTriangleLeftBlack
+        case "FAUP": return Glyphs.noteheadTriangleRightBlack
+        case "SO": return Glyphs.noteheadBlack
+        case "LA": return Glyphs.noteheadSquareBlack
+        case "TI": return Glyphs.noteheadTriangleRoundDownBlack
+
+        case "DI", "H": // Diamond, Harmonics
             switch duration {
-            case "1/2": return "noteheadDiamondDoubleWhole"
-            case "1": return "noteheadDiamondWhole"
-            case "2": return "noteheadDiamondHalf"
-            default: return "noteheadDiamondBlack"
+            case "1/2": return Glyphs.noteheadDiamondDoubleWhole
+            case "1": return Glyphs.noteheadDiamondWhole
+            case "2": return Glyphs.noteheadDiamondHalf
+            default: return Glyphs.noteheadDiamondBlack
             }
-        case "N", "G":
+        case "X", "M": // Muted
             switch duration {
-            case "1/2": return "noteheadDoubleWhole"
-            case "1": return "noteheadWhole"
-            case "2": return "noteheadHalf"
-            default: return "noteheadBlack"
-            }
-        case "M", "X":
-            switch duration {
-            case "1/2": return "noteheadXDoubleWhole"
-            case "1": return "noteheadXWhole"
-            case "2": return "noteheadXHalf"
-            default: return "noteheadXBlack"
+            case "1/2": return Glyphs.noteheadXDoubleWhole
+            case "1": return Glyphs.noteheadXWhole
+            case "2": return Glyphs.noteheadXHalf
+            default: return Glyphs.noteheadXBlack
             }
         case "CX":
             switch duration {
-            case "1/2": return "noteheadCircleXDoubleWhole"
-            case "1": return "noteheadCircleXWhole"
-            case "2": return "noteheadCircleXHalf"
-            default: return "noteheadCircleX"
+            case "1/2": return Glyphs.noteheadCircleXDoubleWhole
+            case "1": return Glyphs.noteheadCircleXWhole
+            case "2": return Glyphs.noteheadCircleXHalf
+            default: return Glyphs.noteheadCircleX
             }
         case "CI":
             switch duration {
-            case "1/2": return "noteheadCircledDoubleWhole"
-            case "1": return "noteheadCircledWhole"
-            case "2": return "noteheadCircledHalf"
-            default: return "noteheadCircledBlack"
+            case "1/2": return Glyphs.noteheadCircledDoubleWhole
+            case "1": return Glyphs.noteheadCircledWhole
+            case "2": return Glyphs.noteheadCircledHalf
+            default: return Glyphs.noteheadCircledBlack
             }
         case "SQ":
             switch duration {
-            case "1/2": return "noteheadDoubleWholeSquare"
-            case "1", "2": return "noteheadSquareWhite"
-            default: return "noteheadSquareBlack"
+            case "1/2": return Glyphs.noteheadDoubleWholeSquare
+            case "1": return Glyphs.noteheadSquareWhite
+            case "2": return Glyphs.noteheadSquareWhite
+            default: return Glyphs.noteheadSquareBlack
             }
         case "TU":
             switch duration {
-            case "1/2": return "noteheadTriangleUpDoubleWhole"
-            case "1": return "noteheadTriangleUpWhole"
-            case "2": return "noteheadTriangleUpHalf"
-            default: return "noteheadTriangleUpBlack"
+            case "1/2": return Glyphs.noteheadTriangleUpDoubleWhole
+            case "1": return Glyphs.noteheadTriangleUpWhole
+            case "2": return Glyphs.noteheadTriangleUpHalf
+            default: return Glyphs.noteheadTriangleUpBlack
             }
         case "TD":
             switch duration {
-            case "1/2": return "noteheadTriangleDownDoubleWhole"
-            case "1": return "noteheadTriangleDownWhole"
-            case "2": return "noteheadTriangleDownHalf"
-            default: return "noteheadTriangleDownBlack"
+            case "1/2": return Glyphs.noteheadTriangleDownDoubleWhole
+            case "1": return Glyphs.noteheadTriangleDownWhole
+            case "2": return Glyphs.noteheadTriangleDownHalf
+            default: return Glyphs.noteheadTriangleDownBlack
             }
         case "SF":
             switch duration {
-            case "1/2": return "noteheadSlashedDoubleWhole1"
-            case "1": return "noteheadSlashedWhole1"
-            case "2": return "noteheadSlashedHalf1"
-            default: return "noteheadSlashedBlack1"
+            case "1/2": return Glyphs.noteheadSlashedDoubleWhole1
+            case "1": return Glyphs.noteheadSlashedWhole1
+            case "2": return Glyphs.noteheadSlashedHalf1
+            default: return Glyphs.noteheadSlashedBlack1
             }
         case "SB":
             switch duration {
-            case "1/2": return "noteheadSlashedDoubleWhole2"
-            case "1": return "noteheadSlashedWhole2"
-            case "2": return "noteheadSlashedHalf2"
-            default: return "noteheadSlashedBlack2"
+            case "1/2": return Glyphs.noteheadSlashedDoubleWhole2
+            case "1": return Glyphs.noteheadSlashedWhole2
+            case "2": return Glyphs.noteheadSlashedHalf2
+            default: return Glyphs.noteheadSlashedBlack2
             }
-        default: return ""
+        case "R":
+            switch duration {
+            case "1/2": return Glyphs.restDoubleWhole
+            case "1": return Glyphs.restWhole
+            case "2": return Glyphs.restHalf
+            case "4": return Glyphs.restQuarter
+            case "8": return Glyphs.rest8th
+            case "16": return Glyphs.rest16th
+            case "32": return Glyphs.rest32nd
+            case "64": return Glyphs.rest64th
+            case "128": return Glyphs.rest128th
+            // 4.x-branch fix (a0c4d47a): 256th rest.
+            case "256": return Glyphs.rest256th
+            default: break
+            }
+        case "S":
+            switch duration {
+            case "1/2": return Glyphs.noteheadSlashWhiteDoubleWhole
+            case "1": return Glyphs.noteheadSlashWhiteWhole
+            case "2": return Glyphs.noteheadSlashWhiteHalf
+            default: return Glyphs.noteheadSlashVerticalEnds
+            }
+        default:
+            switch duration {
+            case "1/2": return Glyphs.noteheadDoubleWhole
+            case "1": return Glyphs.noteheadWhole
+            case "2": return Glyphs.noteheadHalf
+            default: return Glyphs.noteheadBlack
+            }
         }
+        return Glyphs.null
     }
 
-    /// Per-type overrides (rest, slash, etc.).
-    private struct TypeOverride: Sendable {
-        var codeHead: String?
-        var ledgerCodeHead: String?
-        var stem: Bool?
-        var flag: Bool?
-        var rest: Bool?
-        var position: String?
-        var dotShiftY: Double?
-        var lineAbove: Double?
-        var lineBelow: Double?
+    // MARK: - Tablature (VexFlowPatch)
+
+    /// VexFlowPatch: the glyph for an `X` fret on a tab note.
+    /// `useAlternativeXGlyph` selects a classical X notehead (`noteheadXBlack`)
+    /// instead of upstream `accidentalDoubleSharp`. For `TabNote.tabToElement`.
+    public static func tabXGlyphCode(useAlternativeXGlyph: Bool = false) -> String {
+        useAlternativeXGlyph ? Glyphs.noteheadXBlack : Glyphs.accidentalDoubleSharp
     }
 
-    private static let durationTypeOverrides: [String: [String: TypeOverride]] = [
-        "1/2": [
-            "r": TypeOverride(codeHead: "restDoubleWhole", rest: true, position: "B/5", dotShiftY: 0),
-        ],
-        "1": [
-            "r": TypeOverride(
-                codeHead: "restWhole",
-                ledgerCodeHead: "restWholeLegerLine",
-                rest: true,
-                position: "D/5",
-                dotShiftY: 0.5
-            ),
-        ],
-        "2": [
-            "r": TypeOverride(
-                codeHead: "restHalf",
-                ledgerCodeHead: "restHalfLegerLine",
-                stem: false,
-                rest: true,
-                position: "B/4",
-                dotShiftY: -0.5
-            ),
-        ],
-        "4": [
-            "r": TypeOverride(codeHead: "restQuarter", stem: false, rest: true, position: "B/4",
-                              dotShiftY: -0.5, lineAbove: 1.5, lineBelow: 1.5),
-        ],
-        "8": [
-            "r": TypeOverride(codeHead: "rest8th", stem: false, flag: false, rest: true, position: "B/4",
-                              dotShiftY: -0.5, lineAbove: 1.0, lineBelow: 1.0),
-        ],
-        "16": [
-            "r": TypeOverride(codeHead: "rest16th", stem: false, flag: false, rest: true, position: "B/4",
-                              dotShiftY: -0.5, lineAbove: 1.0, lineBelow: 2.0),
-        ],
-        "32": [
-            "r": TypeOverride(codeHead: "rest32nd", stem: false, flag: false, rest: true, position: "B/4",
-                              dotShiftY: -1.5, lineAbove: 2.0, lineBelow: 2.0),
-        ],
-        "64": [
-            "r": TypeOverride(codeHead: "rest64th", stem: false, flag: false, rest: true, position: "B/4",
-                              dotShiftY: -1.5, lineAbove: 2.0, lineBelow: 3.0),
-        ],
-        "128": [
-            "r": TypeOverride(codeHead: "rest128th", stem: false, flag: false, rest: true, position: "B/4",
-                              dotShiftY: -2.5, lineAbove: 3.0, lineBelow: 3.0),
-        ],
-        "256": [
-            "r": TypeOverride(codeHead: "rest256th", stem: false, flag: false, rest: true, position: "B/4",
-                              dotShiftY: -2.5, lineAbove: 3.0, lineBelow: 3.0),
-        ],
-    ]
+    // MARK: - Source compatibility
+
+    /// Use `Note.getGlyphProps(_:_:)`.
+    @available(*, deprecated, message: "Use Note.getGlyphProps(_:_:)")
+    public static func getGlyphProps(duration: String, type: String = "n") -> GlyphProps? {
+        Note.getGlyphProps(duration, type)
+    }
+
+    @available(*, deprecated, message: "Use Note.getGlyphProps(_:_:)")
+    public static func getGlyphProps(duration: NoteValue, type: NoteType = .note) -> GlyphProps? {
+        Note.getGlyphProps(duration.rawValue, type.rawValue)
+    }
 }

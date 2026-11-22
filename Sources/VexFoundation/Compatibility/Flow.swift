@@ -1,4 +1,12 @@
-// VexFoundation - Lightweight compatibility facade for selected VexFlow `Flow` utilities.
+// VexFoundation - Ported from VexFlow (https://vexflow.com)
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of the static API of `src/vexflow.ts` (VexFlow 5.0.0). Upstream 5
+// merged `flow.ts` and `vex.ts` into the `VexFlow` class. In Swift, the
+// classes are module types (use `VexFoundation.StaveNote` and so on), so this
+// facade holds only the static functions and constants.
+//
+// Global state (fonts, metrics) lives in the active `VexRuntimeContext`.
 
 import Foundation
 
@@ -16,13 +24,12 @@ public enum MusicFontParseError: Error, LocalizedError, Sendable {
     }
 }
 
-/// Supported built-in music font names for typed font selection.
+/// Music fonts bundled with VexFoundation (see `FontRegistry.bundledFonts`).
 public enum MusicFontName: String, CaseIterable, Sendable {
     case bravura = "Bravura"
     case gonville = "Gonville"
     case leland = "Leland"
     case petaluma = "Petaluma"
-    case custom = "Custom"
 
     /// Parse a font name from a case-insensitive string.
     public init?(parsing raw: String) {
@@ -38,44 +45,21 @@ public enum MusicFontName: String, CaseIterable, Sendable {
         case "gonville": self = .gonville
         case "leland": self = .leland
         case "petaluma": self = .petaluma
-        case "custom", "vexflowcustom": self = .custom
         default: return nil
-        }
-    }
-
-    fileprivate func load() -> VexFont {
-        switch self {
-        case .bravura:
-            return FontLoader.loadBravura()
-        case .gonville:
-            return FontLoader.loadGonville()
-        case .leland:
-            return FontLoader.loadLeland()
-        case .petaluma:
-            return FontLoader.loadPetaluma()
-        case .custom:
-            return FontLoader.loadCustom()
         }
     }
 }
 
-/// Lightweight compatibility facade that intentionally wraps strongly-typed core APIs.
+/// Upstream name of the static facade (`VexFlow.setFonts(...)` and so on).
+public typealias VexFlow = Flow
+
+/// Static VexFlow API (port of the `VexFlow` class statics).
 public enum Flow {
 
     // MARK: Build metadata
 
+    /// Upstream `VexFlow.BUILD`.
     public static var BUILD: VexBuildInfo { VexVersion.build }
-
-    // MARK: Constants
-
-    public static var RESOLUTION: Int { Tables.RESOLUTION }
-
-    public static var STAVE_LINE_THICKNESS: Double {
-        get { Tables.STAVE_LINE_THICKNESS }
-        set { Tables.STAVE_LINE_THICKNESS = newValue }
-    }
-
-    public static var RENDER_PRECISION_PLACES: Int { Tables.RENDER_PRECISION_PLACES }
 
     // MARK: Runtime Context
 
@@ -100,9 +84,160 @@ public enum Flow {
         try VexRuntime.withContext(context, body)
     }
 
-    // MARK: Duration utilities
+    // MARK: Fonts
 
-    /// Convert a typed duration into total ticks, including dotted augmentation.
+    /// Load the fonts that your app uses.
+    ///
+    /// Upstream loads web fonts from a CDN. VexFoundation bundles its fonts
+    /// (see `FontRegistry.bundledFonts`), so this loads the bundled fonts and
+    /// checks that each family in `fontNames` is available. With no names,
+    /// only the bundled fonts are loaded. To add other fonts, use
+    /// `FontRegistry.shared.register(family:data:weight:style:)`.
+    public static func loadFonts(_ fontNames: String...) throws {
+        try loadFonts(fontNames)
+    }
+
+    /// Array form of `loadFonts(_:)`.
+    public static func loadFonts(_ fontNames: [String]) throws {
+        let registry = FontRegistry.shared
+        registry.loadBundledFontsIfNeeded()
+        for fontName in fontNames where !registry.hasFamily(fontName) {
+            throw FontRegistryError.resourceNotFound(fontName)
+        }
+    }
+
+    /// Set the music and text fonts of the active runtime context.
+    ///
+    /// Example: `VexFlow.setFonts("Petaluma", "Petaluma Script")`.
+    /// The default is `"Bravura", "Academico"`.
+    public static func setFonts(_ fontNames: String...) {
+        setFonts(fontNames)
+    }
+
+    /// Array form of `setFonts(_:)`.
+    public static func setFonts(_ fontNames: [String]) {
+        VexRuntime.getCurrentContext().setFonts(fontNames)
+    }
+
+    /// The font families of the active runtime context.
+    public static func getFonts() -> [String] {
+        VexRuntime.getCurrentContext().getFonts()
+    }
+
+    // MARK: Music font (deprecated typed API)
+
+    /// Typed API that guarantees a non-empty font list. Same as `setFonts(_:)`.
+    @available(*, deprecated, message: "Use setFonts(_:).")
+    @discardableResult
+    public static func setMusicFont(_ fontNames: NonEmptyArray<MusicFontName>) -> [String] {
+        let names = fontNames.array.map(\.rawValue)
+        setFonts(names)
+        return names
+    }
+
+    /// Convenience typed overload for variadic call sites.
+    @available(*, deprecated, message: "Use setFonts(_:).")
+    @discardableResult
+    public static func setMusicFont(_ first: MusicFontName, _ rest: MusicFontName...) -> [String] {
+        let names = ([first] + rest).map(\.rawValue)
+        setFonts(names)
+        return names
+    }
+
+    /// String convenience API that throws for invalid input.
+    @available(*, deprecated, message: "Use setFonts(_:).")
+    @discardableResult
+    public static func setMusicFont(parsing fontNames: [String]) throws -> [String] {
+        guard !fontNames.isEmpty else {
+            throw MusicFontParseError.emptyFontList
+        }
+
+        let parsed = try fontNames.map { name in
+            guard let parsed = MusicFontName(parsing: name) else {
+                throw MusicFontParseError.invalidFontName(name)
+            }
+            return parsed.rawValue
+        }
+
+        setFonts(parsed)
+        return parsed
+    }
+
+    /// String convenience API that returns nil for invalid input.
+    @available(*, deprecated, message: "Use setFonts(_:).")
+    @discardableResult
+    public static func setMusicFont(parsingOrNil fontNames: [String]) -> [String]? {
+        guard !fontNames.isEmpty else { return nil }
+        var names: [String] = []
+        for name in fontNames {
+            guard let parsed = MusicFontName(parsing: name) else { return nil }
+            names.append(parsed.rawValue)
+        }
+        setFonts(names)
+        return names
+    }
+
+    @available(*, deprecated, renamed: "getFonts()")
+    public static func getMusicFont() -> [String] {
+        getFonts()
+    }
+
+    // MARK: Constants
+
+    /// Upstream has setters for these constants. In Swift they are
+    /// fixed `Tables` values, so only the getters are ported.
+    public static var RENDER_PRECISION_PLACES: Int { Tables.RENDER_PRECISION_PLACES }
+
+    public static var SOFTMAX_FACTOR: Double { Tables.SOFTMAX_FACTOR }
+
+    /// Same-line unisons share the notehead position (active runtime context).
+    public static var UNISON: Bool {
+        get { Tables.UNISON }
+        set { Tables.UNISON = newValue }
+    }
+
+    public static var NOTATION_FONT_SCALE: Double { Tables.NOTATION_FONT_SCALE }
+
+    public static var TABLATURE_FONT_SCALE: Double { Tables.TABLATURE_FONT_SCALE }
+
+    public static var RESOLUTION: Int { Tables.RESOLUTION }
+
+    public static var SLASH_NOTEHEAD_WIDTH: Double { Tables.SLASH_NOTEHEAD_WIDTH }
+
+    public static var STAVE_LINE_DISTANCE: Double { Tables.STAVE_LINE_DISTANCE }
+
+    /// The stave line width: the `Stave.lineWidth` metric of the active
+    /// runtime context. The setter also sets `TabStave.lineWidth`.
+    public static var STAVE_LINE_THICKNESS: Double {
+        get {
+            let context = VexRuntime.getCurrentContext()
+            return Metrics.number(context.metrics.get("Stave.lineWidth")) ?? context.getStaveLineThickness()
+        }
+        set {
+            let context = VexRuntime.getCurrentContext()
+            context.metrics.set("Stave.lineWidth", newValue)
+            context.metrics.set("TabStave.lineWidth", newValue)
+            context.metrics.clear("Stave")
+            context.metrics.clear("TabStave")
+            context.setStaveLineThickness(newValue)
+        }
+    }
+
+    public static var STEM_HEIGHT: Double { Tables.STEM_HEIGHT }
+
+    public static var STEM_WIDTH: Double { Tables.STEM_WIDTH }
+
+    // MARK: Table utilities
+
+    public static func keySignature(_ spec: String) throws -> [(type: String, line: Double)] {
+        try Tables.keySignature(spec)
+    }
+
+    public static func hasKeySignature(_ spec: String) -> Bool {
+        Tables.hasKeySignature(spec)
+    }
+
+    /// Convert a typed duration into total ticks, with the dots.
     public static func durationToTicks(_ duration: NoteDurationSpec) -> Int {
         var ticks = Tables.durationToTicks(duration.value)
         var currentTicks = ticks
@@ -125,69 +260,5 @@ public enum Flow {
     /// Failable string convenience parser for duration-to-ticks conversion.
     public static func durationToTicksOrNil(_ duration: String) -> Int? {
         try? durationToTicks(duration)
-    }
-
-    // MARK: Key signature utilities
-
-    public static func hasKeySignature(_ spec: String) -> Bool {
-        Tables.hasKeySignature(spec)
-    }
-
-    public static func keySignature(_ spec: String) throws -> [(type: String, line: Double)] {
-        try Tables.keySignature(spec)
-    }
-
-    // MARK: Music font stack
-
-    /// Typed-first API that guarantees a non-empty font list.
-    @discardableResult
-    public static func setMusicFont(_ fontNames: NonEmptyArray<MusicFontName>) -> [VexFont] {
-        let fonts = fontNames.array.map { $0.load() }
-        Glyph.setMusicFont(fonts)
-        return fonts
-    }
-
-    /// Convenience typed overload for variadic call sites.
-    @discardableResult
-    public static func setMusicFont(_ first: MusicFontName, _ rest: MusicFontName...) -> [VexFont] {
-        guard let nonEmpty = NonEmptyArray(validating: [first] + rest) else {
-            return []
-        }
-        return setMusicFont(nonEmpty)
-    }
-
-    /// String convenience API that throws for invalid input.
-    @discardableResult
-    public static func setMusicFont(parsing fontNames: [String]) throws -> [VexFont] {
-        guard !fontNames.isEmpty else {
-            throw MusicFontParseError.emptyFontList
-        }
-
-        let parsed = try fontNames.map { name in
-            guard let parsed = MusicFontName(parsing: name) else {
-                throw MusicFontParseError.invalidFontName(name)
-            }
-            return parsed
-        }
-
-        guard let nonEmpty = NonEmptyArray(validating: parsed) else {
-            throw MusicFontParseError.emptyFontList
-        }
-
-        return setMusicFont(nonEmpty)
-    }
-
-    /// String convenience API that returns nil for invalid input.
-    @discardableResult
-    public static func setMusicFont(parsingOrNil fontNames: [String]) -> [VexFont]? {
-        try? setMusicFont(parsing: fontNames)
-    }
-
-    public static func getMusicFont() -> [String] {
-        Glyph.MUSIC_FONT_STACK.map(\.name)
-    }
-
-    public static func getMusicFontStack() -> [VexFont] {
-        Glyph.MUSIC_FONT_STACK
     }
 }

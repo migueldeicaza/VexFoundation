@@ -1,5 +1,9 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/tickcontext.ts` (VexFlow 5.0.0).
+// A formatter for abstract tickable objects, such as notes, chords,
+// tabs, etc.
 
 import Foundation
 
@@ -18,14 +22,28 @@ public struct TickContextMetrics {
     public var totalRightPx: Double = 0
 }
 
+/// Formatter metrics of a `TickContext`. A reference type, so that formatters
+/// can change `getFormatterMetrics().freedom` in place, as upstream does.
+public final class TickContextFormatterMetrics {
+    /// The freedom of a tickcontext is the distance it can move without colliding
+    /// with neighboring elements. A formatter can set these values during its
+    /// formatting pass, which a different formatter can then use to fine tune.
+    public var freedom: (left: Double, right: Double) = (0, 0)
+
+    public init() {}
+}
+
 // MARK: - TickContext
 
-/// Formats abstract tickable objects at a specific tick position.
-/// Groups notes, tabs, chords, etc. that occur at the same time.
+/// TickContext formats abstract tickable objects, such as notes, chords, tabs, etc.
+///
+/// It has a public attribute of `tContexts` which is a parent array of the TickContexts
+/// in which this TickContext belongs.
 public final class TickContext {
 
     // MARK: - Static
 
+    /// Get the next TickContext from another TickContext, from the `.tContexts` array.
     public static func getNextContext(_ tContext: TickContext) -> TickContext? {
         let contexts = tContext.tContexts
         guard let index = contexts.firstIndex(where: { $0 === tContext }) else { return nil }
@@ -60,7 +78,7 @@ public final class TickContext {
     public var preFormatted: Bool = false
     public var postFormatted: Bool = false
     public var width: Double = 0
-    public var formatterMetrics: (freedom: (left: Double, right: Double), Void) = ((0, 0), ())
+    public var formatterMetrics = TickContextFormatterMetrics()
 
     // MARK: - Init
 
@@ -114,6 +132,7 @@ public final class TickContext {
     public func getMinTickable() -> Tickable? { minTickable }
     public func getTickables() -> [Tickable] { tickables }
 
+    /// Return the tickable of voice `voiceIndex`.
     public func getTickableForVoice(_ voiceIndex: Int) -> Tickable? {
         tickablesByVoice[voiceIndex]
     }
@@ -126,6 +145,7 @@ public final class TickContext {
 
     // MARK: - Metrics
 
+    /// Gets widths context, note and left/right modifiers for formatting.
     public func getMetrics() -> TickContextMetrics {
         TickContextMetrics(
             width: width, glyphPx: glyphPx, notePx: notePx,
@@ -152,7 +172,7 @@ public final class TickContext {
         if !tickable.shouldIgnoreTicks() {
             let ticks = tickable.getTicks()
 
-            if ticks > maxTicks {
+            if ticks.greaterThan(maxTicks) {
                 maxTicks = ticks.clone()
                 maxTickable = tickable
             }
@@ -160,7 +180,7 @@ public final class TickContext {
             if minTicks == nil {
                 minTicks = ticks.clone()
                 minTickable = tickable
-            } else if ticks < minTicks! {
+            } else if let currentMin = minTicks, ticks.lessThan(currentMin) {
                 minTicks = ticks.clone()
                 minTickable = tickable
             }
@@ -183,6 +203,7 @@ public final class TickContext {
             tickable.preFormat()
             let metrics = tickable.getMetrics()
 
+            // Maintain max displaced head pixels from all tickables in the context
             leftDisplacedHeadPx = max(leftDisplacedHeadPx, metrics.leftDisplacedHeadPx)
             rightDisplacedHeadPx = max(rightDisplacedHeadPx, metrics.rightDisplacedHeadPx)
             notePx = max(notePx, metrics.notePx)
@@ -192,10 +213,10 @@ public final class TickContext {
             totalLeftPx = max(totalLeftPx, metrics.modLeftPx + metrics.leftDisplacedHeadPx)
             totalRightPx = max(totalRightPx, metrics.modRightPx + metrics.rightDisplacedHeadPx)
 
+            // Recalculate the tick context total width
             width = notePx + totalLeftPx + totalRightPx
         }
 
-        preFormatted = true
         return self
     }
 
@@ -208,7 +229,41 @@ public final class TickContext {
         return self
     }
 
-    public func getFormatterMetrics() -> (freedom: (left: Double, right: Double), Void) {
+    public func getFormatterMetrics() -> TickContextFormatterMetrics {
         formatterMetrics
+    }
+
+    /// Move this tick context by `shift` pixels rightward, and adjust the
+    /// freedom on adjacent tickcontexts.
+    /// - Parameters:
+    ///   - shift: pixels to shift rightward.
+    ///   - prev: the previous TickContext, whose right freedom will be increased by `shift`.
+    ///   - next: the next TickContext, whose left freedom will be decreased by `shift`.
+    public func move(_ shift: Double, _ prev: TickContext? = nil, _ next: TickContext? = nil) {
+        setX(getX() + shift)
+        getFormatterMetrics().freedom.left += shift
+        getFormatterMetrics().freedom.right -= shift
+
+        if let prev { prev.getFormatterMetrics().freedom.right += shift }
+        if let next { next.getFormatterMetrics().freedom.left -= shift }
+    }
+
+    /// Return the total cost of space deviations from formatter metrics for
+    /// each tickable in the context. Used by formatters.
+    ///
+    /// Since `FormatterMetrics.space.deviation` is the amount each tickable is smaller
+    /// (negative) or wider (positive) than the mean amount of space allocated to that
+    /// duration, a negative return value means the tickables at this position are on average
+    /// getting less space than they should, while a positive number means they are getting
+    /// more space than they should.
+    public func getDeviationCost() -> Double {
+        sumArray(tickables.map { $0.getFormatterMetrics().space.deviation })
+    }
+
+    /// Like getDeviationCost, but averages the cost of space deviations so that TickContexts
+    /// with more Tickables are not weighted more heavily.
+    public func getAverageDeviationCost() -> Double {
+        if tickables.isEmpty { return 0 }
+        return getDeviationCost() / Double(tickables.count)
     }
 }

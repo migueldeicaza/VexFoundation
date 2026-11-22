@@ -1,11 +1,15 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/staveconnector.ts` (VexFlow 5.0.0).
 
 import Foundation
 
 // MARK: - Connector Type
 
-public enum ConnectorType: Int {
+/// Connector type. `singleLeft` and `single` are the same value for compatibility
+/// with older versions of VexFlow which didn't have right sided stave connectors.
+public enum ConnectorType: Int, Sendable {
     case singleRight = 0
     case singleLeft = 1
     case double = 2
@@ -15,102 +19,161 @@ public enum ConnectorType: Int {
     case boldDoubleRight = 6
     case thinDouble = 7
     case none = 8
+
+    /// Same as `singleLeft`.
+    public static let single: ConnectorType = .singleLeft
+}
+
+private func drawBoldDoubleLine(_ ctx: RenderContext, _ type: ConnectorType, _ topX: Double, _ topY: Double,
+                                _ botY: Double) throws {
+    if type != .boldDoubleLeft && type != .boldDoubleRight {
+        throw VexError("InvalidConnector", "A REPEAT_BEGIN or REPEAT_END type must be provided.")
+    }
+
+    var xShift: Double = 3
+    var variableWidth: Double = 3.5 // Width for avoiding anti-aliasing width issues
+    let thickLineOffset: Double = 2 // For aesthetics
+
+    if type == .boldDoubleRight {
+        xShift = -5 // Flips the side of the thin line
+        variableWidth = 3
+    }
+
+    // Thin line
+    ctx.fillRect(topX + xShift, topY, 1, botY - topY)
+    // Thick line
+    ctx.fillRect(topX - thickLineOffset, topY, variableWidth, botY - topY)
 }
 
 // MARK: - StaveConnector
 
-/// Connects two staves with brackets, braces, or lines.
+/// StaveConnector implements the connector lines between staves of a system.
 public final class StaveConnector: VexElement {
 
     override public class var category: String { "StaveConnector" }
-    override public class var textFont: FontInfo {
-        FontInfo(
-            family: VexFont.SERIF,
-            size: 16,
-            weight: VexFontWeight.normal.rawValue,
-            style: VexFontStyle.normal.rawValue
-        )
-    }
+
+    /// Connector type strings.
+    public static let typeString: [String: ConnectorType] = [
+        "singleRight": .singleRight,
+        "singleLeft": .singleLeft,
+        "single": .single,
+        "double": .double,
+        "brace": .brace,
+        "bracket": .bracket,
+        "boldDoubleLeft": .boldDoubleLeft,
+        "boldDoubleRight": .boldDoubleRight,
+        "thinDouble": .thinDouble,
+        "none": .none,
+    ]
 
     // MARK: - Properties
 
+    public private(set) var texts: [VexElement] = []
+    public private(set) var type: ConnectorType
+
     public let topStave: Stave
     public let bottomStave: Stave
-    public var connectorType: ConnectorType = .double
-    public var connectorWidth: Double = 3
-    public var thickness: Double = Tables.STAVE_LINE_THICKNESS
-    public var connectorXShift: Double = 0
-    public var texts: [(content: String, shiftX: Double, shiftY: Double)] = []
+    public let thickness: Double
 
     // MARK: - Init
 
     public init(topStave: Stave, bottomStave: Stave) {
+        self.thickness = Tables.STAVE_LINE_THICKNESS
         self.topStave = topStave
         self.bottomStave = bottomStave
-        super.init()
+        self.type = .double
+        super.init(category: nil)
+
+        // 1. Offset Bold Double Left to align with offset Repeat Begin bars
+        // 2. Offset BRACE type not to overlap with another StaveConnector
+        xShift = 0
+        texts = []
     }
 
-    // MARK: - Setters
+    // MARK: - Type
 
+    /// Set type.
     @discardableResult
     public func setType(_ type: ConnectorType) -> Self {
-        connectorType = type
+        self.type = type
         return self
     }
 
-    public func getType() -> ConnectorType { connectorType }
+    /// Set type from a type string (see `typeString`). Unknown strings are ignored.
+    @discardableResult
+    public func setType(_ type: String) -> Self {
+        if let newType = StaveConnector.typeString[type] {
+            self.type = newType
+        }
+        return self
+    }
 
+    /// Get type.
+    public func getType() -> ConnectorType { type }
+
+    @available(*, deprecated, message: "Use getType().")
+    public var connectorType: ConnectorType {
+        get { type }
+        set { type = newValue }
+    }
+
+    // MARK: - Text
+
+    /// Set optional associated text.
     @discardableResult
     public func setText(_ text: String, shiftX: Double = 0, shiftY: Double = 0) -> Self {
-        texts.append((content: text, shiftX: shiftX, shiftY: shiftY))
+        let textElement = VexElement(category: "StaveConnector.text")
+        textElement.setText(text)
+        textElement.setXShift(shiftX)
+        textElement.setYShift(shiftY)
+        texts.append(textElement)
         return self
     }
 
+    /// Upstream `setText(text)` overrides `Element.setText` and adds a text.
     @discardableResult
-    public func setXShift(_ shift: Double) -> Self {
-        connectorXShift = shift
-        return self
+    override public func setText(_ text: String) -> Self {
+        setText(text, shiftX: 0, shiftY: 0)
     }
-
-    public func getXShift() -> Double { connectorXShift }
 
     // MARK: - Draw
 
+    /// Render connector and associated text.
     override public func draw() throws {
         let ctx = try checkContext()
         setRendered()
 
         var topY = topStave.getYForLine(0)
         var botY = bottomStave.getYForLine(Double(bottomStave.getNumLines() - 1)) + thickness
-        var width = connectorWidth
+        var width: Double = 3
         var topX = topStave.getX()
 
-        let isRightSided = connectorType == .singleRight
-            || connectorType == .boldDoubleRight
-            || connectorType == .thinDouble
-        if isRightSided {
+        let isRightSidedConnector = type == .singleRight || type == .boldDoubleRight || type == .thinDouble
+
+        if isRightSidedConnector {
             topX = topStave.getX() + topStave.getWidth()
         }
 
         var attachmentHeight = botY - topY
-
-        switch connectorType {
-        case .singleRight, .singleLeft:
+        let element = VexElement()
+        switch type {
+        case .singleLeft:
             width = 1
-
+        case .singleRight:
+            width = 1
         case .double:
-            topX -= connectorWidth + 2
+            topX -= 5
             topY -= thickness
             attachmentHeight += 0.5
-
         case .brace:
             width = 12
-            let x1 = topStave.getX() - 2 + connectorXShift
+            // May need additional code to draw brace
+            let x1 = topStave.getX() - 2 + xShift
             let y1 = topY
             let x3 = x1
             let y3 = botY
             let x2 = x1 - width
-            let y2 = y1 + attachmentHeight / 2
+            let y2 = y1 + attachmentHeight / 2.0
             let cpx1 = x2 - 0.9 * width
             let cpy1 = y1 + 0.2 * attachmentHeight
             let cpx2 = x1 + 1.1 * width
@@ -127,7 +190,6 @@ public final class StaveConnector: VexElement {
             let cpy7 = y2 - 0.135 * attachmentHeight
             let cpx8 = cpx5
             let cpy8 = cpy1
-
             ctx.beginPath()
             ctx.moveTo(x1, y1)
             ctx.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x2, y2)
@@ -136,72 +198,42 @@ public final class StaveConnector: VexElement {
             ctx.bezierCurveTo(cpx7, cpy7, cpx8, cpy8, x1, y1)
             ctx.fill()
             ctx.stroke()
-
         case .bracket:
             topY -= 6
             botY += 6
             attachmentHeight = botY - topY
-            Glyph.renderGlyph(ctx: ctx, xPos: topX - 5, yPos: topY, point: 40, code: "bracketTop")
-            Glyph.renderGlyph(ctx: ctx, xPos: topX - 5, yPos: botY, point: 40, code: "bracketBottom")
-            topX -= connectorWidth + 2
-
+            element.setText(Glyphs.bracketTop)
+            element.renderText(ctx, xPos: topX - 5, yPos: topY)
+            element.setText(Glyphs.bracketBottom)
+            element.renderText(ctx, xPos: topX - 5, yPos: botY)
+            topX -= 5
         case .boldDoubleLeft:
-            drawBoldDoubleLine(ctx: ctx, type: connectorType, topX: topX + connectorXShift, topY: topY, botY: botY - thickness)
-
+            try drawBoldDoubleLine(ctx, type, topX + xShift, topY, botY - thickness)
         case .boldDoubleRight:
-            drawBoldDoubleLine(ctx: ctx, type: connectorType, topX: topX, topY: topY, botY: botY - thickness)
-
+            try drawBoldDoubleLine(ctx, type, topX, topY, botY - thickness)
         case .thinDouble:
             width = 1
             attachmentHeight -= thickness
-
         case .none:
             break
         }
 
-        if connectorType != .brace
-            && connectorType != .boldDoubleLeft
-            && connectorType != .boldDoubleRight
-            && connectorType != .none {
+        if type != .brace && type != .boldDoubleLeft && type != .boldDoubleRight && type != .none {
             ctx.fillRect(topX, topY, width, attachmentHeight)
         }
 
-        if connectorType == .thinDouble {
+        // If the connector is a thin double barline, draw the paralell line
+        if type == .thinDouble {
             ctx.fillRect(topX - 3, topY, width, attachmentHeight)
         }
 
-        ctx.save()
-        _ = ctx.setLineWidth(2)
-        _ = ctx.setFont(getFont())
-        for text in texts {
-            let textWidth = ctx.measureText(text.content).width
-            let x = topStave.getX() - textWidth - 24 + text.shiftX
-            let y = (topStave.getYForLine(0) + bottomStave.getBottomLineY()) / 2 + text.shiftY
-            _ = ctx.fillText(text.content, x, y + 4)
+        // Add stave connector text
+        for textElement in texts {
+            let x = topStave.getX() - textElement.getWidth() - 24
+            let y = (topStave.getYForLine(0) + bottomStave.getBottomLineY()) / 2
+
+            textElement.renderText(ctx, xPos: x, yPos: y + 4)
         }
-        ctx.restore()
-    }
-
-    private func drawBoldDoubleLine(
-        ctx: RenderContext,
-        type: ConnectorType,
-        topX: Double,
-        topY: Double,
-        botY: Double
-    ) {
-        guard type == .boldDoubleLeft || type == .boldDoubleRight else { return }
-
-        var xShift = 3.0
-        var variableWidth = 3.5
-        let thickLineOffset = 2.0
-
-        if type == .boldDoubleRight {
-            xShift = -5
-            variableWidth = 3
-        }
-
-        ctx.fillRect(topX + xShift, topY, 1, botY - topY)
-        ctx.fillRect(topX - thickLineOffset, topY, variableWidth, botY - topY)
     }
 }
 
@@ -214,7 +246,6 @@ import SwiftUI
 #Preview("StaveConnector", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 300, height: 250) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory()
         _ = f.setContext(ctx)

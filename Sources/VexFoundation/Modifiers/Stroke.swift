@@ -1,64 +1,98 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010.
-// Author: Larry Kuhns. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Larry Kuhns
+//
+// Port of `src/strokes.ts` (VexFlow 5.0.0). The `Stroke` class renders chord
+// strokes that can be arpeggiated, brushed, rasgueado, etc.
 
 import Foundation
 
 // MARK: - Stroke Type
 
-public enum StrokeType: Int {
+public enum StrokeType: Int, Sendable {
     case brushDown = 1
     case brushUp = 2
+    /// Arpeggiated chord.
     case rollDown = 3
+    /// Arpeggiated chord.
     case rollUp = 4
-    case rasquedoDown = 5
-    case rasquedoUp = 6
+    case rasgueadoDown = 5
+    case rasgueadoUp = 6
+    /// Arpeggiated chord without upwards or downwards arrow.
     case arpeggioDirectionless = 7
+
+    @available(*, deprecated, renamed: "rasgueadoDown")
+    public static var rasquedoDown: StrokeType { .rasgueadoDown }
+
+    @available(*, deprecated, renamed: "rasgueadoUp")
+    public static var rasquedoUp: StrokeType { .rasgueadoUp }
+}
+
+/// Render options for `Stroke`.
+public struct StrokeRenderOptions {
+    public var fontScale: Double
+
+    public init(fontScale: Double) {
+        self.fontScale = fontScale
+    }
 }
 
 // MARK: - Stroke
 
-/// Renders chord strokes (arpeggiated, brushed, rasquedo, etc.).
 public final class Stroke: Modifier {
 
     override public class var category: String { "Stroke" }
 
     // MARK: - Static Format
 
+    /// Arrange strokes inside `ModifierContext`.
     @discardableResult
     public static func format(
         _ strokes: [Stroke],
         state: inout ModifierContextState
     ) -> Bool {
         let leftShift = state.leftShift
+        let strokeSpacing: Double = 5
 
         if strokes.isEmpty { return false }
 
-        var xShiftMax: Double = 0
-        for stroke in strokes {
+        // Only StaveNote objects have a left displaced head shift. TabNote uses 0.
+        let strokeList: [(shift: Double, stroke: Stroke)] = strokes.map { stroke in
             let note = stroke.getNote()
-            let shift = note.getLeftDisplacedHeadPx()
-            _ = stroke.setXShift(leftShift + shift)
-            xShiftMax = max(stroke.getWidth(), xShiftMax)
+            if let staveNote = note as? StaveNote {
+                return (staveNote.getLeftDisplacedHeadPx(), stroke)
+            }
+            return (0, stroke)
         }
 
-        state.leftShift += xShiftMax
+        let strokeShift = leftShift
+
+        // There can only be one stroke .. if more than one, they overlay each other
+        let xShift = strokeList.reduce(0.0) { xShift, item in
+            _ = item.stroke.setXShift(strokeShift + item.shift)
+            return max(item.stroke.getWidth() + strokeSpacing, xShift)
+        }
+
+        state.leftShift += xShift
+
         return true
     }
 
     // MARK: - Properties
 
     public var strokeType: StrokeType
+    /// Multi voice: span stroke across all voices if true.
     public var allVoices: Bool
+    /// Multi voice: end note of stroke.
     public var noteEnd: Note?
-    public var strokeRenderOptions: (fontScale: Double, ())
+    public var renderOptions: StrokeRenderOptions
 
     // MARK: - Init
 
     public init(type: StrokeType, allVoices: Bool = true) {
         self.strokeType = type
         self.allVoices = allVoices
-        self.strokeRenderOptions = (fontScale: Tables.NOTATION_FONT_SCALE, ())
+        self.renderOptions = StrokeRenderOptions(fontScale: Metrics.getDouble("Stroke.fontSize"))
 
         super.init()
         position = .left
@@ -78,21 +112,22 @@ public final class Stroke: Modifier {
 
     override public func draw() throws {
         let ctx = try checkContext()
-        let note = checkAttachedNote()
+        let note = try checkAttachedNoteThrowing()
         setRendered()
 
-        let start = note.getModifierStartXY(position: position, index: checkIndex())
-        var ys = note.getYs()
+        let start = note.getModifierStartXY(position: position, index: index ?? 0)
+        var yPositions = note.getYs()
         var topY = start.y
         var botY = start.y
         let x = start.x - 5
-        let lineSpace = note.checkStave().getSpacingBetweenLines()
+        let lineSpace = try note.checkStaveThrowing().getSpacingBetweenLines()
 
-        let members = checkModifierContext().getMembers(note.getCategory())
-        for member in members {
+        let notes = try checkModifierContextThrowing().getMembers(note.getCategory())
+        for member in notes {
+            // Only Note objects have getYs().
             if let memberNote = member as? Note {
-                ys = memberNote.getYs()
-                for y in ys {
+                yPositions = memberNote.getYs()
+                for y in yPositions {
                     if self.note === member || allVoices {
                         topY = min(topY, y)
                         botY = max(botY, y)
@@ -102,93 +137,82 @@ public final class Stroke: Modifier {
         }
 
         var arrow = ""
-        var arrowShiftX: Double = 0
         var arrowY: Double = 0
-        var textShiftX: Double = 0
         var textY: Double = 0
-        let isStave = note is StaveNote
 
         switch strokeType {
-        case .brushDown:
-            arrow = "arrowheadBlackUp"
-            arrowShiftX = -3
-            arrowY = topY - lineSpace / 2 + 10
-            botY += lineSpace / 2
-        case .brushUp:
-            arrow = "arrowheadBlackDown"
-            arrowShiftX = 0.5
-            arrowY = botY + lineSpace / 2
+        case .brushDown, .rollDown, .rasgueadoDown:
+            arrow = Glyphs.arrowheadBlackUp
+            arrowY = topY
             topY -= lineSpace / 2
-        case .rollDown, .rasquedoDown:
-            arrow = "arrowheadBlackUp"
-            arrowShiftX = -3
-            textShiftX = xShift + arrowShiftX - 2
-            if isStave {
-                topY += 1.5 * lineSpace
-                if Int(botY - topY) % 2 != 0 {
-                    botY += 0.5 * lineSpace
-                } else {
-                    botY += lineSpace
-                }
-                arrowY = topY - lineSpace
-                textY = botY + lineSpace + 2
-            } else {
-                topY += 1.5 * lineSpace
-                botY += lineSpace
-                arrowY = topY - 0.75 * lineSpace
-                textY = botY + 0.25 * lineSpace
-            }
-        case .rollUp, .rasquedoUp:
-            arrow = "arrowheadBlackDown"
-            arrowShiftX = -4
-            textShiftX = xShift + arrowShiftX - 1
-            if isStave {
-                topY += 0.5 * lineSpace
-                if Int(botY - topY) % 2 == 0 {
-                    botY += lineSpace / 2
-                }
-                arrowY = botY + 0.5 * lineSpace
-                textY = topY - 1.25 * lineSpace
-            } else {
-                topY += 0.25 * lineSpace
-                botY += 0.5 * lineSpace
-                arrowY = botY + 0.25 * lineSpace
-                textY = topY - lineSpace
-            }
+            botY += lineSpace / 2
+        case .brushUp, .rollUp, .rasgueadoUp:
+            arrow = Glyphs.arrowheadBlackDown
+            arrowY = botY + lineSpace
+            topY -= lineSpace / 2
         case .arpeggioDirectionless:
-            topY += 0.5 * lineSpace
-            botY += lineSpace
+            topY -= lineSpace / 2
+            botY += lineSpace / 2
         }
 
-        var strokeLine = "straight"
+        // Draw the stroke
         if strokeType == .brushDown || strokeType == .brushUp {
             ctx.fillRect(x + xShift, topY, 1, botY - topY)
         } else {
-            strokeLine = "wiggly"
-            var i = topY
-            while i <= botY {
-                Glyph.renderGlyph(ctx: ctx, xPos: x + xShift - 4, yPos: i,
-                                  point: strokeRenderOptions.fontScale, code: "vexWiggleArpeggioUp")
-                i += isStave ? lineSpace : 10
+            // Select the wiggle glyph depending on the arrow direction
+            let lineGlyph = arrow == Glyphs.arrowheadBlackDown
+                ? Glyphs.wiggleArpeggiatoDown : Glyphs.wiggleArpeggiatoUp
+            var txt = ""
+            let el = VexElement()
+            // add glyphs until the required length is achieved
+            while el.getWidth() < botY - topY {
+                txt += lineGlyph
+                el.setText(txt)
+                // Guard: stop if the glyph has no width (missing font).
+                if el.getWidth() <= 0 { break }
             }
-            if strokeType == .rasquedoDown && !isStave {
-                textY = i + 0.25 * lineSpace
+            if strokeType == .rasgueadoDown || strokeType == .rollDown || strokeType == .arpeggioDirectionless {
+                ctx.openRotation(90, x + xShift, topY)
+                el.renderText(
+                    ctx,
+                    xPos: x + xShift,
+                    yPos: topY - el.getTextMetrics().actualBoundingBoxDescent + el.getHeight() / 2
+                )
+                ctx.closeRotation()
+                textY = topY + el.getWidth() + 5
+            } else {
+                ctx.openRotation(-90, x + xShift, botY)
+                el.renderText(
+                    ctx,
+                    xPos: x + xShift,
+                    yPos: botY - el.getTextMetrics().actualBoundingBoxDescent + el.getHeight() / 2
+                )
+                ctx.closeRotation()
+                textY = botY - el.getWidth() - 5
             }
         }
 
-        if strokeType == .arpeggioDirectionless {
-            return
+        // Draw the arrow head
+        if arrowY != 0 {
+            let el = VexElement()
+            el.setText(arrow)
+            el.renderText(
+                ctx,
+                // Center the arrow head subtracting its width / 2
+                xPos: x + xShift - el.getWidth() / 2,
+                yPos: arrowY
+            )
         }
 
-        Glyph.renderGlyph(ctx: ctx, xPos: x + xShift + arrowShiftX, yPos: arrowY,
-                          point: strokeRenderOptions.fontScale, code: arrow,
-                          category: "stroke_\(strokeLine).\(arrow)")
-
-        if strokeType == .rasquedoDown || strokeType == .rasquedoUp {
-            ctx.save()
-            if let font = textFont { ctx.setFont(font) }
-            ctx.fillText("R", x + textShiftX, textY)
-            ctx.restore()
+        // Draw the rasgueado "R"
+        if strokeType == .rasgueadoDown || strokeType == .rasgueadoUp {
+            let el = VexElement(category: "Stroke.text")
+            el.setText("R")
+            el.renderText(
+                ctx,
+                xPos: x + xShift - el.getWidth() / 2,
+                yPos: textY + (strokeType == .rasgueadoDown ? el.getHeight() : 0)
+            )
         }
     }
 }
@@ -202,7 +226,6 @@ import SwiftUI
 #Preview("Stroke", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500, height: 150))
         _ = f.setContext(ctx)

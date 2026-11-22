@@ -1,6 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010.
-// Author: Taehoon Moon 2016. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author: Taehoon Moon 2016
+//
+// Port of `src/notesubgroup.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -23,13 +25,13 @@ public final class NoteSubGroup: Modifier {
     public init(subNotes: [Note]) {
         self.subNotes = subNotes
         self.formatter = Formatter()
-        self.voice = Voice(time: VoiceTime(numBeats: 4, beatValue: 4))
+        self.voice = Voice(time: VoiceTime(numBeats: 4, beatValue: 4, resolution: Tables.RESOLUTION))
         _ = voice.setStrict(false)
 
         super.init()
 
         position = .left
-        _ = setWidth(0)
+        width = 0
 
         for subNote in subNotes {
             _ = subNote.setIgnoreTicks(false)
@@ -72,10 +74,9 @@ public final class NoteSubGroup: Modifier {
         let ctx = try checkContext()
         let note = checkAttachedNote()
         setRendered()
-        alignSubNotesWithNote(subNotes, note)
+        alignSubNotesWithNote(subNotes, note) // Modifier function
         for subNote in subNotes {
-            _ = subNote.setContext(ctx)
-            try subNote.drawWithStyle()
+            try subNote.setContext(ctx).drawWithStyle()
         }
     }
 }
@@ -89,7 +90,6 @@ import SwiftUI
 #Preview("NoteSubGroup", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 500, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)

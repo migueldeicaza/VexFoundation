@@ -1,106 +1,102 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/barnote.ts` (VexFlow 5.0.0).
 
 import Foundation
 
 // MARK: - BarNote
 
-/// A note that renders a bar line within a voice.
-/// Has no duration and consumes no ticks.
+/// A `BarNote` renders a bar line (see `Barline`). Bar notes can be added to a
+/// voice and rendered in the middle of a stave. A bar note has no duration,
+/// so it consumes no ticks, and the formatter handles it as such.
 public final class BarNote: Note {
 
     override public class var category: String { "BarNote" }
 
     // MARK: - Properties
 
-    public var barlineType: BarlineType
-    public var barline: Barline
-
-    private static let widths: [BarlineType: Double] = [
-        .single: 8,
-        .double: 12,
-        .end: 15,
-        .repeatBegin: 14,
-        .repeatEnd: 14,
-        .repeatBoth: 18,
-        .none: 0,
-    ]
+    /// Widths of the bar line types (upstream `metrics.widths`).
+    public var widths: [BarlineType: Double] = [:]
+    /// The type of the bar note.
+    public private(set) var type: BarlineType = .single
+    /// 4.x-branch fix 198b8021: the bar note keeps one `Barline`.
+    public var barline: Barline!
 
     // MARK: - Init
 
     public init(type: BarlineType = .single) {
-        self.barlineType = type
-        self.barline = Barline(type)
-
         super.init(NoteStruct(duration: .twoFiftySixth))
 
+        widths = [
+            .single: 8,
+            .double: 12,
+            .end: 15,
+            .repeatBegin: 14,
+            .repeatEnd: 14,
+            .repeatBoth: 18,
+            .none: 0,
+        ]
+
+        // Tell the formatter that bar notes have no duration.
         ignoreTicks = true
-        setTickableWidth(BarNote.widths[type] ?? 0)
+        setType(type)
+        barline = Barline(type)
+    }
+
+    /// Create a bar note from a type string (see `Barline.typeString`).
+    public convenience init(typeString: String) {
+        self.init(type: Barline.typeString[typeString] ?? .single)
     }
 
     // MARK: - Type
 
-    public func getType() -> BarlineType { barlineType }
+    /// The type of the bar note.
+    public func getType() -> BarlineType { type }
 
+    /// Set the type of the bar note.
     @discardableResult
     public func setType(_ type: BarlineType) -> Self {
-        barlineType = type
-        barline = Barline(type)
-        setTickableWidth(BarNote.widths[type] ?? 0)
+        self.type = type
+
+        // Set width to width of relevant `Barline`.
+        setWidth(widths[type] ?? 0)
         return self
+    }
+
+    /// Set the type of the bar note from a type string (see `Barline.typeString`).
+    @discardableResult
+    public func setType(_ type: String) -> Self {
+        setType(Barline.typeString[type] ?? .single)
     }
 
     // MARK: - Overrides
 
+    /// Overridden to ignore.
+    @discardableResult
     override public func addToModifierContext(_ mc: ModifierContext) -> Self {
-        // BarNotes don't participate in modifier context
+        // DO NOTHING.
         return self
     }
 
+    /// Overridden to ignore.
     override public func preFormat() {
         preFormatted = true
     }
 
     // MARK: - Draw
 
+    /// Render the note to the stave.
     override public func draw() throws {
         let ctx = try checkContext()
-        applyStyle(context: ctx)
-
-        _ = barline.setBarlineType(barlineType)
-        barline.modifierX = getAbsoluteX()
-        try barline.drawStave(stave: checkStave())
-
-        restoreStyle(context: ctx)
+        // 4.x-branch fix 198b8021: draw the bar line inside a `barnote` group.
+        _ = ctx.openGroup("barnote", getAttribute("id"))
+        barline.setType(type)
+        barline.setX(getAbsoluteX())
+        barline.setStave(checkStave())
+        barline.setContext(ctx)
+        try barline.drawWithStyle()
+        ctx.closeGroup()
         setRendered()
     }
 }
-
-// MARK: - Preview
-
-#if DEBUG
-import SwiftUI
-
-@available(iOS 17.0, macOS 14.0, *)
-#Preview("BarNote", traits: .sizeThatFitsLayout) {
-    VexCanvas(width: 520, height: 160) { ctx in
-        ctx.clear()
-        FontLoader.loadDefaultFonts()
-
-        let f = Factory(options: FactoryOptions(width: 500))
-        _ = f.setContext(ctx)
-        let score = f.EasyScore()
-
-        let system = f.System(options: SystemOptions(
-            factory: f, x: 10, width: 500, y: 10
-        ))
-        _ = system.addStave(SystemStave(
-            voices: [score.voice(score.notes("C5/q, D5, E5, F5"))]
-        )).addClef(.treble)
-
-        system.format()
-        try? f.draw()
-    }
-    .padding()
-}
-#endif

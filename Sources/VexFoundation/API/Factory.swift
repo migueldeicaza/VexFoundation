@@ -1,11 +1,21 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Mohit Cheppudira
+//
+// Port of `src/factory.ts` (VexFlow 5.0.0).
+//
+// Local changes (see docs/local-deviations.md):
+// - Every object is created inside the factory runtime context.
+// - `formatSystems()` formats the systems before `draw()` (commit 1af03ba).
+// - There is no DOM: `newFromElementId` and `initRenderer` are not ported.
+//   Set a context with `setContext(_:)`.
 
 import Foundation
 
 // MARK: - Factory Options
 
-/// Options for Factory initialization.
+/// Options for Factory initialization. `staveSpace` is upstream
+/// `stave.space`; `width` and `height` are upstream `renderer.width/height`.
 public struct FactoryOptions {
     public var staveSpace: Double = 10
     public var width: Double = 500
@@ -34,6 +44,9 @@ public enum FactoryError: Error, LocalizedError, Equatable, Sendable {
 /// High-level API for creating VexFlow objects.
 /// Provides factory methods for notes, staves, modifiers, and other music elements.
 public final class Factory {
+
+    /// To enable logging for this class. Set `Factory.DEBUG` to `true`.
+    nonisolated(unsafe) public static var DEBUG: Bool = false
 
     // MARK: - Properties
 
@@ -64,6 +77,7 @@ public final class Factory {
         staves = []
         voices = []
         currentStave = nil
+        systemsFormatted = false
     }
 
     // MARK: - Context
@@ -149,7 +163,7 @@ public final class Factory {
 
     @discardableResult
     public func GlyphNote(
-        glyph: Glyph, noteStruct: NoteStruct,
+        glyph: String, noteStruct: NoteStruct,
         options: GlyphNoteOptions = GlyphNoteOptions()
     ) -> VexFoundation.GlyphNote {
         let note = inRuntimeContext {
@@ -322,7 +336,7 @@ public final class Factory {
         let annotation = inRuntimeContext { VexFoundation.Annotation(text) }
         _ = annotation.setJustification(hJustify)
         _ = annotation.setVerticalJustification(vJustify)
-        if let font { _ = annotation.setFont(font) }
+        annotation.setFont(font)
         if let ctx = context { _ = annotation.setContext(ctx) }
         return annotation
     }
@@ -331,28 +345,63 @@ public final class Factory {
     public func ChordSymbol(
         vJustify: ChordSymbolVerticalJustify = .top,
         hJustify: ChordSymbolHorizontalJustify = .center,
-        kerning: Bool = true,
-        reportWidth: Bool = true
+        fontFamily: String? = nil,
+        fontSize: Double? = nil,
+        fontWeight: String? = nil
     ) -> VexFoundation.ChordSymbol {
-        let cs = inRuntimeContext { VexFoundation.ChordSymbol() }
-        _ = cs.setHorizontal(hJustify)
-        _ = cs.setVertical(vJustify)
-        _ = cs.setEnableKerning(kerning)
-        _ = cs.setReportWidth(reportWidth)
-        if let ctx = context { _ = cs.setContext(ctx) }
-        return cs
+        let chordSymbol = inRuntimeContext { VexFoundation.ChordSymbol() }
+        _ = chordSymbol.setHorizontal(hJustify)
+        _ = chordSymbol.setVertical(vJustify)
+        // There is a default font based on the engraving font. Set the font
+        // only if it is specified, else use the default.
+        if let fontFamily, let fontSize {
+            let size = "\(formatJSNumber(fontSize))pt"
+            if let fontWeight {
+                chordSymbol.setFont(family: fontFamily, size: size, weight: fontWeight)
+            } else {
+                chordSymbol.setFont(family: fontFamily, size: size, weight: "")
+            }
+        } else if let fontSize {
+            chordSymbol.setFontSize(fontSize)
+        }
+        if let ctx = context { _ = chordSymbol.setContext(ctx) }
+        return chordSymbol
     }
 
     @discardableResult
-    public func Articulation(type: String = "a.") -> VexFoundation.Articulation {
-        let artic = inRuntimeContext { VexFoundation.Articulation(type) }
-        if let ctx = context { _ = artic.setContext(ctx) }
-        return artic
+    public func Articulation(
+        type: String = "a.",
+        position: ModifierPosition? = nil,
+        betweenLines: Bool? = nil
+    ) -> VexFoundation.Articulation {
+        let articulation = inRuntimeContext { VexFoundation.Articulation(type) }
+        if let position { _ = articulation.setPosition(position) }
+        if let betweenLines { _ = articulation.setBetweenLines(betweenLines) }
+        if let ctx = context { _ = articulation.setContext(ctx) }
+        return articulation
     }
 
     @discardableResult
-    public func Ornament(_ type: String) -> VexFoundation.Ornament {
+    public func Ornament(
+        _ type: String,
+        position: ModifierPosition? = nil,
+        upperAccidental: String? = nil,
+        lowerAccidental: String? = nil,
+        delayed: Bool? = nil
+    ) -> VexFoundation.Ornament {
         let ornament = inRuntimeContext { VexFoundation.Ornament(type) }
+        if let position {
+            _ = ornament.setPosition(position)
+        }
+        if let upperAccidental, !upperAccidental.isEmpty {
+            _ = ornament.setUpperAccidental(upperAccidental)
+        }
+        if let lowerAccidental, !lowerAccidental.isEmpty {
+            _ = ornament.setLowerAccidental(lowerAccidental)
+        }
+        if let delayed {
+            _ = ornament.setDelayed(delayed)
+        }
         if let ctx = context { _ = ornament.setContext(ctx) }
         return ornament
     }
@@ -379,8 +428,8 @@ public final class Factory {
                              drawCircle: Bool = true) -> VexFoundation.StringNumber {
         let sn = inRuntimeContext { VexFoundation.StringNumber(number) }
         _ = sn.setPosition(position)
-        _ = sn.setDrawCircle(drawCircle)
         if let ctx = context { _ = sn.setContext(ctx) }
+        _ = sn.setDrawCircle(drawCircle)
         return sn
     }
 
@@ -501,7 +550,7 @@ public final class Factory {
     // MARK: - Curve, Tie, Line
 
     @discardableResult
-    public func Curve(from: Note, to: Note, options: CurveOptions = CurveOptions()) -> VexFoundation.Curve {
+    public func Curve(from: Note?, to: Note?, options: CurveOptions = CurveOptions()) -> VexFoundation.Curve {
         let curve = inRuntimeContext { VexFoundation.Curve(from: from, to: to, options: options) }
         if let ctx = context { _ = curve.setContext(ctx) }
         renderQ.append(curve)
@@ -531,11 +580,11 @@ public final class Factory {
 
     @discardableResult
     public func VibratoBracket(
-        from: Note?, to: Note?, line: Double? = nil, harsh: Bool? = nil
+        from: Note?, to: Note?, line: Double? = nil, code: Int? = nil
     ) -> VexFoundation.VibratoBracket {
         let vb = inRuntimeContext { VexFoundation.VibratoBracket(start: from, stop: to) }
-        if let line { _ = vb.setLine(line) }
-        if let harsh { _ = vb.setHarsh(harsh) }
+        if let line, line != 0 { _ = vb.setLine(line) }
+        if let code, code != 0 { _ = vb.setVibratoCode(code) }
         if let ctx = context { _ = vb.setContext(ctx) }
         renderQ.append(vb)
         return vb
@@ -553,7 +602,7 @@ public final class Factory {
                 superscript: superscript, position: position
             )
         }
-        if let line { _ = tb.setLine(line) }
+        if let line, line != 0 { _ = tb.setLine(line) }
         if let font { _ = tb.setFont(font) }
         if let ctx = context { _ = tb.setContext(ctx) }
         renderQ.append(tb)
@@ -628,40 +677,36 @@ public final class Factory {
     public func formatSystems() {
         guard let ctx = context else { return }
         for system in systems {
-            _ = system.setContext(ctx)
-            system.format()
+            system.setContext(ctx).format()
         }
         systemsFormatted = true
     }
 
-    /// Render the complete score.
+    /// Render the score.
     public func draw() throws {
         guard let ctx = context else {
             throw FactoryError.missingRenderContext
         }
 
+        // Local: skip the format pass when `formatSystems()` already ran.
         if !systemsFormatted {
             for system in systems {
-                _ = system.setContext(ctx)
-                system.format()
+                system.setContext(ctx).format()
             }
         }
         for stave in staves {
-            _ = stave.setContext(ctx)
-            try stave.draw()
+            try stave.setContext(ctx).drawWithStyle()
         }
         for voice in voices {
-            try voice.draw(context: ctx)
+            try voice.setContext(ctx).drawWithStyle()
         }
         for element in renderQ {
             if !element.isRendered() {
-                _ = element.setContext(ctx)
-                try element.draw()
+                try element.setContext(ctx).drawWithStyle()
             }
         }
         for system in systems {
-            _ = system.setContext(ctx)
-            try system.draw()
+            try system.setContext(ctx).drawWithStyle()
         }
         reset()
     }
@@ -676,7 +721,6 @@ import SwiftUI
 #Preview("Factory", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 500, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)

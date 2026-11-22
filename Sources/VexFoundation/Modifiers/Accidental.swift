@@ -1,5 +1,9 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Mohit Cheppudira
+// @author Greg Ristow (modifications)
+//
+// Port of `src/accidental.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -20,7 +24,11 @@ public enum AccidentalError: Error, LocalizedError, Equatable, Sendable {
 struct AccidentalLineMetrics {
     var column: Int = 0
     var line: Double
+    /// A flat line needs more clearance above than below. This is
+    /// set to true if the accidental is either a flat or double flat.
     var flatLine: Bool
+    /// Double sharps need less clearance above and below than other
+    /// accidentals.
     var dblSharpLine: Bool
     var numAcc: Int
     var width: Double
@@ -93,8 +101,9 @@ public enum AccidentalApplyError: Error, LocalizedError, Equatable, Sendable {
 
 // MARK: - Accidental
 
-/// Modifier that adds accidentals (sharps, flats, naturals, etc.) to notes.
-/// Positioned to the left of the notehead.
+/// An `Accidental` inherits from `Modifier`, and is formatted within a
+/// `ModifierContext`. Accidentals are modifiers that can be attached to
+/// notes. Support is included for both western and microtonal accidentals.
 public final class Accidental: Modifier {
 
     override public class var category: String { "Accidental" }
@@ -102,70 +111,46 @@ public final class Accidental: Modifier {
     // MARK: - Properties
 
     public let accidentalType: AccidentalType
+    /// Accidental code provided to the constructor (a key of the
+    /// `Tables.accidentalCodes` table, or a SMuFL code point).
     public let type: String
-    public var accidentalData: AccidentalCode
-    public var cautionary: Bool = false
-    public var fontScale: Double = Tables.NOTATION_FONT_SCALE
-    public var parenLeftPadding: Double = 2
-    public var parenRightPadding: Double = 2
+    public private(set) var cautionary: Bool = false
     public private(set) var initError: AccidentalError?
 
-    private var glyph: Glyph!
-    private var parenLeft: Glyph?
-    private var parenRight: Glyph?
-
-    private static func fallbackAccidentalData() -> AccidentalCode {
-        Tables.accidentalCode(AccidentalType.natural.rawValue) ?? AccidentalCode(
-            code: "accidentalNatural",
-            parenRightPaddingAdjustment: 0
-        )
+    /// True if `type` is a key of the accidental table or a single SMuFL code point.
+    private static func isKnownType(_ type: String) -> Bool {
+        if Tables.hasAccidentalCode(type) { return true }
+        // A SMuFL code point (for example `Glyphs.accSagittal5CommaDown`).
+        let scalars = type.unicodeScalars
+        if scalars.count == 1, let scalar = scalars.first, (0xE000...0xF8FF).contains(scalar.value) {
+            return true
+        }
+        return false
     }
 
-    private static func resolveAccidentalData(for type: String) -> AccidentalCode? {
-        if let code = Tables.accidentalCode(type) {
-            return code
-        }
-        if let code = Tables.accidentalCode(type.lowercased()) {
-            return code
-        }
-        if (try? Glyph.lookupGlyph(fontStack: Glyph.MUSIC_FONT_STACK, code: type)) != nil {
-            // Upstream includes many accidental names (e.g., Sagittal) whose glyph code
-            // is the same as the accidental key.
-            return AccidentalCode(code: type, parenRightPaddingAdjustment: -1)
-        }
-        return nil
-    }
-
-    private init(
-        type: String,
-        accidentalType: AccidentalType,
-        accidentalData: AccidentalCode,
-        initError: AccidentalError? = nil
-    ) {
+    private init(type: String, accidentalType: AccidentalType) {
         self.type = type
         self.accidentalType = accidentalType
-        self.accidentalData = accidentalData
-        self.initError = initError
         super.init()
         position = .left
+        // Cautionary accidentals have parentheses around them
+        cautionary = false
         reset()
     }
 
     // MARK: - Init
 
+    /// Create accidental.
     public init(_ accidentalType: AccidentalType) {
-        if let accData = Self.resolveAccidentalData(for: accidentalType.rawValue) {
-            self.type = accidentalType.rawValue
-            self.accidentalType = accidentalType
-            self.accidentalData = accData
-        } else {
-            self.type = accidentalType.rawValue
-            self.accidentalType = accidentalType
-            self.accidentalData = Self.fallbackAccidentalData()
+        self.type = accidentalType.rawValue
+        self.accidentalType = accidentalType
+        if !Self.isKnownType(accidentalType.rawValue) {
             self.initError = .missingTableMapping(accidentalType.rawValue)
         }
         super.init()
         position = .left
+        // Cautionary accidentals have parentheses around them
+        cautionary = false
         reset()
     }
 
@@ -177,20 +162,25 @@ public final class Accidental: Modifier {
     }
 
     /// String convenience initializer that throws on invalid accidental type.
+    ///
+    /// Accepts a key of the accidental table (`#`, `##`, `b`, `n`, ...), a SMuFL
+    /// code point (for example `Glyphs.accSagittal5CommaDown`) or a SMuFL glyph
+    /// name (for example `"accSagittal5CommaDown"`).
     public convenience init(parsing type: String) throws {
         let trimmed = type.trimmingCharacters(in: .whitespacesAndNewlines)
         if let parsed = AccidentalType(parsing: trimmed) {
             self.init(parsed)
             return
         }
-        guard let accidentalData = Self.resolveAccidentalData(for: trimmed) else {
-            throw AccidentalParseError.invalidType(type)
+        if Self.isKnownType(trimmed) {
+            self.init(type: trimmed, accidentalType: .natural)
+            return
         }
-        self.init(
-            type: trimmed,
-            accidentalType: .natural,
-            accidentalData: accidentalData
-        )
+        if let code = Glyphs.code(named: trimmed) {
+            self.init(type: code, accidentalType: .natural)
+            return
+        }
+        throw AccidentalParseError.invalidType(type)
     }
 
     /// String convenience initializer that returns nil on invalid accidental type.
@@ -204,51 +194,40 @@ public final class Accidental: Modifier {
 
     // MARK: - Reset
 
-    private func reset() {
-        glyph = Glyph(code: accidentalData.code, point: fontScale)
-        glyph.setOriginX(1.0)
+    override public func reset() {
+        text = ""
 
-        if cautionary {
-            if let leftCode = Tables.accidentalCode("{"),
-               let rightCode = Tables.accidentalCode("}") {
-                parenLeft = Glyph(code: leftCode.code, point: fontScale)
-                parenRight = Glyph(code: rightCode.code, point: fontScale)
-                parenLeft?.setOriginX(1.0)
-                parenRight?.setOriginX(1.0)
-            }
+        if !cautionary {
+            text += Tables.accidentalCodes(type)
+            setFontSize(Metrics.getDouble("Accidental.fontSize"))
+        } else {
+            text += Tables.accidentalCodes("{")
+            text += Tables.accidentalCodes(type)
+            text += Tables.accidentalCodes("}")
+            setFontSize(Metrics.getDouble("Accidental.cautionary.fontSize"))
         }
-    }
-
-    // MARK: - Width
-
-    override public func getWidth() -> Double {
-        if cautionary, let pl = parenLeft, let pr = parenRight {
-            let parenWidth = pl.getMetrics().width + pr.getMetrics().width
-                + parenLeftPadding + parenRightPadding
-            return glyph.getMetrics().width + parenWidth
+        // Accidentals attached to grace notes are rendered smaller.
+        if note is GraceNote {
+            setFontSize(Metrics.getDouble("Accidental.grace.fontSize"))
         }
-        return glyph.getMetrics().width
     }
 
     // MARK: - Set Note
 
+    /// Attach this accidental to `note`, which must be a `StaveNote`.
     @discardableResult
     override public func setNote(_ note: Note) -> Self {
         self.note = note
-        // Grace notes get smaller accidentals, matching upstream behavior.
-        if note is GraceNote {
-            fontScale = 25
-            reset()
-        }
+        reset()
         return self
     }
 
     // MARK: - Cautionary
 
+    /// If called, draws parenthesis around accidental.
     @discardableResult
     public func setAsCautionary() -> Self {
         cautionary = true
-        fontScale = 28
         reset()
         return self
     }
@@ -256,231 +235,314 @@ public final class Accidental: Modifier {
     // MARK: - Static Format
 
     /// Arrange accidentals inside a ModifierContext.
-    /// Uses collision detection and column assignment to avoid overlap.
     @discardableResult
     public static func format(_ accidentals: [Accidental], state: inout ModifierContextState) -> Bool {
+        // If there are no accidentals, no need to format their positions.
         if accidentals.isEmpty { return false }
 
-        // Font metrics for spacing
-        let musicFont = Glyph.MUSIC_FONT_STACK.first
-        let noteheadAccidentalPadding = (musicFont?.lookupMetric("accidental.noteheadAccidentalPadding") as? Double) ?? 2
+        let noteheadAccidentalPadding = Metrics.getDouble("Accidental.noteheadAccidentalPadding")
         let leftShift = state.leftShift + noteheadAccidentalPadding
-        let accidentalSpacing = (musicFont?.lookupMetric("accidental.accidentalSpacing") as? Double) ?? 2
-        let additionalPadding = (musicFont?.lookupMetric("accidental.leftPadding") as? Double) ?? 2
+        let accidentalSpacing = Metrics.getDouble("Accidental.accidentalSpacing")
+        // padding to the left of all accidentals
+        let additionalPadding = Metrics.getDouble("Accidental.leftPadding")
 
-        // MARK: Phase 1 — Collect Y positions
-
-        struct AccLineEntry {
+        struct AccidentalLinePositionsAndXSpaceNeeds {
+            var y: Double?
             var line: Double
+            /// The amount by which the accidental requests that notes be shifted to the right
+            /// to accommodate its presence.
             var extraXSpaceNeeded: Double
-            var acc: Accidental
+            var accidental: Accidental
+            var spacingBetweenStaveLines: Double?
         }
 
-        var accEntries: [AccLineEntry] = []
+        var accidentalLinePositionsAndSpaceNeeds: [AccidentalLinePositionsAndXSpaceNeeds] = []
         var prevNote: Note?
-        var extraXSpace: Double = 0
+        var extraXSpaceNeededForLeftDisplacedNotehead: Double = 0
 
-        for acc in accidentals {
-            let note = acc.getNote()
-            let index = acc.checkIndex()
+        // First determine the accidentals' Y positions from the note.keys
+        for accidental in accidentals {
+            let note = accidental.getNote()
+            let stave = note.getStave()
+            let index = accidental.checkIndex()
             let props = note.getKeyProps()[index]
 
             if note !== prevNote {
-                extraXSpace = max(
-                    note.getLeftDisplacedHeadPx() - note.getXShift(),
-                    extraXSpace
-                )
+                // Iterate through all notes to get the displaced pixels
+                for _ in 0..<note.keys.count {
+                    // If the current extra left-space needed isn't as big as this note's,
+                    // then we need to use this note's.
+                    extraXSpaceNeededForLeftDisplacedNotehead = max(
+                        note.getLeftDisplacedHeadPx() - note.getXShift(),
+                        extraXSpaceNeededForLeftDisplacedNotehead
+                    )
+                }
                 prevNote = note
             }
-
-            if let stave = note.getStave() {
+            if let stave {
                 let lineSpace = stave.getSpacingBetweenLines()
                 let y = stave.getYForLine(props.line)
                 let accLine = (y / lineSpace * 2).rounded() / 2
-                accEntries.append(AccLineEntry(line: accLine, extraXSpaceNeeded: extraXSpace, acc: acc))
+                accidentalLinePositionsAndSpaceNeeds.append(AccidentalLinePositionsAndXSpaceNeeds(
+                    y: y,
+                    line: accLine,
+                    extraXSpaceNeeded: extraXSpaceNeededForLeftDisplacedNotehead,
+                    accidental: accidental,
+                    spacingBetweenStaveLines: lineSpace
+                ))
             } else {
-                accEntries.append(AccLineEntry(line: props.line, extraXSpaceNeeded: extraXSpace, acc: acc))
-            }
-        }
-
-        // MARK: Phase 2 — Sort by line (descending)
-
-        accEntries.sort { $0.line > $1.line }
-
-        // MARK: Phase 3 — Build unique line metrics
-
-        var lineMetrics: [AccidentalLineMetrics] = []
-        var maxExtraXSpace: Double = 0
-
-        for entry in accEntries {
-            if let last = lineMetrics.last, last.line == entry.line {
-                // Same line — update existing
-                let idx = lineMetrics.count - 1
-                if entry.acc.type != "b" && entry.acc.type != "bb" {
-                    lineMetrics[idx].flatLine = false
-                }
-                if entry.acc.type != "##" {
-                    lineMetrics[idx].dblSharpLine = false
-                }
-                lineMetrics[idx].numAcc += 1
-                lineMetrics[idx].width += entry.acc.getWidth() + accidentalSpacing
-            } else {
-                // New line
-                let isFlat = entry.acc.type == "b" || entry.acc.type == "bb"
-                let isDblSharp = entry.acc.type == "##"
-                lineMetrics.append(AccidentalLineMetrics(
-                    line: entry.line,
-                    flatLine: isFlat,
-                    dblSharpLine: isDblSharp,
-                    numAcc: 1,
-                    width: entry.acc.getWidth() + accidentalSpacing
+                accidentalLinePositionsAndSpaceNeeds.append(AccidentalLinePositionsAndXSpaceNeeds(
+                    line: props.line,
+                    extraXSpaceNeeded: extraXSpaceNeededForLeftDisplacedNotehead,
+                    accidental: accidental
                 ))
             }
-            maxExtraXSpace = max(entry.extraXSpaceNeeded, maxExtraXSpace)
         }
 
-        // MARK: Phase 4 — Column assignment
+        // Sort accidentals by line number (stable, like Array.prototype.sort).
+        accidentalLinePositionsAndSpaceNeeds = accidentalLinePositionsAndSpaceNeeds
+            .enumerated()
+            .sorted { $0.element.line != $1.element.line ? $0.element.line > $1.element.line : $0.offset < $1.offset }
+            .map(\.element)
+
+        var staveLineAccidentalLayoutMetrics: [AccidentalLineMetrics] = []
+
+        // amount by which all accidentals must be shifted right or left for
+        // stem flipping, notehead shifting concerns.
+        var maxExtraXSpaceNeeded: Double = 0
+
+        // Create an array of unique line numbers (staveLineAccidentalLayoutMetrics)
+        // from accidentalLinePositionsAndSpaceNeeds
+        for accidentalLinePositionAndSpaceNeeds in accidentalLinePositionsAndSpaceNeeds {
+            let accidentalType = accidentalLinePositionAndSpaceNeeds.accidental.type
+
+            // if this is the first line, or a new line, add a staveLineAccidentalLayoutMetric
+            if staveLineAccidentalLayoutMetrics.last?.line != accidentalLinePositionAndSpaceNeeds.line {
+                staveLineAccidentalLayoutMetrics.append(AccidentalLineMetrics(
+                    column: 0,
+                    line: accidentalLinePositionAndSpaceNeeds.line,
+                    flatLine: true,
+                    dblSharpLine: true,
+                    numAcc: 0,
+                    width: 0
+                ))
+            }
+            let current = staveLineAccidentalLayoutMetrics.count - 1
+
+            // if this accidental is not a flat, the accidental needs 3.0 lines lower
+            // clearance instead of 2.5 lines for b or bb.
+            if accidentalType != "b" && accidentalType != "bb" {
+                staveLineAccidentalLayoutMetrics[current].flatLine = false
+            }
+
+            // if this accidental is not a double sharp, the accidental needs 3.0 lines above
+            if accidentalType != "##" {
+                staveLineAccidentalLayoutMetrics[current].dblSharpLine = false
+            }
+
+            // Track how many accidentals are on this line:
+            staveLineAccidentalLayoutMetrics[current].numAcc += 1
+
+            // Track the total xOffset needed for this line which will be needed
+            // for formatting lines w/ multiple accidentals:
+
+            // width = accidental width + universal spacing between accidentals
+            staveLineAccidentalLayoutMetrics[current].width +=
+                accidentalLinePositionAndSpaceNeeds.accidental.getWidth() + accidentalSpacing
+
+            // if this extraXSpaceNeeded is the largest so far, use it as the starting point for
+            // all accidental columns.
+            maxExtraXSpaceNeeded = max(accidentalLinePositionAndSpaceNeeds.extraXSpaceNeeded, maxExtraXSpaceNeeded)
+        }
+
+        // ### Place Accidentals in Columns
+        //
+        // Default to a classic triangular layout (middle accidental farthest left),
+        // but follow exceptions as outlined in G. Read's _Music Notation_ and
+        // Elaine Gould's _Behind Bars_.
+        //
+        // Additionally, this implements different vertical collision rules for
+        // flats (only need 2.5 lines clearance below) and double sharps (only
+        // need 2.5 lines of clearance above or below).
+        //
+        // Classic layouts and exception patterns are found in the 'tables.js'
+        // in 'Tables.accidentalColumnsTable'
+        //
+        // Beyond 6 vertical accidentals, default to the parallel ascending lines approach,
+        // using as few columns as possible for the vertical structure.
 
         var totalColumns = 0
 
+        // establish the boundaries for a group of notes with clashing accidentals:
         var i = 0
-        while i < lineMetrics.count {
+        while i < staveLineAccidentalLayoutMetrics.count {
+            var noFurtherConflicts = false
             let groupStart = i
             var groupEnd = i
 
-            // Find collision group
-            while groupEnd + 1 < lineMetrics.count &&
-                  checkCollision(lineMetrics[groupEnd], lineMetrics[groupEnd + 1]) {
-                groupEnd += 1
-            }
-
-            let groupLength = groupEnd - groupStart + 1
-
-            // Helper functions
-            func lineDiff(_ a: Int, _ b: Int) -> Double {
-                lineMetrics[groupStart + a].line - lineMetrics[groupStart + b].line
-            }
-
-            func notColliding(_ pairs: [Int]...) -> Bool {
-                pairs.allSatisfy { pair in
-                    !checkCollision(lineMetrics[groupStart + pair[0]], lineMetrics[groupStart + pair[1]])
+            while groupEnd + 1 < staveLineAccidentalLayoutMetrics.count && !noFurtherConflicts {
+                // if this note conflicts with the next:
+                if checkCollision(
+                    staveLineAccidentalLayoutMetrics[groupEnd],
+                    staveLineAccidentalLayoutMetrics[groupEnd + 1]
+                ) {
+                    // include the next note in the group:
+                    groupEnd += 1
+                } else {
+                    noFurtherConflicts = true
                 }
             }
 
-            // Determine layout case
-            var endCase = checkCollision(lineMetrics[groupStart], lineMetrics[groupEnd]) ? "a" : "b"
+            // Gets a line from the `lineList`, relative to the current group
+            func getGroupLine(_ index: Int) -> AccidentalLineMetrics {
+                staveLineAccidentalLayoutMetrics[groupStart + index]
+            }
+            func lineDifference(_ indexA: Int, _ indexB: Int) -> Double {
+                getGroupLine(indexA).line - getGroupLine(indexB).line
+            }
+            func notColliding(_ indexPairs: [Int]...) -> Bool {
+                indexPairs.allSatisfy { pair in
+                    !checkCollision(getGroupLine(pair[0]), getGroupLine(pair[1]))
+                }
+            }
+
+            // Set columns for the lines in this group:
+            let groupLength = groupEnd - groupStart + 1
+
+            // Set the accidental column for each line of the group
+            var endCase = checkCollision(
+                staveLineAccidentalLayoutMetrics[groupStart],
+                staveLineAccidentalLayoutMetrics[groupEnd]
+            ) ? "a" : "b"
 
             switch groupLength {
             case 3:
-                if endCase == "a" && lineDiff(1, 2) == 0.5 && lineDiff(0, 1) != 0.5 {
-                    endCase = "second_on_bottom"
+                if endCase == "a" && lineDifference(1, 2) == 0.5 && lineDifference(0, 1) != 0.5 {
+                    endCase = "secondOnBottom"
                 }
             case 4:
                 if notColliding([0, 2], [1, 3]) {
-                    endCase = "spaced_out_tetrachord"
+                    endCase = "spacedOutTetrachord"
                 }
             case 5:
                 if endCase == "b" && notColliding([1, 3]) {
-                    endCase = "spaced_out_pentachord"
+                    endCase = "spacedOutPentachord"
                     if notColliding([0, 2], [2, 4]) {
-                        endCase = "very_spaced_out_pentachord"
+                        endCase = "verySpacedOutPentachord"
                     }
                 }
             case 6:
                 if notColliding([0, 3], [1, 4], [2, 5]) {
-                    endCase = "spaced_out_hexachord"
+                    endCase = "spacedOutHexachord"
                 }
                 if notColliding([0, 2], [2, 4], [1, 3], [3, 5]) {
-                    endCase = "very_spaced_out_hexachord"
+                    endCase = "verySpacedOutHexachord"
                 }
             default:
                 break
             }
 
+            // If the group contains seven members or more, use ascending parallel lines
+            // of accidentals, using as few columns as possible while avoiding collisions.
             if groupLength >= 7 {
-                // Parallel ascending lines for 7+ accidentals
+                // First, determine how many columns to use:
                 var patternLength = 2
                 var collisionDetected = true
                 while collisionDetected {
                     collisionDetected = false
-                    for line in 0..<(lineMetrics.count - patternLength) {
-                        if checkCollision(lineMetrics[line], lineMetrics[line + patternLength]) {
+                    var line = 0
+                    while line + patternLength < staveLineAccidentalLayoutMetrics.count {
+                        if checkCollision(
+                            staveLineAccidentalLayoutMetrics[line],
+                            staveLineAccidentalLayoutMetrics[line + patternLength]
+                        ) {
                             collisionDetected = true
                             patternLength += 1
                             break
                         }
+                        line += 1
                     }
                 }
-                for member in i...groupEnd {
-                    let column = ((member - i) % patternLength) + 1
-                    lineMetrics[member].column = column
-                    totalColumns = max(totalColumns, column)
+                // Then, assign a column to each line of accidentals
+                for groupMember in i...groupEnd {
+                    let column = ((groupMember - i) % patternLength) + 1
+                    staveLineAccidentalLayoutMetrics[groupMember].column = column
+                    totalColumns = totalColumns > column ? totalColumns : column
                 }
             } else {
-                // Use table layouts for 1-6 accidentals
-                if let layout = Tables.accidentalColumnsTable[groupLength]?[endCase] {
-                    for member in i...groupEnd {
-                        let column = layout[member - i]
-                        lineMetrics[member].column = column
-                        totalColumns = max(totalColumns, column)
-                    }
+                // If the group contains fewer than seven members, use the layouts from
+                // the Tables.accidentalColumnsTable (See: tables.ts).
+                let layout = Tables.accidentalColumnsTable[groupLength]?[endCase] ?? []
+                for groupMember in i...groupEnd where groupMember - i < layout.count {
+                    let column = layout[groupMember - i]
+                    staveLineAccidentalLayoutMetrics[groupMember].column = column
+                    totalColumns = totalColumns > column ? totalColumns : column
                 }
             }
 
+            // Increment i to the last note that was set, so that if a lower set of notes
+            // does not conflict at all with this group, it can have its own classic shape.
             i = groupEnd + 1
         }
 
-        // MARK: Phase 5 — Convert columns to X offsets
+        // ### Convert Columns to xOffsets
+        //
+        // This keeps columns aligned, even if they have different accidentals within them
+        // which sometimes results in a larger xOffset than is an accidental might need
+        // to preserve the symmetry of the accidental shape.
 
+        // track each column's max width, which will be used as initial shift of later columns:
         var columnWidths = [Double](repeating: 0, count: totalColumns + 1)
         var columnXOffsets = [Double](repeating: 0, count: totalColumns + 1)
 
-        columnWidths[0] = leftShift + maxExtraXSpace
+        columnWidths[0] = leftShift + maxExtraXSpaceNeeded
         columnXOffsets[0] = leftShift
 
-        // Fill with widest width per column
-        for metric in lineMetrics {
-            if metric.width > columnWidths[metric.column] {
-                columnWidths[metric.column] = metric.width
-            }
+        // Fill columnWidths with the widest needed x-space;
+        // this is what keeps the columns parallel.
+        for line in staveLineAccidentalLayoutMetrics where line.width > columnWidths[line.column] {
+            columnWidths[line.column] = line.width
         }
 
-        for col in 1..<columnWidths.count {
+        for col in stride(from: 1, to: columnWidths.count, by: 1) {
+            // this column's offset = this column's width + previous column's offset
             columnXOffsets[col] = columnWidths[col] + columnXOffsets[col - 1]
         }
 
-        let totalShift = columnXOffsets.last ?? 0
-
-        // MARK: Phase 6 — Apply X shifts
-
+        let totalShift = columnXOffsets[columnXOffsets.count - 1]
+        // Set the xShift for each accidental according to column offsets:
         var accCount = 0
-        for metric in lineMetrics {
+        for line in staveLineAccidentalLayoutMetrics {
             var lineWidth: Double = 0
-            let lastAccOnLine = accCount + metric.numAcc
+            let lastAccOnLine = accCount + line.numAcc
+            // handle all accidentals on a given line:
             while accCount < lastAccOnLine {
-                let xShift = columnXOffsets[metric.column - 1] + lineWidth + maxExtraXSpace
-                _ = accEntries[accCount].acc.setXShift(xShift)
-                lineWidth += accEntries[accCount].acc.getWidth() + accidentalSpacing
+                let xShift = columnXOffsets[max(line.column - 1, 0)] + lineWidth + maxExtraXSpaceNeeded
+                _ = accidentalLinePositionsAndSpaceNeeds[accCount].accidental.setXShift(xShift)
+                // keep track of the width of accidentals we've added so far, so that when
+                // we loop, we add space for them.
+                lineWidth += accidentalLinePositionsAndSpaceNeeds[accCount].accidental.getWidth() + accidentalSpacing
                 accCount += 1
             }
         }
-
+        // update the overall layout with the full width of the accidental shapes:
         state.leftShift = totalShift + additionalPadding
         return true
     }
 
     // MARK: - Collision Detection
 
-    /// Check if two accidental lines collide vertically.
+    /// Helper function to determine whether two lines of accidentals collide vertically.
     static func checkCollision(_ line1: AccidentalLineMetrics, _ line2: AccidentalLineMetrics) -> Bool {
         var clearance = line2.line - line1.line
-        let clearanceRequired: Double
+        var clearanceRequired: Double = 3
+        // But less clearance is required for certain accidentals: b, bb and ##.
         if clearance > 0 {
-            // line2 is on top
+            // then line 2 is on top
             clearanceRequired = (line2.flatLine || line2.dblSharpLine) ? 2.5 : 3.0
             if line1.dblSharpLine { clearance -= 0.5 }
         } else {
-            // line1 is on top
+            // line 1 is on top
             clearanceRequired = (line1.flatLine || line1.dblSharpLine) ? 2.5 : 3.0
             if line2.dblSharpLine { clearance -= 0.5 }
         }
@@ -602,7 +664,7 @@ public final class Accidental: Modifier {
                 let previouslyModified = modifiedPitches.contains(pitchIdentity)
 
                 // Remove duplicate pre-existing accidental of same type at this key index.
-                staveNote.noteModifiers.removeAll { modifier in
+                staveNote.modifiers.removeAll { modifier in
                     guard let accidental = modifier as? Accidental else { return false }
                     return accidental.type == accidentalString && accidental.getIndex() == keyIndex
                 }
@@ -641,31 +703,17 @@ public final class Accidental: Modifier {
 
     // MARK: - Draw
 
+    /// Render accidental onto canvas.
     override public func draw() throws {
         let ctx = try checkContext()
-        let note = checkAttachedNote()
+        let note = try checkAttachedNoteThrowing()
         setRendered()
 
-        guard let staveNote = note as? StaveNote else { return }
-        let start = staveNote.getModifierStartXY(position: position, index: checkIndex())
-        var accX = start.x + xShift
-        let accY = start.y + yShift
-
-        if !cautionary {
-            glyph.render(ctx: ctx, x: accX, y: accY)
-        } else {
-            guard let parenLeft, let parenRight else { return }
-
-            // Render right-to-left: parenRight, glyph, parenLeft
-            parenRight.render(ctx: ctx, x: accX, y: accY)
-            accX -= parenRight.getMetrics().width
-            accX -= parenRightPadding
-            accX -= accidentalData.parenRightPaddingAdjustment
-            glyph.render(ctx: ctx, x: accX, y: accY)
-            accX -= glyph.getMetrics().width
-            accX -= parenLeftPadding
-            parenLeft.render(ctx: ctx, x: accX, y: accY)
-        }
+        // Figure out the start `x` and `y` coordinates for note and index.
+        let start = note.getModifierStartXY(position: position, index: index ?? 0)
+        x = start.x - width
+        y = start.y
+        renderText(ctx, xPos: 0, yPos: 0)
     }
 }
 
@@ -678,7 +726,6 @@ import SwiftUI
 #Preview("Accidental", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500, height: 150))
         _ = f.setContext(ctx)

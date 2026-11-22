@@ -78,12 +78,25 @@ open class VexElement {
 
     // MARK: - Init
 
-    public convenience init() {
-        self.init(category: nil, runtimeContext: VexRuntime.getCurrentContext())
+    public init() {
+        let runtimeContext = VexRuntime.getCurrentContext()
+        let type = Swift.type(of: self).category
+        self.attrs = ElementAttributes(id: runtimeContext.generateElementID(), type: type)
+        self._fontInfo = runtimeContext.metrics.getFontInfo(type)
+        self.fontScale = Metrics.number(runtimeContext.metrics.get("\(type).fontScale")) ?? 1
+        let style = runtimeContext.metrics.getStyle(type)
+        self.style = style.isEmpty ? nil : style
+        runtimeContext.getDefaultRegistry()?.register(self)
     }
 
-    public convenience init(runtimeContext: VexRuntimeContext) {
-        self.init(category: nil, runtimeContext: runtimeContext)
+    public init(runtimeContext: VexRuntimeContext) {
+        let type = Swift.type(of: self).category
+        self.attrs = ElementAttributes(id: runtimeContext.generateElementID(), type: type)
+        self._fontInfo = runtimeContext.metrics.getFontInfo(type)
+        self.fontScale = Metrics.number(runtimeContext.metrics.get("\(type).fontScale")) ?? 1
+        let style = runtimeContext.metrics.getStyle(type)
+        self.style = style.isEmpty ? nil : style
+        runtimeContext.getDefaultRegistry()?.register(self)
     }
 
     /// Create an element. `category` overrides the class category for metrics lookup.
@@ -147,7 +160,7 @@ open class VexElement {
     /// This does not save the context state; callers pair it with
     /// `ctx.save()` / `ctx.restore()` as needed (VexFlow 5 semantics).
     @discardableResult
-    public func applyStyle(
+    open func applyStyle(
         context ctx: RenderContext? = nil,
         style: ElementStyle? = nil
     ) -> Self {
@@ -175,7 +188,7 @@ open class VexElement {
         let ctx = try checkContext()
         ctx.save()
         defer { ctx.restore() }
-        if let style { Self.apply(style, to: ctx) }
+        applyStyle(context: ctx)
         try draw()
     }
 

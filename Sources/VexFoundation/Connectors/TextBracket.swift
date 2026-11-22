@@ -1,12 +1,18 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010.
-// Author: Cyril Silverman. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Cyril Silverman
+//
+// Port of `src/textbracket.ts` (VexFlow 5.0.0).
+//
+// This file implements `TextBrackets` which extend between two notes.
+// The octave transposition markings (8va, 8vb, 15va, 15vb) can be created
+// using this class.
 
 import Foundation
 
 // MARK: - TextBracket Position
 
-public enum TextBracketPosition: Int {
+public enum TextBracketPosition: Int, Sendable {
     case top = 1
     case bottom = -1
 }
@@ -20,6 +26,7 @@ public struct TextBracketRenderOptions {
     public var lineWidth: Double = 1
     public var showBracket: Bool = true
     public var bracketHeight: Double = 8
+    /// In the BOTTOM position, the bracket line can extend under the superscript.
     public var underlineSuperscript: Bool = true
 
     public init(
@@ -47,24 +54,36 @@ public struct TextBracketRenderOptions {
 public final class TextBracket: VexElement {
 
     override public class var category: String { "TextBracket" }
-    override public class var textFont: FontInfo {
-        FontInfo(
-            family: VexFont.SERIF,
-            size: 15,
-            weight: VexFontWeight.normal.rawValue,
-            style: VexFontStyle.italic.rawValue
-        )
-    }
+
+    public static let positionString: [String: TextBracketPosition] = [
+        "top": .top,
+        "bottom": .bottom,
+    ]
 
     // MARK: - Properties
 
+    public var renderOptions = TextBracketRenderOptions()
+
+    public let textElement: VexElement
+    public let superscriptElement: VexElement
+
+    public var line: Double = 1
+
+    public let position: TextBracketPosition
     public let start: Note
     public let stop: Note
-    public let text: String
-    public let superscriptText: String
-    public let bracketPosition: TextBracketPosition
-    public var line: Double = 1
-    public var bracketRenderOptions = TextBracketRenderOptions()
+
+    @available(*, deprecated, renamed: "position")
+    public var bracketPosition: TextBracketPosition { position }
+
+    @available(*, deprecated, renamed: "renderOptions")
+    public var bracketRenderOptions: TextBracketRenderOptions {
+        get { renderOptions }
+        set { renderOptions = newValue }
+    }
+
+    /// The superscript text.
+    public var superscriptText: String { superscriptElement.getText() }
 
     // MARK: - Init
 
@@ -77,34 +96,88 @@ public final class TextBracket: VexElement {
     ) {
         self.start = start
         self.stop = stop
-        self.text = text
-        self.superscriptText = superscript
-        self.bracketPosition = position
+        self.textElement = VexElement(category: "TextBracket")
+        self.superscriptElement = VexElement(category: "TextBracket")
+        self.position = position
         super.init()
+
+        textElement.setText(text)
+        superscriptElement.setText(superscript)
+        let smallerFontSize = VexFont.scaleSize(fontInfo.size, 0.714286)
+        superscriptElement.setFontSize(smallerFontSize)
+
+        line = 1
+        renderOptions = TextBracketRenderOptions()
+    }
+
+    /// Create a text bracket with a position string (`"top"` or `"bottom"`).
+    /// An unknown string gives `.top`.
+    public convenience init(
+        start: Note,
+        stop: Note,
+        text: String = "",
+        superscript: String = "",
+        positionString: String
+    ) {
+        self.init(
+            start: start,
+            stop: stop,
+            text: text,
+            superscript: superscript,
+            position: TextBracket.positionString[positionString] ?? .top
+        )
+    }
+
+    // MARK: - Style
+
+    /// Apply the text bracket styling to the provided context.
+    /// Upstream overrides `Element.applyStyle(ctx)` and ignores the element style.
+    @discardableResult
+    override public func applyStyle(
+        context ctx: RenderContext? = nil,
+        style: ElementStyle? = nil
+    ) -> Self {
+        textElement.setFont(fontInfo)
+        let f = fontInfo
+        // To draw the superscript, we scale the font size by 1/1.4.
+        let smallerFontSize = VexFont.scaleSize(f.size, 0.714286)
+        superscriptElement.setFont(family: f.family, size: smallerFontSize, weight: f.weight, style: f.style)
+
+        guard let ctx = ctx ?? getContext() else { return self }
+        let options = renderOptions
+        ctx.setStrokeStyle(options.color)
+        ctx.setFillStyle(options.color)
+        ctx.setLineWidth(options.lineWidth)
+
+        return self
     }
 
     // MARK: - Setters
 
+    /// Set whether the bracket line should be `dashed`. You can also
+    /// optionally set the `dash` pattern.
     @discardableResult
     public func setDashed(_ dashed: Bool, dash: [Double]? = nil) -> Self {
-        bracketRenderOptions.dashed = dashed
-        if let dash { bracketRenderOptions.dash = dash }
+        renderOptions.dashed = dashed
+        if let dash { renderOptions.dash = dash }
         return self
     }
 
+    /// Set the line of the octave bracket.
     @discardableResult
     public func setLine(_ line: Double) -> Self {
         self.line = line
         return self
     }
 
-    private func drawDashedLine(
-        context: any RenderContext,
-        fromX: Double,
-        fromY: Double,
-        toX: Double,
-        toY: Double,
-        dashPattern: [Double]
+    /// Port of `Renderer.drawDashedLine`.
+    static func drawDashedLine(
+        _ context: RenderContext,
+        _ fromX: Double,
+        _ fromY: Double,
+        _ toX: Double,
+        _ toY: Double,
+        _ dashPattern: [Double]
     ) {
         context.beginPath()
 
@@ -114,19 +187,15 @@ public final class TextBracket: VexElement {
         var x = fromX
         var y = fromY
         context.moveTo(fromX, fromY)
-
-        var index = 0
+        var idx = 0
         var draw = true
-        while !((dx < 0 ? x <= toX : x >= toX) && (dy < 0 ? y <= toY : y >= toY)) {
-            let dashLength = dashPattern[index % dashPattern.count]
-            index += 1
-
+        while !dashPattern.isEmpty && !((dx < 0 ? x <= toX : x >= toX) && (dy < 0 ? y <= toY : y >= toY)) {
+            let dashLength = dashPattern[idx % dashPattern.count]
+            idx += 1
             let nx = x + cos(angle) * dashLength
             x = dx < 0 ? max(toX, nx) : min(toX, nx)
-
             let ny = y + sin(angle) * dashLength
             y = dy < 0 ? max(toY, ny) : min(toY, ny)
-
             if draw {
                 context.lineTo(x, y)
             } else {
@@ -141,108 +210,95 @@ public final class TextBracket: VexElement {
 
     // MARK: - Draw
 
+    /// Draw the octave bracket on the rendering context.
     override public func draw() throws {
         let ctx = try checkContext()
         setRendered()
 
-        let posValue = Double(bracketPosition.rawValue)
-
-        var y: Double
-        switch bracketPosition {
+        let y: Double
+        switch position {
         case .top:
             y = start.checkStave().getYForTopText(line)
         case .bottom:
             y = start.checkStave().getYForBottomText(line + Tables.TEXT_HEIGHT_OFFSET_HACK)
         }
 
-        let startX = start.getAbsoluteX()
-        let stopX = stop.getAbsoluteX()
+        // Get the preliminary start and stop coordinates for the bracket
+        let start = (x: self.start.getAbsoluteX(), y: y)
+        let stop = (x: self.stop.getAbsoluteX(), y: y)
 
-        let bracketHeight = bracketRenderOptions.bracketHeight * posValue
+        let posValue = Double(position.rawValue)
+        let bracketHeight = renderOptions.bracketHeight * posValue
 
-        ctx.save()
+        // Draw text
+        textElement.renderText(ctx, xPos: start.x, yPos: start.y)
 
-        // Apply style
-        ctx.setFont(getFont())
-        _ = ctx.setStrokeStyle(bracketRenderOptions.color)
-        _ = ctx.setFillStyle(bracketRenderOptions.color)
-        _ = ctx.setLineWidth(bracketRenderOptions.lineWidth)
+        // Get the width and height for the octave number
+        let mainWidth = textElement.getWidth()
+        let mainHeight = textElement.getHeight()
 
-        // Draw main text
-        _ = ctx.fillText(text, startX, y)
+        // Calculate the y position for the super script
+        let superY = start.y - mainHeight / 2.5
 
-        let mainMeasure = ctx.measureText(text)
-        let mainWidth = mainMeasure.width
-        let mainHeight = mainMeasure.height
+        // To draw the superscript, we scale the font size by 1/1.4.
+        superscriptElement.renderText(ctx, xPos: start.x + mainWidth + 1, yPos: superY)
 
-        // Superscript position
-        let superY = y - mainHeight / 2.5
+        // Determine width and height of the superscript
+        let superWidth = superscriptElement.getWidth()
+        let superHeight = superscriptElement.getHeight()
 
-        let baseFont = fontInfo
-        let smallerSize = VexFont.scaleSize(fontSizeInPoints, 0.714286)
-        _ = ctx.setFont(baseFont.family, smallerSize, baseFont.weight, baseFont.style)
-        _ = ctx.fillText(superscriptText, startX + mainWidth + 1, superY)
-
-        let superMeasure = ctx.measureText(superscriptText)
-        let superWidth = superMeasure.width
-        let superHeight = superMeasure.height
-
-        // Setup bracket line coordinates
-        var lineStartX = startX
+        // Setup initial coordinates for the bracket line
+        var startX = start.x
         var lineY = superY
-        let endX = stopX + stop.getGlyphWidth()
+        var endX = stop.x + self.stop.getGlyphWidth()
 
-        if bracketPosition == .top {
-            lineStartX += mainWidth + superWidth + 5
+        // Adjust x and y coordinates based on position
+        switch position {
+        case .top:
+            startX += mainWidth + superWidth + 5
             lineY -= superHeight / 2.7
-        } else {
+        case .bottom:
             lineY += superHeight / 2.7
-            lineStartX += mainWidth + 2
-            if !bracketRenderOptions.underlineSuperscript {
-                lineStartX += superWidth
+            startX += mainWidth + 2
+
+            if !renderOptions.underlineSuperscript {
+                startX += superWidth
             }
         }
 
-        if bracketRenderOptions.dashed {
+        if renderOptions.dashed {
             // VexFlowPatch: prevent bracket from going backwards, also preventing overlap with text
-            var clampedEndX = endX
-            if clampedEndX < lineStartX + 5 && bracketPosition == .top {
-                clampedEndX = lineStartX + 5
-            } else if clampedEndX < lineStartX + superWidth && bracketPosition == .bottom {
-                clampedEndX = lineStartX + superWidth
+            if endX < startX + 5 && position == .top {
+                endX = startX + 5
+            } else if endX < startX + superWidth && position == .bottom {
+                endX = startX + superWidth
             }
 
-            drawDashedLine(
-                context: ctx,
-                fromX: lineStartX,
-                fromY: lineY,
-                toX: clampedEndX,
-                toY: lineY,
-                dashPattern: bracketRenderOptions.dash
-            )
-
-            if bracketRenderOptions.showBracket {
-                drawDashedLine(
-                    context: ctx,
-                    fromX: clampedEndX,
-                    fromY: lineY + 1 * posValue,
-                    toX: clampedEndX,
-                    toY: lineY + bracketHeight,
-                    dashPattern: bracketRenderOptions.dash
+            // Main line
+            Self.drawDashedLine(ctx, startX, lineY, endX, lineY, renderOptions.dash)
+            // Ending Bracket
+            if renderOptions.showBracket {
+                Self.drawDashedLine(
+                    ctx,
+                    endX,
+                    lineY + 1 * posValue,
+                    endX,
+                    lineY + bracketHeight,
+                    renderOptions.dash
                 )
             }
         } else {
             ctx.beginPath()
-            ctx.moveTo(lineStartX, lineY)
+            ctx.moveTo(startX, lineY)
+            // Main line
             ctx.lineTo(endX, lineY)
-            if bracketRenderOptions.showBracket {
+            if renderOptions.showBracket {
+                // Ending bracket
                 ctx.lineTo(endX, lineY + bracketHeight)
             }
             ctx.stroke()
             ctx.closePath()
         }
-
-        ctx.restore()
     }
 }
 
@@ -255,7 +311,6 @@ import SwiftUI
 #Preview("TextBracket", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 180) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)

@@ -1,5 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/tabtie.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -23,12 +25,15 @@ open class TabTie: StaveTie {
 
     // MARK: - Init
 
+    /// - Parameters:
+    ///   - notes: `firstNote`, `lastNote`, `firstIndexes` and `lastIndexes`.
+    ///   - text: The tie text, for example "H" or "P".
     public override init(notes: TieNotes, text: String? = nil) {
         super.init(notes: notes, text: text)
         renderOptions.cp1 = 9
         renderOptions.cp2 = 11
         renderOptions.yShift = 3
-        direction = .down  // Tab ties are always face up
+        direction = .down // Tab ties are always face up (-1).
     }
 }
 
@@ -41,7 +46,6 @@ import SwiftUI
 #Preview("TabTie", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 500, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)
@@ -63,10 +67,10 @@ import SwiftUI
         _ = formatter.joinVoices([voice])
         _ = formatter.format([voice], justifyWidth: 400)
 
-        let hammeron = TabTie(notes: TieNotes(firstNote: notes[0], lastNote: notes[1], firstIndices: [0], lastIndices: [0]), text: "H")
+        let hammeron = TabTie(notes: TieNotes(firstNote: notes[0], lastNote: notes[1], firstIndexes: [0], lastIndexes: [0]), text: "H")
         _ = hammeron.setContext(ctx)
 
-        let pulloff = TabTie(notes: TieNotes(firstNote: notes[2], lastNote: notes[3], firstIndices: [0], lastIndices: [0]), text: "P")
+        let pulloff = TabTie(notes: TieNotes(firstNote: notes[2], lastNote: notes[3], firstIndexes: [0], lastIndexes: [0]), text: "P")
         _ = pulloff.setContext(ctx)
 
         try? f.draw()

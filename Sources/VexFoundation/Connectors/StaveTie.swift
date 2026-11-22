@@ -1,5 +1,10 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/stavetie.ts` (VexFlow 5.0.0).
+//
+// This class implements varies types of ties between contiguous notes. The
+// ties include: regular ties, hammer ons, pull offs, and slides.
 
 import Foundation
 
@@ -14,47 +19,77 @@ public enum StaveTieError: Error, LocalizedError, Equatable, Sendable {
         case .requiresStartOrEndNote:
             return "Tie needs to have either firstNote or lastNote set."
         case .mismatchedIndices(let firstCount, let lastCount):
-            return "Tied notes must have same number of indices (\(firstCount) vs \(lastCount))."
+            return "Tied notes must have same number of indexes (\(firstCount) vs \(lastCount))."
         case .noYValues:
-            return "No Y-values to render tie."
+            return "No Y-values to render"
         case .badIndices:
-            return "Bad indices for tie rendering."
+            return "Bad indexes for tie rendering."
         }
     }
 }
 
 // MARK: - Tie Notes
 
-/// Specifies the notes and indices for a tie connection.
+/// Specifies the notes and indexes for a tie connection.
 public struct TieNotes {
     public var firstNote: Note?
     public var lastNote: Note?
-    public var firstIndices: [Int]
-    public var lastIndices: [Int]
+    public var firstIndexes: [Int]
+    public var lastIndexes: [Int]
 
     public init(
         firstNote: Note? = nil,
         lastNote: Note? = nil,
-        firstIndices: [Int] = [0],
-        lastIndices: [Int] = [0]
+        firstIndexes: [Int] = [0],
+        lastIndexes: [Int] = [0]
     ) {
         self.firstNote = firstNote
         self.lastNote = lastNote
-        self.firstIndices = firstIndices
-        self.lastIndices = lastIndices
+        self.firstIndexes = firstIndexes
+        self.lastIndexes = lastIndexes
+    }
+
+    @available(*, deprecated, renamed: "init(firstNote:lastNote:firstIndexes:lastIndexes:)")
+    public init(
+        firstNote: Note? = nil,
+        lastNote: Note? = nil,
+        firstIndices: [Int],
+        lastIndices: [Int]
+    ) {
+        self.init(firstNote: firstNote, lastNote: lastNote, firstIndexes: firstIndices, lastIndexes: lastIndices)
+    }
+
+    @available(*, deprecated, renamed: "firstIndexes")
+    public var firstIndices: [Int] {
+        get { firstIndexes }
+        set { firstIndexes = newValue }
+    }
+
+    @available(*, deprecated, renamed: "lastIndexes")
+    public var lastIndices: [Int] {
+        get { lastIndexes }
+        set { lastIndexes = newValue }
     }
 }
 
 // MARK: - Tie Render Options
 
 public struct TieRenderOptions {
+    /// Curve control point 1
     public var cp1: Double = 8
+    /// Curve control point 2
     public var cp2: Double = 12
+    /// Below this distance we use short control points
+    public var shortTieCutoff: Double = 10
+    public var cp1Short: Double = 2
+    public var cp2Short: Double = 8
     public var textShiftX: Double = 0
     public var firstXShift: Double = 0
     public var lastXShift: Double = 0
     public var yShift: Double = 7
     public var tieSpacing: Double = 0
+
+    public init() {}
 }
 
 // MARK: - StaveTie
@@ -69,46 +104,52 @@ open class StaveTie: VexElement {
 
     public var renderOptions = TieRenderOptions()
     public var notes: TieNotes
-    public var text: String?
+    /// The direction set with `setDirection`. `nil` means: use the note stem direction.
     public var direction: TieDirection?
+    /// Swift-native: set when the notes are not valid (upstream throws).
     public private(set) var initError: StaveTieError?
 
     private static func normalizedTieNotes(_ notes: TieNotes) -> (notes: TieNotes, error: StaveTieError?) {
         guard notes.firstNote != nil || notes.lastNote != nil else {
-            return (TieNotes(firstIndices: [0], lastIndices: [0]), .requiresStartOrEndNote)
+            return (TieNotes(firstIndexes: [0], lastIndexes: [0]), .requiresStartOrEndNote)
         }
 
         var normalized = notes
-        if normalized.firstIndices.isEmpty { normalized.firstIndices = [0] }
-        if normalized.lastIndices.isEmpty { normalized.lastIndices = [0] }
-        guard normalized.firstIndices.count != normalized.lastIndices.count else {
+        if normalized.firstIndexes.isEmpty { normalized.firstIndexes = [0] }
+        if normalized.lastIndexes.isEmpty { normalized.lastIndexes = [0] }
+        guard normalized.firstIndexes.count != normalized.lastIndexes.count else {
             return (normalized, nil)
         }
 
         let error = StaveTieError.mismatchedIndices(
-            firstCount: normalized.firstIndices.count,
-            lastCount: normalized.lastIndices.count
+            firstCount: normalized.firstIndexes.count,
+            lastCount: normalized.lastIndexes.count
         )
-        let count = min(normalized.firstIndices.count, normalized.lastIndices.count)
+        let count = min(normalized.firstIndexes.count, normalized.lastIndexes.count)
         if count > 0 {
-            normalized.firstIndices = Array(normalized.firstIndices.prefix(count))
-            normalized.lastIndices = Array(normalized.lastIndices.prefix(count))
+            normalized.firstIndexes = Array(normalized.firstIndexes.prefix(count))
+            normalized.lastIndexes = Array(normalized.lastIndexes.prefix(count))
         } else {
-            normalized.firstIndices = [0]
-            normalized.lastIndices = [0]
+            normalized.firstIndexes = [0]
+            normalized.lastIndexes = [0]
         }
         return (normalized, error)
     }
 
     // MARK: - Init
 
+    /// - Parameters:
+    ///   - notes: `firstNote`, `lastNote`, `firstIndexes`, `lastIndexes`.
+    ///   - text: tie text.
+    /// Invalid notes set `initError`; use `init(validating:text:)` to throw.
     public init(notes: TieNotes, text: String? = nil) {
         self.notes = TieNotes()
-        self.text = text
         super.init()
         let normalized = Self.normalizedTieNotes(notes)
         self.notes = normalized.notes
         self.initError = normalized.error
+        self.text = text ?? ""
+        self.renderOptions = TieRenderOptions()
     }
 
     public convenience init(validating notes: TieNotes, text: String? = nil) throws {
@@ -119,6 +160,21 @@ open class StaveTie: VexElement {
     }
 
     // MARK: - Direction
+
+    /// Returns either the direction explicitly set with setDirection, or
+    /// a logical direction based on lastNote or firstNote.
+    public func getDirection() -> TieDirection {
+        if let direction {
+            return direction
+        } else if let lastNote = notes.lastNote {
+            return TieDirection(stemDirection: lastNote.getStemDirection())
+        } else if let firstNote = notes.firstNote {
+            return TieDirection(stemDirection: firstNote.getStemDirection())
+        } else {
+            // Upstream returns 0; setNotes() makes this unreachable.
+            return .up
+        }
+    }
 
     @discardableResult
     public func setDirection(_ direction: TieDirection) -> Self {
@@ -133,6 +189,7 @@ open class StaveTie: VexElement {
 
     // MARK: - Notes
 
+    /// Set the notes to attach this tie to.
     @discardableResult
     public func setNotes(_ notes: TieNotes) -> Self {
         _ = try? setNotesThrowing(notes)
@@ -146,13 +203,13 @@ open class StaveTie: VexElement {
         }
 
         var n = notes
-        if n.firstIndices.isEmpty { n.firstIndices = [0] }
-        if n.lastIndices.isEmpty { n.lastIndices = [0] }
+        if n.firstIndexes.isEmpty { n.firstIndexes = [0] }
+        if n.lastIndexes.isEmpty { n.lastIndexes = [0] }
 
-        guard n.firstIndices.count == n.lastIndices.count else {
+        guard n.firstIndexes.count == n.lastIndexes.count else {
             throw StaveTieError.mismatchedIndices(
-                firstCount: n.firstIndices.count,
-                lastCount: n.lastIndices.count
+                firstCount: n.firstIndexes.count,
+                lastCount: n.lastIndexes.count
             )
         }
 
@@ -160,22 +217,22 @@ open class StaveTie: VexElement {
         return self
     }
 
-    public func getNotes() -> TieNotes { notes }
-
+    /// Returns true if this is a partial bar.
     public func isPartial() -> Bool {
         notes.firstNote == nil || notes.lastNote == nil
     }
 
     // MARK: - Render Tie
 
+    /// `firstX` and `lastX` are specified in pixels.
     open func renderTie(
         direction: TieDirection,
-        firstXPx: Double,
-        lastXPx: Double,
+        firstX: Double,
+        lastX: Double,
         firstYs: [Double],
         lastYs: [Double]
     ) throws {
-        guard !firstYs.isEmpty && !lastYs.isEmpty else {
+        if firstYs.isEmpty || lastYs.isEmpty {
             throw StaveTieError.noYValues
         }
 
@@ -183,124 +240,155 @@ open class StaveTie: VexElement {
         var cp1 = renderOptions.cp1
         var cp2 = renderOptions.cp2
 
-        if abs(lastXPx - firstXPx) < 10 {
-            cp1 = 2
-            cp2 = 8
+        if abs(lastX - firstX) < renderOptions.shortTieCutoff {
+            // do not get super exaggerated curves for very short ties
+            cp1 = renderOptions.cp1Short
+            cp2 = renderOptions.cp2Short
         }
 
+        let dir = direction.signDouble
         let firstXShift = renderOptions.firstXShift
         let lastXShift = renderOptions.lastXShift
-        let yShift = renderOptions.yShift * direction.signDouble
+        let yShift = renderOptions.yShift * dir
 
-        let firstIndices = notes.firstIndices
-        let lastIndices = notes.lastIndices
-
-        applyStyle(context: ctx, style: getStyle())
-        _ = ctx.openGroup("stavetie", getAttribute("id") ?? "")
-
-        for i in 0..<firstIndices.count {
-            guard firstIndices[i] >= 0, firstIndices[i] < firstYs.count,
-                  lastIndices[i] >= 0, lastIndices[i] < lastYs.count else {
+        let firstIndexes = notes.firstIndexes
+        let lastIndexes = notes.lastIndexes
+        _ = ctx.openGroup("stavetie", getAttribute("id"))
+        for i in 0..<firstIndexes.count {
+            let cpX = (lastX + lastXShift + (firstX + firstXShift)) / 2
+            guard i < lastIndexes.count,
+                  firstIndexes[i] >= 0, firstIndexes[i] < firstYs.count,
+                  lastIndexes[i] >= 0, lastIndexes[i] < lastYs.count else {
+                ctx.closeGroup()
                 throw StaveTieError.badIndices
             }
-            let cpX = (lastXPx + lastXShift + firstXPx + firstXShift) / 2
-            let firstYPx = firstYs[firstIndices[i]] + yShift
-            let lastYPx = lastYs[lastIndices[i]] + yShift
+            // firstY and lastY are specified in pixels.
+            let firstY = firstYs[firstIndexes[i]] + yShift
+            let lastY = lastYs[lastIndexes[i]] + yShift
 
-            guard !firstYPx.isNaN && !lastYPx.isNaN else {
+            if firstY.isNaN || lastY.isNaN {
+                ctx.closeGroup()
                 throw StaveTieError.badIndices
             }
 
-            let topCpY = (firstYPx + lastYPx) / 2 + cp1 * direction.signDouble
-            let bottomCpY = (firstYPx + lastYPx) / 2 + cp2 * direction.signDouble
+            let topControlPointY = (firstY + lastY) / 2 + cp1 * dir
+            let bottomControlPointY = (firstY + lastY) / 2 + cp2 * dir
 
             ctx.beginPath()
-            ctx.moveTo(firstXPx + firstXShift, firstYPx)
-            ctx.quadraticCurveTo(cpX, topCpY,
-                                 lastXPx + lastXShift, lastYPx)
-            ctx.quadraticCurveTo(cpX, bottomCpY,
-                                 firstXPx + firstXShift, firstYPx)
+            ctx.moveTo(firstX + firstXShift, firstY)
+            ctx.quadraticCurveTo(cpX, topControlPointY, lastX + lastXShift, lastY)
+            ctx.quadraticCurveTo(cpX, bottomControlPointY, firstX + firstXShift, firstY)
             ctx.closePath()
             ctx.fill()
         }
-
         ctx.closeGroup()
-        restoreStyle(context: ctx, style: getStyle())
     }
 
     // MARK: - Render Text
 
-    public func renderText(firstXPx: Double, lastXPx: Double) throws {
-        guard let text, !text.isEmpty else { return }
+    /// `firstX` and `lastX` are specified in pixels.
+    public func renderTieText(firstX: Double, lastX: Double) throws {
         let ctx = try checkContext()
-
-        var centerX = (firstXPx + lastXPx) / 2
+        var centerX = (firstX + lastX) / 2
         centerX -= ctx.measureText(text).width / 2
-
         let stave = notes.firstNote?.checkStave() ?? notes.lastNote?.checkStave()
         if let stave {
-            ctx.save()
-            ctx.setFont(getFont())
-            ctx.fillText(text, centerX + renderOptions.textShiftX,
-                        stave.getYForTopText() - 1)
-            ctx.restore()
+            ctx.setFont(fontInfo)
+            ctx.fillText(text, centerX + renderOptions.textShiftX, stave.getYForTopText() - 1)
+        }
+    }
+
+    @available(*, deprecated, renamed: "renderTieText(firstX:lastX:)")
+    public func renderText(firstXPx: Double, lastXPx: Double) throws {
+        try renderTieText(firstX: firstXPx, lastX: lastXPx)
+    }
+
+    // MARK: - Positions
+
+    /// Returns the TieNotes structure of the first and last note this tie connects.
+    public func getNotes() -> TieNotes { notes }
+
+    /// Returns the X position in pixels that the tie will be drawn starting from;
+    /// ideally from the firstNote, alternatively from the lastNote, or 0 if all else fails.
+    public func getFirstX() -> Double {
+        if let firstNote = notes.firstNote {
+            return firstNote.getTieRightX() + renderOptions.tieSpacing
+        } else if let lastNote = notes.lastNote {
+            return lastNote.checkStave().getTieStartX()
+        } else {
+            return 0
+        }
+    }
+
+    /// Returns the X position in pixels that the tie will be drawn ending at;
+    /// ideally from the lastNote, alternatively from the firstNote, or 0 if all else fails.
+    public func getLastX() -> Double {
+        if let lastNote = notes.lastNote {
+            return lastNote.getTieLeftX() + renderOptions.tieSpacing
+        } else if let firstNote = notes.firstNote {
+            return firstNote.checkStave().getTieEndX()
+        } else {
+            return 0
+        }
+    }
+
+    /// Get the Y positions of the places where a tie needs to be drawn starting from.
+    public func getFirstYs() -> [Double] {
+        if let firstNote = notes.firstNote {
+            return firstNote.getYs()
+        } else if let lastNote = notes.lastNote {
+            return lastNote.getYs()
+        } else {
+            return [0]
+        }
+    }
+
+    /// Get the Y positions of the places where a tie needs to be drawn ending at.
+    public func getLastYs() -> [Double] {
+        if let lastNote = notes.lastNote {
+            return lastNote.getYs()
+        } else if let firstNote = notes.firstNote {
+            return firstNote.getYs()
+        } else {
+            return [0]
+        }
+    }
+
+    /// If a tie has firstNote and not lastNote, or vice-versa, then their
+    /// firstIndexes and lastIndexes need to be equal to each other.
+    ///
+    /// Does nothing if both notes.firstNote and notes.lastNote are defined (or
+    /// if neither are).
+    public func synchronizeIndexes() {
+        if notes.firstNote != nil && notes.lastNote != nil {
+            return
+        } else if notes.firstNote == nil && notes.lastNote == nil {
+            return
+        } else if notes.firstNote != nil {
+            notes.lastIndexes = notes.firstIndexes
+        } else {
+            // notes.lastNote defined, but not firstNote
+            notes.firstIndexes = notes.lastIndexes
         }
     }
 
     // MARK: - Draw
 
-    override public func draw() throws {
+    override open func draw() throws {
         _ = try checkContext()
         setRendered()
-
-        guard notes.firstNote != nil || notes.lastNote != nil else {
-            throw StaveTieError.requiresStartOrEndNote
-        }
-
-        let firstNote = notes.firstNote
-        let lastNote = notes.lastNote
-
-        var firstXPx: Double = 0
-        var lastXPx: Double = 0
-        var firstYs: [Double] = [0]
-        var lastYs: [Double] = [0]
-        var tieDirection: TieDirection?
-
-        if let firstNote {
-            firstXPx = firstNote.getTieRightX() + renderOptions.tieSpacing
-            tieDirection = TieDirection(stemDirection: firstNote.getStemDirection())
-            firstYs = firstNote.getYs()
-        } else if let lastNote {
-            let stave = lastNote.checkStave()
-            firstXPx = stave.getTieStartX()
-            firstYs = lastNote.getYs()
-            notes.firstIndices = notes.lastIndices
-        }
-
-        if let lastNote {
-            lastXPx = lastNote.getTieLeftX() + renderOptions.tieSpacing
-            tieDirection = TieDirection(stemDirection: lastNote.getStemDirection())
-            lastYs = lastNote.getYs()
-        } else if let firstNote {
-            let stave = firstNote.checkStave()
-            lastXPx = stave.getTieEndX()
-            lastYs = firstNote.getYs()
-            notes.lastIndices = notes.firstIndices
-        }
-
-        if let direction {
-            tieDirection = direction
-        }
-
+        synchronizeIndexes()
+        let firstX = getFirstX()
+        let lastX = getLastX()
         try renderTie(
-            direction: tieDirection ?? .up,
-            firstXPx: firstXPx,
-            lastXPx: lastXPx,
-            firstYs: firstYs,
-            lastYs: lastYs
+            direction: getDirection(), // note: not self.direction
+            firstX: firstX,
+            lastX: lastX,
+            firstYs: getFirstYs(),
+            lastYs: getLastYs()
         )
 
-        try renderText(firstXPx: firstXPx, lastXPx: lastXPx)
+        try renderTieText(firstX: firstX, lastX: lastX)
     }
 }
 
@@ -313,7 +401,6 @@ import SwiftUI
 #Preview("StaveTie", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)
@@ -329,11 +416,11 @@ import SwiftUI
 
         _ = f.StaveTie(notes: TieNotes(
             firstNote: notes[0], lastNote: notes[1],
-            firstIndices: [0], lastIndices: [0]
+            firstIndexes: [0], lastIndexes: [0]
         ))
         _ = f.StaveTie(notes: TieNotes(
             firstNote: notes[2], lastNote: notes[3],
-            firstIndices: [0], lastIndices: [0]
+            firstIndexes: [0], lastIndexes: [0]
         ))
 
         try? f.draw()

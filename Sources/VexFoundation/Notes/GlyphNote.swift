@@ -1,5 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/glyphnote.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -18,118 +20,64 @@ public struct GlyphNoteOptions {
 // MARK: - GlyphNote
 
 /// A note that renders a single glyph (e.g. repeat signs, segno, coda).
+/// The glyph is the element `text`.
 open class GlyphNote: Note {
 
     override open class var category: String { "GlyphNote" }
 
     // MARK: - Properties
 
-    public var glyphNoteOptions: GlyphNoteOptions
-    public var noteGlyph: Glyph
+    public var options: GlyphNoteOptions
 
     // MARK: - Init
 
-    public init(glyph: Glyph, noteStruct: NoteStruct, options: GlyphNoteOptions = GlyphNoteOptions()) {
-        self.glyphNoteOptions = options
-        self.noteGlyph = glyph
+    /// - Parameter glyph: the glyph code (for example `Glyphs.coda`).
+    public init(glyph: String, noteStruct: NoteStruct, options: GlyphNoteOptions = GlyphNoteOptions()) {
+        self.options = options
         super.init(noteStruct)
-        self.ignoreTicks = options.ignoreTicks
+
+        // Note properties
+        ignoreTicks = self.options.ignoreTicks
         setGlyph(glyph)
     }
 
     // MARK: - Glyph
 
     @discardableResult
-    public func setGlyph(_ glyph: Glyph) -> Self {
-        noteGlyph = glyph
-        setTickableWidth(noteGlyph.getMetrics().width)
+    public func setGlyph(_ glyph: String) -> Self {
+        text = glyph
         return self
-    }
-
-    override public func getGlyphWidth() -> Double {
-        noteGlyph.getMetrics().width
-    }
-
-    override public func getMetrics() -> NoteMetrics {
-        var m = super.getMetrics()
-        m.glyphWidth = noteGlyph.getMetrics().width
-        m.width = noteGlyph.getMetrics().width
-        return m
-    }
-
-    override public func getBoundingBox() -> BoundingBox? {
-        noteGlyph.bbox
     }
 
     // MARK: - PreFormat
 
-    override public func preFormat() {
-        if !preFormatted {
-            if let mc = modifierContext {
-                mc.preFormat()
-            }
-            preFormatted = true
+    override open func preFormat() {
+        if !preFormatted, let mc = modifierContext {
+            mc.preFormat()
         }
+        preFormatted = true
     }
 
     // MARK: - Draw
 
     public func drawModifiers() throws {
         let ctx = try checkContext()
-        for modifier in getModifiers() {
+        for modifier in modifiers {
             modifier.setContext(ctx)
-            try modifier.draw()
+            try modifier.drawWithStyle()
         }
     }
 
-    override public func draw() throws {
+    override open func draw() throws {
         let stave = checkStave()
-        let ctx = try checkContext()
+        let ctx = try stave.checkContext()
         setRendered()
+        _ = ctx.openGroup("glyphNote", getAttribute("id"))
 
-        applyStyle(context: ctx, style: getStyle())
-        _ = ctx.openGroup("glyphnote", getAttribute("id") ?? "")
-
-        noteGlyph.setContext(ctx)
-        _ = noteGlyph.setStave(stave)
-        noteGlyph.yShift = stave.getYForLine(glyphNoteOptions.line)
-            - stave.getYForGlyphs()
-
-        let x = isCenterAligned() ? getAbsoluteX() - tickableWidth / 2 : getAbsoluteX()
-
-        noteGlyph.renderToStave(x: x)
+        x = isCenterAligned() ? getAbsoluteX() - getWidth() / 2 : getAbsoluteX()
+        y = stave.getYForLine(options.line)
+        renderText(ctx, xPos: 0, yPos: 0)
         try drawModifiers()
-
         ctx.closeGroup()
-        restoreStyle(context: ctx, style: getStyle())
     }
 }
-
-// MARK: - Preview
-
-#if DEBUG
-import SwiftUI
-
-@available(iOS 17.0, macOS 14.0, *)
-#Preview("GlyphNote", traits: .sizeThatFitsLayout) {
-    VexCanvas(width: 520, height: 160) { ctx in
-        ctx.clear()
-        FontLoader.loadDefaultFonts()
-
-        let f = Factory(options: FactoryOptions(width: 500))
-        _ = f.setContext(ctx)
-        let score = f.EasyScore()
-
-        let system = f.System(options: SystemOptions(
-            factory: f, x: 10, width: 500, y: 10
-        ))
-        _ = system.addStave(SystemStave(
-            voices: [score.voice(score.notes("C5/q, D5, E5, F5"))]
-        )).addClef(.treble)
-
-        system.format()
-        try? f.draw()
-    }
-    .padding()
-}
-#endif

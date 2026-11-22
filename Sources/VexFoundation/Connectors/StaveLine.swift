@@ -1,5 +1,13 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/staveline.ts` (VexFlow 5.0.0).
+//
+// This file implements `StaveLine` which are simply lines that connect
+// two notes. This object is highly configurable, see the `renderOptions`.
+// A simple line is often used for notating glissando articulations, but you
+// can format a `StaveLine` with arrows or colors for more pedagogical
+// purposes, such as diagrams.
 
 import Foundation
 
@@ -9,7 +17,7 @@ public enum StaveLineError: Error, LocalizedError, Equatable, Sendable {
     public var errorDescription: String? {
         switch self {
         case .mismatchedIndices(let firstCount, let lastCount):
-            return "Connected notes must have same number of indices (\(firstCount) vs \(lastCount))."
+            return "Connected notes must have same number of indexes (\(firstCount) vs \(lastCount))."
         }
     }
 }
@@ -18,26 +26,48 @@ public enum StaveLineError: Error, LocalizedError, Equatable, Sendable {
 
 public struct StaveLineNotes {
     public var firstNote: StaveNote
-    public var firstIndices: [Int]
+    public var firstIndexes: [Int]
     public var lastNote: StaveNote
-    public var lastIndices: [Int]
+    public var lastIndexes: [Int]
 
     public init(
         firstNote: StaveNote,
-        firstIndices: [Int] = [0],
+        firstIndexes: [Int] = [0],
         lastNote: StaveNote,
-        lastIndices: [Int] = [0]
+        lastIndexes: [Int] = [0]
     ) {
         self.firstNote = firstNote
-        self.firstIndices = firstIndices
+        self.firstIndexes = firstIndexes
         self.lastNote = lastNote
-        self.lastIndices = lastIndices
+        self.lastIndexes = lastIndexes
+    }
+
+    @available(*, deprecated, renamed: "init(firstNote:firstIndexes:lastNote:lastIndexes:)")
+    public init(
+        firstNote: StaveNote,
+        firstIndices: [Int],
+        lastNote: StaveNote,
+        lastIndices: [Int]
+    ) {
+        self.init(firstNote: firstNote, firstIndexes: firstIndices, lastNote: lastNote, lastIndexes: lastIndices)
+    }
+
+    @available(*, deprecated, renamed: "firstIndexes")
+    public var firstIndices: [Int] {
+        get { firstIndexes }
+        set { firstIndexes = newValue }
+    }
+
+    @available(*, deprecated, renamed: "lastIndexes")
+    public var lastIndices: [Int] {
+        get { lastIndexes }
+        set { lastIndexes = newValue }
     }
 }
 
 // MARK: - StaveLine Text Position
 
-public enum StaveLineTextVerticalPosition: Int {
+public enum StaveLineTextVerticalPosition: Int, Sendable {
     case top = 1
     case bottom = 2
 }
@@ -45,20 +75,51 @@ public enum StaveLineTextVerticalPosition: Int {
 // MARK: - StaveLine Render Options
 
 public struct StaveLineRenderOptions {
+    /// Space to add to the left or the right
     public var paddingLeft: Double = 4
     public var paddingRight: Double = 3
+    /// The width of the line in pixels
     public var lineWidth: Double = 1
+    /// An array of line/space lengths.
     public var lineDash: [Double]?
+    /// Can draw rounded line end, instead of a square.
     public var roundedEnd: Bool = true
+    /// The color of the line and arrowheads
     public var color: String?
+    /// Flags to draw arrows on each end of the line
     public var drawStartArrow: Bool = false
     public var drawEndArrow: Bool = false
+    /// The length of the arrowhead sides
     public var arrowheadLength: Double = 10
+    /// The angle of the arrowhead
     public var arrowheadAngle: Double = Double.pi / 8
+    /// The position of the text
     public var textPositionVertical: StaveLineTextVerticalPosition = .top
     public var textJustification: TextJustification = .center
 
     public init() {}
+}
+
+// Attribution: Arrow rendering implementations based off of
+// Patrick Horgan's article, "Drawing lines and arcs with
+// arrow heads on  HTML5 Canvas"
+//
+// Draw an arrow head that connects between 3 coordinates.
+private func drawArrowHead(
+    _ ctx: RenderContext,
+    _ x0: Double, _ y0: Double,
+    _ x1: Double, _ y1: Double,
+    _ x2: Double, _ y2: Double
+) {
+    // all cases do this.
+    ctx.beginPath()
+    ctx.moveTo(x0, y0)
+    ctx.lineTo(x1, y1)
+    ctx.lineTo(x2, y2)
+    ctx.lineTo(x0, y0)
+    ctx.closePath()
+
+    ctx.fill()
 }
 
 // MARK: - StaveLine
@@ -68,46 +129,74 @@ public final class StaveLine: VexElement {
 
     override public class var category: String { "StaveLine" }
 
+    public typealias TextVerticalPosition = StaveLineTextVerticalPosition
+
     // MARK: - Properties
 
-    public var firstNote: StaveNote
-    public var firstIndices: [Int]
-    public var lastNote: StaveNote
-    public var lastIndices: [Int]
-    public var lineText: String = ""
-    public var lineRenderOptions = StaveLineRenderOptions()
+    public var renderOptions = StaveLineRenderOptions()
+
+    public private(set) var notes: StaveLineNotes
+    public private(set) var firstNote: StaveNote
+    public private(set) var firstIndexes: [Int]
+    public private(set) var lastNote: StaveNote
+    public private(set) var lastIndexes: [Int]
+
+    /// Swift-native: set when the index counts do not match (upstream throws).
     public private(set) var initError: StaveLineError?
 
+    @available(*, deprecated, renamed: "renderOptions")
+    public var lineRenderOptions: StaveLineRenderOptions {
+        get { renderOptions }
+        set { renderOptions = newValue }
+    }
+
+    @available(*, deprecated, renamed: "firstIndexes")
+    public var firstIndices: [Int] { firstIndexes }
+
+    @available(*, deprecated, renamed: "lastIndexes")
+    public var lastIndices: [Int] { lastIndexes }
+
+    @available(*, deprecated, renamed: "text")
+    public var lineText: String { text }
+
     private static func normalizeNotes(_ notes: StaveLineNotes) -> (notes: StaveLineNotes, error: StaveLineError?) {
-        guard notes.firstIndices.count != notes.lastIndices.count else {
+        guard notes.firstIndexes.count != notes.lastIndexes.count else {
             return (notes, nil)
         }
         let error = StaveLineError.mismatchedIndices(
-            firstCount: notes.firstIndices.count,
-            lastCount: notes.lastIndices.count
+            firstCount: notes.firstIndexes.count,
+            lastCount: notes.lastIndexes.count
         )
         var normalized = notes
-        let count = min(notes.firstIndices.count, notes.lastIndices.count)
+        let count = min(notes.firstIndexes.count, notes.lastIndexes.count)
         if count > 0 {
-            normalized.firstIndices = Array(notes.firstIndices.prefix(count))
-            normalized.lastIndices = Array(notes.lastIndices.prefix(count))
+            normalized.firstIndexes = Array(notes.firstIndexes.prefix(count))
+            normalized.lastIndexes = Array(notes.lastIndexes.prefix(count))
         } else {
-            normalized.firstIndices = [0]
-            normalized.lastIndices = [0]
+            normalized.firstIndexes = [0]
+            normalized.lastIndexes = [0]
         }
         return (normalized, error)
     }
 
     // MARK: - Init
 
+    /// Initialize the StaveLine with the given `notes`.
+    /// When the index counts do not match, `initError` is set and the
+    /// indexes are truncated to the shorter list. Use `init(validating:)`
+    /// to throw instead (upstream behavior).
     public init(notes: StaveLineNotes) {
         let normalized = Self.normalizeNotes(notes)
+        self.notes = normalized.notes
         self.firstNote = normalized.notes.firstNote
-        self.firstIndices = normalized.notes.firstIndices
+        self.firstIndexes = normalized.notes.firstIndexes
         self.lastNote = normalized.notes.lastNote
-        self.lastIndices = normalized.notes.lastIndices
+        self.lastIndexes = normalized.notes.lastIndexes
         self.initError = normalized.error
         super.init()
+
+        self.text = ""
+        self.renderOptions = StaveLineRenderOptions()
     }
 
     public convenience init(validating notes: StaveLineNotes) throws {
@@ -119,12 +208,14 @@ public final class StaveLine: VexElement {
 
     // MARK: - Setters
 
+    /// The annotation for the `StaveLine`.
     @discardableResult
-    public func setText(_ text: String) -> Self {
-        lineText = text
+    override public func setText(_ text: String) -> Self {
+        self.text = text
         return self
     }
 
+    /// Set the notes for the `StaveLine`.
     @discardableResult
     public func setNotes(_ notes: StaveLineNotes) -> Self {
         _ = try? setNotesThrowing(notes)
@@ -133,83 +224,69 @@ public final class StaveLine: VexElement {
 
     @discardableResult
     public func setNotesThrowing(_ notes: StaveLineNotes) throws -> Self {
-        guard notes.firstIndices.count == notes.lastIndices.count else {
+        guard notes.firstIndexes.count == notes.lastIndexes.count else {
             throw StaveLineError.mismatchedIndices(
-                firstCount: notes.firstIndices.count,
-                lastCount: notes.lastIndices.count
+                firstCount: notes.firstIndexes.count,
+                lastCount: notes.lastIndexes.count
             )
         }
+        self.notes = notes
         firstNote = notes.firstNote
-        firstIndices = notes.firstIndices
+        firstIndexes = notes.firstIndexes
         lastNote = notes.lastNote
-        lastIndices = notes.lastIndices
+        lastIndexes = notes.lastIndexes
         return self
     }
 
     // MARK: - Line Style
 
-    private func applyLineStyle() throws {
+    /// Apply the style of the `StaveLine` to the context.
+    public func applyLineStyle() throws {
         let ctx = try checkContext()
+        let renderOptions = self.renderOptions
 
-        if let lineDash = lineRenderOptions.lineDash {
-            _ = ctx.setLineDash(lineDash)
+        if let lineDash = renderOptions.lineDash {
+            ctx.setLineDash(lineDash)
         }
 
-        _ = ctx.setLineWidth(lineRenderOptions.lineWidth)
+        if renderOptions.lineWidth != 0 && !renderOptions.lineWidth.isNaN {
+            ctx.setLineWidth(renderOptions.lineWidth)
+        }
 
-        if lineRenderOptions.roundedEnd {
-            _ = ctx.setLineCap(.round)
+        if renderOptions.roundedEnd {
+            ctx.setLineCap(.round)
         } else {
-            _ = ctx.setLineCap(.square)
-        }
-    }
-
-    private func applyFontStyle() throws {
-        let ctx = try checkContext()
-        ctx.setFont(getFont())
-
-        if let color = lineRenderOptions.color {
-            _ = ctx.setStrokeStyle(color)
-            _ = ctx.setFillStyle(color)
+            ctx.setLineCap(.square)
         }
     }
 
     // MARK: - Arrow Drawing
 
-    private func drawArrowHead(
-        ctx: any RenderContext,
-        x0: Double, y0: Double,
-        x1: Double, y1: Double,
-        x2: Double, y2: Double
+    /// Helper function to draw a line with arrow heads.
+    func drawArrowLine(
+        _ ctx: RenderContext,
+        _ pt1: (x: Double, y: Double),
+        _ pt2: (x: Double, y: Double)
     ) {
-        ctx.beginPath()
-        ctx.moveTo(x0, y0)
-        ctx.lineTo(x1, y1)
-        ctx.lineTo(x2, y2)
-        ctx.lineTo(x0, y0)
-        ctx.closePath()
-        ctx.fill()
-    }
-
-    private func drawArrowLine(
-        ctx: any RenderContext,
-        pt1: (x: Double, y: Double),
-        pt2: (x: Double, y: Double)
-    ) {
-        let opts = lineRenderOptions
+        let opts = renderOptions
         let bothArrows = opts.drawStartArrow && opts.drawEndArrow
 
-        let x1 = pt1.x, y1 = pt1.y
-        let x2 = pt2.x, y2 = pt2.y
+        let x1 = pt1.x
+        let y1 = pt1.y
+        let x2 = pt2.x
+        let y2 = pt2.y
 
+        // For ends with arrow we actually want to stop before we get to the arrow
+        // so that wide lines won't put a flat end on the arrow.
         let distance = sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))
         let ratio = (distance - opts.arrowheadLength / 3) / distance
-
-        let endX: Double, endY: Double, startX: Double, startY: Double
-
+        let endX: Double
+        let endY: Double
+        let startX: Double
+        let startY: Double
         if opts.drawEndArrow || bothArrows {
-            endX = (x1 + (x2 - x1) * ratio).rounded()
-            endY = (y1 + (y2 - y1) * ratio).rounded()
+            endX = jsRound(x1 + (x2 - x1) * ratio)
+            endY = jsRound(y1 + (y2 - y1) * ratio)
         } else {
             endX = x2
             endY = y2
@@ -223,20 +300,21 @@ public final class StaveLine: VexElement {
             startY = y1
         }
 
-        if let color = opts.color {
-            _ = ctx.setStrokeStyle(color)
-            _ = ctx.setFillStyle(color)
+        if let color = opts.color, !color.isEmpty {
+            ctx.setStrokeStyle(color)
+            ctx.setFillStyle(color)
         }
 
-        // Draw shaft
+        // Draw the shaft of the arrow
         ctx.beginPath()
         ctx.moveTo(startX, startY)
         ctx.lineTo(endX, endY)
         ctx.stroke()
         ctx.closePath()
 
-        // Calculate arrow head geometry
+        // calculate the angle of the line
         let lineAngle = atan2(y2 - y1, x2 - x1)
+        // h is the line length of a side of the arrow head
         let h = abs(opts.arrowheadLength / cos(opts.arrowheadAngle))
 
         if opts.drawEndArrow || bothArrows {
@@ -248,7 +326,7 @@ public final class StaveLine: VexElement {
             let bottomX = x2 + cos(angle2) * h
             let bottomY = y2 + sin(angle2) * h
 
-            drawArrowHead(ctx: ctx, x0: topX, y0: topY, x1: x2, y1: y2, x2: bottomX, y2: bottomY)
+            drawArrowHead(ctx, topX, topY, x2, y2, bottomX, bottomY)
         }
 
         if opts.drawStartArrow || bothArrows {
@@ -260,66 +338,70 @@ public final class StaveLine: VexElement {
             let bottomX = x1 + cos(angle2) * h
             let bottomY = y1 + sin(angle2) * h
 
-            drawArrowHead(ctx: ctx, x0: topX, y0: topY, x1: x1, y1: y1, x2: bottomX, y2: bottomY)
+            drawArrowHead(ctx, topX, topY, x1, y1, bottomX, bottomY)
         }
+    }
+
+    /// JavaScript `Math.round` (half rounds toward +infinity).
+    private func jsRound(_ v: Double) -> Double {
+        (v + 0.5).rounded(.down)
     }
 
     // MARK: - Draw
 
+    /// Renders the `StaveLine` on the context.
     override public func draw() throws {
         let ctx = try checkContext()
         setRendered()
 
-        let opts = lineRenderOptions
+        let firstNote = self.firstNote
+        let lastNote = self.lastNote
+        let renderOptions = self.renderOptions
 
-        ctx.save()
         try applyLineStyle()
 
+        // Cycle through each set of indexes and draw lines
         var startPosition: (x: Double, y: Double) = (0, 0)
         var endPosition: (x: Double, y: Double) = (0, 0)
+        for (i, firstIndex) in firstIndexes.enumerated() {
+            let lastIndex = lastIndexes[i]
 
-        for i in 0..<firstIndices.count {
-            let firstIndex = firstIndices[i]
-            let lastIndex = lastIndices[i]
-
+            // Get initial coordinates for the start/end of the line
             startPosition = firstNote.getModifierStartXY(position: .right, index: firstIndex)
             endPosition = lastNote.getModifierStartXY(position: .left, index: lastIndex)
             let upwardsSlope = startPosition.y > endPosition.y
 
-            // Adjust x for modifiers
-            let firstMetrics = firstNote.getMetrics()
-            let lastMetrics = lastNote.getMetrics()
-            startPosition.x += firstMetrics.modRightPx + opts.paddingLeft
-            endPosition.x -= lastMetrics.modLeftPx + opts.paddingRight
+            // Adjust `x` coordinates for modifiers
+            startPosition.x += firstNote.getMetrics().modRightPx + renderOptions.paddingLeft
+            endPosition.x -= lastNote.getMetrics().modLeftPx + renderOptions.paddingRight
 
-            // Adjust for displacements
+            // Adjust first `x` coordinates for displacements
             let noteheadWidth = firstNote.getGlyphWidth()
             let firstKeyProps = firstNote.getKeyProps()
-            if firstIndex < firstKeyProps.count && firstKeyProps[firstIndex].displaced
-                && firstNote.getStemDirection() == Stem.UP {
-                startPosition.x += noteheadWidth + opts.paddingLeft
+            let firstDisplaced = firstIndex < firstKeyProps.count && firstKeyProps[firstIndex].displaced
+            if firstDisplaced && firstNote.getStemDirection() == Stem.UP {
+                startPosition.x += noteheadWidth + renderOptions.paddingLeft
             }
 
+            // Adjust last `x` coordinates for displacements
             let lastKeyProps = lastNote.getKeyProps()
-            if lastIndex < lastKeyProps.count && lastKeyProps[lastIndex].displaced
-                && lastNote.getStemDirection() == Stem.DOWN {
-                endPosition.x -= noteheadWidth + opts.paddingRight
+            let lastDisplaced = lastIndex < lastKeyProps.count && lastKeyProps[lastIndex].displaced
+            if lastDisplaced && lastNote.getStemDirection() == Stem.DOWN {
+                endPosition.x -= noteheadWidth + renderOptions.paddingRight
             }
 
-            // Adjust y positions
+            // Adjust y position better if it's not coming from the center of the note
             startPosition.y += upwardsSlope ? -3 : 1
             endPosition.y += upwardsSlope ? 2 : 0
 
-            drawArrowLine(ctx: ctx, pt1: startPosition, pt2: endPosition)
+            drawArrowLine(ctx, startPosition, endPosition)
         }
 
-        ctx.restore()
-
-        // Draw text
-        let textWidth = ctx.measureText(lineText).width
+        // Determine the x coordinate where to start the text
+        let textWidth = width
+        let justification = renderOptions.textJustification
         var x: Double = 0
-
-        switch opts.textJustification {
+        switch justification {
         case .left:
             x = startPosition.x
         case .center:
@@ -330,18 +412,19 @@ public final class StaveLine: VexElement {
             x = endPosition.x - textWidth
         }
 
+        // Determine the y value to start the text
         var y: Double = 0
-        switch opts.textPositionVertical {
+        switch renderOptions.textPositionVertical {
         case .top:
             y = firstNote.checkStave().getYForTopText()
         case .bottom:
             y = firstNote.checkStave().getYForBottomText(Tables.TEXT_HEIGHT_OFFSET_HACK)
         }
 
-        ctx.save()
-        try applyFontStyle()
-        _ = ctx.fillText(lineText, x, y)
-        ctx.restore()
+        // Draw the text
+        let color = renderOptions.color
+        applyStyle(context: ctx, style: ElementStyle(fillStyle: color, strokeStyle: color))
+        renderText(ctx, xPos: x, yPos: y)
     }
 }
 
@@ -354,7 +437,6 @@ import SwiftUI
 #Preview("StaveLine", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)
@@ -368,12 +450,14 @@ import SwiftUI
 
         system.format()
 
-        _ = f.StaveLine(notes: StaveLineNotes(
-            firstNote: notes[0] as! StaveNote,
-            firstIndices: [0],
-            lastNote: notes[3] as! StaveNote,
-            lastIndices: [0]
-        ))
+        if let first = notes[0] as? StaveNote, let last = notes[3] as? StaveNote {
+            _ = f.StaveLine(notes: StaveLineNotes(
+                firstNote: first,
+                firstIndexes: [0],
+                lastNote: last,
+                lastIndexes: [0]
+            ))
+        }
 
         try? f.draw()
     }

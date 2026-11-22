@@ -1,11 +1,18 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
-// Authors: Joshua Koo / @zz85, @incompleteopus
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Joshua Koo / @zz85
+// @author @incompleteopus
+//
+// Port of `src/fraction.ts` (VexFlow 5.0.0).
+//
+// Swift note: numerator and denominator are `Int` (upstream uses JS numbers).
 
 import Foundation
 
 /// Fraction represents a rational number used for tick-based timing in music notation.
 public final class Fraction: @unchecked Sendable {
+    public static var category: String { "Fraction" }
+
     public var numerator: Int
     public var denominator: Int
 
@@ -30,9 +37,19 @@ public final class Fraction: @unchecked Sendable {
 
     /// Lowest common multiple for more than two numbers.
     public static func lcmm(_ args: [Int]) -> Int {
-        guard !args.isEmpty else { return 0 }
-        return args.dropFirst().reduce(args[0]) { lcm($0, $1) }
+        if args.isEmpty { return 0 }
+        if args.count == 1 { return args[0] }
+        if args.count == 2 { return lcm(args[0], args[1]) }
+        // LCM the first number with the rest of the numbers.
+        return lcm(args[0], lcmm(Array(args.dropFirst())))
     }
+
+    /// Upstream name of `gcd(_:_:)`.
+    public static func GCD(_ a: Int, _ b: Int) -> Int { gcd(a, b) }
+    /// Upstream name of `lcm(_:_:)`.
+    public static func LCM(_ a: Int, _ b: Int) -> Int { lcm(a, b) }
+    /// Upstream name of `lcmm(_:)`.
+    public static func LCMM(_ args: [Int]) -> Int { lcmm(args) }
 
     // MARK: - Init
 
@@ -131,7 +148,7 @@ public final class Fraction: @unchecked Sendable {
 
     @discardableResult
     public func copy(_ n: Int) -> Fraction {
-        set(n, 1)
+        set(n)
     }
 
     /// Calculate absolute value.
@@ -149,9 +166,9 @@ public final class Fraction: @unchecked Sendable {
         Fraction(numerator, denominator)
     }
 
-    /// Return the integer component (e.g., 5/2 => 2).
+    /// Return the integer component (e.g. 5/2 => 2). Rounds down, as upstream `Math.floor`.
     public func quotient() -> Int {
-        numerator / denominator
+        Int((Double(numerator) / Double(denominator)).rounded(.down))
     }
 
     /// Return the remainder component (e.g., 5/2 => 1).
@@ -167,6 +184,44 @@ public final class Fraction: @unchecked Sendable {
         let d = parts.count > 1 ? (Int(parts[1]) ?? 1) : 1
         return set(n, d)
     }
+}
+
+// MARK: - Comparison (upstream names)
+
+extension Fraction {
+    /// Simplify both sides and check if they are equal.
+    public func equals(_ compare: Fraction) -> Bool {
+        let a = compare.clone().simplify()
+        let b = clone().simplify()
+        return a.numerator == b.numerator && a.denominator == b.denominator
+    }
+
+    public func equals(_ compare: Int) -> Bool { equals(Fraction(compare, 1)) }
+
+    /// Greater than operator.
+    public func greaterThan(_ compare: Fraction) -> Bool {
+        clone().subtract(compare).numerator > 0
+    }
+
+    public func greaterThan(_ compare: Int) -> Bool { greaterThan(Fraction(compare, 1)) }
+
+    /// Greater than or equals operator.
+    public func greaterThanEquals(_ compare: Fraction) -> Bool {
+        clone().subtract(compare).numerator >= 0
+    }
+
+    public func greaterThanEquals(_ compare: Int) -> Bool { greaterThanEquals(Fraction(compare, 1)) }
+
+    /// Less than operator.
+    public func lessThan(_ compare: Fraction) -> Bool { !greaterThanEquals(compare) }
+    public func lessThan(_ compare: Int) -> Bool { !greaterThanEquals(compare) }
+
+    /// Less than or equals operator.
+    public func lessThanEquals(_ compare: Fraction) -> Bool { !greaterThan(compare) }
+    public func lessThanEquals(_ compare: Int) -> Bool { !greaterThan(compare) }
+
+    /// Return a raw string representation (e.g. "5/2").
+    public func toString() -> String { "\(numerator)/\(denominator)" }
 }
 
 // MARK: - Comparable / Equatable

@@ -1,5 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Mohit Cheppudira
+//
+// Port of `src/registry.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -49,7 +52,7 @@ public final class Registry {
 
     // MARK: - Index
 
-    /// Maps [attribute_name][attribute_value][element_id] => Element
+    /// [attributeName][attributeValue][elementId] => Element
     private var index: [String: [String: [String: VexElement]]] = [
         "id": [:],
         "type": [:],

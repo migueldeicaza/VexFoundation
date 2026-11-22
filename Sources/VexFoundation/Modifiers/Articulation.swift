@@ -1,8 +1,12 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. Author: Larry Kuhns.
-// MIT License
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Larry Kuhns.
+//
+// Port of `src/articulation.ts` (VexFlow 5.0.0).
 
 import Foundation
+
+// `ArticulationStruct` is declared in `Core/Tables.swift` (the articulation table needs it).
 
 // MARK: - Helper Functions
 
@@ -10,118 +14,205 @@ private func roundToNearestHalf(_ mathFn: (Double) -> Double, _ value: Double) -
     mathFn(value / 0.5) * 0.5
 }
 
+/// This includes both staff and ledger lines.
 private func isWithinLines(_ line: Double, _ position: ModifierPosition) -> Bool {
     position == .above ? line <= 5 : line >= 1
 }
 
 private func getRoundingFunction(_ line: Double, _ position: ModifierPosition) -> (Double) -> Double {
     if isWithinLines(line, position) {
-        return position == .above ? { Foundation.ceil($0) } : { Foundation.floor($0) }
+        if position == .above {
+            return { Foundation.ceil($0) }
+        } else {
+            return { Foundation.floor($0) }
+        }
+    } else {
+        // JavaScript Math.round semantics (ties toward +infinity).
+        return { Foundation.floor($0 + 0.5) }
     }
-    // Match JavaScript Math.round semantics (ties toward +infinity).
-    return { Foundation.floor($0 + 0.5) }
 }
 
-private func snapLineToStaff(_ canSitBetweenLines: Bool, _ line: Double, _ position: ModifierPosition, _ offsetDirection: Double) -> Double {
+private func snapLineToStaff(
+    _ canSitBetweenLines: Bool,
+    _ line: Double,
+    _ position: ModifierPosition,
+    _ offsetDirection: Double
+) -> Double {
+    // Initially, snap to nearest staff line or space
     let snappedLine = roundToNearestHalf(getRoundingFunction(line, position), line)
-    let canSnap = canSitBetweenLines && isWithinLines(snappedLine, position)
+    let canSnapToStaffSpace = canSitBetweenLines && isWithinLines(snappedLine, position)
     let onStaffLine = snappedLine.truncatingRemainder(dividingBy: 1) == 0
 
-    if canSnap && onStaffLine {
-        return snappedLine + 0.5 * -offsetDirection
+    if canSnapToStaffSpace && onStaffLine {
+        let halfStaffSpace = 0.5
+        return snappedLine + halfStaffSpace * -offsetDirection
+    } else {
+        return snappedLine
     }
-    return snappedLine
 }
 
-private func getTopY(_ note: Note, _ textLine: Double) -> Double {
-    let stemDirection = note.hasStem() ? note.getStemDirection() : Stem.UP
+/// Helper function for checking if a Note object is either a StaveNote or a GraceNote.
+private func isStaveOrGraceNote(_ note: Note) -> Bool {
+    note is StaveNote || note is GraceNote
+}
+
+func getTopY(_ note: Note, _ textLine: Double) throws -> Double {
+    let stemDirection = note.getStemDirection()
     let extents = note.getStemExtents()
+    let stemTipY = extents.topY
+    let stemBaseY = extents.baseY
 
-    if note is TabNote {
-        let stave = note.checkStave()
+    if isStaveOrGraceNote(note) {
         if note.hasStem() {
-            return stemDirection == Stem.UP ? extents.topY : stave.getYForTopText(textLine)
+            if stemDirection == Stem.UP {
+                return stemTipY
+            } else {
+                return stemBaseY
+            }
+        } else {
+            return note.getYs().min() ?? 0
         }
-        return stave.getYForTopText(textLine)
+    } else if note is TabNote {
+        if note.hasStem() {
+            if stemDirection == Stem.UP {
+                return stemTipY
+            } else {
+                return try note.checkStaveThrowing().getYForTopText(textLine)
+            }
+        } else {
+            return try note.checkStaveThrowing().getYForTopText(textLine)
+        }
+    } else {
+        throw VexError("UnknownCategory", "Only can get the top and bottom ys of stavenotes and tabnotes")
     }
-
-    if note.hasStem() {
-        return stemDirection == Stem.UP ? extents.topY : extents.baseY
-    }
-    return note.getYs().min() ?? 0
 }
 
-private func getBottomY(_ note: Note, _ textLine: Double) -> Double {
-    let stemDirection = note.hasStem() ? note.getStemDirection() : Stem.UP
+func getBottomY(_ note: Note, _ textLine: Double) throws -> Double {
+    let stemDirection = note.getStemDirection()
     let extents = note.getStemExtents()
+    let stemTipY = extents.topY
+    let stemBaseY = extents.baseY
 
-    if note is TabNote {
-        let stave = note.checkStave()
+    if isStaveOrGraceNote(note) {
         if note.hasStem() {
-            return stemDirection == Stem.UP ? stave.getYForBottomText(textLine) : extents.topY
+            if stemDirection == Stem.UP {
+                return stemBaseY
+            } else {
+                return stemTipY
+            }
+        } else {
+            return note.getYs().max() ?? 0
         }
-        return stave.getYForBottomText(textLine)
+    } else if note is TabNote {
+        if note.hasStem() {
+            if stemDirection == Stem.UP {
+                return try note.checkStaveThrowing().getYForBottomText(textLine)
+            } else {
+                return stemTipY
+            }
+        } else {
+            return try note.checkStaveThrowing().getYForBottomText(textLine)
+        }
+    } else {
+        throw VexError("UnknownCategory", "Only can get the top and bottom ys of stavenotes and tabnotes")
     }
-
-    if note.hasStem() {
-        return stemDirection == Stem.UP ? extents.baseY : extents.topY
-    }
-    return note.getYs().max() ?? 0
 }
 
-private func getInitialOffset(_ note: Note, _ position: ModifierPosition) -> Double {
-    let isOnStemTip = (position == .above && note.getStemDirection() == Stem.UP) ||
-                      (position == .below && note.getStemDirection() == Stem.DOWN)
+/// Get the initial offset of the articulation from the y value of the starting position.
+/// This is required because the top/bottom text positions already have spacing applied to
+/// provide a "visually pleasant" default position. However the y values provided from
+/// the stavenote's top/bottom do *not* have any pre-applied spacing. This function
+/// normalizes this asymmetry.
+func getInitialOffset(_ note: Note, _ position: ModifierPosition) -> Double {
+    let isOnStemTip = (position == .above && note.getStemDirection() == Stem.UP)
+        || (position == .below && note.getStemDirection() == Stem.DOWN)
 
-    if note is TabNote {
-        return (note.hasStem() && isOnStemTip) ? 1 : 0
+    if isStaveOrGraceNote(note) {
+        if note.hasStem() && isOnStemTip {
+            return 0.5
+        } else {
+            // this amount is larger than the stem-tip offset because we start from
+            // the center of the notehead
+            return 1
+        }
+    } else {
+        if note.hasStem() && isOnStemTip {
+            return 1
+        } else {
+            return 0
+        }
     }
-
-    if note.hasStem() && isOnStemTip {
-        return 0.5
-    }
-    return 1
 }
 
 // MARK: - Articulation
 
-/// Modifier that adds articulations (staccato, accent, marcato, etc.) to notes.
-/// Positioned above or below the note.
+/// Articulations and Accents are modifiers that can be attached to notes.
+/// The complete list of articulations is available in `Tables.articulationCodes`.
 public final class Articulation: Modifier {
 
     override public class var category: String { "Articulation" }
 
     static let INITIAL_OFFSET: Double = -0.5
 
+    /// VexFlowPatch: articulation code for a breath mark (OSMD). It is not in
+    /// the upstream articulation table.
+    static let breathMarkType = "abr"
+
     // MARK: - Properties
 
+    /// Articulation code provided to the constructor.
     public let type: String
-    public var fontScale: Double = Tables.NOTATION_FONT_SCALE
-    public var articulationData: Tables.ArticulationStruct
+    public private(set) var articulation: ArticulationStruct
     /// VexFlowPatch: % distance to next note or end of stave for breath marks (0.8 = 80%)
     public var breathMarkDistance: Double = 0.8
 
-    private var glyph: Glyph!
+    /// VexFlowPatch: x and y shifts set by the user. Upstream formatting
+    /// overwrites `xShift` and `yShift` with `setOrigin()`, so the user shifts
+    /// are kept here and applied in `draw()`.
+    private var userXShift: Double = 0
+    private var userYShift: Double = 0
+
+    /// Look up `type` in the articulation table.
+    private static func lookup(_ type: String) -> ArticulationStruct? {
+        if let artic = Tables.articulationCodes(type) {
+            return artic
+        }
+        // VexFlowPatch: breath mark.
+        if type == breathMarkType {
+            return ArticulationStruct(code: Glyphs.breathMarkComma, betweenLines: false)
+        }
+        return nil
+    }
 
     // MARK: - Init
 
+    /// Create a new articulation.
+    ///
+    /// - Parameter type: entry in `Tables.articulationCodes` or a glyph code
+    ///   (a SMuFL code point, or a SMuFL glyph name).
+    ///
+    /// Notes default positions (see https://w3c.github.io/smufl/latest/tables/articulation.html):
+    /// - Even codes will be positioned ABOVE
+    /// - Odd codes will be positioned BELOW
     public init(_ type: String) {
-        self.type = type
-
-        // Look up articulation or use type as direct glyph code
-        if let artData = Tables.articulationCode(type) {
-            self.articulationData = artData
+        // Swift extension: accept a SMuFL glyph name and use its code point.
+        let resolvedType: String
+        if Self.lookup(type) == nil, let code = Glyphs.code(named: type) {
+            resolvedType = code
         } else {
-            self.articulationData = Tables.ArticulationStruct(code: type, betweenLines: false)
+            resolvedType = type
         }
-
+        self.type = resolvedType
+        self.articulation = ArticulationStruct(betweenLines: false)
         super.init()
-        position = .above
 
-        // Infer position from glyph code suffix
-        if Tables.articulationCode(type) == nil {
-            if type.hasSuffix("Above") { position = .above }
-            if type.hasSuffix("Below") { position = .below }
+        position = .above
+        if Self.lookup(resolvedType) == nil {
+            if (resolvedType.unicodeScalars.first?.value ?? 0) % 2 == 0 {
+                position = .above
+            } else {
+                position = .below
+            }
         }
 
         reset()
@@ -129,37 +220,53 @@ public final class Articulation: Modifier {
 
     // MARK: - Reset
 
-    private func reset() {
-        let code: String
-        if position == .above {
-            code = articulationData.aboveCode ?? articulationData.code ?? ""
-        } else {
-            code = articulationData.belowCode ?? articulationData.code ?? ""
-        }
+    override public func reset() {
+        // Use type as glyph code, if not defined as articulation code
+        articulation = Self.lookup(type) ?? ArticulationStruct(code: type, betweenLines: false)
+        let positional = position == .above ? articulation.aboveCode : articulation.belowCode
+        let code = nonEmpty(positional) ?? nonEmpty(articulation.code) ?? Glyphs.null
+        text = code
+    }
 
-        glyph = Glyph(code: code, point: fontScale)
-        _ = setWidth(glyph.getMetrics().width)
+    private func nonEmpty(_ s: String?) -> String? {
+        guard let s, !s.isEmpty else { return nil }
+        return s
     }
 
     // MARK: - Between Lines
 
+    /// Set if articulation should be rendered between lines.
     @discardableResult
     public func setBetweenLines(_ betweenLines: Bool = true) -> Self {
-        articulationData.betweenLines = betweenLines
+        articulation.betweenLines = betweenLines
         return self
     }
 
-    // MARK: - Set Position Override
+    // MARK: - Shifts (VexFlowPatch)
 
+    /// VexFlowPatch: respect the modifier `yShift`.
     @discardableResult
-    override public func setPosition(_ pos: ModifierPosition) -> Self {
-        position = pos
-        reset()
+    override public func setYShift(_ y: Double) -> Self {
+        userYShift = y
+        return self
+    }
+
+    /// VexFlowPatch: respect the modifier `xShift` for breath marks.
+    @discardableResult
+    override public func setXShift(_ x: Double) -> Self {
+        userXShift = position == .left ? -x : x
         return self
     }
 
     // MARK: - Static Format
 
+    /// FIXME (upstream):
+    /// Most of the complex formatting logic (ie: snapping to space) is
+    /// actually done in .render(). But that logic belongs in this method.
+    ///
+    /// Unfortunately, this isn't possible because, by this point, stem lengths
+    /// have not yet been finalized. Finalized stem lengths are required to determine the
+    /// initial position of any stem-side articulation.
     @discardableResult
     public static func format(_ articulations: [Articulation], state: inout ModifierContextState) -> Bool {
         if articulations.isEmpty { return false }
@@ -167,152 +274,68 @@ public final class Articulation: Modifier {
         let margin: Double = 0.5
         var maxGlyphWidth: Double = 0
 
+        func getIncrement(_ articulation: Articulation, _ line: Double, _ position: ModifierPosition) -> Double {
+            roundToNearestHalf(getRoundingFunction(line, position), articulation.height / 10 + margin)
+        }
+
         for articulation in articulations {
             let note = articulation.checkAttachedNote()
             maxGlyphWidth = max(note.getGlyphWidth(), maxGlyphWidth)
-
             var lines: Double = 5
             let stemDirection = note.hasStem() ? note.getStemDirection() : Stem.UP
-
             var stemHeight: Double = 0
-            if let stemmable = note as? StemmableNote, let stem = stemmable.getStem() {
-                stemHeight = abs(stem.getHeight()) / Tables.STAVE_LINE_DISTANCE
-            }
+            // Decide if we need to consider beam direction in placement.
 
+            if let stemmable = note as? StemmableNote {
+                if let stem = stemmable.getStem() {
+                    stemHeight = abs(stem.getHeight()) / Tables.STAVE_LINE_DISTANCE
+                }
+            }
             if let stave = note.getStave() {
                 lines = Double(stave.getNumLines())
             }
-
-            let pos = articulation.getPosition()
-
-            if pos == .above {
+            if articulation.getPosition() == .above {
                 var noteLine = note.getLineNumber(isTopNote: true)
                 if stemDirection == Stem.UP {
                     noteLine += stemHeight
                 }
-                var increment = roundToNearestHalf(
-                    getRoundingFunction(state.topTextLine, .above),
-                    articulation.glyph.getMetrics().height / 10 + margin
-                )
+                var increment = getIncrement(articulation, state.topTextLine, .above)
                 let curTop = noteLine + state.topTextLine + 0.5
-                if !articulation.articulationData.betweenLines && curTop < lines {
+                // If articulation must be above stave, add lines between note and stave top
+                if !articulation.articulation.betweenLines && curTop < lines {
                     increment += lines - curTop
                 }
                 _ = articulation.setTextLine(state.topTextLine)
                 state.topTextLine += increment
-            } else if pos == .below {
+                articulation.setOrigin(0.5, 1)
+            } else if articulation.getPosition() == .below {
                 var noteLine = max(lines - note.getLineNumber(), 0)
                 if stemDirection == Stem.DOWN {
                     noteLine += stemHeight
                 }
-                var increment = roundToNearestHalf(
-                    getRoundingFunction(state.textLine, .below),
-                    articulation.glyph.getMetrics().height / 10 + margin
-                )
+                var increment = getIncrement(articulation, state.textLine, .below)
                 let curBottom = noteLine + state.textLine + 0.5
-                if !articulation.articulationData.betweenLines && curBottom < lines {
+                // if articulation must be below stave, add lines from note to stave bottom
+                if !articulation.articulation.betweenLines && curBottom < lines {
                     increment += lines - curBottom
                 }
                 _ = articulation.setTextLine(state.textLine)
                 state.textLine += increment
+                articulation.setOrigin(0.5, 0)
             }
         }
 
-        let maxArticWidth = articulations.reduce(0.0) { max($0, $1.getWidth()) }
+        let width = articulations
+            .map { $0.getWidth() }
+            .reduce(-Double.infinity) { maxWidth, articWidth in max(articWidth, maxWidth) }
         let overlap = min(
-            max(maxArticWidth - maxGlyphWidth, 0),
-            max(maxArticWidth - (state.leftShift + state.rightShift), 0)
+            max(width - maxGlyphWidth, 0),
+            max(width - (state.leftShift + state.rightShift), 0)
         )
 
         state.leftShift += overlap / 2
         state.rightShift += overlap / 2
         return true
-    }
-
-    // MARK: - Draw
-
-    override public func draw() throws {
-        let ctx = try checkContext()
-        let note = checkAttachedNote()
-        setRendered()
-
-        let index = checkIndex()
-        let canSitBetweenLines = articulationData.betweenLines
-
-        let stave = note.checkStave()
-        let staffSpace = stave.getSpacingBetweenLines()
-        let isTab = note is TabNote
-
-        var x = note.getModifierStartXY(position: position, index: index).x
-
-        // VexFlowPatch: breath mark positioning
-        if type == "abr", let noteTickContext = note.tickContext {
-            var delayXShift: Double = 0
-            let noteX = noteTickContext.getX()
-            if let nextContext = TickContext.getNextContext(noteTickContext),
-               nextContext.getX() > noteTickContext.getX() {
-                delayXShift = (nextContext.getX() - noteX) * breathMarkDistance
-            } else {
-                delayXShift = (stave.getX() + stave.getWidth() - noteX + stave.getNoteStartX() - stave.getX()) * breathMarkDistance
-            }
-            x += delayXShift
-            // Clamp to not exceed end of stave
-            if x > stave.getNoteEndX() {
-                let noteXAbsolute = stave.getNoteStartX() - stave.getX() + noteX + stave.getX()
-                x = noteXAbsolute + (stave.getNoteEndX() - noteXAbsolute) * breathMarkDistance
-            }
-            if xShift != 0 {
-                x += xShift
-            }
-        }
-
-        let shouldSitOutsideStaff = !canSitBetweenLines || isTab
-        let initialOffset = getInitialOffset(note, position)
-
-        let padding = (Glyph.MUSIC_FONT_STACK.first?.lookupMetric("articulation.\(glyph.getCode()).padding") as? Double) ?? 0
-
-        var y: Double
-        if position == .above {
-            glyph.setOrigin(0.5, 1)
-            y = getTopY(note, textLine) - (textLine + initialOffset) * staffSpace
-            if shouldSitOutsideStaff {
-                y = min(stave.getYForTopText(Articulation.INITIAL_OFFSET), y)
-            }
-        } else {
-            glyph.setOrigin(0.5, 0)
-            y = getBottomY(note, textLine) + (textLine + initialOffset) * staffSpace
-            if shouldSitOutsideStaff {
-                y = max(stave.getYForBottomText(Articulation.INITIAL_OFFSET), y)
-            }
-        }
-
-        if !isTab {
-            // Snap to staff lines for stave/grace notes.
-            let offsetDirection: Double = position == .above ? -1 : 1
-            let props = note.getKeyProps()
-            if index < props.count {
-                let noteLine = props[index].line
-                let ys = note.getYs()
-                if index < ys.count {
-                    let distanceFromNote = (ys[index] - y) / staffSpace
-                    let articLine = distanceFromNote + noteLine
-                    let snappedLine = snapLineToStaff(canSitBetweenLines, articLine, position, offsetDirection)
-
-                    if isWithinLines(snappedLine, position) {
-                        glyph.setOrigin(0.5, 0.5)
-                    }
-
-                    y += abs(snappedLine - articLine) * staffSpace * offsetDirection + padding * offsetDirection
-                }
-            }
-        }
-
-        // VexFlowPatch: respect modifier y_shift
-        if yShift != 0 {
-            y += yShift
-        }
-
-        glyph.render(ctx: ctx, x: x, y: y)
     }
 
     // MARK: - EasyScore Hook
@@ -323,7 +346,7 @@ public final class Articulation: Modifier {
         note: StemmableNote,
         builder: Builder
     ) {
-        guard let articulationStr = options["articulations"] else { return }
+        guard let articulationStr = options["articulations"], !articulationStr.isEmpty else { return }
 
         let articNameToCode: [String: String] = [
             "staccato": "a.",
@@ -333,16 +356,92 @@ public final class Articulation: Modifier {
 
         for articString in articulationStr.split(separator: ",") {
             let parts = articString.trimmingCharacters(in: .whitespaces).split(separator: ".")
-            let name = String(parts[0])
-            guard let code = articNameToCode[name] else { continue }
+            guard let first = parts.first, let code = articNameToCode[String(first)] else { continue }
             let artic = builder.getFactory().Articulation(type: code)
-            if parts.count > 1 {
-                if let pos = Modifier.positionString[String(parts[1])] {
-                    _ = artic.setPosition(pos)
-                }
+            if parts.count > 1, let pos = Modifier.positionString[String(parts[1])] {
+                _ = artic.setPosition(pos)
             }
             _ = note.addModifier(artic, index: 0)
         }
+    }
+
+    // MARK: - Draw
+
+    /// Render articulation in position next to note.
+    override public func draw() throws {
+        let ctx = try checkContext()
+        let note = try checkAttachedNoteThrowing()
+        setRendered()
+
+        let index = try checkIndexThrowing()
+        let position = self.position
+        let textLine = self.textLine
+        let canSitBetweenLines = articulation.betweenLines
+
+        let stave = try note.checkStaveThrowing()
+        let staffSpace = stave.getSpacingBetweenLines()
+        let isTab = note is TabNote
+
+        // Articulations are centered over/under the note head.
+        var x = note.getModifierStartXY(position: position, index: index).x
+
+        // VexFlowPatch: breath mark positioning
+        if type == Self.breathMarkType, let noteTickContext = note.tickContext {
+            var delayXShift: Double = 0
+            let noteX = noteTickContext.getX()
+            if let nextContext = TickContext.getNextContext(noteTickContext),
+               nextContext.getX() > noteTickContext.getX() {
+                delayXShift = (nextContext.getX() - noteX) * breathMarkDistance
+            } else {
+                delayXShift = (stave.getX() + stave.getWidth() - noteX + stave.getNoteStartX() - stave.getX())
+                    * breathMarkDistance
+            }
+            x += delayXShift
+            // Clamp to not exceed end of stave
+            if x > stave.getNoteEndX() {
+                let noteXAbsolute = stave.getNoteStartX() - stave.getX() + noteX + stave.getX()
+                x = noteXAbsolute + (stave.getNoteEndX() - noteXAbsolute) * breathMarkDistance
+            }
+            if userXShift != 0 {
+                x += userXShift
+            }
+        }
+
+        let shouldSitOutsideStaff = !canSitBetweenLines || isTab
+
+        let initialOffset = getInitialOffset(note, position)
+
+        var y: Double
+        if position == .above {
+            let y0 = try getTopY(note, textLine) - (textLine + initialOffset) * staffSpace
+            y = shouldSitOutsideStaff ? min(stave.getYForTopText(Articulation.INITIAL_OFFSET), y0) : y0
+        } else if position == .below {
+            let y0 = try getBottomY(note, textLine) + (textLine + initialOffset) * staffSpace
+            y = shouldSitOutsideStaff ? max(stave.getYForBottomText(Articulation.INITIAL_OFFSET), y0) : y0
+        } else {
+            throw VexError("InvalidPosition", "Articulation position must be above or below.")
+        }
+
+        if !isTab {
+            let offsetDirection: Double = position == .above ? -1 : 1
+            let noteLine = note.getKeyProps()[index].line
+            let distanceFromNote = (note.getYs()[index] - y) / staffSpace
+            let articLine = distanceFromNote + noteLine
+            let snappedLine = snapLineToStaff(canSitBetweenLines, articLine, position, offsetDirection)
+
+            if isWithinLines(snappedLine, position) { setOrigin(0.5, 0.5) }
+
+            y += abs(snappedLine - articLine) * staffSpace * offsetDirection
+        }
+
+        // VexFlowPatch: respect modifier yShift
+        if userYShift != 0 {
+            y += userYShift
+        }
+
+        self.x = x
+        self.y = y
+        renderText(ctx, xPos: 0, yPos: 0)
     }
 }
 
@@ -355,7 +454,6 @@ import SwiftUI
 #Preview("Articulation", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500, height: 150))
         _ = f.setContext(ctx)

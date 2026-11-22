@@ -1,67 +1,27 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/notehead.ts` (VexFlow 5.0.0).
 
 import Foundation
 
-private func drawSlashNoteHead(
-    ctx: RenderContext,
-    duration: String,
-    x: Double,
-    y: Double,
-    stemDirection: StemDirection,
-    staveSpace: Double
-) {
-    let width = Tables.SLASH_NOTEHEAD_WIDTH
-    _ = ctx.save()
-    _ = ctx.setLineWidth(Tables.STEM_WIDTH)
-
-    let fill = Tables.durationToNumber(duration) > 2
-    let drawX: Double = fill ? x : x - (Tables.STEM_WIDTH / 2) * stemDirection.signDouble
-
-    _ = ctx.beginPath()
-    _ = ctx.moveTo(drawX, y + staveSpace)
-    _ = ctx.lineTo(drawX, y + 1)
-    _ = ctx.lineTo(drawX + width, y - staveSpace)
-    _ = ctx.lineTo(drawX + width, y)
-    _ = ctx.lineTo(drawX, y + staveSpace)
-    _ = ctx.closePath()
-
-    if fill {
-        _ = ctx.fill()
-    } else {
-        _ = ctx.stroke()
-    }
-
-    if duration == NoteValue.doubleWhole.rawValue {
-        let breveLines: [Double] = [-3, -1, width + 1, width + 3]
-        for offset in breveLines {
-            _ = ctx.beginPath()
-            _ = ctx.moveTo(drawX + offset, y - 10)
-            _ = ctx.lineTo(drawX + offset, y + 11)
-            _ = ctx.stroke()
-        }
-    }
-
-    _ = ctx.restore()
-}
-
 // MARK: - NoteHead Struct
 
-/// Input structure for creating a NoteHead.
+/// Input structure for creating a NoteHead (upstream `NoteHeadStruct extends NoteStruct`).
 public struct NoteHeadStruct {
     public var duration: NoteValue
     public var line: Double
-    public var glyphFontScale: Double?
     public var slashed: Bool
     public var style: ElementStyle?
+    /// VexFlowPatch: x shift of a custom notehead when the stem is down (TI notehead, gated in Tables).
     public var stemDownXOffset: Double
+    /// VexFlowPatch: x shift of a custom notehead when the stem is up (TI notehead, gated in Tables).
     public var stemUpXOffset: Double
     /// VexFlowPatch: vertical shift for notehead when stem is up (independent of stem length)
     public var stemUpYShift: Double
     /// VexFlowPatch: vertical shift for notehead when stem is down (independent of stem length)
     public var stemDownYShift: Double
     public var customGlyphCode: String?
-    public var xShift: Double
     public var stemDirection: StemDirection
     public var displaced: Bool
     public var noteType: NoteType?
@@ -74,7 +34,6 @@ public struct NoteHeadStruct {
     public init(
         duration: NoteValue = .quarter,
         line: Double = 0,
-        glyphFontScale: Double? = nil,
         slashed: Bool = false,
         style: ElementStyle? = nil,
         stemDownXOffset: Double = 0,
@@ -82,7 +41,6 @@ public struct NoteHeadStruct {
         stemUpYShift: Double = 0,
         stemDownYShift: Double = 0,
         customGlyphCode: String? = nil,
-        xShift: Double = 0,
         stemDirection: StemDirection = .up,
         displaced: Bool = false,
         noteType: NoteType? = nil,
@@ -94,7 +52,6 @@ public struct NoteHeadStruct {
     ) {
         self.duration = duration
         self.line = line
-        self.glyphFontScale = glyphFontScale
         self.slashed = slashed
         self.style = style
         self.stemDownXOffset = stemDownXOffset
@@ -102,7 +59,6 @@ public struct NoteHeadStruct {
         self.stemUpYShift = stemUpYShift
         self.stemDownYShift = stemDownYShift
         self.customGlyphCode = customGlyphCode
-        self.xShift = xShift
         self.stemDirection = stemDirection
         self.displaced = displaced
         self.noteType = noteType
@@ -117,7 +73,6 @@ public struct NoteHeadStruct {
     public init(
         duration: String,
         line: Double = 0,
-        glyphFontScale: Double? = nil,
         slashed: Bool = false,
         style: ElementStyle? = nil,
         stemDownXOffset: Double = 0,
@@ -125,7 +80,6 @@ public struct NoteHeadStruct {
         stemUpYShift: Double = 0,
         stemDownYShift: Double = 0,
         customGlyphCode: String? = nil,
-        xShift: Double = 0,
         stemDirection: StemDirection = .up,
         displaced: Bool = false,
         noteType: String? = nil,
@@ -151,7 +105,6 @@ public struct NoteHeadStruct {
         self.init(
             duration: parsedDuration.value,
             line: line,
-            glyphFontScale: glyphFontScale,
             slashed: slashed,
             style: style,
             stemDownXOffset: stemDownXOffset,
@@ -159,7 +112,6 @@ public struct NoteHeadStruct {
             stemUpYShift: stemUpYShift,
             stemDownYShift: stemDownYShift,
             customGlyphCode: customGlyphCode,
-            xShift: xShift,
             stemDirection: stemDirection,
             displaced: displaced,
             noteType: parsedType,
@@ -175,7 +127,6 @@ public struct NoteHeadStruct {
     public init?(
         parsingDuration duration: String,
         line: Double = 0,
-        glyphFontScale: Double? = nil,
         slashed: Bool = false,
         style: ElementStyle? = nil,
         stemDownXOffset: Double = 0,
@@ -183,7 +134,6 @@ public struct NoteHeadStruct {
         stemUpYShift: Double = 0,
         stemDownYShift: Double = 0,
         customGlyphCode: String? = nil,
-        xShift: Double = 0,
         stemDirection: StemDirection = .up,
         displaced: Bool = false,
         noteType: String? = nil,
@@ -196,7 +146,6 @@ public struct NoteHeadStruct {
         guard let parsed = try? NoteHeadStruct(
             duration: duration,
             line: line,
-            glyphFontScale: glyphFontScale,
             slashed: slashed,
             style: style,
             stemDownXOffset: stemDownXOffset,
@@ -204,7 +153,6 @@ public struct NoteHeadStruct {
             stemUpYShift: stemUpYShift,
             stemDownYShift: stemDownYShift,
             customGlyphCode: customGlyphCode,
-            xShift: xShift,
             stemDirection: stemDirection,
             displaced: displaced,
             noteType: noteType,
@@ -220,111 +168,94 @@ public struct NoteHeadStruct {
 
 // MARK: - NoteHead
 
-/// Renders note heads. Typically managed internally by StaveNote.
+/// Renders a notehead. Noteheads are typically not manipulated directly,
+/// but used internally in `StaveNote`.
 public final class NoteHead: Note {
 
     override public class var category: String { "NoteHead" }
 
-    public var glyphCode: String
+    /// Map notehead SMuFL codes to the corresponding SMuFL code with a ledger line.
+    public static let ledger: [String: String] = [
+        Glyphs.restWhole: Glyphs.restWholeLegerLine,
+        Glyphs.restHalf: Glyphs.restHalfLegerLine,
+    ]
+
     public var customGlyph: Bool = false
+    public var displaced: Bool
+    public var stemDirection: StemDirection
+    public var line: Double
+    public var index: Int?
+    public var slashed: Bool
+    /// VexFlowPatch: x shift of a custom notehead when the stem is up (TI notehead)
     public var stemUpXOffset: Double = 0
+    /// VexFlowPatch: x shift of a custom notehead when the stem is down (TI notehead)
     public var stemDownXOffset: Double = 0
     /// VexFlowPatch: vertical shift for notehead when stem is up
     public var stemUpYShift: Double = 0
     /// VexFlowPatch: vertical shift for notehead when stem is down
     public var stemDownYShift: Double = 0
-    public var displaced: Bool
-    public var headStemDirection: StemDirection
-    public var headX: Double
-    public var headY: Double
-    public var line: Double
-    public var headIndex: Int?
-    public var slashed: Bool
 
     // MARK: - Init
 
     public init(noteHeadStruct: NoteHeadStruct) {
-        let ns = NoteStruct(
+        self.index = noteHeadStruct.index
+        self.displaced = noteHeadStruct.displaced
+        self.stemDirection = noteHeadStruct.stemDirection
+        self.line = noteHeadStruct.line
+        self.slashed = noteHeadStruct.slashed
+
+        super.init(NoteStruct(
             keys: noteHeadStruct.keys,
             duration: NoteDurationSpec(uncheckedValue: noteHeadStruct.duration),
             dots: noteHeadStruct.dots
-        )
+        ))
 
-        self.headIndex = noteHeadStruct.index
-        self.headX = noteHeadStruct.x
-        self.headY = noteHeadStruct.y
-        self.displaced = noteHeadStruct.displaced
-        self.headStemDirection = noteHeadStruct.stemDirection
-        self.line = noteHeadStruct.line
-        self.slashed = noteHeadStruct.slashed
-        self.glyphCode = ""
-
-        super.init(ns)
-
+        self.x = noteHeadStruct.x
+        self.y = noteHeadStruct.y
         if let noteType = noteHeadStruct.noteType {
             self.noteTypeValue = noteType
             self.noteType = noteType.rawValue
         }
 
-        self.glyphProps = Tables.getGlyphProps(duration: noteValue, type: noteTypeValue)!
+        // Get the glyph code from the duration and note type. This can be a
+        // regular note, a rest, or another custom code.
+        glyphProps = Note.getGlyphProps(duration, noteType)
 
-        if (line > 5 || line < 0), let ledgerCodeHead = glyphProps.ledgerCodeHead {
-            glyphProps.codeHead = ledgerCodeHead
+        // Swap out the glyph with ledger lines.
+        if line > 5 || line < 0, let ledgerCode = NoteHead.ledger[glyphProps.codeHead] {
+            glyphProps.codeHead = ledgerCode
+        }
+        text = glyphProps.codeHead
+        if let customGlyphCode = noteHeadStruct.customGlyphCode {
+            customGlyph = true
+            text = customGlyphCode
         }
 
-        self.glyphCode = glyphProps.codeHead
-        self.xShift = noteHeadStruct.xShift
-
-        // VexFlowPatch: store y-shift values
+        // VexFlowPatch: store the custom notehead x offsets and the y-shift values
+        stemUpXOffset = noteHeadStruct.stemUpXOffset
+        stemDownXOffset = noteHeadStruct.stemDownXOffset
         stemUpYShift = noteHeadStruct.stemUpYShift
         stemDownYShift = noteHeadStruct.stemDownYShift
 
-        if let customCode = noteHeadStruct.customGlyphCode {
-            customGlyph = true
-            glyphCode = customCode
-            stemUpXOffset = noteHeadStruct.stemUpXOffset
-            stemDownXOffset = noteHeadStruct.stemDownXOffset
-        }
-
-        if let style = noteHeadStruct.style {
-            setStyle(style)
-        }
-
-        renderOptions.glyphFontScale = noteHeadStruct.glyphFontScale ?? Tables.NOTATION_FONT_SCALE
-
-        let w: Double
-        if noteTypeValue == .slash {
-            w = Tables.SLASH_NOTEHEAD_WIDTH
-        } else if customGlyph && !glyphCode.hasPrefix("noteheadSlashed") && !glyphCode.hasPrefix("noteheadCircled") {
-            w = Glyph.getWidth(code: glyphCode, point: renderOptions.glyphFontScale)
-        } else {
-            w = Glyph.getWidth(code: glyphProps.codeHead, point: renderOptions.glyphFontScale)
-        }
-        setTickableWidth(w)
+        setStyle(noteHeadStruct.style ?? ElementStyle())
     }
 
     // MARK: - Width
 
-    public func getWidth() -> Double { tickableWidth }
+    /// The width of the notehead.
+    override public func getWidth() -> Double { width }
 
     // MARK: - Displaced
 
+    /// True if the notehead is displaced.
     public func isDisplaced() -> Bool { displaced }
 
-    // MARK: - Position
+    // MARK: - Line
 
-    public func setHeadX(_ x: Double) {
-        headX = x
-    }
-
-    public func getHeadY() -> Double { headY }
-
-    public func setHeadY(_ y: Double) {
-        headY = y
-    }
-
+    /// The stave line of the notehead.
     public func getLine() -> Double { line }
 
+    /// Set the stave line of the notehead.
     @discardableResult
     public func setLine(_ line: Double) -> Self {
         self.line = line
@@ -333,124 +264,71 @@ public final class NoteHead: Note {
 
     // MARK: - Absolute X
 
+    /// The canvas `x` coordinate of the notehead.
     override public func getAbsoluteX() -> Double {
-        let x = !preFormatted ? headX : super.getAbsoluteX()
+        // If the note is not preformatted, use the static x value. Otherwise,
+        // it is formatted: use its x value relative to its tick context.
+        let x = !preFormatted ? self.x : super.getAbsoluteX()
+
+        // For a more natural displaced notehead, adjust the displacement by
+        // half the stem width to keep a slight overlap with the stem.
         let displacementStemAdjustment = Stem.WIDTH / 2
-        let musicFont = Glyph.MUSIC_FONT_STACK.first!
-        let fontShift = ((musicFont.lookupMetric("notehead.shiftX") as? Double) ?? 0) * headStemDirection.signDouble
-        let displacedFontShift =
-            ((musicFont.lookupMetric("noteHead.displacedShiftX") as? Double) ?? 0) * headStemDirection.signDouble
 
-        return x + fontShift + (displaced
-            ? (tickableWidth - displacementStemAdjustment) * headStemDirection.signDouble + displacedFontShift
-            : 0)
-    }
-
-    // MARK: - Bounding Box
-
-    override public func getBoundingBox() -> BoundingBox? {
-        let spacing = checkStave().getSpacingBetweenLines()
-        let halfSpacing = spacing / 2
-        let minY = headY - halfSpacing
-        return BoundingBox(x: getAbsoluteX(), y: minY, w: tickableWidth, h: spacing)
+        return x + (displaced ? (width - displacementStemAdjustment) * stemDirection.signDouble : 0)
     }
 
     // MARK: - Stave
 
+    /// Set the notehead to a stave.
     @discardableResult
     override public func setStave(_ stave: Stave) -> Self {
-        noteStave = stave
-        setHeadY(stave.getYForNote(line))
-        if let ctx = stave.getContext() {
-            setContext(ctx)
-        }
+        let line = getLine()
+
+        self.stave = stave
+        setY(stave.getYForNote(line))
+        setContext(stave.getContext())
         return self
     }
 
     // MARK: - PreFormat
 
+    /// Pre-render formatting.
     override public func preFormat() {
         if preFormatted { return }
-        let width = getWidth() + leftDisplacedHeadPx + rightDisplacedHeadPx
-        setTickableWidth(width)
         preFormatted = true
     }
 
     // MARK: - Draw
 
+    /// Draw the notehead.
     override public func draw() throws {
         let ctx = try checkContext()
         setRendered()
+        _ = ctx.openGroup("notehead", getAttribute("id"))
 
-        var drawX = getAbsoluteX()
-        if customGlyph {
-            drawX += headStemDirection == Stem.UP
-                ? stemUpXOffset + (glyphProps.stem
-                    ? (noteTypeValue == .slash
-                        ? Tables.SLASH_NOTEHEAD_WIDTH
-                        : Glyph.getWidth(code: glyphProps.codeHead, point: renderOptions.glyphFontScale)) - tickableWidth
-                    : 0)
-                : stemDownXOffset
+        x = getAbsoluteX()
+
+        // VexFlowPatch: notehead y-shift that does not depend on stem length.
+        var yPatch: Double = 0
+        if stemDirection == Stem.UP {
+            yPatch = stemUpYShift
+        } else if stemDirection == Stem.DOWN {
+            yPatch = stemDownYShift
         }
 
-        let categorySuffix = "\(glyphCode)Stem\(headStemDirection == Stem.UP ? "Up" : "Down")"
-
-        // VexFlowPatch: apply notehead y-shift independent of stem length
-        var drawY = headY
-        if headStemDirection == Stem.UP {
-            drawY += stemUpYShift
-        } else if headStemDirection == Stem.DOWN {
-            drawY += stemDownYShift
+        // VexFlowPatch: x offset of a custom notehead (TI notehead). Zero by default.
+        var xPatch: Double = 0
+        if customGlyph && (stemUpXOffset != 0 || stemDownXOffset != 0) {
+            if stemDirection == Stem.UP {
+                let defaultHeadWidth = TextMeasurer.measure(glyphProps.codeHead, fontInfo: fontInfo).width
+                xPatch = stemUpXOffset + (glyphProps.stem ? defaultHeadWidth - width : 0)
+            } else {
+                xPatch = stemDownXOffset
+            }
         }
 
-        if noteType == NoteType.slash.rawValue {
-            let staveSpace = checkStave().getSpacingBetweenLines()
-            drawSlashNoteHead(
-                ctx: ctx,
-                duration: noteDuration,
-                x: drawX,
-                y: drawY,
-                stemDirection: headStemDirection,
-                staveSpace: staveSpace
-            )
-        } else {
-            Glyph.renderGlyph(
-                ctx: ctx,
-                xPos: drawX,
-                yPos: drawY,
-                point: renderOptions.glyphFontScale,
-                code: glyphCode,
-                category: "noteHead.\(categorySuffix)"
-            )
-        }
+        renderText(ctx, xPos: xPatch, yPos: yPatch)
+        try (parent as? StaveNote)?.drawModifiers(self)
+        ctx.closeGroup()
     }
 }
-
-// MARK: - Preview
-
-#if DEBUG
-import SwiftUI
-
-@available(iOS 17.0, macOS 14.0, *)
-#Preview("NoteHead", traits: .sizeThatFitsLayout) {
-    VexCanvas(width: 520, height: 160) { ctx in
-        ctx.clear()
-        FontLoader.loadDefaultFonts()
-
-        let f = Factory(options: FactoryOptions(width: 500))
-        _ = f.setContext(ctx)
-        let score = f.EasyScore()
-
-        let system = f.System(options: SystemOptions(
-            factory: f, x: 10, width: 500, y: 10
-        ))
-        _ = system.addStave(SystemStave(
-            voices: [score.voice(score.notes("C5/w, D5/h, E5/q, F5/8"))]
-        )).addClef(.treble)
-
-        system.format()
-        try? f.draw()
-    }
-    .padding()
-}
-#endif

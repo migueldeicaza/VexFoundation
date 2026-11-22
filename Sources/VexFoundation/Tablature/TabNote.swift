@@ -1,5 +1,10 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/tabnote.ts` (VexFlow 5.0.0).
+//
+// Notes for tablature notation. A tab note has one or more fret positions
+// and can be drawn with or without a stem.
 
 import Foundation
 
@@ -98,28 +103,38 @@ public struct TabNoteStruct {
 
 // MARK: - Helper Functions
 
-/// Gets unused strings grouped together if consecutive.
+/// Get the unused strings, grouped together if consecutive.
 private func getUnusedStringGroups(numLines: Int, stringsUsed: [Int]) -> [[Int]] {
     var stemThrough: [[Int]] = []
     var group: [Int] = []
-    for string in 1...numLines {
-        if stringsUsed.contains(string) {
-            stemThrough.append(group)
-            group = []
-        } else {
-            group.append(string)
+    if numLines >= 1 {
+        for string in 1...numLines {
+            let isUsed = stringsUsed.contains(string)
+            if !isUsed {
+                group.append(string)
+            } else {
+                stemThrough.append(group)
+                group = []
+            }
         }
     }
     if !group.isEmpty { stemThrough.append(group) }
     return stemThrough
 }
 
-/// Gets groups of points that outline the partial stem lines between fret positions.
+/// Get groups of points that outline the partial stem lines between fret positions.
+///
+/// - Parameters:
+///   - stemY: The `y` coordinate of the stem.
+///   - unusedStrings: Groups of unused strings.
+///   - stave: The reference stave.
+///   - stemDirection: The stem direction.
 private func getPartialStemLines(
     stemY: Double, unusedStrings: [[Int]], stave: Stave, stemDirection: StemDirection
 ) -> [[Double]] {
     let upStem = stemDirection != .up
     let downStem = stemDirection != .down
+
     let lineSpacing = stave.getSpacingBetweenLines()
     let totalLines = stave.getNumLines()
 
@@ -133,6 +148,8 @@ private func getPartialStemLines(
             continue
         }
 
+        // A group with one string gets a duplicate value, because two strings
+        // are necessary to get the upper and lower y values.
         if strings.count == 1 {
             strings.append(strings[0])
         }
@@ -142,8 +159,10 @@ private func getPartialStemLines(
             let isTopBound = string == 1
             let isBottomBound = string == totalLines
 
+            // getYForLine uses a 0-based index. String numbers are 1-based.
             var y = stave.getYForLine(Double(string - 1))
 
+            // Add padding on each side of the line, unless it is the first or last string.
             if index == 0 && !isTopBound {
                 y -= lineSpacing / 2 - 1
             } else if index == strings.count - 1 && !isBottomBound {
@@ -152,6 +171,8 @@ private func getPartialStemLines(
 
             lineYs.append(y)
 
+            // Connect the group to the main stem above or below the stave
+            // if it is the top or bottom string.
             if stemDirection == .up && isTopBound {
                 lineYs.append(stemY - 2)
             } else if stemDirection == .down && isBottomBound {
@@ -179,52 +200,41 @@ public enum TabNoteError: Error, LocalizedError, Equatable, Sendable {
         case .missingGlyph(let duration, let type):
             return "No glyph found for duration '\(duration)' and type '\(type)'."
         case .unformattedNoteForModifierStart:
-            return "Can't call getModifierStartXY on an unformatted note."
+            return "Can't call GetModifierStartXY on an unformatted note."
         case .invalidModifierIndex(let index):
             return "Modifier index out of range: \(index)"
         case .noYValues:
-            return "No Y-values calculated for this note."
+            return "No Y-Values calculated for this note."
         }
     }
 }
 
 // MARK: - TabNote
 
-/// Renders notes for tablature notation. Consists of one or more fret positions,
-/// and can be drawn with or without stems.
+/// Notes for tablature notation. A tab note has one or more fret positions
+/// and can be drawn with or without a stem.
 open class TabNote: StemmableNote {
 
     override open class var category: String { "TabNote" }
 
     // MARK: - Properties
 
+    /// Draw parentheses around the fret positions.
     public var ghost: Bool = false
-    public var glyphPropsArr: [TabGlyphProps] = []
+    /// One text element for each fret position.
+    public internal(set) var fretElement: [VexElement] = []
     public var positions: [TabNotePosition]
     public private(set) var tabInitError: TabNoteError?
-    /// VexFlowPatch: configurable background color for tab notes
-    /// (prevents black rectangles in viewers that render transparent as black)
+
+    /// VexFlowPatch: configurable background color for tab notes. When set,
+    /// the area behind each fret number is filled with this color instead of
+    /// `clearRect` (some viewers render a transparent clear as black).
     public var backgroundColor: String?
 
-    private static func fallbackGlyphProps() -> GlyphProps {
-        Tables.getGlyphProps(duration: .quarter, type: .note) ?? GlyphProps(
-            codeHead: "noteheadBlack",
-            stem: true,
-            flag: false,
-            rest: false,
-            position: "B/4",
-            dotShiftY: 0,
-            lineAbove: 0,
-            lineBelow: 0,
-            beamCount: 0,
-            codeFlagUpstem: nil,
-            codeFlagDownstem: nil,
-            stemUpExtension: 0,
-            stemDownExtension: 0,
-            stemBeamExtension: 0,
-            tabnoteStemUpExtension: 0,
-            tabnoteStemDownExtension: 0
-        )
+    /// VexFlowPatch: use a classical X notehead glyph (`noteheadXBlack`)
+    /// instead of `accidentalDoubleSharp` for muted strings ("X").
+    public var useAlternativeXNoteheadGlyph: Bool = false {
+        didSet { if oldValue != useAlternativeXNoteheadGlyph { updateWidth() } }
     }
 
     private func setInitErrorIfNeeded(_ error: TabNoteError) {
@@ -235,11 +245,13 @@ open class TabNote: StemmableNote {
 
     // MARK: - Init
 
+    /// Create a `TabNote` from `noteStruct`. `drawStem` enables the stem.
     public init(_ noteStruct: TabNoteStruct, drawStem: Bool = false) {
+        // The fret positions in the note.
         self.positions = noteStruct.positions
 
         let noteInput = NoteStruct(
-            keys: noteStruct.positions.map { "\(String($0.fret))/\($0.str)" },
+            keys: [],
             duration: NoteDurationSpec(uncheckedValue: noteStruct.duration),
             dots: noteStruct.dots,
             type: noteStruct.type
@@ -247,32 +259,29 @@ open class TabNote: StemmableNote {
 
         super.init(noteInput)
 
-        renderOptions.glyphFontScale = Tables.TABLATURE_FONT_SCALE
+        self.ghost = false // Draw parentheses around the notes.
+
+        // Render options.
         renderOptions.drawStem = drawStem
         renderOptions.drawDots = drawStem
         renderOptions.drawStemThroughStave = false
         renderOptions.yShift = 0
-        renderOptions.scale = 1.0
-        renderOptions.font = "\(VexFont.SIZE)pt \(VexFont.SANS_SERIF)"
 
         if noteStruct.positions.isEmpty {
             setInitErrorIfNeeded(.emptyPositions)
         }
-        if let gp = Tables.getGlyphProps(duration: noteDuration, type: noteType) {
-            glyphProps = gp
-        } else {
-            glyphProps = Self.fallbackGlyphProps()
-            setInitErrorIfNeeded(.missingGlyph(duration: noteDuration, type: noteType))
-        }
+        // Upstream sets `glyphProps = Note.getGlyphProps(duration, noteType)`
+        // here. The Note initializer already does the same lookup.
 
         buildStem()
 
         if let dir = noteStruct.stemDirection {
             setStemDirection(dir)
         } else {
-            setStemDirection(.up)
+            setStemDirection(Stem.UP)
         }
 
+        self.ghost = false
         updateWidth()
     }
 
@@ -285,12 +294,12 @@ open class TabNote: StemmableNote {
 
     // MARK: - String Accessors
 
-    /// Return the number of the greatest string (lowest on display).
+    /// The number of the greatest string (the lowest string on the display).
     public func greatestString() -> Int {
         positions.map { $0.str }.max() ?? 0
     }
 
-    /// Return the number of the least string (highest on display).
+    /// The number of the least string (the highest string on the display).
     public func leastString() -> Int {
         positions.map { $0.str }.min() ?? 0
     }
@@ -298,13 +307,16 @@ open class TabNote: StemmableNote {
     // MARK: - Reset
 
     @discardableResult
-    public func reset() -> Self {
-        if let stave = getStave() { _ = setStave(stave) }
+    override open func reset() -> Self {
+        super.reset()
+        if let stave = getStave() { setStave(stave) }
         return self
     }
 
     // MARK: - Ghost
 
+    /// Set as ghost `TabNote`: draw parentheses around the fret positions.
+    /// Often used for frets that are bent to.
     @discardableResult
     public func setGhost(_ ghost: Bool) -> Self {
         self.ghost = ghost
@@ -318,77 +330,61 @@ open class TabNote: StemmableNote {
         renderOptions.drawStem
     }
 
+    /// The default stem extension of the note.
     override public func getStemExtension() -> Double {
         if let override = stemExtensionOverride {
             return override
         }
-        return getStemDirection() == Stem.UP
-            ? glyphProps.tabnoteStemUpExtension
-            : glyphProps.tabnoteStemDownExtension
+        return flag.getHeight() > Stem.HEIGHT ? flag.getHeight() - Stem.HEIGHT : 0
+    }
+
+    // MARK: - Fret Elements
+
+    /// Make the element for a fret: `X` gives a glyph, other values give text.
+    ///
+    /// VexFlowPatch: `useAlternativeXGlyph` selects `noteheadXBlack` for `X`.
+    public static func tabToElement(_ fret: String, useAlternativeXGlyph: Bool = false) -> VexElement {
+        let el: VexElement
+
+        if fret.uppercased() == "X" {
+            el = VexElement(category: "TabNote")
+            el.setText(useAlternativeXGlyph ? Glyphs.noteheadXBlack : Glyphs.accidentalDoubleSharp)
+        } else {
+            el = VexElement(category: "TabNote.text")
+            el.setText(fret)
+            el.setYShift(el.getHeight() / 2)
+        }
+
+        return el
     }
 
     // MARK: - Width
 
+    /// Calculate and store the width of the note.
     public func updateWidth() {
-        glyphPropsArr = []
-        var w: Double = 0
+        fretElement = []
+        width = 0
         for i in 0..<positions.count {
             var fret = positions[i].fret
-            if ghost { fret = "(\(fret))" }
-            let tabGlyph = Tables.tabToGlyphProps(fret, scale: renderOptions.scale, useAlternativeXGlyph: renderOptions.useAlternativeXNoteheadGlyph)
-            glyphPropsArr.append(tabGlyph)
-            w = max(tabGlyph.getWidth(), w)
+            if ghost { fret = "(" + fret + ")" }
+            let el = TabNote.tabToElement(fret, useAlternativeXGlyph: useAlternativeXNoteheadGlyph)
+            fretElement.append(el)
+            width = max(el.getWidth(), width)
         }
-        tickableWidth = w
-    }
-
-    /// Upstream TabNote overrides glyph width semantics to use the rendered fret text width.
-    /// This width participates in formatter / modifier spacing (e.g. Annotation.format).
-    override public func getGlyphWidth() -> Double {
-        tickableWidth
     }
 
     // MARK: - Stave
 
+    /// Set the stave of the note.
     @discardableResult
     override public func setStave(_ stave: Stave) -> Self {
         super.setStave(stave)
         let ctx = stave.getContext()
-        if let ctx { setContext(ctx) }
-        // Recalculate widths based on the context's font
-        if let context = ctx {
-            var measuredMax: Double = 0
-            for i in 0..<glyphPropsArr.count {
-                var gp = glyphPropsArr[i]
-                let text = gp.text
-                if text.uppercased() != "X" {
-                    if let font = renderOptions.font {
-                        context.save()
-                        context.setFont(font)
-                        gp.width = context.measureText(text).width
-                        // Upstream switches getWidth() to return measured width directly.
-                        // In Swift, emulate that by neutralizing the pre-measure scale factor.
-                        gp.scale = 1
-                        context.restore()
-                    }
-                }
-                glyphPropsArr[i] = gp
-                measuredMax = max(gp.getWidth(), measuredMax)
-            }
-            // Most current parity fixtures expect formatter spacing to use the
-            // initial table estimate, except bend/vibrato tab notes where
-            // measured fret width feeds the modifier spacing path.
-            let hasBendOrVibratoModifier = getModifiers().contains { modifier in
-                let category = modifier.getCategory()
-                return category == Bend.category || category == Vibrato.category
-            }
-            if preFormatted || hasBendOrVibratoModifier {
-                tickableWidth = measuredMax
-            }
-        }
+        setContext(ctx)
 
-        // Calculate Y positions
+        // getYForLine uses a 0-based index. position.str is 1-based.
         let ys = positions.map { stave.getYForLine(Double($0.str - 1)) }
+
         setYs(ys)
 
         if let stem {
@@ -400,20 +396,31 @@ open class TabNote: StemmableNote {
 
     // MARK: - Positions
 
+    /// The fret positions of the note.
     public func getPositions() -> [TabNotePosition] {
         positions
     }
 
     // MARK: - Modifier Start XY
 
-    override public func getModifierStartXY(position: ModifierPosition, index: Int) -> (x: Double, y: Double) {
-        (try? getModifierStartXYThrowing(position: position, index: index)) ?? (
+    /// The default `x` and `y` coordinates of a modifier at `position`
+    /// for the fret position at `index`.
+    override public func getModifierStartXY(
+        position: ModifierPosition,
+        index: Int,
+        forceFlagRight: Bool = false
+    ) -> (x: Double, y: Double) {
+        (try? getModifierStartXYThrowing(position: position, index: index, forceFlagRight: forceFlagRight)) ?? (
             x: getAbsoluteX(),
             y: ys.first ?? 0
         )
     }
 
-    public func getModifierStartXYThrowing(position: ModifierPosition, index: Int) throws -> (x: Double, y: Double) {
+    override public func getModifierStartXYThrowing(
+        position: ModifierPosition,
+        index: Int,
+        forceFlagRight: Bool = false
+    ) throws -> (x: Double, y: Double) {
         guard preFormatted else {
             throw TabNoteError.unformattedNoteForModifierStart
         }
@@ -426,11 +433,12 @@ open class TabNote: StemmableNote {
 
         var x: Double = 0
         if position == .left {
-            x = -2
+            x = -1 * 2 // FIXME: modifier padding, move to font file
         } else if position == .right {
-            x = tickableWidth + 2
+            x = width + 2 // FIXME: modifier padding, move to font file
         } else if position == .below || position == .above {
-            x = tickableWidth / 2
+            let noteGlyphWidth = width
+            x = noteGlyphWidth / 2
         }
 
         return (x: getAbsoluteX() + x, y: ys[index])
@@ -438,24 +446,29 @@ open class TabNote: StemmableNote {
 
     // MARK: - Rest Line
 
+    /// The default line for a rest.
     override public func getLineForRest() -> Double {
         Double(positions.first?.str ?? 0)
     }
 
     // MARK: - Pre Format
 
+    /// Pre-render formatting.
     override open func preFormat() {
         if preFormatted { return }
         modifierContext?.preFormat()
+        // The width is already set in init.
         preFormatted = true
     }
 
     // MARK: - Stem Position
 
+    /// The x position of the stem.
     override public func getStemX() -> Double {
         getCenterGlyphX()
     }
 
+    /// The y position of the stem.
     public func getStemY() -> Double {
         (try? getStemYThrowing()) ?? 0
     }
@@ -463,125 +476,128 @@ open class TabNote: StemmableNote {
     public func getStemYThrowing() throws -> Double {
         let stave = try checkStaveThrowing()
         let numLines = stave.getNumLines()
+
+        // The decimal staff line values give good spacing between the
+        // fret number and the stem.
         let stemUpLine = -0.5
         let stemDownLine = Double(numLines) - 0.5
-        let stemStartLine = Stem.UP == getStemDirection() ? stemUpLine : stemDownLine
+        let stemStartLine = Stem.UP == stemDirection ? stemUpLine : stemDownLine
+
         return stave.getYForLine(stemStartLine)
     }
 
+    /// The stem extents of the tab note.
     override public func getStemExtents() -> (topY: Double, baseY: Double) {
         checkStem().getExtents()
     }
 
     // MARK: - Draw Flag
 
-    public func drawFlag() {
-        guard let context = getContext() else { return }
-        let shouldDrawFlag = beam == nil && renderOptions.drawStem
+    /// Draw the flag.
+    public func drawFlag() throws {
+        let drawStem = renderOptions.drawStem
+        let context = try checkContext()
 
-        if glyphProps.flag && shouldDrawFlag {
+        let shouldDrawFlag = beam == nil && drawStem
+
+        if glyphProps.codeFlagUp != nil && shouldDrawFlag {
             let flagX = getStemX()
-            let flagY: Double
-            if getStemDirection() == Stem.DOWN {
-                flagY = getStemY() - checkStem().getHeight()
-                    - glyphProps.stemDownExtension
-            } else {
-                flagY = getStemY() - checkStem().getHeight()
-                    + glyphProps.stemUpExtension
-            }
-            flag?.render(ctx: context, x: flagX, y: flagY)
+            let flagY = getStemDirection() == Stem.DOWN
+                // Down stems are below the notehead and have flags on the right.
+                ? getStemY() - checkStem().getHeight() - getStemExtension()
+                // Up stems are above the notehead and have flags on the right.
+                : getStemY() - checkStem().getHeight() + getStemExtension()
+
+            flag.setContext(context).setX(flagX).setY(flagY)
+            try flag.drawWithStyle()
         }
     }
 
     // MARK: - Draw Modifiers
 
-    public func drawModifiers() {
-        for modifier in noteModifiers {
+    /// Draw the modifiers.
+    public func drawModifiers() throws {
+        for modifier in getModifiers() {
+            // Draw the dots only if enabled.
             if modifier is Dot && !renderOptions.drawDots {
                 continue
             }
             modifier.setContext(getContext())
-            try? modifier.drawWithStyle()
+            try modifier.drawWithStyle()
         }
     }
 
     // MARK: - Draw Stem Through
 
-    public func drawStemThrough() {
+    /// Draw the stem extension through the fret positions.
+    public func drawStemThrough() throws {
         let stemX = getStemX()
         let stemY = getStemY()
-        guard let ctx = getContext() else { return }
+        let ctx = try checkContext()
 
-        if renderOptions.drawStem && renderOptions.drawStemThroughStave {
-            let numLines = checkStave().getNumLines()
+        let drawStem = renderOptions.drawStem
+        let stemThrough = renderOptions.drawStemThroughStave
+        if drawStem && stemThrough {
+            let stave = try checkStaveThrowing()
+            let numLines = stave.getNumLines()
             let stringsUsed = positions.map { $0.str }
+
             let unusedStrings = getUnusedStringGroups(numLines: numLines, stringsUsed: stringsUsed)
             let stemLines = getPartialStemLines(
                 stemY: stemY, unusedStrings: unusedStrings,
-                stave: checkStave(), stemDirection: getStemDirection()
+                stave: stave, stemDirection: getStemDirection()
             )
 
-            ctx.save()
             ctx.setLineWidth(Stem.WIDTH)
             for bounds in stemLines {
                 if bounds.isEmpty { continue }
+
                 ctx.beginPath()
                 ctx.moveTo(stemX, bounds[0])
                 ctx.lineTo(stemX, bounds[bounds.count - 1])
                 ctx.stroke()
                 ctx.closePath()
             }
-            ctx.restore()
         }
     }
 
     // MARK: - Draw Positions
 
-    public func drawPositions() {
-        guard let ctx = getContext() else { return }
+    /// Draw the fret positions.
+    public func drawPositions() throws {
+        let ctx = try checkContext()
         let x = getAbsoluteX()
         let ys = self.ys
-        let count = min(positions.count, ys.count, glyphPropsArr.count)
+        let count = min(positions.count, ys.count, fretElement.count)
         for i in 0..<count {
             let y = ys[i] + renderOptions.yShift
-            let glyphProps = glyphPropsArr[i]
+            let el = fretElement[i]
 
-            let noteGlyphWidth = tickableWidth
-            let tabX = x + noteGlyphWidth / 2 - glyphProps.getWidth() / 2
+            // Center the fret text below the stem.
+            let tabX = x - el.getWidth() / 2
 
-            // VexFlowPatch: use backgroundColor if set, otherwise clearRect
+            // FIXME: Magic numbers.
             if let bgColor = backgroundColor {
+                // VexFlowPatch: fill with the background color instead of clearRect.
                 ctx.save()
                 ctx.setFillStyle(bgColor)
                 ctx.setLineWidth(0)
-                ctx.fillRect(tabX - 2, y - 3, glyphProps.getWidth() + 4, 6)
+                ctx.fillRect(tabX - 2, y - 3, el.getWidth() + 4, 6)
                 ctx.restore()
             } else {
-                ctx.clearRect(tabX - 2, y - 3, glyphProps.getWidth() + 4, 6)
+                ctx.clearRect(tabX - 2, y - 3, el.getWidth() + 4, 6)
             }
 
-            if let code = glyphProps.code {
-                Glyph.renderGlyph(
-                    ctx: ctx, xPos: tabX, yPos: y,
-                    point: renderOptions.glyphFontScale * renderOptions.scale,
-                    code: code
-                )
-            } else {
-                ctx.save()
-                if let font = renderOptions.font {
-                    ctx.setFont(font)
-                }
-                let text = glyphProps.text
-                ctx.fillText(text, tabX, y + 5 * renderOptions.scale)
-                ctx.restore()
-            }
+            el.renderText(ctx, xPos: tabX, yPos: y)
         }
     }
 
     // MARK: - Draw
 
+    /// Draw the note.
     override public func draw() throws {
         let ctx = try checkContext()
+
         guard !ys.isEmpty else {
             throw TabNoteError.noYValues
         }
@@ -589,22 +605,20 @@ open class TabNote: StemmableNote {
         setRendered()
         let renderStem = beam == nil && renderOptions.drawStem
 
-        applyStyle()
-        _ = ctx.openGroup("tabnote", getAttribute("id") ?? "")
-        drawPositions()
-        drawStemThrough()
+        _ = ctx.openGroup("tabnote", getAttribute("id"))
+        try drawPositions()
+        try drawStemThrough()
 
         if let stem, renderStem {
             let stemX = getStemX()
             stem.setNoteHeadXBounds(stemX, stemX)
             stem.setContext(ctx)
-            try stem.draw()
+            try stem.drawWithStyle()
         }
 
-        drawFlag()
-        drawModifiers()
+        try drawFlag()
+        try drawModifiers()
         ctx.closeGroup()
-        restoreStyle()
     }
 }
 
@@ -617,7 +631,6 @@ import SwiftUI
 #Preview("TabNote", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 500, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)

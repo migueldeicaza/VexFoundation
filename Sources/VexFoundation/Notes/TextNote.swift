@@ -1,11 +1,13 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/textnote.ts` (VexFlow 5.0.0).
 
 import Foundation
 
 // MARK: - Text Justification
 
-public enum TextJustification: Int {
+public enum TextJustification: Int, Sendable {
     case left = 1
     case center = 2
     case right = 3
@@ -22,7 +24,9 @@ public struct TextNoteStruct {
     public var smooth: Bool?
     public var line: Double?
     public var superscript: String?
+    /// Upstream `subscript` (a Swift keyword).
     public var subscriptText: String?
+    public var font: FontInfo?
 
     public init(
         keys: [StaffKeySpec] = [StaffKeySpec(letter: .b, octave: 4)],
@@ -33,8 +37,10 @@ public struct TextNoteStruct {
         smooth: Bool? = nil,
         line: Double? = nil,
         superscript: String? = nil,
-        subscriptText: String? = nil
+        subscriptText: String? = nil,
+        font: FontInfo? = nil
     ) {
+        self.font = font
         self.keys = keys
         self.duration = duration
         self.text = text
@@ -177,249 +183,160 @@ public struct TextNoteStruct {
     }
 }
 
-// MARK: - Text Note Glyph Info
-
-private struct TextNoteGlyphInfo {
-    let code: String
-    let xShift: Double
-    let yShift: Double
-}
-
 // MARK: - Text Note
 
-/// A note that renders text or a glyph at a specific tick position.
-/// Used for dynamics, lyrics, and other text-based elements.
+/// `TextNote` is a notation element that is positioned in time. Generally
+/// meant for objects that sit above/below the staff and inline with each other.
+/// A `TextNote` must be assigned to a `Stave` with `setStave` before rendering.
+/// Examples are dynamics, lyrics, chord changes, and so on.
 public final class TextNote: Note {
 
     override public class var category: String { "TextNote" }
-    override public class var textFont: FontInfo {
-        FontInfo(
-            family: VexFont.SANS_SERIF,
-            size: "12pt",
-            weight: VexFontWeight.normal.rawValue,
-            style: VexFontStyle.normal.rawValue
-        )
-    }
 
-    // MARK: - Glyph Definitions
+    public typealias Justification = TextJustification
 
-    private static let GLYPHS: [String: TextNoteGlyphInfo] = [
-        "segno": TextNoteGlyphInfo(code: "segno", xShift: 0, yShift: 0),
-        "tr": TextNoteGlyphInfo(code: "ornamentTrill", xShift: 0, yShift: 0),
-        "mordent": TextNoteGlyphInfo(code: "ornamentMordent", xShift: 0, yShift: 0),
-        "mordent_upper": TextNoteGlyphInfo(code: "ornamentShortTrill", xShift: 0, yShift: 0),
-        "mordent_lower": TextNoteGlyphInfo(code: "ornamentMordent", xShift: 0, yShift: 0),
-        "f": TextNoteGlyphInfo(code: "dynamicForte", xShift: 0, yShift: 0),
-        "p": TextNoteGlyphInfo(code: "dynamicPiano", xShift: 0, yShift: 0),
-        "m": TextNoteGlyphInfo(code: "dynamicMezzo", xShift: 0, yShift: 0),
-        "s": TextNoteGlyphInfo(code: "dynamicSforzando", xShift: 0, yShift: 0),
-        "z": TextNoteGlyphInfo(code: "dynamicZ", xShift: 0, yShift: 0),
-        "coda": TextNoteGlyphInfo(code: "coda", xShift: 0, yShift: 0),
-        "pedal_open": TextNoteGlyphInfo(code: "keyboardPedalPed", xShift: 0, yShift: 0),
-        "pedal_close": TextNoteGlyphInfo(code: "keyboardPedalUp", xShift: 0, yShift: 0),
-        "caesura_straight": TextNoteGlyphInfo(code: "caesura", xShift: 0, yShift: 0),
-        "caesura_curved": TextNoteGlyphInfo(code: "caesuraCurved", xShift: 0, yShift: 0),
-        "breath": TextNoteGlyphInfo(code: "breathMarkComma", xShift: 0, yShift: 0),
-        "tick": TextNoteGlyphInfo(code: "breathMarkTick", xShift: 0, yShift: 0),
-        "turn": TextNoteGlyphInfo(code: "ornamentTurn", xShift: 0, yShift: 0),
-        "turn_inverted": TextNoteGlyphInfo(code: "ornamentTurnSlash", xShift: 0, yShift: 0),
+    /// Glyph data.
+    public static let GLYPHS: [String: String] = [
+        "segno": Glyphs.segno,
+        "tr": Glyphs.ornamentTrill,
+        "mordent": Glyphs.ornamentMordent,
+        "mordentUpper": Glyphs.ornamentShortTrill,
+        "mordentLower": Glyphs.ornamentMordent,
+        "f": Glyphs.dynamicForte,
+        "p": Glyphs.dynamicPiano,
+        "m": Glyphs.dynamicMezzo,
+        "s": Glyphs.dynamicSforzando,
+        "z": Glyphs.dynamicZ,
+        "coda": Glyphs.coda,
+        "pedalOpen": Glyphs.keyboardPedalPed,
+        "pedalClose": Glyphs.keyboardPedalUp,
+        "caesuraStraight": Glyphs.caesura,
+        "caesuraCurved": Glyphs.caesuraCurved,
+        "breath": Glyphs.breathMarkComma,
+        "tick": Glyphs.breathMarkTick,
+        "turn": Glyphs.ornamentTurn,
+        "turnInverted": Glyphs.ornamentTurnSlash,
     ]
 
     // MARK: - Properties
 
-    public var text: String
-    public var noteGlyph: Glyph?
-    public var superscriptText: String?
-    public var subscriptText: String?
+    public var superscript: VexElement?
+    public var `subscript`: VexElement?
     public var smooth: Bool
-    public var justification: TextJustification = .left
+    public var justification: TextJustification
     public var line: Double
 
     // MARK: - Init
 
     public init(_ noteStruct: TextNoteStruct) {
-        self.text = noteStruct.text ?? ""
-        self.superscriptText = noteStruct.superscript
-        self.subscriptText = noteStruct.subscriptText
-        self.smooth = noteStruct.smooth ?? false
         self.line = noteStruct.line ?? 0
+        self.smooth = noteStruct.smooth ?? false
+        self.justification = .left
 
-        let ns = NoteStruct(
+        super.init(NoteStruct(
             keys: noteStruct.keys.map(\.rawValue),
-            duration: noteStruct.duration
-        )
-        super.init(ns)
+            duration: noteStruct.duration,
+            line: noteStruct.line
+        ))
 
-        if let ig = noteStruct.ignoreTicks {
-            ignoreTicks = ig
+        text = noteStruct.text ?? ""
+        if let glyph = noteStruct.glyph {
+            text += TextNote.GLYPHS[glyph] ?? glyph
+        }
+        if let font = noteStruct.font {
+            setFont(font)
+        } else if noteStruct.glyph == nil {
+            setFont(Metrics.getFontInfo("TextNote.text.fontSize"))
         }
 
-        // If a glyph is specified, create it
-        if let glyphName = noteStruct.glyph,
-           let glyphInfo = TextNote.GLYPHS[glyphName] {
-            noteGlyph = Glyph(
-                code: glyphInfo.code,
-                point: Tables.NOTATION_FONT_SCALE,
-                options: GlyphOptions(category: "textNote")
-            )
-            setTickableWidth(noteGlyph?.getMetrics().width ?? 0)
+        // Scale the font size by 1/1.3.
+        let smallerFontSize = VexFont.convertSizeToPointValue(fontInfo.size) * 0.769231
+        if let sup = noteStruct.superscript, !sup.isEmpty {
+            let element = VexElement(category: "TexNote.subSuper")
+            element.setText(sup)
+            element.setFontSize(smallerFontSize)
+            superscript = element
         }
+        if let sub = noteStruct.subscriptText, !sub.isEmpty {
+            let element = VexElement(category: "TexNote.subSuper")
+            element.setText(sub)
+            element.setFontSize(smallerFontSize)
+            `subscript` = element
+        }
+
+        ignoreTicks = noteStruct.ignoreTicks ?? false
     }
 
     // MARK: - Justification
 
+    /// Set the horizontal justification of the TextNote.
     @discardableResult
     public func setJustification(_ just: TextJustification) -> Self {
         justification = just
         return self
     }
 
+    /// Set the stave line of the note.
     @discardableResult
     public func setLine(_ line: Double) -> Self {
         self.line = line
         return self
     }
 
+    /// The stave line of the TextNote.
     public func getLine() -> Double { line }
-
-    public func getText() -> String { text }
 
     // MARK: - PreFormat
 
+    /// Pre-render formatting.
     override public func preFormat() {
         if preFormatted { return }
         let tickContext = checkTickContext("Can't preformat without a TickContext.")
 
-        if smooth {
-            setTickableWidth(0)
-        } else if let glyph = noteGlyph {
-            setTickableWidth(glyph.getMetrics().width)
-        } else {
-            if let ctx = try? checkContext() {
-                ctx.setFont(fontInfo)
-                setTickableWidth(ctx.measureText(text).width)
-            } else {
-                let formatter = TextFormatter.create(
-                    font: fontInfo,
-                    context: getContext() ?? noteStave?.getContext()
-                )
-                setTickableWidth(formatter.getWidthForTextInPx(text))
-            }
-        }
-
-        // Adjust displaced head offsets based on justification
         if justification == .center {
-            leftDisplacedHeadPx = tickableWidth / 2
+            leftDisplacedHeadPx = width / 2
         } else if justification == .right {
-            leftDisplacedHeadPx = tickableWidth
+            leftDisplacedHeadPx = width
         }
-        rightDisplacedHeadPx = tickContext.getMetrics().glyphPx / 2
 
+        // We reposition to the center of the note head
+        rightDisplacedHeadPx = tickContext.getMetrics().glyphPx / 2
         preFormatted = true
     }
 
     // MARK: - Draw
 
+    /// Render the TextNote. It must have a stave (`setStave`).
     override public func draw() throws {
-        let stave = checkStave()
         let ctx = try checkContext()
+        let stave = checkStave()
+        let tickContext = checkTickContext("Can't draw without a TickContext.")
+
         setRendered()
 
-        // Reposition to center of note head.
-        let tickContext = checkTickContext("Can't draw without a TickContext.")
+        // Reposition to center of note head
         var x = getAbsoluteX() + tickContext.getMetrics().glyphPx / 2
-        let width = tickableWidth
+
+        // Align based on tick-context width.
+        let width = getWidth()
+
         if justification == .center {
             x -= width / 2
-            // Align with VexFlow reference SVGs when this tick context's left modifier
-            // space comes from other simultaneous voices (e.g. accidentals).
-            if noteModifiers.isEmpty {
-                let contextModLeft = tickContext.getMetrics().modLeftPx
-                if contextModLeft > 0 {
-                    x -= contextModLeft / 2
-                }
-            }
         } else if justification == .right {
             x -= width
         }
 
-        let y = stave.getYForLine(line - 3)
+        let y = stave.getYForLine(line + -3)
+        renderText(ctx, xPos: x, yPos: y)
 
-        if let glyph = noteGlyph {
-            glyph.render(ctx: ctx, x: x, y: y)
-        } else {
-            applyStyle(context: ctx, style: getStyle())
-            ctx.setFont(fontInfo)
-            ctx.fillText(text, x, y)
-            let height = ctx.measureText(text).height
+        let height = getHeight()
 
-            // Render superscript
-            if let sup = superscriptText, !sup.isEmpty {
-                let smallerSize = VexFont.scaleSize(fontInfo.size, 0.769231)
-                ctx.setFont(FontInfo(
-                    family: fontInfo.family,
-                    size: smallerSize,
-                    weight: fontInfo.weight,
-                    style: fontInfo.style
-                ))
-                ctx.fillText(sup, x + width + 2, y - height / 2.2)
-            }
+        if let superscript {
+            superscript.renderText(ctx, xPos: x + self.width + 2, yPos: y - height / 2.2)
+        }
 
-            // Render subscript
-            if let sub = subscriptText, !sub.isEmpty {
-                let smallerSize = VexFont.scaleSize(fontInfo.size, 0.769231)
-                ctx.setFont(FontInfo(
-                    family: fontInfo.family,
-                    size: smallerSize,
-                    weight: fontInfo.weight,
-                    style: fontInfo.style
-                ))
-                ctx.fillText(sub, x + width + 2, y + height / 2.2 - 1)
-            }
-
-            restoreStyle(context: ctx, style: getStyle())
+        if let sub = `subscript` {
+            sub.renderText(ctx, xPos: x + self.width + 2, yPos: y + height / 2.2 - 1)
         }
     }
 }
-
-// MARK: - Preview
-
-#if DEBUG
-import SwiftUI
-
-@available(iOS 17.0, macOS 14.0, *)
-#Preview("TextNote", traits: .sizeThatFitsLayout) {
-    VexCanvas(width: 520, height: 160) { ctx in
-        ctx.clear()
-        FontLoader.loadDefaultFonts()
-
-        let f = Factory(options: FactoryOptions(width: 500))
-        _ = f.setContext(ctx)
-        let score = f.EasyScore()
-
-        let stave = f.Stave(x: 10, y: 10, width: 500)
-        _ = stave.addClef(.treble)
-
-        let notes = score.notes("C5/q, D5, E5, F5")
-        let voice = score.voice(notes)
-
-        let textNotes: [Note] = [
-            f.TextNote(TextNoteStruct(keys: [StaffKeySpec(letter: .c, octave: 5)], duration: .quarter, text: "do")),
-            f.TextNote(TextNoteStruct(keys: [StaffKeySpec(letter: .d, octave: 5)], duration: .quarter, text: "re")),
-            f.TextNote(TextNoteStruct(keys: [StaffKeySpec(letter: .e, octave: 5)], duration: .quarter, text: "mi")),
-            f.TextNote(TextNoteStruct(keys: [StaffKeySpec(letter: .f, octave: 5)], duration: .quarter, text: "fa")),
-        ]
-        let textVoice = f.Voice(timeSignature: .meter(4, 4))
-        _ = textVoice.addTickables(textNotes)
-        for tn in textNotes { _ = (tn as! TextNote).setStave(stave) }
-
-        let formatter = f.Formatter()
-        _ = formatter.joinVoices([voice])
-        _ = formatter.joinVoices([textVoice])
-        _ = formatter.format([voice, textVoice], justifyWidth: 400)
-
-        try? f.draw()
-    }
-    .padding()
-}
-#endif

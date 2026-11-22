@@ -1,5 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/voice.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -19,13 +21,16 @@ public enum VoiceTimeError: Error, LocalizedError, Equatable, Sendable {
 public enum VoiceError: Error, LocalizedError, Equatable, Sendable {
     case noStave
     case tooManyTicks
+    case missingStave
 
     public var errorDescription: String? {
         switch self {
         case .noStave:
             return "No stave attached to voice."
         case .tooManyTicks:
-            return "Too many ticks for voice in strict/full mode."
+            return "Too many ticks."
+        case .missingStave:
+            return "The voice cannot draw tickables without staves."
         }
     }
 }
@@ -34,6 +39,7 @@ public enum VoiceError: Error, LocalizedError, Equatable, Sendable {
 public struct VoiceTime {
     public var numBeats: Int
     public var beatValue: Int
+    /// Defaults to `Tables.RESOLUTION` if not provided.
     public var resolution: Int
 
     public init(numBeats: Int = 4, beatValue: Int = 4, resolution: Int = Tables.RESOLUTION) {
@@ -52,8 +58,11 @@ public struct VoiceTime {
 
 // MARK: - Voice Mode
 
-/// Modes for tick validation within a voice.
-public enum VoiceMode: Int {
+/// Modes allow the addition of ticks in three different ways:
+/// - strict: This is the default. Ticks must fill the voice.
+/// - soft: Ticks can be added without restrictions.
+/// - full: Ticks do not need to fill the voice, but can't exceed the maximum tick length.
+public enum VoiceMode: Int, Sendable {
     case strict = 1
     case soft = 2
     case full = 3
@@ -61,10 +70,12 @@ public enum VoiceMode: Int {
 
 // MARK: - Voice
 
-/// Container object to group Tickables for formatting.
+/// `Voice` is mainly a container object to group `Tickables` for formatting.
 public final class Voice: VexElement {
 
     override public class var category: String { "Voice" }
+
+    public typealias Mode = VoiceMode
 
     // MARK: - Properties
 
@@ -84,12 +95,47 @@ public final class Voice: VexElement {
 
     // MARK: - Init
 
+    /// Default time signature is 4/4.
     public init(time: VoiceTime? = nil) {
         let t = time ?? VoiceTime()
         self.time = t
+        // Recalculate total ticks.
         self.totalTicks = Fraction(t.numBeats * (t.resolution / t.beatValue), 1)
+        // until tickables are added, the smallestTickCount is the same as the stated totalTicks duration.
         self.smallestTickCount = totalTicks.clone()
         super.init()
+        self.options = (Tables.SOFTMAX_FACTOR, ())
+    }
+
+    /// Time signature shortcut: "4/4", "3/8", etc. A string that does not
+    /// match `<n>/<n>` gives 4/4 (upstream behavior).
+    public convenience init(time: String) {
+        self.init(time: Voice.parseVoiceTime(time))
+    }
+
+    static func parseVoiceTime(_ time: String) -> VoiceTime {
+        // Upstream: time.match(/(\d+)\/(\d+)/)
+        let chars = Array(time)
+        var i = 0
+        while i < chars.count {
+            if chars[i].isASCII, chars[i].isNumber {
+                var j = i
+                while j < chars.count, chars[j].isASCII, chars[j].isNumber { j += 1 }
+                if j < chars.count, chars[j] == "/" {
+                    var k = j + 1
+                    while k < chars.count, chars[k].isASCII, chars[k].isNumber { k += 1 }
+                    if k > j + 1,
+                       let num = Int(String(chars[i..<j])),
+                       let den = Int(String(chars[(j + 1)..<k])) {
+                        return VoiceTime(numBeats: num, beatValue: den)
+                    }
+                }
+                i = j
+            } else {
+                i += 1
+            }
+        }
+        return VoiceTime()
     }
 
     /// Convenience init from a typed time signature.
@@ -129,11 +175,27 @@ public final class Voice: VexElement {
     @discardableResult
     public func setStave(_ stave: Stave) -> Self {
         voiceStave = stave
-        boundingBox = nil
         return self
     }
 
     public func getStave() -> Stave? { voiceStave }
+
+    /// Get the bounding box for the voice.
+    override public func getBoundingBox() -> BoundingBox? {
+        guard let first = tickables.first else { return nil }
+        var boundingBox = first.getBoundingBox()
+        for tickable in tickables.dropFirst() {
+            if tickable.getStave() == nil, let stave = voiceStave { tickable.setStave(stave) }
+            if let bb = tickable.getBoundingBox() {
+                if boundingBox == nil {
+                    boundingBox = bb
+                } else {
+                    boundingBox?.mergeWith(bb)
+                }
+            }
+        }
+        return boundingBox
+    }
 
     public func checkStave() throws -> Stave {
         guard let voiceStave else {
@@ -152,7 +214,7 @@ public final class Voice: VexElement {
 
     public func isComplete() -> Bool {
         if mode == .strict || mode == .full {
-            return ticksUsed == totalTicks
+            return ticksUsed.equals(totalTicks)
         }
         return true
     }
@@ -199,12 +261,12 @@ public final class Voice: VexElement {
             ticksUsed.add(ticks)
             expTicksUsed = nil
 
-            if (mode == .strict || mode == .full) && ticksUsed > totalTicks {
+            if (mode == .strict || mode == .full) && ticksUsed.greaterThan(totalTicks) {
                 ticksUsed.subtract(ticks)
                 throw VoiceError.tooManyTicks
             }
 
-            if ticks < smallestTickCount {
+            if ticks.lessThan(smallestTickCount) {
                 smallestTickCount = ticks.clone()
             }
 
@@ -258,27 +320,29 @@ public final class Voice: VexElement {
 
     // MARK: - Draw
 
-    public func draw(context: RenderContext? = nil, stave: Stave? = nil) throws {
-        let ctx = try context ?? checkContext()
-        let drawStave = stave ?? voiceStave
-        setRendered()
+    override public func draw() throws {
+        try draw(context: nil, stave: nil)
+    }
 
-        var bb: BoundingBox?
+    /// Render the voice onto the canvas `context` and an optional `stave`.
+    /// If `stave` is omitted, it is expected that the notes have staves
+    /// already set.
+    public func draw(context: RenderContext?, stave: Stave? = nil) throws {
+        let ctx = try context ?? checkContext()
+        let stave = stave ?? voiceStave
+        setRendered()
         for tickable in tickables {
-            if let s = drawStave {
-                tickable.setStave(s)
+            // Set the stave if provided.
+            if let stave {
+                tickable.setStave(stave)
             }
-            if let tbb = tickable.getBoundingBox() {
-                if bb != nil {
-                    bb!.mergeWith(tbb)
-                } else {
-                    bb = tbb
-                }
+            guard tickable.getStave() != nil else {
+                throw VoiceError.missingStave
             }
+
             tickable.setContext(ctx)
             try tickable.drawWithStyle()
         }
-        boundingBox = bb
     }
 }
 
@@ -291,7 +355,6 @@ import SwiftUI
 #Preview("Voice", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 160) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)

@@ -1,5 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author: Larry Kuhns 2011
+//
+// Port of `src/stavesection.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -8,96 +11,67 @@ public final class StaveSection: StaveModifier {
 
     override public class var category: String { "StaveSection" }
 
-    override public class var textFont: FontInfo {
-        FontInfo(
-            family: VexFont.SANS_SERIF,
-            size: 10,
-            weight: VexFontWeight.bold.rawValue,
-            style: VexFontStyle.normal.rawValue
-        )
-    }
-
     // MARK: - Properties
 
-    public var section: String
-    public var sectionShiftX: Double = 0
-    public var sectionShiftY: Double
     public var drawRect: Bool
 
     // MARK: - Init
 
-    public init(section: String, x: Double, shiftY: Double, drawRect: Bool = true) {
-        self.section = section
-        self.sectionShiftY = shiftY
+    public init(section: String, x: Double = 0, shiftY yShift: Double = 0, drawRect: Bool = true) {
         self.drawRect = drawRect
         super.init()
-        self.modifierWidth = 16
-        self.modifierX = x
-        resetFont()
+
+        setText(section)
+        self.x = x
+        self.yShift = yShift
+        self.drawRect = drawRect
+        padding = Metrics.getDouble("StaveSection.padding")
     }
 
     @discardableResult
-    public func setStaveSection(_ section: String) -> Self {
-        self.section = section
+    public func setDrawRect(_ drawRect: Bool) -> Self {
+        self.drawRect = drawRect
         return self
     }
 
-    @discardableResult
-    public func setShiftX(_ x: Double) -> Self {
-        sectionShiftX = x
-        return self
-    }
+    // MARK: - Deprecated 4.x API
 
+    @available(*, deprecated, message: "Use text / getText().")
+    public var section: String { getText() }
+
+    @available(*, deprecated, renamed: "setText(_:)")
     @discardableResult
-    public func setShiftY(_ y: Double) -> Self {
-        sectionShiftY = y
-        return self
-    }
+    public func setStaveSection(_ section: String) -> Self { setText(section) }
+
+    @available(*, deprecated, renamed: "setXShift(_:)")
+    @discardableResult
+    public func setShiftX(_ x: Double) -> Self { setXShift(x) }
+
+    @available(*, deprecated, renamed: "setYShift(_:)")
+    @discardableResult
+    public func setShiftY(_ y: Double) -> Self { setYShift(y) }
 
     // MARK: - Draw
 
-    override public func drawStave(stave: Stave, xShift: Double = 0) throws {
+    override public func draw() throws {
+        let stave = try checkStaveThrowing()
         let ctx = try stave.checkContext()
         setRendered()
 
-        let borderWidth: Double = 2
-        let pad: Double = 2
+        x = stave.getX() + stave.getModifierXShift(getPosition().rawValue)
+        let headroom = -1 * textMetrics.actualBoundingBoxDescent
+        let width = self.width + 2 * padding // add left & right padding
+        let height = self.height + 2 * padding // add top & bottom padding
 
-        ctx.save()
-        ctx.setLineWidth(borderWidth)
-        ctx.setFont(fontInfo)
-
-        let textMeasure = ctx.measureText(section)
-        let textWidth = textMeasure.width
-        let useUpstreamParity = VexRuntime.getCurrentContext().upstreamParityMode
-        var parityHeadroom = 0.0
-        let textHeight: Double
-        if useUpstreamParity {
-            let baseFactor = abs(fontSizeInPoints - 14) < 0.1 ? 0.93895 : 0.939
-            let overshootLetters = Set(["C", "G", "O", "Q", "S"])
-            let needsOvershoot = section.count == 1 && overshootLetters.contains(section.uppercased())
-            let overshoot = needsOvershoot ? (fontSizeInPixels * 0.01215) : 0
-            textHeight = fontSizeInPixels * baseFactor + overshoot
-            parityHeadroom = overshoot
-        } else {
-            textHeight = textMeasure.height
-        }
-
-        let width = textWidth + 2 * pad
-        let height = textHeight + 2 * pad
-        let headroom = useUpstreamParity ? parityHeadroom : abs(textMeasure.yMin)
-
-        let y = stave.getYForTopText(1.5) + sectionShiftY
-        let x = modifierX + xShift + sectionShiftX
-
+        //  Seems to be a good default y
+        let y = stave.getYForTopText(1.5) + yShift
+        let x = self.x + xShift
         if drawRect {
             ctx.beginPath()
             ctx.rect(x, y - height + headroom, width, height)
             ctx.stroke()
         }
-
-        ctx.fillText(section, x + pad, y - pad)
-        ctx.restore()
+        renderText(ctx, xPos: xShift + padding, yPos: y - padding)
     }
 }
 
@@ -110,7 +84,6 @@ import SwiftUI
 #Preview("StaveSection", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 140) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory()
         _ = f.setContext(ctx)

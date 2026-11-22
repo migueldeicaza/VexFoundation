@@ -1,5 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/system.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -152,23 +154,37 @@ public final class System: VexElement {
 
     // MARK: - Accessors
 
-    public func getX() -> Double { options.x }
+    /// Get origin x.
+    override public func getX() -> Double { options.x }
 
-    public func setX(_ x: Double) {
+    /// Set origin x.
+    @discardableResult
+    override public func setX(_ x: Double) -> Self {
         options.x = x
-        partStaves.forEach { _ = $0.setStaveX(x) }
+        partStaves.forEach { $0.setX(x) }
+        return self
     }
 
-    public func getY() -> Double { options.y }
+    /// Get origin y.
+    override public func getY() -> Double { options.y }
+
+    /// Set origin y.
+    @discardableResult
+    override public func setY(_ y: Double) -> Self {
+        options.y = y
+        partStaves.forEach { $0.setY(y) }
+        return self
+    }
 
     public func getRuntimeContext() -> VexRuntimeContext { runtimeContext }
 
-    public func setY(_ y: Double) {
-        options.y = y
-        partStaves.forEach { _ = $0.setStaveY(y) }
-    }
-
+    /// Get the staves of the system.
     public func getStaves() -> [Stave] { partStaves }
+
+    /// Get the voices of the system.
+    public func getVoices() -> [Voice] { partVoices }
+
+    @available(*, deprecated, renamed: "getVoices()")
     public func getSystemVoices() -> [Voice] { partVoices }
 
     // MARK: - Context
@@ -209,7 +225,7 @@ public final class System: VexElement {
         let ctx = getContext()
 
         for voice in params.voices {
-            if let ctx { _ = voice.setContext(ctx) }
+            voice.setContext(ctx)
             _ = voice.setStave(stave)
             for tickable in voice.getTickables() {
                 _ = tickable.setStave(stave)
@@ -232,7 +248,7 @@ public final class System: VexElement {
     public func addVoices(_ voices: [Voice]) {
         let ctx = getContext()
         for voice in voices {
-            if let ctx { _ = voice.setContext(ctx) }
+            voice.setContext(ctx)
             partVoices.append(voice)
         }
     }
@@ -257,7 +273,7 @@ public final class System: VexElement {
 
             for (index, part) in partStaves.enumerated() {
                 y += part.space(partStaveInfos[index].spaceAbove)
-                _ = part.setStaveY(y)
+                part.setY(y)
                 y += part.space(partStaveInfos[index].spaceBelow)
                 y += part.space(options.spaceBetweenStaves)
                 if partStaveInfos[index].debugNoteMetrics {
@@ -288,7 +304,7 @@ public final class System: VexElement {
                 justifyWidth = try formatter.preCalculateMinTotalWidthThrowing(partVoices)
                 options.width = justifyWidth + Stave.rightPadding + (startX - options.x)
                 for part in partStaves {
-                    _ = part.setStaveWidth(options.width)
+                    part.setWidth(options.width)
                 }
             } else {
                 if options.noPadding {
@@ -314,30 +330,27 @@ public final class System: VexElement {
             self.startX = startX
             self.debugNoteMetricsYs = debugNoteMetricsYs
             self.lastY = y
-            self.boundingBox = BoundingBox(
-                x: options.x, y: options.y,
-                w: options.width, h: y - options.y
-            )
             Stave.formatBegModifiers(partStaves)
         }
     }
 
+    // MARK: - Bounding Box
+
+    /// Get the bounding box.
+    override public func getBoundingBox() -> BoundingBox? {
+        BoundingBox(x: options.x, y: options.y, w: options.width, h: (lastY ?? 0) - options.y)
+    }
+
     // MARK: - Draw
 
+    /// Render the system. Draws debug information, if requested.
     override public func draw() throws {
         try VexRuntime.withContext(runtimeContext) {
-            guard formatter != nil, startX != nil, lastY != nil else {
+            let ctx = try checkContext()
+            guard let formatter, let startX, let lastY else {
                 throw SystemError.drawRequiresFormat
             }
             setRendered()
-
-            guard let formatter,
-                  let startX,
-                  let lastY,
-                  let ctx = getContext() ?? factory.getContext()
-            else {
-                throw SystemError.drawRequiresFormat
-            }
 
             if options.debugFormatter {
                 Formatter.plotDebugging(
@@ -370,7 +383,6 @@ import SwiftUI
 #Preview("System", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 500, height: 260) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)

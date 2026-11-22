@@ -1,36 +1,41 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010.
-// Author: Taehoon Moon 2014. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/timesignote.ts` (VexFlow 5.0.0).
 
 import Foundation
 
 // MARK: - TimeSigNote
 
 /// A note that renders a time signature within a voice.
-/// Has no duration and consumes no ticks.
+/// It has no duration and consumes no ticks.
 public final class TimeSigNote: Note {
 
     override public class var category: String { "TimeSigNote" }
 
     // MARK: - Properties
 
-    public let timeSig: TimeSignature
+    public private(set) var timeSig: TimeSignature!
 
     // MARK: - Init
 
     public init(timeSpec: TimeSignatureSpec, customPadding: Double = 15) {
-        self.timeSig = TimeSignature(timeSpec: timeSpec, customPadding: customPadding)
-
         super.init(NoteStruct(duration: .twoFiftySixth))
 
-        setTickableWidth(timeSig.getModifierWidth())
+        timeSig = TimeSignature(timeSpec: timeSpec, customPadding: customPadding)
+
+        setWidth(timeSig.getWidth())
+
+        // Note properties
         ignoreTicks = true
     }
 
     // MARK: - Overrides
 
+    /// Overridden to ignore.
+    @discardableResult
     override public func addToModifierContext(_ mc: ModifierContext) -> Self {
-        // TimeSigNotes don't participate in modifier context
+        // DO NOTHING.
         return self
     }
 
@@ -42,39 +47,11 @@ public final class TimeSigNote: Note {
 
     override public func draw() throws {
         let stave = checkStave()
-        _ = try checkContext()
+        let ctx = try checkContext()
         setRendered()
-        _ = timeSig.setStave(stave)
-        timeSig.modifierX = getAbsoluteX()
-        try timeSig.drawStave(stave: stave)
+
+        _ = ctx.openGroup("timesignote", getAttribute("id"))
+        timeSig.drawAt(ctx, stave, getAbsoluteX())
+        ctx.closeGroup()
     }
 }
-
-// MARK: - Preview
-
-#if DEBUG
-import SwiftUI
-
-@available(iOS 17.0, macOS 14.0, *)
-#Preview("TimeSigNote", traits: .sizeThatFitsLayout) {
-    VexCanvas(width: 520, height: 160) { ctx in
-        ctx.clear()
-        FontLoader.loadDefaultFonts()
-
-        let f = Factory(options: FactoryOptions(width: 500))
-        _ = f.setContext(ctx)
-        let score = f.EasyScore()
-
-        let system = f.System(options: SystemOptions(
-            factory: f, x: 10, width: 500, y: 10
-        ))
-        _ = system.addStave(SystemStave(
-            voices: [score.voice(score.notes("C5/q, D5, E5, F5"))]
-        )).addClef(.treble).addTimeSignature(.meter(4, 4))
-
-        system.format()
-        try? f.draw()
-    }
-    .padding()
-}
-#endif

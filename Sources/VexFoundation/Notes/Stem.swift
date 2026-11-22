@@ -1,5 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/stem.ts` (VexFlow 5.0.0).
+// The `Stem` object is generally handled by its parent `StemmableNote`.
 
 import Foundation
 
@@ -68,32 +71,46 @@ public final class Stem: VexElement {
     public var xBegin: Double
     public var xEnd: Double
     public var yTop: Double
-    public var yBottom: Double
     public var stemUpYOffset: Double = 0
+    public var yBottom: Double
     public var stemDownYOffset: Double = 0
     public var stemUpYBaseOffset: Double = 0
     public var stemDownYBaseOffset: Double = 0
     public var stemDirection: StemDirection
     public var stemExtension: Double
-    public var renderHeightAdjustment: Double = 0
+    /// Adjusts the rendered height without changing the result of `getExtents()`.
+    public var renderHeightAdjustment: Double
 
     // MARK: - Init
 
     public init(options: StemOptions? = nil) {
+        // Default notehead x bounds
         self.xBegin = options?.xBegin ?? 0
         self.xEnd = options?.xEnd ?? 0
+
+        // Y bounds for top/bottom most notehead
         self.yTop = options?.yTop ?? 0
         self.yBottom = options?.yBottom ?? 0
+
+        // Stem top extension
         self.stemExtension = options?.stemExtension ?? 0
+
+        // Direction of the stem
         self.stemDirection = options?.stemDirection ?? .up
+
+        // Flag to override all draw calls
         self.hide = options?.hide ?? false
+
         self.isStemlet = options?.isStemlet ?? false
         self.stemletHeight = options?.stemletHeight ?? 0
-        super.init()
+
+        self.renderHeightAdjustment = 0
+        super.init(category: nil)
         setOptions(options)
     }
 
     public func setOptions(_ options: StemOptions?) {
+        // Changing where the stem meets the head
         stemUpYOffset = options?.stemUpYOffset ?? 0
         stemDownYOffset = options?.stemDownYOffset ?? 0
         stemUpYBaseOffset = options?.stemUpYBaseOffset ?? 0
@@ -102,6 +119,7 @@ public final class Stem: VexElement {
 
     // MARK: - Methods
 
+    /// Set the x bounds for the default notehead.
     @discardableResult
     public func setNoteHeadXBounds(_ xBegin: Double, _ xEnd: Double) -> Self {
         self.xBegin = xBegin
@@ -109,34 +127,43 @@ public final class Stem: VexElement {
         return self
     }
 
+    /// Set the direction of the stem in relation to the noteheads.
     public func setDirection(_ direction: StemDirection) {
         stemDirection = direction
     }
 
+    /// Set the extension for the stem, generally for flags or beams.
     public func setExtension(_ ext: Double) {
         stemExtension = ext
     }
 
     public func getExtension() -> Double { stemExtension }
 
+    /// Set the y bounds for the top and bottom noteheads.
     public func setYBounds(_ yTop: Double, _ yBottom: Double) {
         self.yTop = yTop
         self.yBottom = yBottom
     }
 
-    public func getHeight() -> Double {
+    /// The full height of the stem.
+    override public func getHeight() -> Double {
         let yOffset = stemDirection == Stem.UP ? stemUpYOffset : stemDownYOffset
         let unsignedHeight = yBottom - yTop + (Stem.HEIGHT - yOffset + stemExtension)
         return unsignedHeight * stemDirection.signDouble
     }
 
+    /// Upstream throws `NotImplemented`. A stem has no bounding box.
+    override public func getBoundingBox() -> BoundingBox? {
+        nil
+    }
+
+    /// The y coordinates from the base of the stem to the top of the extension.
     public func getExtents() -> (topY: Double, baseY: Double) {
         let isStemUp = stemDirection == Stem.UP
-        let ys = [yTop, yBottom]
         let stemHeight = Stem.HEIGHT + stemExtension
 
-        let innerMostNoteheadY = isStemUp ? ys.min()! : ys.max()!
-        let outerMostNoteheadY = isStemUp ? ys.max()! : ys.min()!
+        let innerMostNoteheadY = isStemUp ? min(yTop, yBottom) : max(yTop, yBottom)
+        let outerMostNoteheadY = isStemUp ? max(yTop, yBottom) : min(yTop, yBottom)
         let stemTipY = innerMostNoteheadY + stemHeight * -stemDirection.signDouble
 
         return (topY: stemTipY, baseY: outerMostNoteheadY)
@@ -156,8 +183,7 @@ public final class Stem: VexElement {
     }
 
     public func adjustHeightForFlag() {
-        let musicFont = Glyph.MUSIC_FONT_STACK.first!
-        renderHeightAdjustment = (musicFont.lookupMetric("stem.heightAdjustmentForFlag") as? Double) ?? -3
+        renderHeightAdjustment = Metrics.getDouble("Stem.heightAdjustmentForFlag", -3)
     }
 
     public func adjustHeightForBeam() {
@@ -166,30 +192,33 @@ public final class Stem: VexElement {
 
     // MARK: - Draw
 
+    /// Render the stem.
     override public func draw() throws {
         setRendered()
         if hide { return }
         let ctx = try checkContext()
 
-        var stemX: Double
-        var stemY: Double
-        var yBaseOffset: Double = 0
-
+        let stemX: Double
+        let stemY: Double
+        let yBaseOffset: Double
         if stemDirection == Stem.DOWN {
+            // Down stems are rendered to the left of the head.
             stemX = xBegin
             stemY = yTop + stemDownYOffset
             yBaseOffset = stemDownYBaseOffset
         } else {
+            // Up stems are rendered to the right of the head.
             stemX = xEnd
             stemY = yBottom - stemUpYOffset
             yBaseOffset = stemUpYBaseOffset
         }
 
         let stemHeight = getHeight()
+
+        // The offset from the stem base that gives the stemlet height.
         let stemletYOffset = isStemlet ? stemHeight - stemletHeight * stemDirection.signDouble : 0
 
-        ctx.save()
-        applyStyle()
+        // Draw the stem
         _ = ctx.openGroup("stem", getAttribute("id"))
         ctx.beginPath()
         ctx.setLineWidth(Stem.WIDTH)
@@ -197,37 +226,5 @@ public final class Stem: VexElement {
         ctx.lineTo(stemX, stemY - stemHeight - renderHeightAdjustment * stemDirection.signDouble)
         ctx.stroke()
         ctx.closeGroup()
-        restoreStyle()
-        ctx.restore()
     }
 }
-
-// MARK: - Preview
-
-#if DEBUG
-import SwiftUI
-
-@available(iOS 17.0, macOS 14.0, *)
-#Preview("Stem", traits: .sizeThatFitsLayout) {
-    VexCanvas(width: 520, height: 160) { ctx in
-        ctx.clear()
-        FontLoader.loadDefaultFonts()
-
-        let f = Factory(options: FactoryOptions(width: 500))
-        _ = f.setContext(ctx)
-        let score = f.EasyScore()
-
-        let system = f.System(options: SystemOptions(
-            factory: f, x: 10, width: 500, y: 10
-        ))
-        let upNotes = score.notes("E5/q, F5, G5, A5", options: ["stem": "up"])
-        _ = system.addStave(SystemStave(
-            voices: [score.voice(upNotes)]
-        )).addClef(.treble)
-
-        system.format()
-        try? f.draw()
-    }
-    .padding()
-}
-#endif

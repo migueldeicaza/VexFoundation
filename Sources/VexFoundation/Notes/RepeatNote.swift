@@ -1,5 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/repeatnote.ts` (VexFlow 5.0.0).
 
 import Foundation
 
@@ -10,56 +12,25 @@ public final class RepeatNote: GlyphNote {
 
     override public class var category: String { "RepeatNote" }
 
-    // MARK: - Repeat Codes
-
-    private static let codes: [String: String] = [
-        "1": "repeat1Bar",
-        "2": "repeat2Bars",
-        "4": "repeat4Bars",
-        "slash": "repeatBarSlash",
+    /// Map `type` to the SMuFL glyph code.
+    private static let CODES: [String: String] = [
+        "1": Glyphs.repeat1Bar,
+        "2": Glyphs.repeat2Bars,
+        "4": Glyphs.repeat4Bars,
+        "slash": Glyphs.repeatBarSlash,
     ]
 
     // MARK: - Init
 
     public init(type: String, noteStruct: NoteStruct? = nil, options: GlyphNoteOptions? = nil) {
-        let code = RepeatNote.codes[type] ?? "repeat1Bar"
-        let point = (Glyph.MUSIC_FONT_STACK.first?.lookupMetric("repeatNote.point") as? Double) ?? 40
-        let glyph = Glyph(code: code, point: point, options: GlyphOptions(category: "repeatNote"))
+        let glyphCode = RepeatNote.CODES[type] ?? "\u{E500}" /* repeat1Bar */
 
-        let ns = noteStruct ?? NoteStruct(
-            duration: .quarter,
-            alignCenter: type != "slash"
-        )
+        // { duration: 'q', alignCenter: type !== 'slash', ...noteStruct }
+        var ns = noteStruct ?? NoteStruct(duration: .quarter)
+        if ns.alignCenter == nil {
+            ns.alignCenter = type != "slash"
+        }
 
-        super.init(glyph: glyph, noteStruct: ns, options: options ?? GlyphNoteOptions())
+        super.init(glyph: glyphCode, noteStruct: ns, options: options ?? GlyphNoteOptions())
     }
 }
-
-// MARK: - Preview
-
-#if DEBUG
-import SwiftUI
-
-@available(iOS 17.0, macOS 14.0, *)
-#Preview("RepeatNote", traits: .sizeThatFitsLayout) {
-    VexCanvas(width: 520, height: 160) { ctx in
-        ctx.clear()
-        FontLoader.loadDefaultFonts()
-
-        let f = Factory(options: FactoryOptions(width: 500))
-        _ = f.setContext(ctx)
-        let score = f.EasyScore()
-
-        let system = f.System(options: SystemOptions(
-            factory: f, x: 10, width: 500, y: 10
-        ))
-        _ = system.addStave(SystemStave(
-            voices: [score.voice(score.notes("C5/q, D5, E5, F5"))]
-        )).addClef(.treble)
-
-        system.format()
-        try? f.draw()
-    }
-    .padding()
-}
-#endif

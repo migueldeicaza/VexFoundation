@@ -1,5 +1,10 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/util.ts` (VexFlow 5.0.0).
+// `RuntimeError` is `VexError`. `prefix` is `vexPrefix`, `log` is `vexLog`
+// and `warn` is `vexWarn` (to avoid clashes with Swift/Foundation names).
+// `globalObject()` has no Swift equivalent.
 
 import Foundation
 
@@ -45,6 +50,24 @@ public func midLine(_ a: Double, _ b: Double) -> Double {
 /// Provide a unique prefix to element names.
 public func vexPrefix(_ text: String) -> String {
     "vf-\(text)"
+}
+
+/// Return `s` with the first letter capitalized.
+public func upperFirst(_ s: String = "") -> String {
+    guard let first = s.first else { return s }
+    return first.uppercased() + s.dropFirst()
+}
+
+/// Default log function: print the block name and the arguments.
+public func vexLog(_ block: String, _ args: Any...) {
+    let line = args.map { "\($0)" }.joined(separator: " ")
+    print(block + ": " + line)
+}
+
+/// Print a warning.
+public func vexWarn(_ args: Any...) {
+    let line = args.map { "\($0)" }.joined(separator: " ")
+    print("Warning: ", line)
 }
 
 /// Convert an arbitrary angle in radians to the equivalent one in the range [0, 2*pi).

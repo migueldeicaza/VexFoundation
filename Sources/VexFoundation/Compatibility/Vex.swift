@@ -1,10 +1,14 @@
-// VexFoundation - Lightweight compatibility facade for selected VexFlow `Vex` helpers.
+// VexFoundation - Compatibility facade for the VexFlow 4 `Vex` helpers.
+//
+// VexFlow 5.0.0 removed `vex.ts`: its contents moved to the `VexFlow` class
+// (`src/vexflow.ts`, see `Flow.swift`) and to `src/util.ts`. This file keeps
+// the 4.x entry points for source compatibility.
 
 import Dispatch
 import Foundation
 
 public enum Vex {
-    /// Back-compat alias for older `Vex.Flow`-style call sites.
+    /// Back-compat alias for older `Vex.Flow`-style call sites. Use `VexFlow`.
     public static var Flow: VexFoundation.Flow.Type { VexFoundation.Flow.self }
 
     /// Back-compat runtime error aliases.

@@ -1,232 +1,177 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. Author: Cyril Silverman. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+// @author Cyril Silverman
+//
+// Port of `src/keysignature.ts` (VexFlow 5.0.0).
+//
+// This file implements key signatures. A key signature sits on a stave
+// and indicates the notes with implicit accidentals.
 
 import Foundation
+
+/// An accidental of a key signature: the accidental type and the stave line.
+public typealias KeySignatureAccidental = (type: String, line: Double)
 
 /// Renders key signatures (sharps/flats) on a stave.
 public final class KeySignature: StaveModifier {
 
     override public class var category: String { "KeySignature" }
 
-    // MARK: - Accidental Spacing
-
-    /// Spacing between a natural and the next accidental, based on vertical position.
-    public static let accidentalSpacing: [String: (above: Double, below: Double)] = [
-        "#": (above: 6, below: 4),
-        "b": (above: 4, below: 7),
-        "n": (above: 4, below: 1),
-        "##": (above: 6, below: 4),
-        "bb": (above: 4, below: 7),
-        "db": (above: 4, below: 7),
-        "d": (above: 4, below: 7),
-        "bbs": (above: 4, below: 7),
-        "++": (above: 6, below: 4),
-        "+": (above: 6, below: 4),
-        "+-": (above: 6, below: 4),
-        "++-": (above: 6, below: 4),
-        "bs": (above: 4, below: 10),
-        "bss": (above: 4, below: 10),
-    ]
-
     // MARK: - Properties
 
-    public var glyphFontScale: Double
-    public var glyphs: [Glyph] = []
-    public var xPositions: [Double] = [0]
     public var paddingForced: Bool = false
     public var formatted: Bool = false
     public var cancelKeySpec: String?
-    public var accList: [(type: String, line: Double)] = []
+    public var accList: [KeySignatureAccidental] = []
     public var keySpec: String?
     public var alterKeySpec: [String]?
 
     // MARK: - Init
 
+    /// Create a new Key Signature based on a `keySpec`.
     public init(keySpec: String, cancelKeySpec: String? = nil, alterKeySpec: [String]? = nil) {
-        self.glyphFontScale = Tables.NOTATION_FONT_SCALE
         super.init()
+
         setKeySig(keySpec, cancelKeySpec: cancelKeySpec, alterKeySpec: alterKeySpec)
         setPosition(.begin)
+        children = []
+        paddingForced = false
     }
 
-    // MARK: - Configuration
+    // MARK: - Glyphs
 
-    @discardableResult
-    public func setKeySig(_ keySpec: String, cancelKeySpec: String? = nil, alterKeySpec: [String]? = nil) -> Self {
-        self.formatted = false
-        self.keySpec = keySpec
-        self.cancelKeySpec = cancelKeySpec
-        self.alterKeySpec = alterKeySpec
-        return self
+    /// Add an accidental glyph to the `KeySignature` instance which represents
+    /// the provided `acc`. If `nextAcc` is also provided, the appropriate
+    /// spacing will be included in the glyph's position.
+    func convertToGlyph(_ acc: KeySignatureAccidental, _ nextAcc: KeySignatureAccidental?, _ stave: Stave) {
+        let code = Tables.accidentalCodes(acc.type)
+        let glyph = VexElement(category: KeySignature.category)
+        glyph.setText(code)
+
+        // Determine spacing between current accidental and the next accidental
+        var extraWidth: Double = 1
+        // Place the glyph on the stave
+        glyph.setYShift(stave.getYForLine(acc.line))
+        if let prevGlyph = children.last {
+            let isNatural: (VexElement) -> Bool = { $0.getText() == Glyphs.accidentalNatural }
+            let yShiftDiff: (VexElement, VexElement) -> Double = { abs($1.getYShift() - $0.getYShift()) }
+
+            if (isNatural(prevGlyph) || isNatural(glyph)) && yShiftDiff(prevGlyph, glyph) < 10 {
+                extraWidth = 2
+            }
+            glyph.setXShift(prevGlyph.getXShift() + prevGlyph.getWidth() + extraWidth)
+        }
+        children.append(glyph)
+
+        // Expand size of key signature
+        width += glyph.getWidth() + extraWidth
     }
 
+    /// Cancel out a key signature provided in the `spec` parameter. This will
+    /// place appropriate natural accidentals before the key signature.
     @discardableResult
     public func cancelKey(_ spec: String) -> Self {
-        self.formatted = false
-        self.cancelKeySpec = spec
+        formatted = false
+        cancelKeySpec = spec
         return self
     }
 
-    @discardableResult
-    public func alterKey(_ specs: [String]) -> Self {
-        self.formatted = false
-        self.alterKeySpec = specs
-        return self
+    /// Convert the `cancelKeySpec` into a list of naturals to be displayed.
+    func convertToCancelAccList(_ spec: String) -> (type: String, accList: [KeySignatureAccidental])? {
+        // Get the accidental list for the cancelled key signature
+        let cancelAccList = (try? Tables.keySignature(spec)) ?? []
+
+        // If the cancelled key has a different accidental type, ie: # vs b
+        let differentTypes = !accList.isEmpty && !cancelAccList.isEmpty && cancelAccList[0].type != accList[0].type
+
+        // Determine how many naturals needed to add
+        let naturals = differentTypes ? cancelAccList.count : cancelAccList.count - accList.count
+
+        // Return if no naturals needed
+        if naturals < 1 { return nil }
+
+        // Get the line position for each natural
+        var cancelled: [KeySignatureAccidental] = []
+        for i in 0..<naturals {
+            var index = i
+            if !differentTypes {
+                index = cancelAccList.count - naturals + i
+            }
+
+            let acc = cancelAccList[index]
+            cancelled.append((type: "n", line: acc.line))
+        }
+
+        // Combine naturals with main accidental list for the key signature
+        accList = cancelled + accList
+
+        return (type: cancelAccList[0].type, accList: cancelled)
     }
 
-    /// Mirror VexFlow's `addToStave` behavior where key signatures always
-    /// include inter-modifier padding (used by certain upstream tests).
+    /// Add this key signature to the start of a stave.
     @discardableResult
     public func addToStave(_ stave: Stave) -> Self {
         paddingForced = true
-        _ = stave.addModifier(self)
+        stave.addModifier(self)
         return self
     }
 
-    // MARK: - Formatting
+    /// Add this key signature to a stave.
+    @discardableResult
+    override public func setStave(_ stave: Stave) -> Self {
+        formatted = false
+        return super.setStave(stave)
+    }
 
-    override public func getPadding(_ index: Int) -> Double {
+    /// Get the `BoundingBox`.
+    override public func getBoundingBox() -> BoundingBox? {
         if !formatted { format() }
-        return glyphs.isEmpty || (!paddingForced && index < 2) ? 0 : padding
+        return super.getBoundingBox()
     }
 
-    override public func getModifierWidth() -> Double {
-        if !formatted { format() }
-        return modifierWidth
-    }
-
-    public func getGlyphs() -> [Glyph] {
-        if !formatted { format() }
-        return glyphs
-    }
-
-    /// Build the glyph array by processing the key, cancel key, and alterations.
-    public func format() {
-        let stave = checkStave()
-        modifierWidth = 0
-        glyphs = []
-        xPositions = [0]
-
-        guard let keySpec else { formatted = true; return }
-        accList = (try? Tables.keySignature(keySpec)) ?? []
-
-        let firstAccType = accList.first?.type
-
-        var cancelResult: (accList: [(type: String, line: Double)], type: String)?
-        if let cancelKeySpec {
-            cancelResult = convertToCancelAccList(cancelKeySpec)
+    /// Calculate the width and height for the entire signature.
+    func calculateDimensions() {
+        var boundingBox: BoundingBox
+        if let first = children.first, let bb = first.getBoundingBox() {
+            boundingBox = bb
+        } else {
+            boundingBox = BoundingBox(x: x + xShift, y: y + yShift, w: 0, h: 0)
         }
-        if let alterKeySpec {
-            convertToAlterAccList(alterKeySpec)
-        }
-
-        if !accList.isEmpty {
-            let clef: ClefName
-            if position == .end {
-                clef = stave.getEndClef() ?? stave.getClef()
-            } else {
-                clef = stave.getClef()
-            }
-
-            let cancelCount = cancelResult?.accList.count ?? 0
-
-            if let cancelResult {
-                var cancelAccs = cancelResult.accList
-                convertAccLines(clef: clef, type: cancelResult.type, accList: &cancelAccs)
-                // Update the cancel portion in our accList
-                for i in 0..<cancelAccs.count {
-                    accList[i] = cancelAccs[i]
-                }
-            }
-
-            // VexFlow formats cancel accidentals separately from the main list.
-            // Only the main segment should receive the second clef conversion.
-            var mainAccs = Array(accList.dropFirst(cancelCount))
-            convertAccLines(clef: clef, type: firstAccType, accList: &mainAccs)
-            for i in 0..<mainAccs.count {
-                accList[cancelCount + i] = mainAccs[i]
-            }
-
-            for i in 0..<accList.count {
-                let nextAcc = i + 1 < accList.count ? accList[i + 1] : nil
-                convertToGlyph(acc: accList[i], nextAcc: nextAcc, stave: stave)
+        for glyph in children {
+            if let bb = glyph.getBoundingBox() {
+                boundingBox.mergeWith(bb)
             }
         }
-
-        formatted = true
+        width = boundingBox.getW()
+        height = boundingBox.getH()
+        y = boundingBox.getY()
     }
 
-    // MARK: - Internal Conversion
-
-    private func convertToGlyph(
-        acc: (type: String, line: Double),
-        nextAcc: (type: String, line: Double)?,
-        stave: Stave
-    ) {
-        guard let accCode = Tables.accidentalCode(acc.type) else { return }
-        let glyph = Glyph(code: accCode.code, point: glyphFontScale)
-
-        var extraWidth: Double = 1
-        if acc.type == "n", let nextAcc {
-            if let spacing = KeySignature.accidentalSpacing[nextAcc.type] {
-                let isAbove = nextAcc.line >= acc.line
-                extraWidth = isAbove ? spacing.above : spacing.below
-            }
-        }
-
-        placeGlyphOnLine(glyph, stave: stave, line: acc.line)
-        glyphs.append(glyph)
-
-        let xPosition = xPositions.last ?? 0
-        let glyphWidth = glyph.getMetrics().width + extraWidth
-        xPositions.append(xPosition + glyphWidth)
-        modifierWidth += glyphWidth
-    }
-
-    private func convertToCancelAccList(_ spec: String) -> (accList: [(type: String, line: Double)], type: String)? {
-        guard let cancelAccList = try? Tables.keySignature(spec) else { return nil }
-
-        let differentTypes = !accList.isEmpty && !cancelAccList.isEmpty
-            && cancelAccList[0].type != accList[0].type
-
-        let naturals = differentTypes ? cancelAccList.count : cancelAccList.count - accList.count
-        guard naturals >= 1 else { return nil }
-
-        var cancelled: [(type: String, line: Double)] = []
-        for i in 0..<naturals {
-            let index = differentTypes ? i : (cancelAccList.count - naturals + i)
-            cancelled.append((type: "n", line: cancelAccList[index].line))
-        }
-
-        accList = cancelled + accList
-        return (accList: cancelled, type: cancelAccList[0].type)
-    }
-
-    private func convertAccLines(clef: ClefName, type: String?, accList: inout [(type: String, line: Double)]) {
-        var offset: Double = 0
-        var customLines: [Double]?
+    /// Apply the accidental staff line placement based on the `clef` and
+    /// the accidental `type` for the key signature ('#' or 'b').
+    func convertAccLines(_ clef: ClefName, _ type: String?, _ accList: inout [KeySignatureAccidental]) {
+        var offset: Double = 0.0 // if clef === "treble"
+        var customLines: [Double]? // when clef doesn't follow treble key sig shape
 
         switch clef {
+        // Treble & Subbass both have offsets of 0, so are not included.
         case .soprano:
-            if type == "#" { customLines = [2.5, 0.5, 2, 0, 1.5, -0.5, 1] }
-            else { offset = -1 }
+            if type == "#" { customLines = [2.5, 0.5, 2, 0, 1.5, -0.5, 1] } else { offset = -1 }
         case .mezzoSoprano:
-            if type == "b" { customLines = [0, 2, 0.5, 2.5, 1, 3, 1.5] }
-            else { offset = 1.5 }
+            if type == "b" { customLines = [0, 2, 0.5, 2.5, 1, 3, 1.5] } else { offset = 1.5 }
         case .alto:
             offset = 0.5
         case .tenor:
-            if type == "#" { customLines = [3, 1, 2.5, 0.5, 2, 0, 1.5] }
-            else { offset = -0.5 }
+            if type == "#" { customLines = [3, 1, 2.5, 0.5, 2, 0, 1.5] } else { offset = -0.5 }
         case .baritoneF, .baritoneC:
-            if type == "b" { customLines = [0.5, 2.5, 1, 3, 1.5, 3.5, 2] }
-            else { offset = 2 }
+            if type == "b" { customLines = [0.5, 2.5, 1, 3, 1.5, 3.5, 2] } else { offset = 2 }
         case .bass, .french:
             offset = 1
         default:
             break
         }
 
+        // If there's a special case, assign those lines/spaces:
         if let customLines {
             for i in 0..<accList.count where i < customLines.count {
                 accList[i].line = customLines[i]
@@ -238,35 +183,116 @@ public final class KeySignature: StaveModifier {
         }
     }
 
-    private func convertToAlterAccList(_ specs: [String]) {
-        let max = min(specs.count, accList.count)
+    /// Get the padding required for this modifier.
+    override public func getPadding(_ index: Int) -> Double {
+        if !formatted { format() }
+        return children.isEmpty || (!paddingForced && index < 2) ? 0 : padding
+    }
+
+    /// Get the width of the modifier.
+    override public func getWidth() -> Double {
+        if !formatted { format() }
+        return width
+    }
+
+    /// Set the key signature to a specific key, ie: 'C' or 'Gm'.
+    @discardableResult
+    public func setKeySig(_ keySpec: String, cancelKeySpec: String? = nil, alterKeySpec: [String]? = nil) -> Self {
+        formatted = false
+        self.keySpec = keySpec
+        self.cancelKeySpec = cancelKeySpec
+        self.alterKeySpec = alterKeySpec
+        return self
+    }
+
+    /// Alter the accidentals of a key spec one by one.
+    /// Each alteration is a new accidental that replaces the
+    /// original accidental (or the canceled one).
+    @discardableResult
+    public func alterKey(_ alterKeySpec: [String]) -> Self {
+        formatted = false
+        self.alterKeySpec = alterKeySpec
+        return self
+    }
+
+    /// Convert the `alterKeySpec` into a list of accidentals to be displayed.
+    func convertToAlterAccList(_ alterKeySpec: [String]) {
+        let max = min(alterKeySpec.count, accList.count)
         for i in 0..<max {
-            if !specs[i].isEmpty {
-                accList[i].type = specs[i]
+            if !alterKeySpec[i].isEmpty {
+                accList[i].type = alterKeySpec[i]
             }
         }
     }
 
+    /// Format and position the modifier.
+    /// If no stave is set, a dummy stave is created.
+    public func format() {
+        let stave: Stave
+        if let attached = getStave() {
+            stave = attached
+        } else {
+            stave = Stave(x: 0, y: 0, width: 100)
+            setStave(stave)
+        }
+
+        width = 0
+        children = []
+        // Upstream throws 'BadKeySignature' here; this method does not throw, so an
+        // unknown key spec gives an empty key signature.
+        accList = keySpec.flatMap { try? Tables.keySignature($0) } ?? []
+        let firstAccidentalType = accList.first?.type
+        var cancelAccList: (type: String, accList: [KeySignatureAccidental])?
+        if let cancelKeySpec, !cancelKeySpec.isEmpty {
+            cancelAccList = convertToCancelAccList(cancelKeySpec)
+        }
+        if let alterKeySpec {
+            convertToAlterAccList(alterKeySpec)
+        }
+
+        if !accList.isEmpty {
+            let clef = (position == .end ? stave.getEndClef() : stave.getClef()) ?? stave.getClef()
+            // Upstream converts `cancelAccList.accList` and the local `accList` in place.
+            // The local `accList` is the list from before the naturals were prepended, so
+            // the naturals get only the cancel conversion and the key accidentals get only
+            // the main conversion. Reproduce that with value types here.
+            let cancelCount = cancelAccList?.accList.count ?? 0
+            if let cancelAccList {
+                var cancelled = cancelAccList.accList
+                convertAccLines(clef, cancelAccList.type, &cancelled)
+                for i in 0..<cancelled.count {
+                    accList[i] = cancelled[i]
+                }
+            }
+            var main = Array(accList.dropFirst(cancelCount))
+            convertAccLines(clef, firstAccidentalType, &main)
+            for i in 0..<main.count {
+                accList[cancelCount + i] = main[i]
+            }
+            for i in 0..<accList.count {
+                convertToGlyph(accList[i], i + 1 < accList.count ? accList[i + 1] : nil, stave)
+            }
+        }
+
+        calculateDimensions()
+        formatted = true
+    }
+
     // MARK: - Draw
 
-    override public func drawStave(stave: Stave, xShift: Double = 0) throws {
+    /// Render the key signature.
+    override public func draw() throws {
+        let stave = try checkStaveThrowing()
         let ctx = try stave.checkContext()
+
         if !formatted { format() }
         setRendered()
 
-        applyStyle(context: ctx)
         _ = ctx.openGroup("keysignature", getAttribute("id"))
-
-        for i in 0..<glyphs.count {
-            let glyph = glyphs[i]
-            let x = modifierX + xPositions[i]
-            glyph.setStave(stave)
-            glyph.setContext(ctx)
-            glyph.renderToStave(x: x)
+        for glyph in children {
+            glyph.renderText(ctx, xPos: x, yPos: 0)
         }
-
         ctx.closeGroup()
-        restoreStyle(context: ctx)
     }
 }
 
@@ -279,7 +305,6 @@ import SwiftUI
 #Preview("KeySignature", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 120) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory()
         _ = f.setContext(ctx)

@@ -1,11 +1,13 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
-// Original: Copyright (c) Mohit Muthanna 2010. MIT License.
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/pedalmarking.ts` (VexFlow 5.0.0).
 
 import Foundation
 
 // MARK: - Pedal Marking Type
 
-public enum PedalMarkingType: Int {
+public enum PedalMarkingType: Int, Sendable {
     case text = 1
     case bracket = 2
     case mixed = 3
@@ -37,28 +39,52 @@ public struct PedalMarkingRenderOptions {
     }
 }
 
+public enum PedalMarkingError: Error, LocalizedError, Equatable, Sendable {
+    case notesNotInAscendingOrder
+
+    public var errorDescription: String? {
+        switch self {
+        case .notesNotInAscendingOrder:
+            return "The notes provided must be in order of ascending x positions"
+        }
+    }
+}
+
 // MARK: - PedalMarking
 
-/// Renders pedal markings (sustain, sostenuto, una corda) below notes.
+/// PedalMarking implements different types of pedal markings. These notation
+/// elements indicate to the performer when to depress and release the a pedal.
+///
+/// In order to create "Sostenuto", and "una corda" markings, you must set
+/// custom text for the release/depress pedal markings.
 public final class PedalMarking: VexElement {
 
     override public class var category: String { "PedalMarking" }
 
     // MARK: - Glyph Data
 
+    /// Glyph data
     public static let GLYPHS: [String: String] = [
-        "pedal_depress": "keyboardPedalPed",
-        "pedal_release": "keyboardPedalUp",
+        "pedalDepress": Glyphs.keyboardPedalPed,
+        "pedalRelease": Glyphs.keyboardPedalUp,
+    ]
+
+    /// Pedal type as string.
+    public static let typeString: [String: PedalMarkingType] = [
+        "text": .text,
+        "bracket": .bracket,
+        "mixed": .mixed,
     ]
 
     // MARK: - Properties
 
+    public var line: Double = 0
+    public var type: PedalMarkingType = .text
+    public var depressText: String
+    public var releaseText: String
+    public var renderOptions = PedalMarkingRenderOptions()
     public var notes: [StaveNote]
-    public var pedalType: PedalMarkingType = .text
-    public var pedalLine: Double = 0
-    public var customDepressText: String = ""
-    public var customReleaseText: String = ""
-    public var pedalRenderOptions = PedalMarkingRenderOptions()
+
     /// VexFlowPatch: track pedal marking spanning staves
     public var endsStave: Bool = false
     public var beginsStave: Bool = false
@@ -68,51 +94,105 @@ public final class PedalMarking: VexElement {
     public var startMargin: Double = 0
     public var endMargin: Double = 0
 
+    @available(*, deprecated, renamed: "type")
+    public var pedalType: PedalMarkingType {
+        get { type }
+        set { type = newValue }
+    }
+
+    @available(*, deprecated, renamed: "line")
+    public var pedalLine: Double {
+        get { line }
+        set { line = newValue }
+    }
+
+    @available(*, deprecated, renamed: "renderOptions")
+    public var pedalRenderOptions: PedalMarkingRenderOptions {
+        get { renderOptions }
+        set { renderOptions = newValue }
+    }
+
+    @available(*, deprecated, renamed: "depressText")
+    public var customDepressText: String { depressText }
+
+    @available(*, deprecated, renamed: "releaseText")
+    public var customReleaseText: String { releaseText }
+
     // MARK: - Init
 
     public init(notes: [StaveNote]) {
         self.notes = notes
+        // Text for the release/depress markings
+        self.depressText = PedalMarking.GLYPHS["pedalDepress"] ?? Glyphs.keyboardPedalPed
+        self.releaseText = PedalMarking.GLYPHS["pedalRelease"] ?? Glyphs.keyboardPedalUp
         super.init()
+        self.type = .text
+        self.line = 0
+        self.renderOptions = PedalMarkingRenderOptions(
+            color: "black",
+            bracketHeight: 10,
+            textMarginRight: 6,
+            bracketLineWidth: 1
+        )
     }
 
     // MARK: - Factory Methods
 
+    /// Create a sustain pedal marking. Returns the defaults PedalMarking.
+    /// Which uses the traditional "Ped" and "*" markings.
     public static func createSustain(notes: [StaveNote]) -> PedalMarking {
         PedalMarking(notes: notes)
     }
 
+    /// Create a sostenuto pedal marking
     public static func createSostenuto(notes: [StaveNote]) -> PedalMarking {
         let pedal = PedalMarking(notes: notes)
-        _ = pedal.setType(.mixed)
-        _ = pedal.setCustomText("Sost. Ped.")
+        pedal.setType(.mixed)
+        pedal.setCustomText("Sost. Ped.")
         return pedal
     }
 
+    /// Create an una corda pedal marking
     public static func createUnaCorda(notes: [StaveNote]) -> PedalMarking {
         let pedal = PedalMarking(notes: notes)
-        _ = pedal.setType(.text)
-        _ = pedal.setCustomText("una corda", release: "tre corda")
+        pedal.setType(.text)
+        pedal.setCustomText("una corda", release: "tre corda")
         return pedal
     }
 
     // MARK: - Setters
 
+    /// Set pedal type.
     @discardableResult
     public func setType(_ type: PedalMarkingType) -> Self {
-        pedalType = type
+        self.type = type
         return self
     }
 
+    /// Set pedal type from a string (`"text"`, `"bracket"`, `"mixed"`).
+    /// An unknown string does not change the type.
+    @discardableResult
+    public func setType(_ type: String) -> Self {
+        if let t = PedalMarking.typeString[type] {
+            self.type = t
+        }
+        return self
+    }
+
+    /// Set custom text for the `depress`/`release` pedal markings. No text is
+    /// set if the parameter is empty.
     @discardableResult
     public func setCustomText(_ depress: String, release: String = "") -> Self {
-        customDepressText = depress
-        customReleaseText = release
+        depressText = depress
+        releaseText = release
+        setFont(Metrics.getFontInfo("PedalMarking.text"))
         return self
     }
 
+    /// Set the staff line to render the markings on.
     @discardableResult
     public func setLine(_ line: Double) -> Self {
-        pedalLine = line
+        self.line = line
         return self
     }
 
@@ -132,72 +212,87 @@ public final class PedalMarking: VexElement {
         return self
     }
 
-    // MARK: - Draw Pedal Glyph
+    // MARK: - Helpers
 
-    private func drawPedalGlyph(
-        name: String,
-        ctx: any RenderContext,
-        x: Double,
-        y: Double,
-        point: Double
-    ) {
-        guard let code = PedalMarking.GLYPHS[name] else { return }
-        let glyph = Glyph(code: code, point: point)
-        let glyphWidth = glyph.getMetrics().width
-        glyph.render(ctx: ctx, x: x - (glyphWidth - Tables.STAVE_LINE_DISTANCE) / 2, y: y)
+    /// The absolute x position of the end of `note`: the x of the next note in
+    /// the voice, or the end of the stave for the last note of the voice.
+    private func noteEndX(_ note: StaveNote) throws -> Double {
+        // Get the current note index and the total notes in the associated voice
+        let tickables = try note.getVoiceThrowing().getTickables()
+        let noteNdx = tickables.firstIndex(where: { $0 === note }) ?? -1
+        let voiceNotes = tickables.count
+        if noteNdx + 1 < voiceNotes {
+            // If the next note is in the same voice, use the x position of the next note
+            return tickables[noteNdx + 1].getAbsoluteX()
+        }
+        // If this is the last note is the voice, use the x position of the next stave
+        return (note.getStave()?.getX() ?? 0) + (note.getStave()?.getWidth() ?? 0)
     }
 
     // MARK: - Draw Bracketed
 
-    private func drawBracketed() throws {
+    /// Draw the bracket based pedal markings.
+    public func drawBracketed() throws {
         let ctx = try checkContext()
         var isPedalDepressed = false
-        var prevX: Double = 0
-        var prevY: Double = 0
+        var prevX: Double?
+        var prevY: Double?
+        var textWidth: Double = 0
 
+        // Iterate through each note
         for (index, note) in notes.enumerated() {
+            // Each note triggers the opposite pedal action
             isPedalDepressed = !isPedalDepressed
 
+            // Get the initial coordinates for the note
             let x = note.getAbsoluteX()
-            let y = note.checkStave().getYForBottomText(pedalLine + 3)
+            let y = note.checkStave().getYForBottomText(line + 3)
 
-            let nextIsSame = index + 1 < notes.count && notes[index + 1] === note
-            let prevIsSame = index > 0 && notes[index - 1] === note
+            // Throw if current note is positioned before the previous note
+            if let prevX, x < prevX {
+                throw PedalMarkingError.notesNotInAscendingOrder
+            }
 
-            let point = Tables.NOTATION_FONT_SCALE
+            // Determine if the previous or next note are the same
+            // as the current note. We need to keep track of this for
+            // when adjustments are made for the release+depress action
+            let nextNoteIsSame = index + 1 < notes.count && notes[index + 1] === note
+            let prevNoteIsSame = index > 0 && notes[index - 1] === note
 
             var xShift: Double = 0
 
             if isPedalDepressed {
-                xShift = prevIsSame ? 5 : 0
+                // Adjustment for release+depress
+                xShift = prevNoteIsSame ? 5 : 0
 
-                if pedalType == .mixed && !prevIsSame {
-                    if !customDepressText.isEmpty {
-                        let textWidth = ctx.measureText(customDepressText).width
-                        _ = ctx.fillText(customDepressText, x - textWidth / 2, y)
-                        xShift = textWidth / 2 + pedalRenderOptions.textMarginRight
-                    } else {
-                        drawPedalGlyph(name: "pedal_depress", ctx: ctx, x: x, y: y, point: point)
-                        xShift = 20 + pedalRenderOptions.textMarginRight
-                    }
+                if type == .mixed && !prevNoteIsSame {
+                    // For MIXED style, start with text instead of bracket
+                    textWidth = ctx.measureText(depressText).width
+                    ctx.fillText(depressText, x, y)
+                    // Adjust the xShift for the next note
+                    xShift = textWidth + renderOptions.textMarginRight
                 } else {
+                    // Draw start bracket
                     ctx.beginPath()
-                    ctx.moveTo(x, y - pedalRenderOptions.bracketHeight)
+                    ctx.moveTo(x, y - renderOptions.bracketHeight)
                     ctx.lineTo(x + xShift, y)
                     ctx.stroke()
                     ctx.closePath()
                 }
             } else {
-                xShift = nextIsSame ? -5 : 0
+                let noteEndX = try noteEndX(note)
 
+                // Draw end bracket
                 ctx.beginPath()
-                ctx.moveTo(prevX, prevY)
-                ctx.lineTo(x + xShift, y)
-                ctx.lineTo(x, y - pedalRenderOptions.bracketHeight)
+                ctx.moveTo(prevX ?? .nan, prevY ?? .nan)
+                ctx.lineTo(nextNoteIsSame ? x - 5 : noteEndX - 5, y)
+                // No shift if next note is the same
+                ctx.lineTo(nextNoteIsSame ? x : noteEndX - 5, y - renderOptions.bracketHeight)
                 ctx.stroke()
                 ctx.closePath()
             }
 
+            // Store previous coordinates
             prevX = x + xShift
             prevY = y
         }
@@ -205,58 +300,50 @@ public final class PedalMarking: VexElement {
 
     // MARK: - Draw Text
 
-    private func drawText() throws {
+    /// Draw the text based pedal markings. This defaults to the traditional
+    /// "Ped" and "*" symbols if no custom text has been provided.
+    public func drawText() throws {
         let ctx = try checkContext()
         var isPedalDepressed = false
+        var textWidth: Double = 0
 
+        // Iterate through each note, placing glyphs or custom text accordingly
         for note in notes {
             isPedalDepressed = !isPedalDepressed
-
-            let x = note.getAbsoluteX()
             let stave = note.checkStave()
-            let y = stave.getYForBottomText(pedalLine + 3)
-
-            let point = Tables.NOTATION_FONT_SCALE
+            let x = note.getAbsoluteX()
+            let y = stave.getYForBottomText(line + 3)
 
             if isPedalDepressed {
-                if !customDepressText.isEmpty {
-                    let textWidth = ctx.measureText(customDepressText).width
-                    _ = ctx.fillText(customDepressText, x - textWidth / 2, y)
-                } else {
-                    drawPedalGlyph(name: "pedal_depress", ctx: ctx, x: x, y: y, point: point)
-                }
+                textWidth = ctx.measureText(depressText).width
+                ctx.fillText(depressText, x, y)
             } else {
-                if !customReleaseText.isEmpty {
-                    let textWidth = ctx.measureText(customReleaseText).width
-                    _ = ctx.fillText(customReleaseText, x - textWidth / 2, y)
-                } else {
-                    drawPedalGlyph(name: "pedal_release", ctx: ctx, x: x, y: y, point: point)
-                }
+                let noteEndX = try noteEndX(note)
+                textWidth = ctx.measureText(releaseText).width
+                ctx.fillText(releaseText, noteEndX - textWidth, y)
             }
         }
     }
 
     // MARK: - Draw
 
+    /// Render the pedal marking in position on the rendering context.
     override public func draw() throws {
         let ctx = try checkContext()
         setRendered()
 
-        ctx.save()
-        _ = ctx.setStrokeStyle(pedalRenderOptions.color)
-        _ = ctx.setFillStyle(pedalRenderOptions.color)
+        ctx.setStrokeStyle(renderOptions.color)
+        ctx.setFillStyle(renderOptions.color)
         ctx.setFont(getFont())
 
         // VexFlowPatch: handle extended pedal types
-        switch pedalType {
+        switch type {
         case .bracket, .mixed, .mixedOpenEnd, .bracketOpenBegin, .bracketOpenEnd, .bracketOpenBoth:
-            _ = ctx.setLineWidth(pedalRenderOptions.bracketLineWidth)
+            ctx.setLineWidth(renderOptions.bracketLineWidth)
             try drawBracketed()
         case .text:
             try drawText()
         }
-
-        ctx.restore()
     }
 }
 
@@ -269,7 +356,6 @@ import SwiftUI
 #Preview("PedalMarking", traits: .sizeThatFitsLayout) {
     VexCanvas(width: 520, height: 200) { ctx in
         ctx.clear()
-        FontLoader.loadDefaultFonts()
 
         let f = Factory(options: FactoryOptions(width: 500))
         _ = f.setContext(ctx)
@@ -283,10 +369,9 @@ import SwiftUI
 
         system.format()
 
-        _ = f.PedalMarking(
-            notes: [notes[0] as! StaveNote, notes[3] as! StaveNote],
-            type: .text
-        )
+        if let first = notes[0] as? StaveNote, let last = notes[3] as? StaveNote {
+            _ = f.PedalMarking(notes: [first, last], type: .text)
+        }
 
         try? f.draw()
     }
