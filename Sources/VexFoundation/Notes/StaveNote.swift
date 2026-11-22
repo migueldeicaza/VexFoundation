@@ -1429,8 +1429,11 @@ open class StaveNote: StemmableNote {
         let style = mergeStyles(stave.getDefaultLedgerLineStyle(), getLedgerLineStyle())
         ctx.save()
         applyStyle(context: ctx, style: style)
-        // VexFlowPatch: wrap the ledger lines in an SVG group.
-        _ = ctx.openGroup("ledgers", (getAttribute("id") ?? "") + "ledgers")
+        // VexFlowPatch: wrap the ledger lines in an SVG group (gated for upstream parity).
+        let groupLedgers = !VexRuntime.getCurrentContext().upstreamParityMode
+        if groupLedgers {
+            _ = ctx.openGroup("ledgers", (getAttribute("id") ?? "") + "ledgers")
+        }
 
         // Draw ledger lines below the staff:
         var line: Double = 6
@@ -1451,7 +1454,7 @@ open class StaveNote: StemmableNote {
         }
 
         // VexFlowPatch: close the ledger lines SVG group.
-        ctx.closeGroup()
+        if groupLedgers { ctx.closeGroup() }
         ctx.restore()
     }
 
