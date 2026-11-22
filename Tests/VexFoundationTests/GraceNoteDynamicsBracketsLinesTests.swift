@@ -8,7 +8,7 @@ import Testing
 struct GraceNoteDynamicsBracketsLinesTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     // MARK: - Helper
@@ -216,12 +216,12 @@ struct GraceNoteDynamicsBracketsLinesTests {
     }
 
     @Test func textDynamicsGlyphWidths() {
-        #expect(TextDynamics.GLYPHS["f"]!.width == 12)
-        #expect(TextDynamics.GLYPHS["p"]!.width == 14)
-        #expect(TextDynamics.GLYPHS["m"]!.width == 17)
-        #expect(TextDynamics.GLYPHS["s"]!.width == 10)
-        #expect(TextDynamics.GLYPHS["z"]!.width == 12)
-        #expect(TextDynamics.GLYPHS["r"]!.width == 12)
+        #expect(TextDynamics.GLYPHS["f"] == Glyphs.dynamicForte)
+        #expect(TextDynamics.GLYPHS["p"] == Glyphs.dynamicPiano)
+        #expect(TextDynamics.GLYPHS["m"] == Glyphs.dynamicMezzo)
+        #expect(TextDynamics.GLYPHS["s"] == Glyphs.dynamicSforzando)
+        #expect(TextDynamics.GLYPHS["z"] == Glyphs.dynamicZ)
+        #expect(TextDynamics.GLYPHS["r"] == Glyphs.dynamicRinforzando)
     }
 
     @Test func textDynamicsSetLine() {

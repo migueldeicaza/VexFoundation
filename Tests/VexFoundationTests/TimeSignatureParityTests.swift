@@ -5,7 +5,7 @@ import Testing
 struct TimeSignatureParityTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     private func makeFactory(width: Double = 920, height: Double = 260) -> (Factory, SVGRenderContext) {

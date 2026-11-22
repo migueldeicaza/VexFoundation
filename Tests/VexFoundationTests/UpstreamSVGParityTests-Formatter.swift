@@ -1057,45 +1057,14 @@ extension UpstreamSVGParityTests {
         y1: Double,
         y2: Double
     ) {
-        let stavePadding = (Glyph.MUSIC_FONT_STACK.first?.lookupMetric("stave.padding", defaultValue: 0) as? Double) ?? 0
-        let x = xPos + stavePadding
-
-        _ = context.save()
-        _ = context.setFont(FontInfo(family: VexFont.SANS_SERIF, size: "8pt"))
-
-        for gap in formatter.contextGaps.gaps {
-            _ = context.beginPath()
-            _ = context.setStrokeStyle("rgba(100,200,100,0.4)")
-            _ = context.setFillStyle("rgba(100,200,100,0.4)")
-            _ = context.setLineWidth(1)
-            _ = context.fillRect(x + gap.x1, y1, max(gap.x2 - gap.x1, 0), y2 - y1)
-            _ = context.setFillStyle("green")
-            _ = context.fillText("\(Int((gap.x2 - gap.x1).rounded()))", x + gap.x1, y2 + 12)
-        }
-
-        _ = context.setFillStyle("red")
-        let lossText = String(
-            format: "Loss: %.2f Shift: %.2f Gap: %.2f",
-            formatter.totalCost,
-            formatter.totalShift,
-            formatter.contextGaps.total
-        )
-        _ = context.fillText(lossText, x - 20, y2 + 27)
-        _ = context.restore()
+        // Upstream 5.0 `Formatter.plotDebugging(ctx, formatter, xPos, y1, y2)` (called from `System.format`).
+        VexFoundation.Formatter.plotDebugging(ctx: context, formatter: formatter, xPos: xPos, y1: y1, y2: y2)
     }
 
+    /// Upstream 5.0 `getGlyphWidth(glyph)` in formatter_tests.ts: the glyph width in the current music font.
     private func upstreamFormatterGlyphWidth(_ glyphName: String) -> Double {
-        guard let musicFont = Glyph.MUSIC_FONT_STACK.first,
-              let glyphs = try? musicFont.getGlyphs(),
-              let glyph = glyphs[glyphName],
-              let resolution = try? musicFont.getResolution(),
-              resolution != 0
-        else {
-            return Glyph.getWidth(code: glyphName, point: 39)
-        }
-
-        let widthInEm = (glyph.xMax - glyph.xMin) / resolution
-        let ptScale = VexFont.scaleToPxFrom["pt"] ?? (4.0 / 3.0)
-        return widthInEm * 38 * ptScale
+        let el = VexElement()
+        el.setText(Glyphs.code(named: glyphName) ?? "")
+        return el.getWidth()
     }
 }

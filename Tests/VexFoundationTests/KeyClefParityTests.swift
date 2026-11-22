@@ -5,7 +5,7 @@ import Testing
 struct KeyClefParityTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     private func makeFactory(width: Double = 900, height: Double = 260) -> (Factory, SVGRenderContext) {
@@ -30,7 +30,7 @@ struct KeyClefParityTests {
 
         let keySig = stave.getModifiers(position: position, category: KeySignature.category).first as? KeySignature
         keySig?.format()
-        return keySig?.getGlyphs().first?.getYShift()
+        return keySig?.children.first?.getYShift()
     }
 
     private func makeQuarterC4(
@@ -76,7 +76,7 @@ struct KeyClefParityTests {
             ks.format()
 
             let expected = Tables.keySignatures[key]?.num ?? 0
-            #expect(ks.getGlyphs().count == expected)
+            #expect(ks.children.count == expected)
         }
     }
 
@@ -117,7 +117,7 @@ struct KeyClefParityTests {
         let altered = KeySignature(keySpec: "D", cancelKeySpec: "Bb", alterKeySpec: ["b", "n"])
         _ = altered.setStave(top)
         altered.format()
-        #expect(altered.getGlyphs().count == 4)
+        #expect(altered.children.count == 4)
 
         try factory.draw()
         #expect(context.getSVG().contains("<svg"))
@@ -163,8 +163,8 @@ struct KeyClefParityTests {
         let smallTreble = Clef(type: .treble, size: .small, annotation: .octaveUp)
         let defaultTreble = Clef(type: .treble, size: .default, annotation: .octaveUp)
         #expect(Clef.getPoint(.small) < Clef.getPoint(.default))
-        #expect(smallTreble.annotation != nil)
-        #expect(defaultTreble.annotation != nil)
+        #expect(smallTreble.code == Glyphs.gClef8va)
+        #expect(defaultTreble.code == Glyphs.gClef8va)
 
         try factory.draw()
         #expect(context.getSVG().contains("<svg"))

@@ -8,7 +8,7 @@ import Testing
 struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     // MARK: - Helper
@@ -375,7 +375,8 @@ struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
 
     @Test func bendRenderOptions() {
         let opts = BendRenderOptions()
-        #expect(opts.lineWidth == 1.5)
+        // 5.0: the bend line style comes from the `Bend.line` metric.
+        #expect(Metrics.getStyle("Bend.line").lineWidth == 1)
         #expect(opts.bendWidth == 8)
         #expect(opts.releaseWidth == 8)
     }

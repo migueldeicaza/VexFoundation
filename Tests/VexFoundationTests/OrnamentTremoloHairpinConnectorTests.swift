@@ -7,7 +7,7 @@ import Testing
 struct OrnamentTremoloHairpinConnectorTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     // MARK: - Helper
@@ -30,7 +30,8 @@ struct OrnamentTremoloHairpinConnectorTests {
     @Test func ornamentTrillCreation() {
         let orn = Ornament("tr")
         #expect(orn.type == "tr")
-        #expect(orn.reportedWidth > 0)
+        #expect(orn.getText() == Glyphs.ornamentTrill)
+        #expect(orn.getWidth() > 0)
         #expect(orn.adjustForStemDirection == true)
         #expect(orn.delayed == false)
     }
@@ -38,13 +39,13 @@ struct OrnamentTremoloHairpinConnectorTests {
     @Test func ornamentMordentCreation() {
         let orn = Ornament("mordent")
         #expect(orn.type == "mordent")
-        #expect(orn.reportedWidth > 0)
+        #expect(orn.getWidth() > 0)
     }
 
     @Test func ornamentTurnCreation() {
         let orn = Ornament("turn")
         #expect(orn.type == "turn")
-        #expect(orn.reportedWidth > 0)
+        #expect(orn.getWidth() > 0)
     }
 
     // MARK: - Ornament Type Lists
@@ -212,7 +213,7 @@ struct OrnamentTremoloHairpinConnectorTests {
     @Test func tremoloCreation() {
         let trem = Tremolo(3)
         #expect(trem.num == 3)
-        #expect(trem.code == "tremolo1")
+        #expect(trem.getText() == Glyphs.tremolo1)
         #expect(trem.position == .center)
     }
 
@@ -224,20 +225,6 @@ struct OrnamentTremoloHairpinConnectorTests {
     @Test func tremoloDoubleStroke() {
         let trem = Tremolo(2)
         #expect(trem.num == 2)
-    }
-
-    @Test func tremoloYSpacingScale() {
-        let trem = Tremolo(3)
-        #expect(trem.ySpacingScale == 1)
-        trem.ySpacingScale = 1.5
-        #expect(trem.ySpacingScale == 1.5)
-    }
-
-    @Test func tremoloExtraStrokeScale() {
-        let trem = Tremolo(3)
-        #expect(trem.extraStrokeScale == 1)
-        trem.extraStrokeScale = 2.0
-        #expect(trem.extraStrokeScale == 2.0)
     }
 
     // MARK: - Hairpin Type
@@ -407,9 +394,9 @@ struct OrnamentTremoloHairpinConnectorTests {
 
         _ = connector.setText("Piano")
         #expect(connector.texts.count == 1)
-        #expect(connector.texts[0].content == "Piano")
-        #expect(connector.texts[0].shiftX == 0)
-        #expect(connector.texts[0].shiftY == 0)
+        #expect(connector.texts[0].getText() == "Piano")
+        #expect(connector.texts[0].getXShift() == 0)
+        #expect(connector.texts[0].getYShift() == 0)
     }
 
     @Test func staveConnectorSetTextWithShift() {
@@ -418,8 +405,8 @@ struct OrnamentTremoloHairpinConnectorTests {
         let connector = StaveConnector(topStave: stave1, bottomStave: stave2)
 
         _ = connector.setText("Vln.", shiftX: 5, shiftY: -3)
-        #expect(connector.texts[0].shiftX == 5)
-        #expect(connector.texts[0].shiftY == -3)
+        #expect(connector.texts[0].getXShift() == 5)
+        #expect(connector.texts[0].getYShift() == -3)
     }
 
     @Test func staveConnectorMultipleTexts() {
@@ -437,9 +424,9 @@ struct OrnamentTremoloHairpinConnectorTests {
         let stave2 = Stave(x: 10, y: 140, width: 300)
         let connector = StaveConnector(topStave: stave1, bottomStave: stave2)
 
-        #expect(connector.connectorWidth == 3)
         #expect(connector.thickness == Tables.STAVE_LINE_THICKNESS)
-        #expect(connector.connectorXShift == 0)
+        #expect(connector.getXShift() == 0)
+        #expect(connector.getType() == .double)
         #expect(connector.texts.isEmpty)
     }
 
@@ -463,23 +450,18 @@ struct OrnamentTremoloHairpinConnectorTests {
 
     @Test func tablesOrnamentCodeLookup() {
         // Known ornament types should resolve to codes
-        let trCode = Tables.ornamentCode("tr")
-        #expect(trCode != nil)
+        #expect(Tables.ornamentCodes("tr") == Glyphs.ornamentTrill)
+        #expect(Tables.ornamentCodes("mordent") == Glyphs.ornamentShortTrill)
+        #expect(Tables.ornamentCodes("turn") == Glyphs.ornamentTurn)
 
-        let mordentCode = Tables.ornamentCode("mordent")
-        #expect(mordentCode != nil)
-
-        let turnCode = Tables.ornamentCode("turn")
-        #expect(turnCode != nil)
-
-        // Unknown type returns nil
-        let unknownCode = Tables.ornamentCode("nonexistent")
-        #expect(unknownCode == nil)
+        // Unknown type: no table entry, and the lookup returns the input (upstream)
+        #expect(!Tables.hasOrnamentCode("nonexistent"))
+        #expect(Tables.ornamentCodes("nonexistent") == "nonexistent")
     }
 
     @Test func tablesOrnamentCodeVariety() {
         let types = [
-            "mordent", "mordent_inverted", "turn", "turn_inverted",
+            "mordent", "mordentInverted", "turn", "turnInverted",
             "tr", "upprall", "downprall", "prallup", "pralldown",
             "upmordent", "downmordent", "lineprall",
             "prallprall", "scoop", "doit", "fall", "doitLong",
@@ -487,8 +469,7 @@ struct OrnamentTremoloHairpinConnectorTests {
             "flip", "jazzTurn", "smear"
         ]
         for type in types {
-            let code = Tables.ornamentCode(type)
-            #expect(code != nil, "Ornament code for '\(type)' should exist")
+            #expect(Tables.hasOrnamentCode(type), "Ornament code for '\(type)' should exist")
         }
     }
 }

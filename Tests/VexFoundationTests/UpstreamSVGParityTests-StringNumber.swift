@@ -156,8 +156,7 @@ extension UpstreamSVGParityTests {
             width: 750,
             height: 140
         ) { factory, context in
-            let glyphScale = 39.0
-            let clefWidth = Glyph.getWidth(code: "gClef", point: glyphScale)
+            let clefWidth = VexElement.measureWidth(Glyphs.gClef) // widest clef
 
             let notes: [StaveNote] = [
                 factory.StaveNote(StaveNoteStruct(

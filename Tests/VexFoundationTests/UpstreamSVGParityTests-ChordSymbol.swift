@@ -34,62 +34,57 @@ extension UpstreamSVGParityTests {
             var chords: [ChordSymbol] = [
                 makeChordSymbol(factory, fontSize: 10)
                     .addText("F7")
-                    .addGlyph("leftParenTall"),
+                    .addGlyph("leftParenTall")
+                    .addGlyphOrText("b9", symbolModifier: .sup)
+                    .addGlyphOrText("#11", symbolModifier: .sub)
+                    .addGlyph("rightParenTall"),
                 makeChordSymbol(factory, fontSize: 12)
-                    .addText("F7"),
+                    .addText("F7")
+                    .addGlyphOrText("b9", symbolModifier: .sup)
+                    .addGlyphOrText("#11", symbolModifier: .sub),
                 makeChordSymbol(factory, fontSize: 14)
                     .addText("F7")
-                    .addGlyph("leftParenTall"),
+                    .addGlyph("leftParenTall")
+                    .addGlyphOrText("add 3", symbolModifier: .sup)
+                    .addGlyphOrText("omit 9", symbolModifier: .sub)
+                    .addGlyph("rightParenTall"),
                 makeChordSymbol(factory, fontSize: 16)
                     .addText("F7")
-                    .addGlyph("leftParenTall"),
+                    .addGlyph("leftParenTall")
+                    .addGlyphOrText("b9", symbolModifier: .sup)
+                    .addGlyphOrText("#11", symbolModifier: .sub)
+                    .addGlyph("rightParenTall"),
             ]
-            _ = chordAddGlyphOrText(chords[0], "b9", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[0], "#11", modifier: .sub)
-            _ = chords[0].addGlyph("rightParenTall")
-
-            _ = chordAddGlyphOrText(chords[1], "b9", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[1], "#11", modifier: .sub)
-
-            _ = chordAddGlyphOrText(chords[2], "add 3", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[2], "omit 9", modifier: .sub)
-            _ = chords[2].addGlyph("rightParenTall")
-
-            _ = chordAddGlyphOrText(chords[3], "b9", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[3], "#11", modifier: .sub)
-            _ = chords[3].addGlyph("rightParenTall")
             try drawRow(chords, y: 40)
 
             chords = [
-                makeChordSymbol(factory, fontSize: 10).addText("F7"),
-                makeChordSymbol(factory, fontSize: 12).addText("F7"),
-                makeChordSymbol(factory, fontSize: 14).addText("F7"),
-                makeChordSymbol(factory, fontSize: 16).addText("F7"),
+                makeChordSymbol(factory, fontSize: 10)
+                    .setFontSize(10)
+                    .addText("F7")
+                    .addGlyphOrText("#11", symbolModifier: .sup)
+                    .addGlyphOrText("b9", symbolModifier: .sub),
+                makeChordSymbol(factory, fontSize: 12)
+                    .addText("F7")
+                    .addGlyphOrText("#11", symbolModifier: .sup)
+                    .addGlyphOrText("b9", symbolModifier: .sub),
+                makeChordSymbol(factory, fontSize: 14)
+                    .addText("F7")
+                    .addGlyphOrText("#11", symbolModifier: .sup)
+                    .addGlyphOrText("b9", symbolModifier: .sub),
+                makeChordSymbol(factory, fontSize: 16)
+                    .setFontSize(16)
+                    .addText("F7")
+                    .addGlyphOrText("#11", symbolModifier: .sup)
+                    .addGlyphOrText("b9", symbolModifier: .sub),
             ]
-            _ = chordAddGlyphOrText(chords[0], "#11", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[0], "b9", modifier: .sub)
-            _ = chordAddGlyphOrText(chords[1], "#11", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[1], "b9", modifier: .sub)
-            _ = chordAddGlyphOrText(chords[2], "#11", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[2], "b9", modifier: .sub)
-            _ = chordAddGlyphOrText(chords[3], "#11", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[3], "b9", modifier: .sub)
             try drawRow(chords, y: 140)
 
             chords = [
-                makeChordSymbol(factory, fontSize: 10),
-                makeChordSymbol(factory, fontSize: 14),
-                makeChordSymbol(factory, fontSize: 16),
-                makeChordSymbol(factory, fontSize: 18),
+                makeChordSymbol(factory, fontSize: 10).addGlyphOrText("Ab").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
+                makeChordSymbol(factory, fontSize: 14).addGlyphOrText("C#").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
+                makeChordSymbol(factory, fontSize: 16).addGlyphOrText("Ab").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
+                makeChordSymbol(factory, fontSize: 18).addGlyphOrText("C#").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
             ]
-            _ = chords[0].addGlyphOrText("Ab")
-            _ = chordAddGlyphOrText(chords[0], "7(#11b9)", modifier: .sup)
-            _ = chords[1].addGlyphOrText("C#")
-            _ = chordAddGlyphOrText(chords[1], "7(#11b9)", modifier: .sup)
-            _ = chords[2].addGlyphOrText("Ab")
-            _ = chordAddGlyphOrText(chords[2], "7(#11b9)", modifier: .sup)
-            _ = chords[3].addGlyphOrText("C#")
-            _ = chordAddGlyphOrText(chords[3], "7(#11b9)", modifier: .sup)
             try drawRow(chords, y: 240)
         }
     }
@@ -114,57 +109,59 @@ extension UpstreamSVGParityTests {
             }
 
             var chords: [ChordSymbol] = [
-                makeChordSymbol(factory, fontSize: 10, reportWidth: false).addText("F7").addGlyph("leftParenTall"),
-                makeChordSymbol(factory, fontSize: 12, reportWidth: false).addText("F7"),
-                makeChordSymbol(factory, fontSize: 14, reportWidth: false).addText("F7").addGlyph("leftParenTall"),
-                makeChordSymbol(factory, fontSize: 16, reportWidth: false).addText("F7").addGlyph("leftParenTall"),
+                makeChordSymbol(factory, fontSize: 10)
+                    .addText("F7")
+                    .addGlyph("leftParenTall")
+                    .addGlyphOrText("b9", symbolModifier: .sup)
+                    .addGlyphOrText("#11", symbolModifier: .sub)
+                    .addGlyph("rightParenTall"),
+                makeChordSymbol(factory, fontSize: 12)
+                    .addText("F7")
+                    .addGlyphOrText("b9", symbolModifier: .sup)
+                    .addGlyphOrText("#11", symbolModifier: .sub),
+                makeChordSymbol(factory, fontSize: 14)
+                    .addText("F7")
+                    .addGlyph("leftParenTall")
+                    .addGlyphOrText("add 3", symbolModifier: .sup)
+                    .addGlyphOrText("omit 9", symbolModifier: .sub)
+                    .addGlyph("rightParenTall"),
+                makeChordSymbol(factory, fontSize: 16)
+                    .addText("F7")
+                    .addGlyph("leftParenTall")
+                    .addGlyphOrText("b9", symbolModifier: .sup)
+                    .addGlyphOrText("#11", symbolModifier: .sub)
+                    .addGlyph("rightParenTall"),
             ]
-            _ = chordAddGlyphOrText(chords[0], "b9", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[0], "#11", modifier: .sub)
-            _ = chords[0].addGlyph("rightParenTall")
-
-            _ = chordAddGlyphOrText(chords[1], "b9", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[1], "#11", modifier: .sub)
-
-            _ = chordAddGlyphOrText(chords[2], "add 3", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[2], "omit 9", modifier: .sub)
-            _ = chords[2].addGlyph("rightParenTall")
-
-            _ = chordAddGlyphOrText(chords[3], "b9", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[3], "#11", modifier: .sub)
-            _ = chords[3].addGlyph("rightParenTall")
             try drawRow(chords, y: 40)
 
             chords = [
-                makeChordSymbol(factory, fontSize: 10).addText("F7"),
-                makeChordSymbol(factory, fontSize: 12).addText("F7"),
-                makeChordSymbol(factory, fontSize: 14).addText("F7"),
-                makeChordSymbol(factory, fontSize: 16).addText("F7"),
+                makeChordSymbol(factory, fontSize: 10)
+                    .setFontSize(10)
+                    .addText("F7")
+                    .addGlyphOrText("#11", symbolModifier: .sup)
+                    .addGlyphOrText("b9", symbolModifier: .sub),
+                makeChordSymbol(factory, fontSize: 12)
+                    .addText("F7")
+                    .addGlyphOrText("#11", symbolModifier: .sup)
+                    .addGlyphOrText("b9", symbolModifier: .sub),
+                makeChordSymbol(factory, fontSize: 14)
+                    .addText("F7")
+                    .addGlyphOrText("#11", symbolModifier: .sup)
+                    .addGlyphOrText("b9", symbolModifier: .sub),
+                makeChordSymbol(factory, fontSize: 16)
+                    .setFontSize(16)
+                    .addText("F7")
+                    .addGlyphOrText("#11", symbolModifier: .sup)
+                    .addGlyphOrText("b9", symbolModifier: .sub),
             ]
-            _ = chordAddGlyphOrText(chords[0], "#11", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[0], "b9", modifier: .sub)
-            _ = chordAddGlyphOrText(chords[1], "#11", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[1], "b9", modifier: .sub)
-            _ = chordAddGlyphOrText(chords[2], "#11", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[2], "b9", modifier: .sub)
-            _ = chordAddGlyphOrText(chords[3], "#11", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[3], "b9", modifier: .sub)
             try drawRow(chords, y: 140)
 
             chords = [
-                makeChordSymbol(factory, fontSize: 10),
-                makeChordSymbol(factory, fontSize: 14),
-                makeChordSymbol(factory, fontSize: 16),
-                makeChordSymbol(factory, fontSize: 18),
+                makeChordSymbol(factory, fontSize: 10).addGlyphOrText("Ab").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
+                makeChordSymbol(factory, fontSize: 14).addGlyphOrText("C#").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
+                makeChordSymbol(factory, fontSize: 16).addGlyphOrText("Ab").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
+                makeChordSymbol(factory, fontSize: 18).addGlyphOrText("C#").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
             ]
-            _ = chords[0].addGlyphOrText("Ab")
-            _ = chordAddGlyphOrText(chords[0], "7(#11b9)", modifier: .sup)
-            _ = chords[1].addGlyphOrText("C#")
-            _ = chordAddGlyphOrText(chords[1], "7(#11b9)", modifier: .sup)
-            _ = chords[2].addGlyphOrText("Ab")
-            _ = chordAddGlyphOrText(chords[2], "7(#11b9)", modifier: .sup)
-            _ = chords[3].addGlyphOrText("C#")
-            _ = chordAddGlyphOrText(chords[3], "7(#11b9)", modifier: .sup)
             try drawRow(chords, y: 240)
         }
     }
@@ -196,18 +193,16 @@ extension UpstreamSVGParityTests {
             }
 
             var chords: [ChordSymbol] = [
-                makeChordSymbol(factory, reportWidth: false).addText("A").addGlyphSuperscript("dim"),
-                makeChordSymbol(factory, kerning: false, reportWidth: false).addText("A").addGlyphSuperscript("dim"),
-                makeChordSymbol(factory, hJustify: .left, reportWidth: false).addText("C"),
-                makeChordSymbol(factory, reportWidth: false).addText("D"),
+                makeChordSymbol(factory).addText("A").addGlyphSuperscript("dim"),
+                makeChordSymbol(factory).addText("A").addGlyphSuperscript("dim"),
+                makeChordSymbol(factory, hJustify: .left).addText("C").addGlyph("halfDiminished", symbolModifier: .sup),
+                makeChordSymbol(factory).addText("D").addGlyph("halfDiminished", symbolModifier: .sup),
             ]
-            _ = chords[2].addSymbolBlock(symbolType: .glyph, symbolModifier: .sup, glyphName: "halfDiminished")
-            _ = chords[3].addSymbolBlock(symbolType: .glyph, symbolModifier: .sup, glyphName: "halfDiminished")
             try drawRow(chords, y: 10)
 
             chords = [
                 makeChordSymbol(factory).addText("A").addGlyphSuperscript("dim"),
-                makeChordSymbol(factory, kerning: false).addText("A").addGlyphSuperscript("dim"),
+                makeChordSymbol(factory).addText("A").addGlyphSuperscript("dim"),
                 makeChordSymbol(factory).addText("A").addGlyphSuperscript("+").addTextSuperscript("5"),
                 makeChordSymbol(factory).addText("G").addGlyphSuperscript("+").addTextSuperscript("5"),
             ]
@@ -216,23 +211,17 @@ extension UpstreamSVGParityTests {
             chords = [
                 makeChordSymbol(factory).addText("A").addGlyph("-"),
                 makeChordSymbol(factory).addText("E").addGlyph("-"),
-                makeChordSymbol(factory).addText("A"),
-                makeChordSymbol(factory).addText("E"),
+                makeChordSymbol(factory).addText("A").addGlyphOrText("(#11)", symbolModifier: .sup),
+                makeChordSymbol(factory).addText("E").addGlyphOrText("(#9)", symbolModifier: .sup),
             ]
-            _ = chordAddGlyphOrText(chords[2], "(#11)", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[3], "(#9)", modifier: .sup)
             try drawRow(chords, y: 210)
 
             chords = [
-                makeChordSymbol(factory),
+                makeChordSymbol(factory).addGlyphOrText("F/B").addGlyphOrText("b", symbolModifier: .sup),
                 makeChordSymbol(factory).addText("E").addGlyphOrText("V/V"),
-                makeChordSymbol(factory).addText("A"),
-                makeChordSymbol(factory).addText("E"),
+                makeChordSymbol(factory).addText("A").addGlyphOrText("(#11)", symbolModifier: .sup),
+                makeChordSymbol(factory).addText("E").addGlyphOrText("(#9)", symbolModifier: .sup),
             ]
-            _ = chords[0].addGlyphOrText("F/B")
-            _ = chordAddGlyphOrText(chords[0], "b", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[2], "(#11)", modifier: .sup)
-            _ = chordAddGlyphOrText(chords[3], "(#9)", modifier: .sup)
             try drawRow(chords, y: 310)
         }
     }
@@ -255,22 +244,25 @@ extension UpstreamSVGParityTests {
                 try factory.draw()
             }
 
-            var chord1 = makeChordSymbol(factory, hJustify: .left, reportWidth: false).addText("F7").setHorizontal(.left)
-            var chord2 = makeChordSymbol(factory, hJustify: .left, reportWidth: false).addText("C").setHorizontal(.left)
-            _ = chordAddGlyphOrText(chord1, "(#11b9)", modifier: .sup)
-            _ = chord2.addGlyphSuperscript("majorSeventh")
+            var chord1 = makeChordSymbol(factory).addText("F7").setHorizontal(.left)
+                .addGlyphOrText("(#11b9)", symbolModifier: .sup)
+            var chord2 = makeChordSymbol(factory).addText("C").setHorizontal(.left).addGlyphSuperscript("majorSeventh")
             try draw(chord1, chord2, y: 40)
 
-            chord1 = makeChordSymbol(factory).addText("F7").addTextSuperscript("(")
+            chord1 = makeChordSymbol(factory)
+                .addText("F7")
+                .addTextSuperscript("(")
+                .addGlyphOrText("#11b9", symbolModifier: .sup)
+                .addTextSuperscript(")")
             chord2 = makeChordSymbol(factory).addText("C").setHorizontal(.left).addTextSuperscript("Maj.")
-            _ = chordAddGlyphOrText(chord1, "#11b9", modifier: .sup)
-            _ = chord1.addTextSuperscript(")")
             try draw(chord1, chord2, y: 140)
 
-            chord1 = makeChordSymbol(factory).addText("F7").setHorizontal(.left)
+            chord1 = makeChordSymbol(factory)
+                .addText("F7")
+                .setHorizontal(.left)
+                .addGlyphOrText("#11", symbolModifier: .sup)
+                .addGlyphOrText("b9", symbolModifier: .sub)
             chord2 = makeChordSymbol(factory).addText("C").addTextSuperscript("sus4")
-            _ = chordAddGlyphOrText(chord1, "#11", modifier: .sup)
-            _ = chordAddGlyphOrText(chord1, "b9", modifier: .sub)
             try draw(chord1, chord2, y: 240)
         }
     }
@@ -291,25 +283,31 @@ extension UpstreamSVGParityTests {
             }
 
             var chord1 = makeChordSymbol(factory).addText("F7").setHorizontal(.left)
+                .addGlyphOrText("(#11b9)", symbolModifier: .sup)
             var chord2 = makeChordSymbol(factory, hJustify: .left).addText("C").addGlyphSuperscript("majorSeventh")
-            _ = chordAddGlyphOrText(chord1, "(#11b9)", modifier: .sup)
             try draw(chord1, chord2, y: 40)
 
-            chord1 = makeChordSymbol(factory, hJustify: .center).addText("F7").setHorizontal(.left)
+            chord1 = makeChordSymbol(factory, hJustify: .center)
+                .addText("F7")
+                .setHorizontal(.left)
+                .addGlyphOrText("(#11b9)", symbolModifier: .sup)
             chord2 = makeChordSymbol(factory, hJustify: .center).addText("C").addTextSuperscript("Maj.")
-            _ = chordAddGlyphOrText(chord1, "(#11b9)", modifier: .sup)
             try draw(chord1, chord2, y: 140)
 
-            chord1 = makeChordSymbol(factory, hJustify: .right).addText("F7").setHorizontal(.left)
+            chord1 = makeChordSymbol(factory, hJustify: .right)
+                .addText("F7")
+                .setHorizontal(.left)
+                .addGlyphOrText("#11", symbolModifier: .sup)
+                .addGlyphOrText("b9", symbolModifier: .sub)
             chord2 = makeChordSymbol(factory, hJustify: .right).addText("C").addTextSuperscript("Maj.")
-            _ = chordAddGlyphOrText(chord1, "#11", modifier: .sup)
-            _ = chordAddGlyphOrText(chord1, "b9", modifier: .sub)
             try draw(chord1, chord2, y: 240)
 
-            chord1 = makeChordSymbol(factory, hJustify: .left).addText("F7").setHorizontal(.left)
+            chord1 = makeChordSymbol(factory, hJustify: .left)
+                .addText("F7")
+                .setHorizontal(.left)
+                .addGlyphOrText("#11", symbolModifier: .sup)
+                .addGlyphOrText("b9", symbolModifier: .sub)
             chord2 = makeChordSymbol(factory, hJustify: .centerStem).addText("C").addTextSuperscript("Maj.")
-            _ = chordAddGlyphOrText(chord1, "#11", modifier: .sup)
-            _ = chordAddGlyphOrText(chord1, "b9", modifier: .sub)
             try draw(chord1, chord2, y: 340)
         }
     }
@@ -321,7 +319,7 @@ extension UpstreamSVGParityTests {
             let chords = [
                 makeChordSymbol(factory, vJustify: .bottom).addText("I").addTextSuperscript("6").addTextSubscript("4"),
                 makeChordSymbol(factory, vJustify: .bottom).addGlyphOrText("V"),
-                makeChordSymbol(factory, vJustify: .bottom).addLine(12),
+                makeChordSymbol(factory, vJustify: .bottom).addLine(),
                 makeChordSymbol(factory, vJustify: .bottom).addGlyphOrText("V/V"),
             ]
             try drawBottomChordSymbolsRow(factory: factory, context: context, y: 10, stemDirection: nil, chords1: chords, chords2: nil, staveWidth: 400)
@@ -340,7 +338,7 @@ extension UpstreamSVGParityTests {
             let chords = [
                 makeChordSymbol(factory, vJustify: .bottom).addGlyphOrText("F"),
                 makeChordSymbol(factory, vJustify: .bottom).addGlyphOrText("C7"),
-                makeChordSymbol(factory, vJustify: .bottom).addLine(12),
+                makeChordSymbol(factory, vJustify: .bottom).addLine(),
                 makeChordSymbol(factory, vJustify: .bottom).addText("A").addGlyphSuperscript("dim"),
             ]
             try drawBottomChordSymbolsRow(
@@ -367,7 +365,7 @@ extension UpstreamSVGParityTests {
             let chords1 = [
                 makeChordSymbol(factory, vJustify: .bottom).addText("I").addTextSuperscript("6").addTextSubscript("4"),
                 makeChordSymbol(factory, vJustify: .bottom).addGlyphOrText("V"),
-                makeChordSymbol(factory, vJustify: .bottom).addLine(12),
+                makeChordSymbol(factory, vJustify: .bottom).addLine(),
                 makeChordSymbol(factory, vJustify: .bottom).addGlyphOrText("V/V"),
             ]
             let chords2 = [
@@ -425,15 +423,9 @@ extension UpstreamSVGParityTests {
         _ factory: Factory,
         fontSize: Double? = nil,
         vJustify: ChordSymbolVerticalJustify = .top,
-        hJustify: ChordSymbolHorizontalJustify = .center,
-        kerning: Bool = true,
-        reportWidth: Bool = true
+        hJustify: ChordSymbolHorizontalJustify = .center
     ) -> ChordSymbol {
-        let chord = factory.ChordSymbol(vJustify: vJustify, hJustify: hJustify, kerning: kerning, reportWidth: reportWidth)
-        if let fontSize {
-            _ = chord.setFont(size: fontSize)
-        }
-        return chord
+        factory.ChordSymbol(vJustify: vJustify, hJustify: hJustify, fontSize: fontSize)
     }
 
     private func chordSymbolNote(
@@ -452,44 +444,10 @@ extension UpstreamSVGParityTests {
         return note
     }
 
+    /// Upstream 5.0 `getGlyphWidth(0xe050 /*gClef*/)`: the glyph width in the current music font.
     private func chordSymbolGClefWidth() -> Double {
-        guard
-            let font = Glyph.MUSIC_FONT_STACK.first,
-            let glyphs = try? font.getGlyphs(),
-            let glyph = glyphs["gClef"]
-        else {
-            let point = 38 * (VexFont.scaleToPxFrom["pt"] ?? 1)
-            return Glyph.getWidth(code: "gClef", point: point)
-        }
-
-        let resolution = (try? font.getResolution()) ?? 1000
-        let widthInEm = (glyph.xMax - glyph.xMin) / resolution
-        return widthInEm * 38 * (VexFont.scaleToPxFrom["pt"] ?? 1)
-    }
-
-    @discardableResult
-    private func chordAddGlyphOrText(_ chord: ChordSymbol, _ text: String, modifier: SymbolModifier) -> ChordSymbol {
-        guard modifier != .none else {
-            _ = chord.addGlyphOrText(text)
-            return chord
-        }
-
-        var buffered = ""
-        for ch in text {
-            let symbol = String(ch)
-            if ChordSymbol.glyphs[symbol] != nil {
-                if !buffered.isEmpty {
-                    _ = chord.addText(buffered, symbolModifier: modifier)
-                    buffered = ""
-                }
-                _ = chord.addSymbolBlock(symbolType: .glyph, symbolModifier: modifier, glyphName: symbol)
-            } else {
-                buffered.append(ch)
-            }
-        }
-        if !buffered.isEmpty {
-            _ = chord.addText(buffered, symbolModifier: modifier)
-        }
-        return chord
+        let el = VexElement()
+        el.setText(Glyphs.gClef)
+        return el.getWidth()
     }
 }

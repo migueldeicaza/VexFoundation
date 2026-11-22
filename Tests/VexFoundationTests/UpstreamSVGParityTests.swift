@@ -1193,8 +1193,16 @@ struct UpstreamSVGParityTests {
             }
 
             _ = stave1.setContext(context)
-            _ = stave2.setContext(context)
             try stave1.draw()
+            for modifier in stave1.getModifiers() {
+                // Upstream 5.0: VexFlowTests.drawBoundingBox(ctx, modifier)
+                if let bb = modifier.getBoundingBox() {
+                    context.beginPath()
+                    context.rect(bb.getX(), bb.getY(), bb.getW(), bb.getH())
+                    context.stroke()
+                }
+            }
+            _ = stave2.setContext(context)
             try stave2.draw()
         }
     }
@@ -1939,16 +1947,17 @@ struct UpstreamSVGParityTests {
     }
 
     private func upstreamKeySigFontWidths() -> (sharpWidth: Double, flatWidth: Double, naturalWidth: Double, clefWidth: Double) {
-        let glyphScale = 39.0
-        let sharpWidth = Glyph.getWidth(code: "accidentalSharp", point: glyphScale) + 1
-        let flatWidth = Glyph.getWidth(code: "accidentalFlat", point: glyphScale) + 1
-        let naturalWidth = Glyph.getWidth(code: "accidentalNatural", point: glyphScale) + 2
-        let clefWidth = Glyph.getWidth(code: "gClef", point: glyphScale) * 2
+        // Upstream 5.0 `fontWidths()` in keysignature_tests.ts.
+        let sharpWidth = VexElement.measureWidth(Glyphs.accidentalSharp) + 1
+        let flatWidth = VexElement.measureWidth(Glyphs.accidentalFlat) + 1
+        let naturalWidth = VexElement.measureWidth(Glyphs.accidentalNatural) + 2
+        let clefWidth = VexElement.measureWidth(Glyphs.gClef) * 2 // widest clef
         return (sharpWidth: sharpWidth, flatWidth: flatWidth, naturalWidth: naturalWidth, clefWidth: clefWidth)
     }
 
     private func upstreamKeyClefWidth() -> Double {
-        Glyph.getWidth(code: "gClef", point: 39)
+        // Upstream 5.0 `fontWidths().clefWidth` in key_clef_tests.ts.
+        VexElement.measureWidth(Glyphs.gClef)
     }
 
     private func drawClefKeysTest(context: SVGRenderContext, keys: [String]) throws {

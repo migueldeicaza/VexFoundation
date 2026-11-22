@@ -8,7 +8,7 @@ import Testing
 struct PercussionParityTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     private func makePercussionNote(
@@ -33,8 +33,8 @@ struct PercussionParityTests {
 
     @Test func percussionClefUsesUnpitchedGlyph() throws {
         let clef = Clef(type: .percussion)
-        #expect(clef.clefDef.code == "unpitchedPercussionClef1")
-        #expect(clef.clefDef.line == 2)
+        #expect(clef.code == Glyphs.unpitchedPercussionClef1)
+        #expect(clef.line == 2)
     }
 
     @Test func staffKeyParserAcceptsXSlashShorthand() throws {
@@ -53,30 +53,30 @@ struct PercussionParityTests {
             let note = StaveNote(parsed)
             #expect(note.getKeys().first == "x/4")
             #expect(note.getKeyProps().first?.key == "X")
-            #expect(note.noteHeads.first?.glyphCode == "noteheadXBlack")
+            #expect(note.noteHeads.first?.getText() == Glyphs.noteheadXBlack)
         }
     }
 
     @Test func percussionCustomNoteheadsResolveExpectedGlyphCodes() throws {
         let cases: [(key: String, duration: String, expected: String)] = [
-            ("g/5/d0", "4", "noteheadDiamondWhole"),
-            ("g/5/d1", "4", "noteheadDiamondHalf"),
-            ("g/5/d2", "4", "noteheadDiamondBlack"),
-            ("g/5/d3", "4", "noteheadDiamondBlack"),
-            ("g/5/t0", "1", "noteheadTriangleUpWhole"),
-            ("g/5/t1", "4", "noteheadTriangleUpHalf"),
-            ("g/5/t2", "4", "noteheadTriangleUpBlack"),
-            ("g/5/t3", "4", "noteheadTriangleUpBlack"),
-            ("g/5/x0", "1", "noteheadXWhole"),
-            ("g/5/x1", "4", "noteheadXHalf"),
-            ("g/5/x2", "4", "noteheadXBlack"),
-            ("g/5/x3", "4", "noteheadCircleX"),
+            ("g/5/d0", "4", Glyphs.noteheadDiamondWhole),
+            ("g/5/d1", "4", Glyphs.noteheadDiamondHalf),
+            ("g/5/d2", "4", Glyphs.noteheadDiamondBlack),
+            ("g/5/d3", "4", Glyphs.noteheadDiamondBlack),
+            ("g/5/t0", "1", Glyphs.noteheadTriangleUpWhole),
+            ("g/5/t1", "4", Glyphs.noteheadTriangleUpHalf),
+            ("g/5/t2", "4", Glyphs.noteheadTriangleUpBlack),
+            ("g/5/t3", "4", Glyphs.noteheadTriangleUpBlack),
+            ("g/5/x0", "1", Glyphs.noteheadXWhole),
+            ("g/5/x1", "4", Glyphs.noteheadXHalf),
+            ("g/5/x2", "4", Glyphs.noteheadXBlack),
+            ("g/5/x3", "4", Glyphs.noteheadCircleX),
         ]
 
         for c in cases {
             let note = makePercussionNote(key: c.key, duration: c.duration)
             #expect(note != nil)
-            #expect(note?.noteHeads.first?.glyphCode == c.expected)
+            #expect(note?.noteHeads.first?.getText() == c.expected)
         }
     }
 
@@ -85,13 +85,13 @@ struct PercussionParityTests {
         let quarterDiamond = makePercussionNote(key: "g/5/d", duration: "4")
         #expect(wholeDiamond != nil)
         #expect(quarterDiamond != nil)
-        #expect(wholeDiamond?.noteHeads.first?.glyphCode == "noteheadDiamondWhole")
-        #expect(quarterDiamond?.noteHeads.first?.glyphCode == "noteheadDiamondBlack")
+        #expect(wholeDiamond?.noteHeads.first?.getText() == Glyphs.noteheadDiamondWhole)
+        #expect(quarterDiamond?.noteHeads.first?.getText() == Glyphs.noteheadDiamondBlack)
 
         let wholeX = makePercussionNote(key: "g/5/x", duration: "1")
         let quarterX = makePercussionNote(key: "g/5/x", duration: "4")
-        #expect(wholeX?.noteHeads.first?.glyphCode == "noteheadXWhole")
-        #expect(quarterX?.noteHeads.first?.glyphCode == "noteheadXBlack")
+        #expect(wholeX?.noteHeads.first?.getText() == Glyphs.noteheadXWhole)
+        #expect(quarterX?.noteHeads.first?.getText() == Glyphs.noteheadXBlack)
     }
 
     @Test func percussionTwoVoiceFormattingAndBeamingBaseline() throws {

@@ -7,7 +7,7 @@ import Testing
 struct BachDemoParityTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     @Test func minuetStyleSystemBuildsFormatsAndSupportsRegistryLookups() {
@@ -80,8 +80,8 @@ struct BachDemoParityTests {
             system1.format()
             system2.format()
 
-            #expect(system1.boundingBox != nil)
-            #expect(system2.boundingBox != nil)
+            #expect(system1.getBoundingBox() != nil)
+            #expect(system2.getBoundingBox() != nil)
             #expect(m1a.getModifiers().count >= 1)
         }
     }

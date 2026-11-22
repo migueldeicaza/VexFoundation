@@ -50,12 +50,12 @@ extension UpstreamSVGParityTests {
                     ],
                     duration: .half
                 ))
-                    .addModifier(Vibrato().setHarsh(true), index: 0),
+                    .addModifier(Vibrato().setVibratoCode(0xEAE2), index: 0),
                 TabNote(TabNoteStruct(
                     positions: [TabNotePosition(str: 2, fret: 10)],
                     duration: .half
                 ))
-                    .addModifier(Vibrato().setHarsh(true), index: 0),
+                    .addModifier(Vibrato().setVibratoCode(0xEAC0), index: 0),
             ]
 
             try Formatter.FormatAndDraw(ctx: context, stave: stave, notes: notes)
@@ -93,7 +93,7 @@ extension UpstreamSVGParityTests {
                     positions: [TabNotePosition(str: 2, fret: 10)],
                     duration: .half
                 ))
-                    .addModifier(Vibrato().setVibratoWidth(120).setHarsh(true), index: 0),
+                    .addModifier(Vibrato().setVibratoWidth(120).setVibratoCode(0xEAE2), index: 0),
             ]
 
             try Formatter.FormatAndDraw(ctx: context, stave: stave, notes: notes)

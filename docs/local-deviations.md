@@ -19,7 +19,7 @@ When `VexRuntimeContext.upstreamParityMode` is `true`, the items marked **(gated
 - [ ] Barline: double heavy barline type.
 - [ ] TabNote: configurable background color instead of `clearRect`.
 - [ ] StaveTempo: SVG groups around the tempo marking and the BPM text.
-- [ ] StaveNote: `paddingRight`; keep notehead types (for example slash) across a notehead rebuild; ledger-line style and SVG group.
+- [x] StaveNote: `paddingRight`; keep notehead types (for example slash) across a notehead rebuild; ledger-line style; ledger SVG group **(gated)**.
 - [ ] Formatter: no tick-mismatch error between voices; guard against zero `totalTicks`; guard against GhostNote in key-props lookups.
 - [ ] Tuplet: option to hide the tuplet number.
 - [ ] Beam: reset stem extensions to base values before recalculation.

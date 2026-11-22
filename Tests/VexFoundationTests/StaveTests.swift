@@ -5,7 +5,7 @@ import Testing
 struct StaveTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     // MARK: - Tables Data
@@ -40,40 +40,33 @@ struct StaveTests {
     }
 
     @Test func accidentalCodes() {
-        let sharp = Tables.accidentalCode("#")
-        #expect(sharp != nil)
-        #expect(sharp!.code == "accidentalSharp")
+        #expect(Tables.hasAccidentalCode("#"))
+        #expect(Tables.accidentalCodes("#") == Glyphs.accidentalSharp)
 
-        let flat = Tables.accidentalCode("b")
-        #expect(flat != nil)
-        #expect(flat!.code == "accidentalFlat")
+        #expect(Tables.hasAccidentalCode("b"))
+        #expect(Tables.accidentalCodes("b") == Glyphs.accidentalFlat)
 
-        let natural = Tables.accidentalCode("n")
-        #expect(natural != nil)
-        #expect(natural!.code == "accidentalNatural")
+        #expect(Tables.hasAccidentalCode("n"))
+        #expect(Tables.accidentalCodes("n") == Glyphs.accidentalNatural)
     }
 
     @Test func glyphProps() {
         // Quarter note
-        let quarter = Tables.getGlyphProps(duration: .quarter)
-        #expect(quarter != nil)
-        #expect(quarter!.stem == true)
-        #expect(quarter!.flag == false)
-        #expect(quarter!.beamCount == 0)
+        let quarter = Note.getGlyphProps(.quarter)
+        #expect(quarter.stem == true)
+        #expect(quarter.codeFlagUp == nil)
+        #expect(quarter.beamCount == 0)
+        #expect(quarter.codeHead == Glyphs.noteheadBlack)
 
         // Eighth note
-        let eighth = Tables.getGlyphProps(duration: .eighth)
-        #expect(eighth != nil)
-        #expect(eighth!.stem == true)
-        #expect(eighth!.flag == true)
-        #expect(eighth!.beamCount == 1)
-        #expect(eighth!.codeFlagUpstem == "flag8thUp")
+        let eighth = Note.getGlyphProps(.eighth)
+        #expect(eighth.stem == true)
+        #expect(eighth.codeFlagUp == Glyphs.flag8thUp)
+        #expect(eighth.beamCount == 1)
 
         // Quarter rest
-        let qRest = Tables.getGlyphProps(duration: .quarter, type: .rest)
-        #expect(qRest != nil)
-        #expect(qRest!.rest == true)
-        #expect(qRest!.codeHead == "restQuarter")
+        let qRest = Note.getGlyphProps(.quarter, .rest)
+        #expect(qRest.codeHead == Glyphs.restQuarter)
     }
 
     // MARK: - Stave Creation
@@ -191,7 +184,7 @@ struct StaveTests {
         ks.setStave(stave)
         ks.format()
 
-        let glyphs = ks.getGlyphs()
+        let glyphs = ks.children
         #expect(glyphs.count == 3) // A major has 3 sharps
     }
 
@@ -203,7 +196,7 @@ struct StaveTests {
         ks.format()
 
         // D has 2 sharps, C has none → should produce 2 naturals
-        let glyphs = ks.getGlyphs()
+        let glyphs = ks.children
         #expect(glyphs.count == 2)
     }
 
@@ -215,21 +208,13 @@ struct StaveTests {
         #expect(ts.getTimeSpec() == .meter(4, 4))
     }
 
-    @Test func timeSigGlyphAliasAndMetrics() {
+    @Test func timeSignatureDigitTextsAndWidth() {
         let ts = TimeSignature(timeSpec: .meter(12, 8))
-        let glyph = TimeSigGlyph(
-            timeSignature: ts,
-            topDigits: "12",
-            botDigits: "8",
-            code: "timeSig0",
-            point: ts.tsPoint
-        )
-        let alias: TimeSignatureGlyph = glyph
-        let metrics = alias.getMetrics()
 
-        #expect(metrics.width > 0)
-        #expect(metrics.xMax >= metrics.xMin)
-        #expect(alias.width == glyph.width)
+        #expect(ts.topText.getText() == Glyphs.timeSig1 + Glyphs.timeSig2)
+        #expect(ts.botText.getText() == Glyphs.timeSig8)
+        #expect(ts.getWidth() > 0)
+        #expect(ts.getWidth() == max(ts.topText.getWidth(), ts.botText.getWidth()))
     }
 
     @Test func timeSignatureCommon() {
@@ -375,7 +360,7 @@ struct StaveTests {
         // Check Eb has 3 flats
         let keySigs = stave.getModifiers(position: .begin, category: "KeySignature")
         let ks = keySigs[0] as! KeySignature
-        let glyphs = ks.getGlyphs()
+        let glyphs = ks.children
         #expect(glyphs.count == 3)
     }
 

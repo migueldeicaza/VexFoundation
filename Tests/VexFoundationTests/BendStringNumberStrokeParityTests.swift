@@ -5,7 +5,7 @@ import Testing
 struct BendStringNumberStrokeParityTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     private func makeFactory(width: Double = 600, height: Double = 240) -> (Factory, SVGRenderContext) {

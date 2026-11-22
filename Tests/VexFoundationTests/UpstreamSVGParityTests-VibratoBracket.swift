@@ -34,7 +34,7 @@ extension UpstreamSVGParityTests {
             let notes = score.notes("c4/4, c4, c4, c4")
             let voice = score.voice(notes)
 
-            _ = factory.VibratoBracket(from: notes[2], to: nil, line: 2, harsh: true)
+            _ = factory.VibratoBracket(from: notes[2], to: nil, line: 2, code: 0xEAE2)
             _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
             try factory.draw()
         }
@@ -53,7 +53,7 @@ extension UpstreamSVGParityTests {
             let notes = score.notes("c4/4, c4, c4, c4")
             let voice = score.voice(notes)
 
-            _ = factory.VibratoBracket(from: nil, to: notes[2], line: 2, harsh: true)
+            _ = factory.VibratoBracket(from: nil, to: notes[2], line: 2, code: 0xEAE2)
             _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
             try factory.draw()
         }

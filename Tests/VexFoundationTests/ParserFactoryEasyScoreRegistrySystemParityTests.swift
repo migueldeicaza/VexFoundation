@@ -5,7 +5,7 @@ import Testing
 struct ParserFactoryEasyScoreRegistrySystemParityTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     private final class MicroScoreGrammar: Grammar {

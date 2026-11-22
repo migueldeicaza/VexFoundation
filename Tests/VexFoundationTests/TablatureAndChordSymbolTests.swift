@@ -8,7 +8,7 @@ import Testing
 struct TablatureAndChordSymbolTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     // MARK: - Helper
@@ -157,7 +157,7 @@ struct TablatureAndChordSymbolTests {
         _ = tn.setGhost(true)
         #expect(tn.ghost == true)
         // Ghost adds parentheses to fret text
-        #expect(tn.glyphPropsArr[0].text == "(5)")
+        #expect(tn.fretElement[0].getText() == "(5)")
     }
 
     @Test func tabNoteGetPositions() {
@@ -237,10 +237,9 @@ struct TablatureAndChordSymbolTests {
             TabNotePosition(str: 2, fret: "X"),
         ]
         let tn = TabNote(TabNoteStruct(positions: positions))
-        #expect(tn.glyphPropsArr.count == 2)
-        #expect(tn.glyphPropsArr[0].text == "12")
-        #expect(tn.glyphPropsArr[1].text == "X")
-        #expect(tn.glyphPropsArr[1].code != nil)
+        #expect(tn.fretElement.count == 2)
+        #expect(tn.fretElement[0].getText() == "12")
+        #expect(tn.fretElement[1].getText() == Glyphs.accidentalDoubleSharp)
     }
 
     @Test func tabNoteIsStemmableNote() {
@@ -473,8 +472,8 @@ struct TablatureAndChordSymbolTests {
         do {
             try slide.renderTie(
                 direction: .up,
-                firstXPx: 10,
-                lastXPx: 20,
+                firstX: 10,
+                lastX: 20,
                 firstYs: [],
                 lastYs: []
             )
@@ -492,25 +491,11 @@ struct TablatureAndChordSymbolTests {
         #expect(GraceTabNote.category == "GraceTabNote")
     }
 
-    @Test func graceTabNoteScale() {
-        let gtn = GraceTabNote(TabNoteStruct(
-            positions: [TabNotePosition(str: 1, fret: 5)]
-        ))
-        #expect(gtn.renderOptions.scale == 0.6)
-    }
-
     @Test func graceTabNoteYShift() {
         let gtn = GraceTabNote(TabNoteStruct(
             positions: [TabNotePosition(str: 1, fret: 5)]
         ))
         #expect(gtn.renderOptions.yShift == 0.3)
-    }
-
-    @Test func graceTabNoteFont() {
-        let gtn = GraceTabNote(TabNoteStruct(
-            positions: [TabNotePosition(str: 1, fret: 5)]
-        ))
-        #expect(gtn.renderOptions.font?.contains("7.5") == true)
     }
 
     @Test func graceTabNoteIsTabNote() {
@@ -536,32 +521,24 @@ struct TablatureAndChordSymbolTests {
     }
 
     // ============================================================
-    // MARK: - TabGlyphProps Tests
+    // MARK: - TabNote.tabToElement Tests (5.0 replacement of TabGlyphProps)
     // ============================================================
 
     @Test func tabGlyphPropsForNumber() {
-        let props = Tables.tabToGlyphProps("5")
-        #expect(props.text == "5")
-        #expect(props.code == nil)
+        let props = TabNote.tabToElement("5")
+        #expect(props.getText() == "5")
         #expect(props.getWidth() > 0)
     }
 
     @Test func tabGlyphPropsForX() {
-        let props = Tables.tabToGlyphProps("X")
-        #expect(props.text == "X")
-        #expect(props.code == "accidentalDoubleSharp")
+        let props = TabNote.tabToElement("X")
+        #expect(props.getText() == Glyphs.accidentalDoubleSharp)
         #expect(props.getWidth() > 0)
     }
 
-    @Test func tabGlyphPropsScale() {
-        let props1 = Tables.tabToGlyphProps("5", scale: 1.0)
-        let props2 = Tables.tabToGlyphProps("5", scale: 0.6)
-        #expect(props2.getWidth() < props1.getWidth())
-    }
-
     @Test func tabGlyphPropsMultiDigit() {
-        let props1 = Tables.tabToGlyphProps("5")
-        let props2 = Tables.tabToGlyphProps("12")
+        let props1 = TabNote.tabToElement("5")
+        let props2 = TabNote.tabToElement("12")
         // Two-digit number should be wider
         #expect(props2.getWidth() > props1.getWidth())
     }
@@ -573,25 +550,18 @@ struct TablatureAndChordSymbolTests {
     }
 
     // ============================================================
-    // MARK: - GlyphProps Tab Extensions
+    // MARK: - TabNote stem extension (5.0: from the flag height)
     // ============================================================
 
     @Test func glyphPropsTabExtensions() {
-        let gp = Tables.getGlyphProps(duration: .quarter)!
-        #expect(gp.tabnoteStemUpExtension == 0)
-        #expect(gp.tabnoteStemDownExtension == 0)
+        let tn = TabNote(TabNoteStruct(positions: [TabNotePosition(str: 1, fret: 5)], duration: .quarter), drawStem: true)
+        #expect(tn.getStemExtension() == 0)
     }
 
-    @Test func glyphPropsTabExtensions32nd() {
-        let gp = Tables.getGlyphProps(duration: .thirtySecond)!
-        #expect(gp.tabnoteStemUpExtension == 9)
-        #expect(gp.tabnoteStemDownExtension == 9)
-    }
-
-    @Test func glyphPropsTabExtensionsWhole() {
-        let gp = Tables.getGlyphProps(duration: .whole)!
-        #expect(gp.tabnoteStemUpExtension == -Tables.STEM_HEIGHT)
-        #expect(gp.tabnoteStemDownExtension == -Tables.STEM_HEIGHT)
+    @Test func glyphPropsTabExtensionsOverride() {
+        let tn = TabNote(TabNoteStruct(positions: [TabNotePosition(str: 1, fret: 5)], duration: .thirtySecond), drawStem: true)
+        tn.stemExtensionOverride = 9
+        #expect(tn.getStemExtension() == 9)
     }
 
     // ============================================================
@@ -611,8 +581,8 @@ struct TablatureAndChordSymbolTests {
         let cs = ChordSymbol()
         _ = cs.addText("C")
         #expect(cs.symbolBlocks.count == 1)
-        #expect(cs.symbolBlocks[0].text == "C")
-        #expect(cs.symbolBlocks[0].symbolType == .text)
+        #expect(cs.symbolBlocks[0].getText() == "C")
+        #expect(cs.symbolBlocks[0].symbolModifier == .none)
     }
 
     @Test func chordSymbolAddTextSuperscript() {
@@ -633,8 +603,7 @@ struct TablatureAndChordSymbolTests {
         let cs = ChordSymbol()
         _ = cs.addGlyph("diminished")
         #expect(cs.symbolBlocks.count == 1)
-        #expect(cs.symbolBlocks[0].symbolType == .glyph)
-        #expect(cs.symbolBlocks[0].glyph != nil)
+        #expect(cs.symbolBlocks[0].getText() == Glyphs.csymDiminished)
     }
 
     @Test func chordSymbolAddGlyphSuperscript() {
@@ -642,21 +611,22 @@ struct TablatureAndChordSymbolTests {
         _ = cs.addGlyphSuperscript("diminished")
         #expect(cs.symbolBlocks.count == 1)
         #expect(cs.symbolBlocks[0].symbolModifier == .sup)
-        #expect(cs.symbolBlocks[0].symbolType == .glyph)
+        #expect(cs.symbolBlocks[0].getText() == Glyphs.csymDiminished)
     }
 
     @Test func chordSymbolAddGlyphOrText() {
         let cs = ChordSymbol()
         _ = cs.addGlyphOrText("(5)")
-        // '(' is a glyph, '5' is text, ')' is a glyph
-        #expect(cs.symbolBlocks.count == 3)
+        // 5.0: glyphs and text are joined in one text block
+        #expect(cs.symbolBlocks.count == 1)
+        #expect(cs.symbolBlocks[0].getText() == "(5)")
     }
 
     @Test func chordSymbolAddLine() {
         let cs = ChordSymbol()
-        _ = cs.addLine(20)
+        _ = cs.addLine()
         #expect(cs.symbolBlocks.count == 1)
-        #expect(cs.symbolBlocks[0].symbolType == .line)
+        #expect(cs.symbolBlocks[0].getText() == Glyphs.csymMinor + Glyphs.csymMinor)
     }
 
     @Test func chordSymbolSetHorizontal() {
@@ -688,7 +658,7 @@ struct TablatureAndChordSymbolTests {
         _ = cs.addText("C")
         let w1 = cs.getWidth()
         // A vAligned block shouldn't add to width
-        var block = cs.getSymbolBlock(text: "test")
+        let block = cs.getSymbolBlock(text: "test")
         block.vAlign = true
         cs.symbolBlocks.append(block)
         let w2 = cs.getWidth()
@@ -702,48 +672,35 @@ struct TablatureAndChordSymbolTests {
         #expect(cs.getReportWidth() == false)
     }
 
-    @Test func chordSymbolKerning() {
-        let cs = ChordSymbol()
-        #expect(cs.useKerning == true)
-        _ = cs.setEnableKerning(false)
-        #expect(cs.useKerning == false)
-    }
-
     @Test func chordSymbolGlyphs() {
-        #expect(ChordSymbol.glyphs["diminished"] == "csymDiminished")
-        #expect(ChordSymbol.glyphs["+"] == "csymAugmented")
-        #expect(ChordSymbol.glyphs["minor"] == "csymMinor")
-        #expect(ChordSymbol.glyphs["-"] == "csymMinor")
-        #expect(ChordSymbol.glyphs["majorSeventh"] == "csymMajorSeventh")
-        #expect(ChordSymbol.glyphs["("] == "csymParensLeftTall")
-        #expect(ChordSymbol.glyphs[")"] == "csymParensRightTall")
-        #expect(ChordSymbol.glyphs["/"] == "csymDiagonalArrangementSlash")
-        #expect(ChordSymbol.glyphs["#"] == "accidentalSharp")
-        #expect(ChordSymbol.glyphs["b"] == "accidentalFlat")
+        #expect(ChordSymbol.glyphs["diminished"] == Glyphs.csymDiminished)
+        #expect(ChordSymbol.glyphs["+"] == Glyphs.csymAugmented)
+        #expect(ChordSymbol.glyphs["minor"] == Glyphs.csymMinor)
+        #expect(ChordSymbol.glyphs["-"] == Glyphs.csymMinor)
+        #expect(ChordSymbol.glyphs["majorSeventh"] == Glyphs.csymMajorSeventh)
+        // 5.0 uses plain text parentheses
+        #expect(ChordSymbol.glyphs["("] == "(")
+        #expect(ChordSymbol.glyphs[")"] == ")")
+        #expect(ChordSymbol.glyphs["/"] == Glyphs.csymDiagonalArrangementSlash)
+        #expect(ChordSymbol.glyphs["#"] == Glyphs.csymAccidentalSharp)
+        #expect(ChordSymbol.glyphs["b"] == Glyphs.csymAccidentalFlat)
     }
 
     @Test func chordSymbolIsSuperscript() {
-        let block = ChordSymbolBlock(
-            text: "7", symbolType: .text, symbolModifier: .sup,
-            xShift: 0, yShift: 0, vAlign: false, width: 0
-        )
-        #expect(ChordSymbol.isSuperscript(block) == true)
-        #expect(ChordSymbol.isSubscript(block) == false)
+        let block = ChordSymbolBlock("7", symbolModifier: .sup, xShift: 0, yShift: 0, vAlign: false)
+        #expect(block.isSuperscript() == true)
+        #expect(block.isSubscript() == false)
     }
 
     @Test func chordSymbolIsSubscript() {
-        let block = ChordSymbolBlock(
-            text: "5", symbolType: .text, symbolModifier: .sub,
-            xShift: 0, yShift: 0, vAlign: false, width: 0
-        )
-        #expect(ChordSymbol.isSubscript(block) == true)
-        #expect(ChordSymbol.isSuperscript(block) == false)
+        let block = ChordSymbolBlock("5", symbolModifier: .sub, xShift: 0, yShift: 0, vAlign: false)
+        #expect(block.isSubscript() == true)
+        #expect(block.isSuperscript() == false)
     }
 
     @Test func chordSymbolStaticMetrics() {
         #expect(ChordSymbol.superSubRatio > 0)
         #expect(ChordSymbol.superSubRatio < 1)
-        #expect(ChordSymbol.engravingFontResolution > 0)
         #expect(ChordSymbol.spacingBetweenBlocks >= 0)
     }
 
@@ -753,22 +710,6 @@ struct TablatureAndChordSymbolTests {
 
     @Test func chordSymbolSubscriptOffset() {
         #expect(ChordSymbol.subscriptOffset > 0) // Positive = downward
-    }
-
-    @Test func chordSymbolKerningOffset() {
-        #expect(ChordSymbol.kerningOffset < 0)
-    }
-
-    @Test func chordSymbolLowerKerningText() {
-        let lkt = ChordSymbol.lowerKerningText
-        #expect(!lkt.isEmpty)
-        #expect(lkt.contains("D"))
-    }
-
-    @Test func chordSymbolUpperKerningText() {
-        let ukt = ChordSymbol.upperKerningText
-        #expect(!ukt.isEmpty)
-        #expect(ukt.contains("A"))
     }
 
     @Test func chordSymbolMinPadding() {
@@ -819,19 +760,16 @@ struct TablatureAndChordSymbolTests {
 
     @Test func chordSymbolGetSymbolBlock() {
         let cs = ChordSymbol()
-        let block = cs.getSymbolBlock(text: "hello", symbolType: .text)
-        #expect(block.text == "hello")
-        #expect(block.symbolType == .text)
+        let block = cs.getSymbolBlock(text: "hello")
+        #expect(block.getText() == "hello")
         #expect(block.symbolModifier == .none)
-        #expect(block.width > 0)
+        #expect(block.getWidth() > 0)
     }
 
     @Test func chordSymbolGetSymbolBlockGlyph() {
         let cs = ChordSymbol()
-        let block = cs.getSymbolBlock(symbolType: .glyph, glyphName: "diminished")
-        #expect(block.symbolType == .glyph)
-        #expect(block.glyph != nil)
-        #expect(block.glyph?.code == "csymDiminished")
+        let block = cs.getSymbolBlock(text: ChordSymbol.glyphs["diminished"])
+        #expect(block.getText() == Glyphs.csymDiminished)
     }
 
     // ============================================================
@@ -869,7 +807,7 @@ struct TablatureAndChordSymbolTests {
         ))
         _ = gtn.setStave(ts)
         #expect(gtn.getYs().count == 1)
-        #expect(gtn.renderOptions.scale == 0.6)
+        #expect(gtn.renderOptions.yShift == 0.3)
     }
 
     @Test func chordSymbolOnNote() {

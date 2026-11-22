@@ -8,7 +8,7 @@ import Testing
 struct NoteSubGroupBarNoteVibratoParenthesisMMRTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     // MARK: - Helper
@@ -150,39 +150,34 @@ struct NoteSubGroupBarNoteVibratoParenthesisMMRTests {
     @Test func vibratoCreation() {
         let vib = Vibrato()
         #expect(vib.position == .right)
-        #expect(vib.vibratoRenderOptions.harsh == false)
-        #expect(vib.vibratoRenderOptions.vibratoWidth == 20)
+        #expect(vib.renderOptions.code == 0xEAB0)
+        #expect(vib.renderOptions.width == 20)
     }
 
-    @Test func vibratoSetHarsh() {
+    @Test func vibratoSetCode() {
         let vib = Vibrato()
-        _ = vib.setHarsh(true)
-        #expect(vib.vibratoRenderOptions.harsh == true)
+        _ = vib.setVibratoCode(0xEAE2)
+        #expect(vib.renderOptions.code == 0xEAE2)
+        #expect(vib.getText().unicodeScalars.allSatisfy { $0.value == 0xEAE2 })
     }
 
     @Test func vibratoSetWidth() {
         let vib = Vibrato()
         _ = vib.setVibratoWidth(30)
-        #expect(vib.vibratoRenderOptions.vibratoWidth == 30)
-        #expect(vib.getWidth() == 30)
+        #expect(vib.renderOptions.width == 30)
+        #expect(vib.getWidth() > 0)
     }
 
     @Test func vibratoRenderOptionsDefaults() {
         let opts = VibratoRenderOptions()
-        #expect(opts.harsh == false)
-        #expect(opts.vibratoWidth == 20)
-        #expect(opts.waveHeight == 6)
-        #expect(opts.waveWidth == 4)
-        #expect(opts.waveGirth == 2)
+        #expect(opts.code == 0xEAB0)
+        #expect(opts.width == 20)
     }
 
     @Test func vibratoRenderOptionsCustom() {
-        let opts = VibratoRenderOptions(harsh: true, vibratoWidth: 30, waveHeight: 8, waveWidth: 5, waveGirth: 3)
-        #expect(opts.harsh == true)
-        #expect(opts.vibratoWidth == 30)
-        #expect(opts.waveHeight == 8)
-        #expect(opts.waveWidth == 5)
-        #expect(opts.waveGirth == 3)
+        let opts = VibratoRenderOptions(code: 0xEAE2, width: 30)
+        #expect(opts.code == 0xEAE2)
+        #expect(opts.width == 30)
     }
 
     @Test func vibratoStaticFormat() {
@@ -235,14 +230,14 @@ struct NoteSubGroupBarNoteVibratoParenthesisMMRTests {
         let note = makeNote()
         let vb = VibratoBracket(start: note)
         _ = vb.setLine(2)
-        #expect(vb.vibLine == 2)
+        #expect(vb.line == 2)
     }
 
-    @Test func vibratoBracketSetHarsh() {
+    @Test func vibratoBracketSetVibratoCode() {
         let note = makeNote()
         let vb = VibratoBracket(start: note)
-        _ = vb.setHarsh(true)
-        #expect(vb.vibRenderOptions.harsh == true)
+        _ = vb.setVibratoCode(0xEAE2)
+        #expect(vb.vibrato.renderOptions.code == 0xEAE2)
     }
 
     @Test func vibratoBracketValidatingInit() throws {
@@ -262,9 +257,9 @@ struct NoteSubGroupBarNoteVibratoParenthesisMMRTests {
     // ============================================================
 
     @Test func vibratoRenderOptionsInitWithZeroWidth() {
-        let opts = VibratoRenderOptions(vibratoWidth: 0)
-        #expect(opts.vibratoWidth == 0)
-        #expect(opts.harsh == false)
+        let opts = VibratoRenderOptions(width: 0)
+        #expect(opts.width == 0)
+        #expect(opts.code == 0xEAB0)
     }
 
     // ============================================================
@@ -278,29 +273,29 @@ struct NoteSubGroupBarNoteVibratoParenthesisMMRTests {
     @Test func parenthesisLeftCreation() {
         let paren = Parenthesis(position: .left)
         #expect(paren.position == .left)
-        #expect(paren.point > 0)
+        #expect(paren.getText() == Glyphs.noteheadParenthesisLeft)
         #expect(paren.getWidth() > 0)
     }
 
     @Test func parenthesisRightCreation() {
         let paren = Parenthesis(position: .right)
         #expect(paren.position == .right)
-        #expect(paren.point > 0)
+        #expect(paren.getText() == Glyphs.noteheadParenthesisRight)
     }
 
     @Test func parenthesisSetNoteDefault() {
         let paren = Parenthesis(position: .left)
         let note = makeNote()
         _ = paren.setNote(note)
-        #expect(paren.point == Note.getPoint("default"))
+        #expect(paren.getFont() == note.getFont())
     }
 
     @Test func parenthesisSetNoteGrace() {
         let paren = Parenthesis(position: .left)
         let graceNote = GraceNote(GraceNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .eighth))
         _ = paren.setNote(graceNote)
-        // Grace note should get a smaller point
-        #expect(paren.point == Note.getPoint("gracenote"))
+        // 5.0: the parenthesis takes the font of its note
+        #expect(paren.getFont() == graceNote.getFont())
     }
 
     @Test func parenthesisBuildAndAttach() {
@@ -543,9 +538,8 @@ struct NoteSubGroupBarNoteVibratoParenthesisMMRTests {
     @Test func vibratoBracketRenderOptionsLink() {
         let note = makeNote()
         let vb = VibratoBracket(start: note)
-        #expect(vb.vibRenderOptions.vibratoWidth == 0)
-        _ = vb.setHarsh(true)
-        #expect(vb.vibRenderOptions.harsh == true)
+        _ = vb.setVibratoCode(0xEAE2)
+        #expect(vb.vibrato.renderOptions.code == 0xEAE2)
     }
 
     @Test func crescendoIsNote() {

@@ -5,7 +5,7 @@ import Testing
 struct NoteTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     // MARK: - Tables Extensions
@@ -39,7 +39,7 @@ struct NoteTests {
         #expect(try Tables.durationToNumberThrowing("4") == 4.0)
         #expect(try Tables.sanitizeDurationThrowing("q") == "4")
         #expect(Tables.sanitizeDuration("invalid-duration") == "4")
-        #expect(try Tables.clefPropertiesThrowing(.tab) == 0)
+        #expect(try Tables.clefPropertiesThrowing(.tab).lineShift == 0)
 
         do {
             _ = try Tables.integerToNoteThrowing(99)
@@ -50,10 +50,10 @@ struct NoteTests {
     }
 
     @Test func clefPropertiesLookup() {
-        #expect(Tables.clefProperties(.treble) == 0)
-        #expect(Tables.clefProperties(.bass) == 6)
-        #expect(Tables.clefProperties(.alto) == 3)
-        #expect(Tables.clefProperties(.tenor) == 4)
+        #expect(Tables.clefProperties(.treble).lineShift == 0)
+        #expect(Tables.clefProperties(.bass).lineShift == 6)
+        #expect(Tables.clefProperties(.alto).lineShift == 3)
+        #expect(Tables.clefProperties(.tenor).lineShift == 4)
     }
 
     @Test func keyPropertiesBasic() throws {
@@ -61,7 +61,6 @@ struct NoteTests {
         #expect(c4.key == "C")
         #expect(c4.octave == 4)
         #expect(c4.intValue == 48) // 4 * 12 + 0
-        #expect(c4.accidental == nil)
 
         let g5 = try Tables.keyProperties("g/5")
         #expect(g5.key == "G")
@@ -84,7 +83,6 @@ struct NoteTests {
     @Test func keyPropertiesWithAccidental() throws {
         let fSharp = try Tables.keyProperties("f#/4")
         #expect(fSharp.key == "F#")
-        #expect(fSharp.accidental == "#")
         #expect(fSharp.intValue == 54) // 4 * 12 + 6
     }
 
@@ -380,15 +378,14 @@ struct NoteTests {
         #expect(note.getDuration() == "8")
         #expect(note.getTicks().numerator == 2048)
         #expect(note.getGlyphProps().stem == true)
-        #expect(note.getGlyphProps().flag == true)
+        #expect(note.getGlyphProps().codeFlagUp == Glyphs.flag8thUp)
         #expect(note.getGlyphProps().beamCount == 1)
     }
 
     @Test func noteCreationRest() {
         let note = TestNote(NoteStruct(duration: .quarter, type: .rest))
         #expect(note.getNoteType() == "r")
-        #expect(note.getGlyphProps().rest == true)
-        #expect(note.getGlyphProps().codeHead == "restQuarter")
+        #expect(note.getGlyphProps().codeHead == Glyphs.restQuarter)
     }
 
     @Test func noteHasStem() {
@@ -699,14 +696,6 @@ struct NoteTests {
         } catch {
             #expect(error as? StaveNoteError == .invalidModifierIndex(2))
         }
-
-        staveNote.preFormatted = false
-        do {
-            _ = try staveNote.getBoundingBoxThrowing()
-            #expect(Bool(false))
-        } catch {
-            #expect(error as? StaveNoteError == .unformattedNoteForBoundingBox)
-        }
     }
 }
 
@@ -720,5 +709,5 @@ private class TestNote: Note {
 /// Concrete subclass of StemmableNote for testing.
 private class TestStemmableNote: StemmableNote {
     override class var category: String { "TestStemmableNote" }
-    override func hasStem() -> Bool { glyphProps?.stem ?? false }
+    override func hasStem() -> Bool { glyphProps.stem }
 }

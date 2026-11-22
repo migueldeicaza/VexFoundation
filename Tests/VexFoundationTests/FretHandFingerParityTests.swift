@@ -5,7 +5,7 @@ import Testing
 struct FretHandFingerParityTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     private func makeFactory(width: Double = 760, height: Double = 240) -> (Factory, SVGRenderContext) {

@@ -14,9 +14,9 @@ extension UpstreamSVGParityTests {
             }
             let types = [
                 "mordent",
-                "mordent_inverted",
+                "mordentInverted",
                 "turn",
-                "turn_inverted",
+                "turnInverted",
                 "tr",
                 "upprall",
                 "downprall",
@@ -59,9 +59,9 @@ extension UpstreamSVGParityTests {
             ]
             let types = [
                 "mordent",
-                "mordent_inverted",
+                "mordentInverted",
                 "turn",
-                "turn_inverted",
+                "turnInverted",
                 "tr",
                 "upprall",
                 "downprall",
@@ -75,7 +75,7 @@ extension UpstreamSVGParityTests {
             for i in notes.indices {
                 _ = notes[i].addModifier(Ornament(types[i]), index: 0)
             }
-            _ = notes[1].addModifier(Ornament("mordent_inverted"), index: 0)
+            _ = notes[1].addModifier(Ornament("mordentInverted"), index: 0)
 
             try Formatter.FormatAndDraw(ctx: context, stave: stave, notes: notes)
         }
@@ -126,7 +126,7 @@ extension UpstreamSVGParityTests {
                 makeOrnamentNote(factory, key: "e/4", duration: "2r", stemDirection: nil),
             ]
 
-            _ = notes1[1].addModifier(Ornament("turn_inverted").setDelayed(true), index: 0)
+            _ = notes1[1].addModifier(Ornament("turnInverted").setDelayed(true), index: 0)
             _ = notes2[0].addModifier(Ornament("turn").setDelayed(true), index: 0)
 
             let voice1 = Voice(time: VoiceTime(numBeats: 4, beatValue: 4))
@@ -162,9 +162,9 @@ extension UpstreamSVGParityTests {
             ]
 
             _ = notes[0].addModifier(Ornament("mordent"), index: 0)
-            _ = notes[1].addModifier(Ornament("turn_inverted"), index: 0)
+            _ = notes[1].addModifier(Ornament("turnInverted"), index: 0)
             _ = notes[2].addModifier(Ornament("turn"), index: 0)
-            _ = notes[3].addModifier(Ornament("turn_inverted"), index: 0)
+            _ = notes[3].addModifier(Ornament("turnInverted"), index: 0)
 
             _ = notes[0].addModifier(Ornament("turn"), index: 0)
             _ = notes[1].addModifier(Ornament("prallup"), index: 0)
@@ -187,16 +187,16 @@ extension UpstreamSVGParityTests {
             }
 
             _ = notes[0].addModifier(Ornament("mordent").setLowerAccidental("#").setUpperAccidental("#"), index: 0)
-            _ = notes[1].addModifier(Ornament("turn_inverted").setLowerAccidental("b").setUpperAccidental("b"), index: 0)
+            _ = notes[1].addModifier(Ornament("turnInverted").setLowerAccidental("b").setUpperAccidental("b"), index: 0)
             _ = notes[2].addModifier(Ornament("turn").setUpperAccidental("##").setLowerAccidental("##"), index: 0)
-            _ = notes[3].addModifier(Ornament("mordent_inverted").setLowerAccidental("db").setUpperAccidental("db"), index: 0)
-            _ = notes[4].addModifier(Ornament("turn_inverted").setUpperAccidental("++").setLowerAccidental("++"), index: 0)
+            _ = notes[3].addModifier(Ornament("mordentInverted").setLowerAccidental("db").setUpperAccidental("db"), index: 0)
+            _ = notes[4].addModifier(Ornament("turnInverted").setUpperAccidental("++").setLowerAccidental("++"), index: 0)
             _ = notes[5].addModifier(Ornament("tr").setUpperAccidental("n").setLowerAccidental("n"), index: 0)
             _ = notes[6].addModifier(Ornament("prallup").setUpperAccidental("d").setLowerAccidental("d"), index: 0)
             _ = notes[7].addModifier(Ornament("lineprall").setUpperAccidental("db").setLowerAccidental("db"), index: 0)
             _ = notes[8].addModifier(Ornament("upmordent").setUpperAccidental("bbs").setLowerAccidental("bbs"), index: 0)
             _ = notes[9].addModifier(Ornament("prallprall").setUpperAccidental("bb").setLowerAccidental("bb"), index: 0)
-            _ = notes[10].addModifier(Ornament("turn_inverted").setUpperAccidental("+").setLowerAccidental("+"), index: 0)
+            _ = notes[10].addModifier(Ornament("turnInverted").setUpperAccidental("+").setLowerAccidental("+"), index: 0)
 
             try Formatter.FormatAndDraw(ctx: context, stave: stave, notes: notes)
         }
@@ -205,7 +205,7 @@ extension UpstreamSVGParityTests {
     @Test("Ornament.Jazz_Ornaments")
     func ornamentJazzMatchesUpstream() throws {
         try runCategorySVGParityCase(module: "Ornament", test: "Jazz_Ornaments", width: 950, height: 400) { factory, context in
-            let clefWidth = Glyph.getWidth(code: "gClef", point: 38)
+            let clefWidth = VexElement.measureWidth(Glyphs.gClef)
             let xStart = 10.0
             let width = 300.0
             let yStart = 50.0
@@ -421,8 +421,8 @@ extension UpstreamSVGParityTests {
         ]
 
         _ = notes[0].addModifier(Ornament("turn").setDelayed(true), index: 0)
-        _ = notes[1].addModifier(Ornament("turn_inverted").setDelayed(true), index: 0)
-        _ = notes[2].addModifier(Ornament("turn_inverted").setDelayed(true), index: 0)
+        _ = notes[1].addModifier(Ornament("turnInverted").setDelayed(true), index: 0)
+        _ = notes[2].addModifier(Ornament("turnInverted").setDelayed(true), index: 0)
         _ = notes[3].addModifier(Ornament("turn").setDelayed(true), index: 0)
 
         return (stave, notes)

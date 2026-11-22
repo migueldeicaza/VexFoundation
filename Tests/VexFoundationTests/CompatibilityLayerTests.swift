@@ -7,7 +7,7 @@ import Testing
 struct CompatibilityLayerTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     @Test func flowExposesBuildMetadataAndCoreConstants() {
@@ -38,16 +38,21 @@ struct CompatibilityLayerTests {
 
     @Test func flowMusicFontTypedAndStringConvenience() throws {
         try Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
-            let typedFonts = Flow.setMusicFont(.petaluma, .custom)
-            #expect(typedFonts.map(\.name) == ["Petaluma", "Custom"])
-            #expect(Flow.getMusicFont() == ["Petaluma", "Custom"])
+            #expect(Flow.getFonts() == ["Bravura", "Academico"])
 
-            let parsedFonts = try Flow.setMusicFont(parsing: ["Bravura", "Custom"])
-            #expect(parsedFonts.map(\.name) == ["Bravura", "Custom"])
-            #expect(Flow.getMusicFont() == ["Bravura", "Custom"])
+            Flow.setFonts("Petaluma", "Petaluma Script")
+            #expect(Flow.getFonts() == ["Petaluma", "Petaluma Script"])
 
-            let maybeFonts = Flow.setMusicFont(parsingOrNil: ["Gonville", "Custom"])
-            #expect(maybeFonts?.map(\.name) == ["Gonville", "Custom"])
+            let typedFonts = Flow.setMusicFont(.leland)
+            #expect(typedFonts == ["Leland"])
+            #expect(Flow.getFonts() == ["Leland"])
+
+            let parsedFonts = try Flow.setMusicFont(parsing: ["Bravura", "gonville"])
+            #expect(parsedFonts == ["Bravura", "Gonville"])
+            #expect(Flow.getFonts() == ["Bravura", "Gonville"])
+
+            let maybeFonts = Flow.setMusicFont(parsingOrNil: ["Gonville", "Petaluma"])
+            #expect(maybeFonts == ["Gonville", "Petaluma"])
             #expect(Flow.setMusicFont(parsingOrNil: ["UnknownFont"]) == nil)
         }
     }
@@ -93,7 +98,7 @@ struct CompatibilityLayerTests {
         let contextB = Flow.makeRuntimeContext()
 
         let idA1 = Flow.withRuntimeContext(contextA) {
-            _ = Flow.setMusicFont(.petaluma, .custom)
+            Flow.setFonts("Petaluma", "Petaluma Script")
             return VexElement().getAttribute("id")
         }
         let idA2 = Flow.withRuntimeContext(contextA) {
@@ -101,8 +106,7 @@ struct CompatibilityLayerTests {
         }
 
         let idB1 = Flow.withRuntimeContext(contextB) {
-            FontLoader.loadDefaultFonts()
-            #expect(Flow.getMusicFont() == ["Bravura", "Custom"])
+            #expect(Flow.getFonts() == ["Bravura", "Academico"])
             return VexElement().getAttribute("id")
         }
 
@@ -119,7 +123,7 @@ struct CompatibilityLayerTests {
         let regA = Registry()
         Flow.withRuntimeContext(contextA) {
             Registry.enableDefaultRegistry(regA)
-            FontLoader.loadDefaultFonts()
+            Flow.setFonts("Bravura", "Academico")
             Tables.UNISON = false
         }
 

@@ -24,11 +24,11 @@ extension UpstreamSVGParityTests {
 
             _ = Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
             _ = stave.setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
             try voice.draw(context: context)
 
-            if let bb = voice.boundingBox {
-                _ = context.fillRect(bb.x, bb.y, bb.w, bb.h)
+            if let bb = voice.getBoundingBox() {
+                _ = context.rect(bb.getX(), bb.getY(), bb.getW(), bb.getH())
             }
             _ = context.stroke()
         }

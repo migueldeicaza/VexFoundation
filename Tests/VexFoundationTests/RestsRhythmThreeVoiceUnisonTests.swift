@@ -8,7 +8,7 @@ import Testing
 struct RestsRhythmThreeVoiceUnisonTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     private func makeNote(
@@ -275,7 +275,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
 
     @Test func unisonToggleControlsHorizontalShiftForSameLineVoices() throws {
         Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
-            FontLoader.loadDefaultFonts()
+            Flow.setFonts("Bravura", "Academico")
 
             let stave = Stave(x: 10, y: 40, width: 420)
 
@@ -301,7 +301,7 @@ struct RestsRhythmThreeVoiceUnisonTests {
 
     @Test func unisonModeStillShiftsForStyleOrDotDifferences() throws {
         Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
-            FontLoader.loadDefaultFonts()
+            Flow.setFonts("Bravura", "Academico")
             Tables.UNISON = true
 
             let stave = Stave(x: 10, y: 40, width: 420)

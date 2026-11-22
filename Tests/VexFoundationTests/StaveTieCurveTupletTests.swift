@@ -7,7 +7,7 @@ import Testing
 struct StaveTieCurveTupletTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     // MARK: - Helper
@@ -363,11 +363,9 @@ struct StaveTieCurveTupletTests {
     }
 
     @Test func tupletMetrics() throws {
-        let m = Tuplet.metrics
-        #expect(m.noteHeadOffset > 0)
-        #expect(m.stemOffset > 0)
-        #expect(m.bottomLine > 0)
-        #expect(m.topModifierOffset > 0)
+        // 5.0: tuplet offsets come from the Metrics tree.
+        #expect(Metrics.getDouble("Tuplet.yOffset") == 0)
+        #expect(Metrics.getDouble("Tuplet.textYOffset") == 2)
     }
 
     @Test func tupletGetNoteCount() throws {

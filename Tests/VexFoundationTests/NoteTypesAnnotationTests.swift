@@ -7,7 +7,7 @@ import Testing
 struct NoteTypesAnnotationTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     // MARK: - Helper
@@ -51,35 +51,32 @@ struct NoteTypesAnnotationTests {
     // MARK: - GlyphNote
 
     @Test func glyphNoteCreation() {
-        let glyph = Glyph(code: "segno", point: 40)
-        let note = GlyphNote(glyph: glyph, noteStruct: NoteStruct(duration: .quarter))
+        let note = GlyphNote(glyph: Glyphs.segno, noteStruct: NoteStruct(duration: .quarter))
         #expect(GlyphNote.category == "GlyphNote")
-        #expect(note.getGlyphWidth() > 0)
+        #expect(note.getText() == Glyphs.segno)
+        #expect(note.getWidth() > 0)
     }
 
     @Test func glyphNoteOptions() {
-        let glyph = Glyph(code: "coda", point: 40)
         let options = GlyphNoteOptions(ignoreTicks: true, line: 3)
-        let note = GlyphNote(glyph: glyph, noteStruct: NoteStruct(duration: .quarter), options: options)
-        #expect(note.glyphNoteOptions.ignoreTicks == true)
-        #expect(note.glyphNoteOptions.line == 3)
+        let note = GlyphNote(glyph: Glyphs.coda, noteStruct: NoteStruct(duration: .quarter), options: options)
+        #expect(note.options.ignoreTicks == true)
+        #expect(note.options.line == 3)
     }
 
     @Test func glyphNoteSetGlyph() {
-        let glyph1 = Glyph(code: "segno", point: 40)
-        let glyph2 = Glyph(code: "coda", point: 40)
-        let note = GlyphNote(glyph: glyph1, noteStruct: NoteStruct(duration: .quarter))
-        let width1 = note.getGlyphWidth()
-        _ = note.setGlyph(glyph2)
-        let width2 = note.getGlyphWidth()
+        let note = GlyphNote(glyph: Glyphs.segno, noteStruct: NoteStruct(duration: .quarter))
+        let width1 = note.getWidth()
+        _ = note.setGlyph(Glyphs.coda)
+        #expect(note.getText() == Glyphs.coda)
+        let width2 = note.getWidth()
         // Both should have positive width (may or may not differ)
         #expect(width1 > 0)
         #expect(width2 > 0)
     }
 
     @Test func glyphNotePreFormat() {
-        let glyph = Glyph(code: "segno", point: 40)
-        let note = GlyphNote(glyph: glyph, noteStruct: NoteStruct(duration: .quarter))
+        let note = GlyphNote(glyph: Glyphs.segno, noteStruct: NoteStruct(duration: .quarter))
         note.preFormat()
         #expect(note.preFormatted == true)
     }
@@ -115,28 +112,28 @@ struct NoteTypesAnnotationTests {
     @Test func clefNoteCreation() {
         let note = ClefNote(type: .treble)
         #expect(ClefNote.category == "ClefNote")
-        #expect(note.clefDef.code == "gClef")
-        #expect(note.clefSize == .default)
+        #expect(note.getClef().code == Glyphs.gClef)
+        #expect(note.getClef().size == .default)
     }
 
     @Test func clefNoteBass() {
         let note = ClefNote(type: .bass)
-        #expect(note.clefDef.code == "fClef")
+        #expect(note.getClef().code == Glyphs.fClef)
     }
 
     @Test func clefNoteAlto() {
         let note = ClefNote(type: .alto)
-        #expect(note.clefDef.code == "cClef")
+        #expect(note.getClef().code == Glyphs.cClef)
     }
 
     @Test func clefNoteSmallSize() {
         let note = ClefNote(type: .treble, size: .small)
-        #expect(note.clefSize == .small)
+        #expect(note.getClef().size == .small)
     }
 
     @Test func clefNoteWithAnnotation() {
         let note = ClefNote(type: .treble, annotation: .octaveUp)
-        #expect(note.clefAnnotation != nil)
+        #expect(note.getClef().code == Glyphs.gClef8va)
     }
 
     @Test func clefNotePreFormat() {
@@ -150,8 +147,8 @@ struct NoteTypesAnnotationTests {
     @Test func clefNoteSetType() {
         let note = ClefNote(type: .treble)
         _ = note.setType(.bass)
-        #expect(note.clefDef.code == "fClef")
-        #expect(note.clefTypeName == .bass)
+        #expect(note.getClef().code == Glyphs.fClef)
+        #expect(note.getClef().type == .bass)
     }
 
     // MARK: - KeySigNote
@@ -209,7 +206,7 @@ struct NoteTypesAnnotationTests {
 
     @Test func textNoteWithGlyph() {
         let note = TextNote(TextNoteStruct(glyph: "segno"))
-        #expect(note.noteGlyph != nil)
+        #expect(note.getText() == Glyphs.segno)
     }
 
     @Test func textNoteJustification() {
@@ -238,12 +235,12 @@ struct NoteTypesAnnotationTests {
 
     @Test func textNoteSuperscript() {
         let note = TextNote(TextNoteStruct(text: "rit.", superscript: "decresc."))
-        #expect(note.superscriptText == "decresc.")
+        #expect(note.superscript?.getText() == "decresc.")
     }
 
     @Test func textNoteSubscript() {
         let note = TextNote(TextNoteStruct(text: "p", subscriptText: "sub"))
-        #expect(note.subscriptText == "sub")
+        #expect(note.subscript?.getText() == "sub")
     }
 
     @Test func textNoteIgnoreTicks() {
@@ -270,7 +267,8 @@ struct NoteTypesAnnotationTests {
         let types = ["segno", "coda", "f", "p", "tr", "turn", "breath"]
         for type in types {
             let note = TextNote(TextNoteStruct(glyph: type))
-            #expect(note.noteGlyph != nil, "Glyph \(type) should exist")
+            #expect(TextNote.GLYPHS[type] != nil, "Glyph \(type) should exist")
+            #expect(note.getText() == TextNote.GLYPHS[type])
         }
     }
 
@@ -371,23 +369,18 @@ struct NoteTypesAnnotationTests {
         #expect(mc.formatted == true)
     }
 
-    // MARK: - Glyph renderToStave
-
-    @Test func glyphRenderToStaveSetup() {
-        let glyph = Glyph(code: "gClef", point: 40)
-        let stave = Stave(x: 10, y: 40, width: 300)
-        _ = glyph.setStave(stave)
-        #expect(glyph.stave === stave)
-    }
+    // MARK: - Glyph elements (5.0: glyphs are text elements)
 
     @Test func glyphSetYShift() {
-        let glyph = Glyph(code: "gClef", point: 40)
+        let glyph = VexElement()
+        glyph.setText(Glyphs.gClef)
         _ = glyph.setYShift(5)
         #expect(glyph.getYShift() == 5)
     }
 
     @Test func glyphSetXShift() {
-        let glyph = Glyph(code: "gClef", point: 40)
+        let glyph = VexElement()
+        glyph.setText(Glyphs.gClef)
         _ = glyph.setXShift(3)
         #expect(glyph.getXShift() == 3)
     }

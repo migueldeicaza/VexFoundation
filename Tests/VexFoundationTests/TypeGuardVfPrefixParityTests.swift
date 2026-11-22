@@ -7,7 +7,7 @@ import Testing
 struct TypeGuardVfPrefixParityTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     @Test func vfPrefixMatchesVexFlowBehavior() {

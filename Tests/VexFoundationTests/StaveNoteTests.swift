@@ -7,7 +7,7 @@ import Testing
 struct StaveNoteTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     // MARK: - StaveNote Creation
@@ -47,7 +47,7 @@ struct StaveNoteTests {
         let note = StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .b, octave: 4)), duration: .quarter, type: .rest))
         #expect(note.isRest())
         #expect(!note.hasStem() || note.stem?.hide == true)
-        #expect(note.glyphProps.rest)
+        #expect(note.glyphProps.codeHead == Glyphs.restQuarter)
     }
 
     @Test func staveNoteChord() {
@@ -227,7 +227,7 @@ struct StaveNoteTests {
     @Test func dotCreation() {
         let dot = Dot()
         #expect(dot.getWidth() == 5)
-        #expect(dot.radius == 2)
+        #expect(dot.getText() == Glyphs.augmentationDot)
         #expect(dot.position == .right)
     }
 

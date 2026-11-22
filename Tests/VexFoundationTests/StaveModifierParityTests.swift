@@ -5,7 +5,7 @@ import Testing
 struct StaveModifierParityTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     private func makeContext(width: Double = 980, height: Double = 280) -> SVGRenderContext {
@@ -254,12 +254,12 @@ struct StaveModifierParityTests {
             .setRepetitionType(parsing: "to_coda", yShift: 2)
             .setVoltaType(parsing: "begin_end", number: "2.", yShift: -4)
             .setTempo(parsingDuration: "8", bpm: 96, dots: 1, name: "Allegretto", y: -12)
-            .setText("Bridge", parsingPosition: "below", shiftY: 10, parsingJustification: "right")
+            .setStaveText("Bridge", parsingPosition: "below", shiftY: 10, parsingJustification: "right")
 
         let badRepetition = stave.setRepetitionType(parsingOrNil: "not-a-repetition")
         let badVolta = stave.setVoltaType(parsingOrNil: "bad", number: "1.", yShift: 0)
         let badTempo = stave.setTempo(parsingDurationOrNil: "bad-duration", bpm: 80, y: 0)
-        let badText = stave.setText("X", parsingPositionOrNil: "diagonal", parsingJustificationOrNil: "left")
+        let badText = stave.setStaveText("X", parsingPositionOrNil: "diagonal", parsingJustificationOrNil: "left")
         #expect(badRepetition == nil)
         #expect(badVolta == nil)
         #expect(badTempo == nil)
@@ -287,7 +287,7 @@ struct StaveModifierParityTests {
         }
 
         do {
-            _ = try stave.setText("X", parsingPosition: "bad", parsingJustification: "left")
+            _ = try stave.setStaveText("X", parsingPosition: "bad", parsingJustification: "left")
             #expect(Bool(false))
         } catch {
             #expect(error as? StaveError == .invalidModifierPosition("bad"))

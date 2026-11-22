@@ -50,7 +50,7 @@ struct SVGRenderContextTests {
 
     @Test func svgSnapshotSimpleScore() throws {
         try Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
-            FontLoader.loadDefaultFonts()
+            Flow.setFonts("Bravura", "Academico")
 
             let ctx = SVGRenderContext(width: 520, height: 180, options: SVGRenderOptions(precision: 3))
             let factory = Factory(options: FactoryOptions(width: 500, height: 160))

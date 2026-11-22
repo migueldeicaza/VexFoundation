@@ -23,35 +23,35 @@ extension UpstreamSVGParityTests {
 
             let notes: [GlyphNote] = try [
                 factory.GlyphNote(
-                    glyph: Glyph(code: "repeatBarSlash", point: 40),
+                    glyph: Glyphs.repeatBarSlash,
                     noteStruct: NoteStruct(duration: "q")
                 ),
                 factory.GlyphNote(
-                    glyph: Glyph(code: "repeatBarSlash", point: 40),
+                    glyph: Glyphs.repeatBarSlash,
                     noteStruct: NoteStruct(duration: "q")
                 ),
                 factory.GlyphNote(
-                    glyph: Glyph(code: "repeatBarSlash", point: 40),
+                    glyph: Glyphs.repeatBarSlash,
                     noteStruct: NoteStruct(duration: "q")
                 ),
                 factory.GlyphNote(
-                    glyph: Glyph(code: "repeatBarSlash", point: 40),
+                    glyph: Glyphs.repeatBarSlash,
                     noteStruct: NoteStruct(duration: "q")
                 ),
             ]
 
             let chord1 = factory
-                .ChordSymbol(reportWidth: false)
+                .ChordSymbol()
                 .addText("F7")
                 .setHorizontal(.left)
-            _ = glyphNoteAddGlyphOrText(chord1, "(#11b9)", modifier: .sup)
+                .addGlyphOrText("(#11b9)", symbolModifier: .sup)
 
             let chord2 = factory
                 .ChordSymbol()
                 .addText("F7")
                 .setHorizontal(.left)
-            _ = glyphNoteAddGlyphOrText(chord2, "#11", modifier: .sup)
-            _ = glyphNoteAddGlyphOrText(chord2, "b9", modifier: .sub)
+                .addGlyphOrText("#11", symbolModifier: .sup)
+                .addGlyphOrText("b9", symbolModifier: .sub)
 
             _ = notes[0].addModifier(chord1, index: 0)
             _ = notes[2].addModifier(chord2, index: 0)
@@ -140,32 +140,32 @@ extension UpstreamSVGParityTests {
             let voices: [[GlyphNote]] = try [
                 [
                     factory.GlyphNote(
-                        glyph: Glyph(code: "repeat1Bar", point: 40),
+                        glyph: Glyphs.repeat1Bar,
                         noteStruct: NoteStruct(duration: "q"),
                         options: GlyphNoteOptions(line: 4)
                     ),
                 ],
                 [
                     factory.GlyphNote(
-                        glyph: Glyph(code: "repeat2Bars", point: 40),
+                        glyph: Glyphs.repeat2Bars,
                         noteStruct: NoteStruct(duration: "q", alignCenter: true)
                     ),
                 ],
                 [
                     factory.GlyphNote(
-                        glyph: Glyph(code: "repeatBarSlash", point: 40),
+                        glyph: Glyphs.repeatBarSlash,
                         noteStruct: NoteStruct(duration: "16")
                     ),
                     factory.GlyphNote(
-                        glyph: Glyph(code: "repeatBarSlash", point: 40),
+                        glyph: Glyphs.repeatBarSlash,
                         noteStruct: NoteStruct(duration: "16")
                     ),
                     factory.GlyphNote(
-                        glyph: Glyph(code: "repeat4Bars", point: 40),
+                        glyph: Glyphs.repeat4Bars,
                         noteStruct: NoteStruct(duration: "16")
                     ),
                     factory.GlyphNote(
-                        glyph: Glyph(code: "repeatBarSlash", point: 40),
+                        glyph: Glyphs.repeatBarSlash,
                         noteStruct: NoteStruct(duration: "16")
                     ),
                 ],
@@ -179,36 +179,5 @@ extension UpstreamSVGParityTests {
 
             try factory.draw()
         }
-    }
-
-    @discardableResult
-    private func glyphNoteAddGlyphOrText(
-        _ chord: ChordSymbol,
-        _ text: String,
-        modifier: SymbolModifier
-    ) -> ChordSymbol {
-        guard modifier != .none else {
-            _ = chord.addGlyphOrText(text)
-            return chord
-        }
-
-        var buffered = ""
-        for ch in text {
-            let symbol = String(ch)
-            if ChordSymbol.glyphs[symbol] != nil {
-                if !buffered.isEmpty {
-                    _ = chord.addText(buffered, symbolModifier: modifier)
-                    buffered = ""
-                }
-                _ = chord.addSymbolBlock(symbolType: .glyph, symbolModifier: modifier, glyphName: symbol)
-            } else {
-                buffered.append(ch)
-            }
-        }
-
-        if !buffered.isEmpty {
-            _ = chord.addText(buffered, symbolModifier: modifier)
-        }
-        return chord
     }
 }

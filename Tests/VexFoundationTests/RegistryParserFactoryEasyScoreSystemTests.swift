@@ -7,7 +7,7 @@ import Testing
 struct RegistryParserFactoryEasyScoreSystemTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     // ============================================================
@@ -792,7 +792,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         _ = system.addStave(SystemStave(voices: [voice]))
         system.format()
         // format should set the bounding box
-        #expect(system.boundingBox != nil)
+        #expect(system.getBoundingBox() != nil)
     }
 
     @Test func systemDrawBeforeFormatThrows() throws {
@@ -908,7 +908,7 @@ struct RegistryParserFactoryEasyScoreSystemTests {
         let notes = score.notes("C4/q, D4, E4, F4")
         _ = system.addStave(SystemStave(voices: [score.voice(notes)]))
         system.format()
-        #expect(system.boundingBox != nil)
+        #expect(system.getBoundingBox() != nil)
         #expect(system.getStaves().count == 1)
     }
 

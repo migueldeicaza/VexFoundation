@@ -7,7 +7,7 @@ import Testing
 struct AccidentalBeamArticulationTests {
 
     init() {
-        FontLoader.loadDefaultFonts()
+        Flow.setFonts("Bravura", "Academico")
     }
 
     private func makeNote(
@@ -54,25 +54,25 @@ struct AccidentalBeamArticulationTests {
     @Test func accidentalFlat() throws {
         let acc = Accidental(.flat)
         #expect(acc.type == "b")
-        #expect(acc.accidentalData.code == "accidentalFlat")
+        #expect(acc.getText() == Glyphs.accidentalFlat)
     }
 
     @Test func accidentalNatural() throws {
         let acc = Accidental(.natural)
         #expect(acc.type == "n")
-        #expect(acc.accidentalData.code == "accidentalNatural")
+        #expect(acc.getText() == Glyphs.accidentalNatural)
     }
 
     @Test func accidentalDoubleSharp() throws {
         let acc = Accidental(.doubleSharp)
         #expect(acc.type == "##")
-        #expect(acc.accidentalData.code == "accidentalDoubleSharp")
+        #expect(acc.getText() == Glyphs.accidentalDoubleSharp)
     }
 
     @Test func accidentalDoubleFlat() throws {
         let acc = Accidental(.doubleFlat)
         #expect(acc.type == "bb")
-        #expect(acc.accidentalData.code == "accidentalDoubleFlat")
+        #expect(acc.getText() == Glyphs.accidentalDoubleFlat)
     }
 
     @Test func accidentalCautionary() throws {
@@ -594,23 +594,23 @@ struct AccidentalBeamArticulationTests {
 
     @Test func articulationTypes() throws {
         let staccato = Articulation("a.")
-        #expect(staccato.articulationData.betweenLines == true)
+        #expect(staccato.articulation.betweenLines == true)
 
         let accent = Articulation("a>")
-        #expect(accent.articulationData.betweenLines == true)
+        #expect(accent.articulation.betweenLines == true)
 
         let marcato = Articulation("a^")
-        #expect(marcato.articulationData.betweenLines == false)
+        #expect(marcato.articulation.betweenLines == false)
 
         let fermata = Articulation("a@")
-        #expect(fermata.articulationData.betweenLines == false)
+        #expect(fermata.articulation.betweenLines == false)
     }
 
     @Test func articulationBetweenLines() throws {
         let artic = Articulation("a.")
-        #expect(artic.articulationData.betweenLines == true)
+        #expect(artic.articulation.betweenLines == true)
         _ = artic.setBetweenLines(false)
-        #expect(artic.articulationData.betweenLines == false)
+        #expect(artic.articulation.betweenLines == false)
     }
 
     @Test func articulationPositionAboveBelow() throws {
