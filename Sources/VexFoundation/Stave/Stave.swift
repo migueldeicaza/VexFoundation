@@ -725,19 +725,25 @@ open class Stave: VexElement {
                 width = 10
             }
             x += pad
-            // VexFlowPatch: don't overwrite modifier.x when it was already shifted further
-            // (e.g. to align time signatures via formatBegModifiers)
-            let modifierX = modifier.getModifierX()
-            if modifierX > x {
-                x = modifierX
-            } else {
+            if ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_SVG_PARITY"] == "1" {
                 modifier.setModifierX(x)
+            } else {
+                // VexFlowPatch: don't overwrite modifier.x when it was already shifted further
+                // (e.g. to align time signatures via formatBegModifiers)
+                let modifierX = modifier.getModifierX()
+                if modifierX > x {
+                    x = modifierX
+                } else {
+                    modifier.setModifierX(x)
+                }
             }
             x += width
             if pad + width == 0 { offset -= 1 }
         }
-        // VexFlowPatch: don't overwrite start_x if it's already bigger (alignment)
-        if x > startX {
+        if ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_SVG_PARITY"] == "1" {
+            startX = x
+        } else if x > startX {
+            // VexFlowPatch: don't overwrite start_x if it's already bigger (alignment)
             startX = x
         }
 

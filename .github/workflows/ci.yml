@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  parity-and-tests:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkout upstream VexFlow (pinned)
+        run: |
+          git clone https://github.com/vexflow/vexflow ../vexflow
+          cd ../vexflow
+          git checkout a0c4d47a
+
+      - name: Verify parity matrix freshness
+        run: tools/generate_parity_matrix.sh --check
+
+      - name: Run Swift tests
+        run: swift test
