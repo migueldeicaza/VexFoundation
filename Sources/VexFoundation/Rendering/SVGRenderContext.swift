@@ -1,850 +1,659 @@
-// VexFoundation - Deterministic SVG rendering backend.
+// VexFoundation - Ported from VexFlow (https://vexflow.com)
+// Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
+//
+// Port of `src/svgcontext.ts` (VexFlow 5). Instead of a DOM, the context keeps
+// a small element tree and serializes it with `getSVG()`. The serialization
+// follows the browser `XMLSerializer` output of upstream, so SVG files can be
+// compared with the upstream reference images.
 
 import Foundation
-#if canImport(AppKit)
-import AppKit
-#endif
-#if canImport(CoreText)
-import CoreText
-#endif
 
 /// Options controlling SVG serialization.
 public struct SVGRenderOptions: Sendable, Equatable {
+    /// Number of decimal places for coordinates (`Tables.RENDER_PRECISION_PLACES`).
     public var precision: Int
+    /// Prefix the output with an XML declaration.
     public var includeXMLHeader: Bool
+    /// Write the `viewBox` attribute on the root element.
     public var includeViewBox: Bool
 
-    public init(
-        precision: Int = 3,
-        includeXMLHeader: Bool = false,
-        includeViewBox: Bool = true
-    ) {
+    public init(precision: Int = 3, includeXMLHeader: Bool = false, includeViewBox: Bool = true) {
         self.precision = max(0, precision)
         self.includeXMLHeader = includeXMLHeader
         self.includeViewBox = includeViewBox
     }
 }
 
-private struct SVGGraphicsState {
-    var fillStyle: String
-    var strokeStyle: String
-    var backgroundFillStyle: String
-    var lineWidth: Double
-    var lineCap: VexLineCap
-    var lineDash: [Double]
-    var shadowColor: String
-    var shadowBlur: Double
-    var fontInfo: FontInfo
-    var scaleX: Double
-    var scaleY: Double
-}
+/// An SVG attribute value: JavaScript numbers and strings behave differently
+/// for truthiness (`0` is not written, `"0"` is).
+public enum SVGAttributeValue: Equatable, Sendable {
+    case number(Double)
+    case string(String)
 
-private final class SVGGroupNode {
-    let cls: String?
-    let id: String?
-    var children: [String] = []
+    var isTruthy: Bool {
+        switch self {
+        case .number(let n): return n != 0 && !n.isNaN
+        case .string(let s): return !s.isEmpty
+        }
+    }
 
-    init(cls: String?, id: String?) {
-        self.cls = cls
-        self.id = id
+    var stringValue: String {
+        switch self {
+        case .number(let n): return formatJSNumber(n)
+        case .string(let s): return s
+        }
+    }
+
+    /// JavaScript loose equality (`==`) between attribute values.
+    func looselyEquals(_ other: SVGAttributeValue?) -> Bool {
+        guard let other else { return false }
+        switch (self, other) {
+        case let (.number(a), .number(b)): return a == b
+        case let (.string(a), .string(b)): return a == b
+        case let (.number(a), .string(b)), let (.string(b), .number(a)):
+            let trimmed = b.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { return a == 0 }
+            return Double(trimmed) == a
+        }
     }
 }
 
-/// `RenderContext` backend that records drawing operations and serializes deterministic SVG.
-public final class SVGRenderContext: RenderContext {
-#if canImport(AppKit) && canImport(CoreText)
-    private static let registerUpstreamTextFontsOnce: Void = {
-        let bundledURL = Bundle.module.url(forResource: "RobotoSlab-Medium_2.001", withExtension: "otf")
-            ?? Bundle.module.url(forResource: "RobotoSlab-Medium_2.001", withExtension: "otf", subdirectory: "text_fonts")
-        if let bundledURL {
-            var registerError: Unmanaged<CFError>?
-            _ = CTFontManagerRegisterFontsForURL(bundledURL as CFURL, .process, &registerError)
+/// Ordered attribute dictionary (JavaScript object key order).
+public struct SVGAttributes: Sendable, Equatable {
+    public private(set) var keys: [String] = []
+    private var values: [String: SVGAttributeValue] = [:]
+
+    public init() {}
+
+    public init(_ pairs: [(String, SVGAttributeValue)]) {
+        for (k, v) in pairs { self[k] = v }
+    }
+
+    public subscript(key: String) -> SVGAttributeValue? {
+        get { values[key] }
+        set {
+            if let newValue {
+                if values[key] == nil { keys.append(key) }
+                values[key] = newValue
+            } else if values[key] != nil {
+                values.removeValue(forKey: key)
+                keys.removeAll { $0 == key }
+            }
         }
-    }()
-#endif
+    }
 
-    private var canvasWidth: Double
-    private var canvasHeight: Double
+    /// `{...self, ...other}`.
+    public func merging(_ other: SVGAttributes) -> SVGAttributes {
+        var copy = self
+        for k in other.keys { copy[k] = other.values[k] }
+        return copy
+    }
+
+    var pairs: [(String, SVGAttributeValue)] { keys.map { ($0, values[$0]!) } }
+}
+
+/// A node in the SVG element tree.
+public final class SVGNode {
+    public let name: String
+    public private(set) var attributes: [(String, String)] = []
+    public var children: [SVGNode] = []
+    public var textContent: String?
+    public weak var parent: SVGNode?
+
+    init(_ name: String) { self.name = name }
+
+    public func setAttribute(_ name: String, _ value: String) {
+        if let i = attributes.firstIndex(where: { $0.0 == name }) {
+            attributes[i].1 = value
+        } else {
+            attributes.append((name, value))
+        }
+    }
+
+    public func getAttribute(_ name: String) -> String? {
+        attributes.first { $0.0 == name }?.1
+    }
+
+    func append(_ child: SVGNode) {
+        child.parent = self
+        children.append(child)
+    }
+
+    func serialize(into out: inout String, isRoot: Bool = false) {
+        out += "<\(name)"
+        if isRoot { out += " xmlns=\"http://www.w3.org/2000/svg\"" }
+        for (k, v) in attributes {
+            out += " \(k)=\"\(SVGNode.escapeAttribute(v))\""
+        }
+        if children.isEmpty, textContent == nil {
+            out += "/>"
+            return
+        }
+        out += ">"
+        if let textContent { out += SVGNode.escapeText(textContent) }
+        for child in children { child.serialize(into: &out) }
+        out += "</\(name)>"
+    }
+
+    static func escapeAttribute(_ s: String) -> String {
+        var out = ""
+        out.reserveCapacity(s.count)
+        for c in s {
+            switch c {
+            case "&": out += "&amp;"
+            case "\"": out += "&quot;"
+            case "<": out += "&lt;"
+            case ">": out += "&gt;"
+            default: out.append(c)
+            }
+        }
+        return out
+    }
+
+    static func escapeText(_ s: String) -> String {
+        var out = ""
+        for c in s {
+            switch c {
+            case "&": out += "&amp;"
+            case "<": out += "&lt;"
+            case ">": out += "&gt;"
+            default: out.append(c)
+            }
+        }
+        return out
+    }
+}
+
+private let attributesToIgnore: [String: Set<String>] = [
+    "path": ["x", "y", "width", "height", "font-family", "font-weight", "font-style", "font-size"],
+    "rect": ["font-family", "font-weight", "font-style", "font-size"],
+    "text": ["width", "height"],
+]
+
+/// `RenderContext` that builds an SVG document.
+public final class SVGRenderContext: RenderContext {
+    private struct SavedState {
+        var state: SVGAttributes
+        var attributes: SVGAttributes
+    }
+
+    public let svg: SVGNode
+    public private(set) var width: Double = 0
+    public private(set) var height: Double = 0
+    private var path: String = ""
+    private var pen: (x: Double, y: Double) = (.nan, .nan)
+    public private(set) var attributes: SVGAttributes
+    private var state: SVGAttributes
+    private var stateStack: [SavedState] = []
+    private var parentNode: SVGNode
+    private var groups: [SVGNode]
+    private var groupAttributes: [SVGAttributes] = []
+    private let precision: Double
     private let options: SVGRenderOptions
+    public var backgroundFillStyle: String = "white"
+    private var fontCSSString: String = ""
 
-    private var stateStack: [SVGGraphicsState] = []
-
-    private var currentFillStyle: String = "#000000"
-    private var currentStrokeStyle: String = "#000000"
-    private var currentBackgroundFillStyle: String = "transparent"
-    private var currentLineWidth: Double = 1
-    private var currentLineCap: VexLineCap = .butt
-    private var currentLineDash: [Double] = []
-    private var currentShadowColor: String = "transparent"
-    private var currentShadowBlur: Double = 0
-    private var currentFontInfo: FontInfo = FontInfo()
-    private var currentScaleX: Double = 1
-    private var currentScaleY: Double = 1
-
-    private var currentPathCommands: [String] = []
-    private var currentPoint: (x: Double, y: Double)?
-    private var currentSubpathStart: (x: Double, y: Double)?
-
-    private var rootElements: [String] = []
-    private var groupStack: [SVGGroupNode] = []
+    /// Prefix for `class` and `id` attributes (`VexFlow` uses `vf-`).
+    public static var idPrefix = "vf-"
 
     public init(width: Double, height: Double, options: SVGRenderOptions = SVGRenderOptions()) {
-        self.canvasWidth = max(1, width)
-        self.canvasHeight = max(1, height)
         self.options = options
+        self.precision = pow(10, Double(options.precision))
+
+        let svg = SVGNode("svg")
+        svg.setAttribute("pointer-events", "none")
+        self.svg = svg
+        self.parentNode = svg
+        self.groups = [svg]
+
+        let defaultFont: [(String, SVGAttributeValue)] = [
+            ("font-family", .string(Metrics.getString("fontFamily", "Bravura,Academico"))),
+            ("font-size", .string("10pt")),
+            ("font-weight", .string(VexFontWeight.normal.rawValue)),
+            ("font-style", .string(VexFontStyle.normal.rawValue)),
+        ]
+        self.state = SVGAttributes([("scaleX", .number(1)), ("scaleY", .number(1))] + defaultFont)
+        self.attributes = SVGAttributes([
+            ("stroke-width", .number(1)),
+            ("stroke-dasharray", .string("none")),
+            ("fill", .string("black")),
+            ("stroke", .string("black")),
+            ("shadowBlur", .number(0)),
+            ("shadowColor", .string("black")),
+        ] + defaultFont)
+
+        applyAttributes(svg, attributes)
+        groupAttributes.append(attributes)
+        resize(width, height)
     }
 
-    // MARK: - RenderContext: state
+    /// Prefix a class or id with `idPrefix`.
+    static func prefix(_ text: String) -> String { idPrefix + text }
 
-    public func clear() {
-        rootElements.removeAll(keepingCapacity: true)
-        groupStack.removeAll(keepingCapacity: true)
-        currentPathCommands.removeAll(keepingCapacity: true)
-        currentPoint = nil
-        currentSubpathStart = nil
+    private func round(_ n: Double) -> Double {
+        (n * precision + 0.5).rounded(.down) / precision
     }
+
+    private func num(_ n: Double) -> String { formatJSNumber(n) }
+
+    // MARK: - Groups
 
     @discardableResult
-    public func save() -> Self {
-        stateStack.append(SVGGraphicsState(
-            fillStyle: currentFillStyle,
-            strokeStyle: currentStrokeStyle,
-            backgroundFillStyle: currentBackgroundFillStyle,
-            lineWidth: currentLineWidth,
-            lineCap: currentLineCap,
-            lineDash: currentLineDash,
-            shadowColor: currentShadowColor,
-            shadowBlur: currentShadowBlur,
-            fontInfo: currentFontInfo,
-            scaleX: currentScaleX,
-            scaleY: currentScaleY
-        ))
-        return self
+    public func openGroup(_ cls: String? = nil, _ id: String? = nil) -> Any? {
+        let group = SVGNode("g")
+        groups.append(group)
+        parentNode.append(group)
+        parentNode = group
+        if let cls, !cls.isEmpty { group.setAttribute("class", Self.prefix(cls)) }
+        if let id, !id.isEmpty { group.setAttribute("id", Self.prefix(id)) }
+        applyAttributes(group, attributes)
+        groupAttributes.append(groupAttributes[groupAttributes.count - 1].merging(attributes))
+        return group
     }
 
-    @discardableResult
-    public func restore() -> Self {
-        guard let state = stateStack.popLast() else { return self }
-        currentFillStyle = state.fillStyle
-        currentStrokeStyle = state.strokeStyle
-        currentBackgroundFillStyle = state.backgroundFillStyle
-        currentLineWidth = state.lineWidth
-        currentLineCap = state.lineCap
-        currentLineDash = state.lineDash
-        currentShadowColor = state.shadowColor
-        currentShadowBlur = state.shadowBlur
-        currentFontInfo = state.fontInfo
-        currentScaleX = state.scaleX
-        currentScaleY = state.scaleY
-        return self
+    public func closeGroup() {
+        guard groups.count > 1 else { return }
+        groups.removeLast()
+        groupAttributes.removeLast()
+        parentNode = groups[groups.count - 1]
     }
 
-    // MARK: - RenderContext: styles
+    public func openRotation(_ angleDegrees: Double, _ x: Double, _ y: Double) {
+        let group = openGroup(nil, nil) as! SVGNode
+        group.setAttribute("transform", "translate(\(num(x)),\(num(y))) rotate(\(num(angleDegrees))) translate(-\(num(x)),-\(num(y)))")
+    }
+
+    public func closeRotation() {
+        closeGroup()
+    }
+
+    public func add(_ child: Any) {
+        if let node = child as? SVGNode { parentNode.append(node) }
+    }
+
+    // MARK: - Style
 
     @discardableResult
     public func setFillStyle(_ style: String) -> Self {
-        currentFillStyle = style
+        attributes["fill"] = .string(style)
         return self
     }
 
     @discardableResult
     public func setBackgroundFillStyle(_ style: String) -> Self {
-        currentBackgroundFillStyle = style
+        backgroundFillStyle = style
         return self
     }
 
     @discardableResult
     public func setStrokeStyle(_ style: String) -> Self {
-        currentStrokeStyle = style
+        attributes["stroke"] = .string(style)
         return self
     }
 
     @discardableResult
     public func setShadowColor(_ color: String) -> Self {
-        currentShadowColor = color
+        attributes["shadowColor"] = .string(color)
         return self
     }
 
     @discardableResult
     public func setShadowBlur(_ blur: Double) -> Self {
-        currentShadowBlur = blur
+        attributes["shadowBlur"] = .number(blur)
         return self
     }
 
     @discardableResult
     public func setLineWidth(_ width: Double) -> Self {
-        currentLineWidth = max(0, width)
-        return self
-    }
-
-    @discardableResult
-    public func setLineCap(_ capType: VexLineCap) -> Self {
-        currentLineCap = capType
+        attributes["stroke-width"] = .number(width)
         return self
     }
 
     @discardableResult
     public func setLineDash(_ dashPattern: [Double]) -> Self {
-        currentLineDash = dashPattern
+        attributes["stroke-dasharray"] = .string(dashPattern.map(formatJSNumber).joined(separator: ","))
+        return self
+    }
+
+    @discardableResult
+    public func setLineCap(_ capType: VexLineCap) -> Self {
+        attributes["stroke-linecap"] = .string(capType.rawValue)
         return self
     }
 
     public var fillStyle: String {
-        get { currentFillStyle }
-        set { _ = setFillStyle(newValue) }
+        get { attributes["fill"]?.stringValue ?? "" }
+        set { setFillStyle(newValue) }
     }
 
     public var strokeStyle: String {
-        get { currentStrokeStyle }
-        set { _ = setStrokeStyle(newValue) }
+        get { attributes["stroke"]?.stringValue ?? "" }
+        set { setStrokeStyle(newValue) }
     }
 
-    // MARK: - RenderContext: transform
-
-    @discardableResult
-    public func scale(_ x: Double, _ y: Double) -> Self {
-        currentScaleX *= x
-        currentScaleY *= y
-        return self
-    }
+    // MARK: - Size
 
     @discardableResult
     public func resize(_ width: Double, _ height: Double) -> Self {
-        canvasWidth = max(1, width)
-        canvasHeight = max(1, height)
+        self.width = width
+        self.height = height
+        applyAttributes(svg, SVGAttributes([("width", .number(width)), ("height", .number(height))]))
+        let sx = Metrics.number(stateNumber("scaleX")) ?? 1
+        let sy = Metrics.number(stateNumber("scaleY")) ?? 1
+        state["scaleX"] = .number(1)
+        state["scaleY"] = .number(1)
+        scale(sx, sy)
         return self
     }
 
-    // MARK: - RenderContext: paths
-
-    @discardableResult
-    public func beginPath() -> Self {
-        currentPathCommands.removeAll(keepingCapacity: true)
-        currentPoint = nil
-        currentSubpathStart = nil
-        return self
+    private func stateNumber(_ key: String) -> Double? {
+        if case .number(let n)? = state[key] { return n }
+        return nil
     }
 
     @discardableResult
-    public func moveTo(_ x: Double, _ y: Double) -> Self {
-        let p = scaled(x, y)
-        currentPathCommands.append("M \(fmt(p.x)) \(fmt(p.y))")
-        currentPoint = p
-        currentSubpathStart = p
+    public func scale(_ x: Double, _ y: Double) -> Self {
+        let sx = (stateNumber("scaleX").flatMap { $0 == 0 ? nil : $0 } ?? 1) * x
+        let sy = (stateNumber("scaleY").flatMap { $0 == 0 ? nil : $0 } ?? 1) * y
+        state["scaleX"] = .number(sx)
+        state["scaleY"] = .number(sy)
+        setViewBox(0, 0, width / sx, height / sy)
         return self
     }
 
-    @discardableResult
-    public func lineTo(_ x: Double, _ y: Double) -> Self {
-        let p = scaled(x, y)
-        if currentPoint == nil {
-            currentPathCommands.append("M \(fmt(p.x)) \(fmt(p.y))")
-            currentSubpathStart = p
-        } else {
-            currentPathCommands.append("L \(fmt(p.x)) \(fmt(p.y))")
+    public func setViewBox(_ minX: Double, _ minY: Double, _ width: Double, _ height: Double) {
+        guard options.includeViewBox else { return }
+        svg.setAttribute("viewBox", "\(num(minX)) \(num(minY)) \(num(width)) \(num(height))")
+    }
+
+    // MARK: - Attributes
+
+    private func applyAttributes(_ element: SVGNode, _ attributes: SVGAttributes) {
+        let ignore = attributesToIgnore[element.name]
+        let inherited = groupAttributes.last
+        for (name, value) in attributes.pairs {
+            if ignore?.contains(name) == true { continue }
+            if Self.isUnsafeAttributeName(name) { continue }
+            guard value.isTruthy else { continue }
+            if let inherited, value.looselyEquals(inherited[name]) { continue }
+            element.setAttribute(name, value.stringValue)
         }
-        currentPoint = p
-        return self
     }
 
-    @discardableResult
-    public func bezierCurveTo(
-        _ cp1x: Double, _ cp1y: Double,
-        _ cp2x: Double, _ cp2y: Double,
-        _ x: Double, _ y: Double
-    ) -> Self {
-        let cp1 = scaled(cp1x, cp1y)
-        let cp2 = scaled(cp2x, cp2y)
-        let p = scaled(x, y)
-        if currentPoint == nil {
-            currentPathCommands.append("M \(fmt(p.x)) \(fmt(p.y))")
-            currentSubpathStart = p
-        } else {
-            currentPathCommands.append(
-                "C \(fmt(cp1.x)) \(fmt(cp1.y)) \(fmt(cp2.x)) \(fmt(cp2.y)) \(fmt(p.x)) \(fmt(p.y))"
-            )
-        }
-        currentPoint = p
-        return self
+    /// Reject attribute names that could run script or load resources.
+    static func isUnsafeAttributeName(_ name: String) -> Bool {
+        let lower = name.lowercased()
+        return lower.hasPrefix("on") || lower == "href" || lower.hasSuffix(":href")
     }
 
-    @discardableResult
-    public func quadraticCurveTo(
-        _ cpx: Double, _ cpy: Double,
-        _ x: Double, _ y: Double
-    ) -> Self {
-        let cp = scaled(cpx, cpy)
-        let p = scaled(x, y)
-        if currentPoint == nil {
-            currentPathCommands.append("M \(fmt(p.x)) \(fmt(p.y))")
-            currentSubpathStart = p
-        } else {
-            currentPathCommands.append("Q \(fmt(cp.x)) \(fmt(cp.y)) \(fmt(p.x)) \(fmt(p.y))")
-        }
-        currentPoint = p
-        return self
+    public func clear() {
+        svg.children.removeAll()
     }
 
-    @discardableResult
-    public func arc(
-        _ x: Double, _ y: Double,
-        _ radius: Double,
-        _ startAngle: Double, _ endAngle: Double,
-        _ counterclockwise: Bool
-    ) -> Self {
-        let cx = x
-        let cy = y
-        let rx = abs(radius)
-        let ry = abs(radius)
-        guard rx > 0, ry > 0 else { return self }
-
-        let delta = normalizedArcDelta(startAngle: startAngle, endAngle: endAngle, counterclockwise: counterclockwise)
-        if abs(delta) < 1e-10 { return self }
-
-        let startPoint = (
-            x: cx + rx * cos(startAngle),
-            y: cy + ry * sin(startAngle)
-        )
-        let endPoint = (
-            x: cx + rx * cos(startAngle + delta),
-            y: cy + ry * sin(startAngle + delta)
-        )
-
-        if let cp = currentPoint {
-            if hypot(cp.x - startPoint.x, cp.y - startPoint.y) > 1e-7 {
-                currentPathCommands.append("L \(fmt(startPoint.x)) \(fmt(startPoint.y))")
-            }
-        } else {
-            currentPathCommands.append("M \(fmt(startPoint.x)) \(fmt(startPoint.y))")
-            currentSubpathStart = startPoint
-        }
-
-        let sweepFlag = counterclockwise ? 0 : 1
-
-        if abs(delta) >= (2 * .pi - 1e-9) {
-            // Full-circle path as two half arcs.
-            let midAngle = startAngle + delta / 2
-            let midPoint = (
-                x: cx + rx * cos(midAngle),
-                y: cy + ry * sin(midAngle)
-            )
-            // Match VexFlow's SVGContext behavior for full circles.
-            let fullCircleSweepFlag = 0
-            currentPathCommands.append(
-                "A \(fmt(rx)) \(fmt(ry)) 0 0 \(fullCircleSweepFlag) \(fmt(midPoint.x)) \(fmt(midPoint.y))"
-            )
-            currentPathCommands.append(
-                "A \(fmt(rx)) \(fmt(ry)) 0 0 \(fullCircleSweepFlag) \(fmt(endPoint.x)) \(fmt(endPoint.y))"
-            )
-        } else {
-            let largeArcFlag = abs(delta) > .pi ? 1 : 0
-            currentPathCommands.append(
-                "A \(fmt(rx)) \(fmt(ry)) 0 \(largeArcFlag) \(sweepFlag) \(fmt(endPoint.x)) \(fmt(endPoint.y))"
-            )
-        }
-
-        currentPoint = endPoint
-        return self
-    }
-
-    @discardableResult
-    public func closePath() -> Self {
-        currentPathCommands.append("Z")
-        currentPoint = currentSubpathStart
-        return self
-    }
-
-    @discardableResult
-    public func fill() -> Self {
-        let d = currentPathData() ?? ""
-        appendElement(pathElement(
-            d: d,
-            fill: currentFillStyle,
-            stroke: nil,
-            includeStrokeAttrs: false
-        ))
-        return self
-    }
-
-    @discardableResult
-    public func stroke() -> Self {
-        let d = currentPathData() ?? ""
-        appendElement(pathElement(
-            d: d,
-            fill: "none",
-            stroke: currentStrokeStyle,
-            includeStrokeAttrs: true
-        ))
-        return self
-    }
-
-    // MARK: - RenderContext: rectangles
+    // MARK: - Rectangles
 
     @discardableResult
     public func rect(_ x: Double, _ y: Double, _ width: Double, _ height: Double) -> Self {
-        let r = scaledRect(x, y, width, height)
-        var attrs = "x=\"\(fmt(r.x))\" y=\"\(fmt(r.y))\" width=\"\(fmt(r.width))\" height=\"\(fmt(r.height))\""
-        attrs += " fill=\"none\""
-        attrs += " stroke=\"\(escape(currentStrokeStyle))\""
-        attrs += " stroke-width=\"\(fmt(currentLineWidth))\""
-        if !currentLineDash.isEmpty {
-            attrs += " stroke-dasharray=\"\(currentLineDash.map(fmt).joined(separator: ","))\""
+        rect(x, y, width, height, attributes: nil)
+    }
+
+    @discardableResult
+    public func rect(_ x: Double, _ y: Double, _ width: Double, _ height: Double, attributes extra: SVGAttributes?) -> Self {
+        var y = y, height = height
+        if height < 0 {
+            y += height
+            height *= -1
         }
-        appendElement("<rect \(attrs) />")
-        currentPoint = (x: r.x, y: r.y)
-        currentSubpathStart = (x: r.x, y: r.y)
+        let rectangle = SVGNode("rect")
+        let attrs = extra ?? SVGAttributes([
+            ("fill", .string("none")),
+            ("stroke-width", self.attributes["stroke-width"] ?? .number(1)),
+            ("stroke", .string("black")),
+        ])
+        let geometry = SVGAttributes([
+            ("x", .number(round(x))),
+            ("y", .number(round(y))),
+            ("width", .number(round(width))),
+            ("height", .number(round(height))),
+        ])
+        applyAttributes(rectangle, geometry.merging(attrs))
+        add(rectangle)
         return self
     }
 
     @discardableResult
     public func fillRect(_ x: Double, _ y: Double, _ width: Double, _ height: Double) -> Self {
-        let r = scaledRect(x, y, width, height)
-        appendElement(
-            "<rect x=\"\(fmt(r.x))\" y=\"\(fmt(r.y))\" width=\"\(fmt(r.width))\" height=\"\(fmt(r.height))\" fill=\"\(escape(currentFillStyle))\" />"
-        )
-        return self
+        rect(x, y, width, height, attributes: SVGAttributes([
+            ("fill", attributes["fill"] ?? .string("black")),
+            ("stroke", .string("none")),
+        ]))
+    }
+
+    @discardableResult
+    public func pointerRect(_ x: Double, _ y: Double, _ width: Double, _ height: Double) -> Self {
+        rect(x, y, width, height, attributes: SVGAttributes([
+            ("opacity", .string("0")),
+            ("pointer-events", .string("auto")),
+        ]))
     }
 
     @discardableResult
     public func clearRect(_ x: Double, _ y: Double, _ width: Double, _ height: Double) -> Self {
-        let r = scaledRect(x, y, width, height)
-        appendElement(
-            "<rect x=\"\(fmt(r.x))\" y=\"\(fmt(r.y))\" width=\"\(fmt(r.width))\" height=\"\(fmt(r.height))\" fill=\"white\" />"
-        )
+        rect(x, y, width, height, attributes: SVGAttributes([
+            ("fill", .string(backgroundFillStyle)),
+            ("stroke", .string("none")),
+        ]))
+    }
+
+    // MARK: - Paths
+
+    @discardableResult
+    public func beginPath() -> Self {
+        path = ""
+        pen = (.nan, .nan)
         return self
     }
 
-    // MARK: - RenderContext: text
+    @discardableResult
+    public func moveTo(_ x: Double, _ y: Double) -> Self {
+        let x = round(x), y = round(y)
+        path += "M\(num(x)) \(num(y))"
+        pen = (x, y)
+        return self
+    }
+
+    @discardableResult
+    public func lineTo(_ x: Double, _ y: Double) -> Self {
+        let x = round(x), y = round(y)
+        path += "L\(num(x)) \(num(y))"
+        pen = (x, y)
+        return self
+    }
+
+    @discardableResult
+    public func bezierCurveTo(_ cp1x: Double, _ cp1y: Double, _ cp2x: Double, _ cp2y: Double, _ x: Double, _ y: Double) -> Self {
+        let x = round(x), y = round(y)
+        path += "C\(num(round(cp1x))) \(num(round(cp1y))),\(num(round(cp2x))) \(num(round(cp2y))),\(num(x)) \(num(y))"
+        pen = (x, y)
+        return self
+    }
+
+    @discardableResult
+    public func quadraticCurveTo(_ cpx: Double, _ cpy: Double, _ x: Double, _ y: Double) -> Self {
+        let x = round(x), y = round(y)
+        path += "Q\(num(round(cpx))) \(num(round(cpy))),\(num(x)) \(num(y))"
+        pen = (x, y)
+        return self
+    }
+
+    @discardableResult
+    public func arc(_ x: Double, _ y: Double, _ radius: Double, _ startAngle: Double, _ endAngle: Double, _ counterclockwise: Bool) -> Self {
+        let twoPi = 2 * Double.pi
+        let x0 = round(x + radius * cos(startAngle))
+        let y0 = round(y + radius * sin(startAngle))
+
+        let tmpStartTest = normalizeAngle(startAngle)
+        let tmpEndTest = normalizeAngle(endAngle)
+        if (!counterclockwise && endAngle - startAngle >= twoPi)
+            || (counterclockwise && startAngle - endAngle >= twoPi)
+            || tmpStartTest == tmpEndTest {
+            let x1 = round(x + radius * cos(startAngle + .pi))
+            let y1 = round(y + radius * sin(startAngle + .pi))
+            let r = round(radius)
+            path += "M\(num(x0)) \(num(y0)) A\(num(r)) \(num(r)) 0 0 0 \(num(x1)) \(num(y1)) "
+            path += "A\(num(r)) \(num(r)) 0 0 0 \(num(x0)) \(num(y0))"
+            pen = (x0, y0)
+        } else {
+            let x1 = round(x + radius * cos(endAngle))
+            let y1 = round(y + radius * sin(endAngle))
+            let s = tmpStartTest, e = tmpEndTest
+            var large: Bool = abs(e - s) < .pi ? counterclockwise : !counterclockwise
+            if s > e { large = !large }
+            let sweep = !counterclockwise
+            let r = round(radius)
+            path += "M\(num(x0)) \(num(y0)) A\(num(r)) \(num(r)) 0 \(large ? 1 : 0) \(sweep ? 1 : 0) \(num(x1)) \(num(y1))"
+            pen = (x1, y1)
+        }
+        return self
+    }
+
+    @discardableResult
+    public func closePath() -> Self {
+        path += "Z"
+        return self
+    }
+
+    private func shadowStyle() -> String {
+        let blur: Double
+        if case .number(let b)? = attributes["shadowBlur"] { blur = b } else { blur = 0 }
+        return "filter: drop-shadow(0 0 \(num(blur / 1.5))px \(attributes["shadowColor"]?.stringValue ?? "black"))"
+    }
+
+    private var hasShadow: Bool {
+        if case .number(let b)? = attributes["shadowBlur"] { return b > 0 }
+        return false
+    }
+
+    @discardableResult
+    public func fill() -> Self {
+        var attrs = attributes
+        attrs["stroke"] = .string("none")
+        return fill(attributes: attrs)
+    }
+
+    /// Fill the current path with explicit attributes.
+    @discardableResult
+    public func fill(attributes attrs: SVGAttributes) -> Self {
+        let node = SVGNode("path")
+        var attrs = attrs
+        attrs["d"] = .string(path)
+        if hasShadow { attrs["style"] = .string(shadowStyle()) }
+        applyAttributes(node, attrs)
+        if hasShadow { node.setAttribute("style", shadowStyle()) }
+        add(node)
+        return self
+    }
+
+    @discardableResult
+    public func stroke() -> Self {
+        let node = SVGNode("path")
+        var attrs = attributes
+        attrs["fill"] = .string("none")
+        attrs["d"] = .string(path)
+        applyAttributes(node, attrs)
+        if hasShadow { node.setAttribute("style", shadowStyle()) }
+        add(node)
+        return self
+    }
+
+    // MARK: - Text
+
+    public func measureText(_ text: String) -> TextMeasure {
+        let info = VexFont.validate(
+            family: attributes["font-family"]?.stringValue,
+            size: attributes["font-size"]?.stringValue,
+            weight: attributes["font-weight"]?.stringValue,
+            style: attributes["font-style"]?.stringValue
+        )
+        let m = TextMeasurer.measure(text, fontInfo: info)
+        return TextMeasure(
+            x: 0,
+            y: -m.actualBoundingBoxAscent,
+            width: m.width,
+            height: m.actualBoundingBoxAscent + m.actualBoundingBoxDescent
+        )
+    }
 
     @discardableResult
     public func fillText(_ text: String, _ x: Double, _ y: Double) -> Self {
-        let p = scaled(x, y)
-        let family = escape(currentFontInfo.family)
-        let size = escape(currentFontInfo.size)
-        var attrs: [String] = [
-            "stroke=\"none\"",
-            "font-family=\"\(family)\"",
-            "font-size=\"\(size)\"",
-            "x=\"\(fmt(p.x))\"",
-            "y=\"\(fmt(p.y))\"",
-        ]
-        if currentFontInfo.weight.lowercased() != VexFontWeight.normal.rawValue {
-            attrs.append("font-weight=\"\(escape(currentFontInfo.weight))\"")
-        }
-        if currentFontInfo.style.lowercased() != VexFontStyle.normal.rawValue {
-            attrs.append("font-style=\"\(escape(currentFontInfo.style))\"")
-        }
-        appendElement("<text \(attrs.joined(separator: " "))>\(escape(text))</text>")
+        guard !text.isEmpty else { return self }
+        var attrs = attributes
+        attrs["stroke"] = .string("none")
+        attrs["x"] = .number(round(x))
+        attrs["y"] = .number(round(y))
+        let node = SVGNode("text")
+        node.textContent = text
+        applyAttributes(node, attrs)
+        add(node)
         return self
     }
 
-    public func measureText(_ text: String) -> TextMeasure {
-#if canImport(AppKit)
-        if text.isEmpty {
-            return TextMeasure(x: 0, y: 0, width: 0, height: 0)
-        }
+    // MARK: - State
 
-        let family = primaryFontFamily(from: currentFontInfo.family).replacingOccurrences(of: "\"", with: "")
-        let isParityMode = VexRuntime.getCurrentContext().upstreamParityMode
-        if isParityMode {
-            Self.ensureUpstreamTextFontsRegistered(forFamily: family)
-        }
-        let pxSize = CGFloat(max(VexFont.convertSizeToPixelValue(currentFontInfo.size), 1))
-
-        var font = NSFont(name: family, size: pxSize) ?? NSFont.systemFont(ofSize: pxSize)
-        if VexFont.isBold(currentFontInfo.weight) || VexFont.isItalic(currentFontInfo.style) {
-            var traits = NSFontTraitMask()
-            if VexFont.isBold(currentFontInfo.weight) {
-                traits.insert(.boldFontMask)
-            }
-            if VexFont.isItalic(currentFontInfo.style) {
-                traits.insert(.italicFontMask)
-            }
-            font = NSFontManager.shared.convert(font, toHaveTrait: traits)
-        }
-
-        if isParityMode, let chromiumLike = chromiumParityMeasureText(text, font: font) {
-            return chromiumLike
-        }
-
-        let width = Double((text as NSString).size(withAttributes: [.font: font]).width)
-        let ascent = Double(font.ascender)
-        let descent = Double(abs(font.descender))
-        let height = max(ascent + descent, 1)
-        return TextMeasure(x: 0, y: -ascent, width: width, height: height)
-#elseif canImport(CoreText)
-        let family = primaryFontFamily(from: currentFontInfo.family).replacingOccurrences(of: "\"", with: "")
-        let pxSize = max(VexFont.convertSizeToPixelValue(currentFontInfo.size), 1)
-
-        var traits = CTFontSymbolicTraits()
-        if VexFont.isBold(currentFontInfo.weight) {
-            traits.insert(.traitBold)
-        }
-        if VexFont.isItalic(currentFontInfo.style) {
-            traits.insert(.traitItalic)
-        }
-
-        var descriptorAttributes: [CFString: Any] = [
-            kCTFontFamilyNameAttribute: family,
-            kCTFontSizeAttribute: pxSize,
-        ]
-        if !traits.isEmpty {
-            descriptorAttributes[kCTFontTraitsAttribute] = [kCTFontSymbolicTrait: traits.rawValue]
-        }
-
-        let descriptor = CTFontDescriptorCreateWithAttributes(descriptorAttributes as CFDictionary)
-        let font = CTFontCreateWithFontDescriptor(descriptor, pxSize, nil)
-        let attributed = NSAttributedString(
-            string: text,
-            attributes: [kCTFontAttributeName as NSAttributedString.Key: font]
-        )
-        let line = CTLineCreateWithAttributedString(attributed)
-
-        var ascent: CGFloat = 0
-        var descent: CGFloat = 0
-        var leading: CGFloat = 0
-        let width = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
-        let height = max(Double(ascent + descent + leading), 1)
-        return TextMeasure(x: 0, y: -Double(ascent), width: Double(width), height: height)
-#else
-        let px = max(VexFont.convertSizeToPixelValue(currentFontInfo.size), 1)
-        let width = Double(text.count) * 0.6 * px
-        let yMin = -px * 0.8
-        return TextMeasure(x: 0, y: yMin, width: width, height: px)
-#endif
+    @discardableResult
+    public func save() -> Self {
+        stateStack.append(SavedState(state: state, attributes: attributes))
+        return self
     }
 
     @discardableResult
-    public func setFont(
-        _ family: String?,
-        _ size: Double?,
-        _ weight: String?,
-        _ style: String?
-    ) -> Self {
-        currentFontInfo = VexFont.validate(
+    public func restore() -> Self {
+        if let saved = stateStack.popLast() {
+            state = saved.state
+            attributes = saved.attributes
+        }
+        return self
+    }
+
+    // MARK: - Font
+
+    @discardableResult
+    public func setFont(_ family: String?, _ size: Double?, _ weight: String?, _ style: String?) -> Self {
+        setFont(VexFont.validate(
             family: family,
-            size: size != nil ? "\(size!)pt" : nil,
+            size: size.map { "\(formatJSNumber($0))pt" },
             weight: weight,
             style: style
-        )
-        return self
+        ))
     }
 
     @discardableResult
     public func setFont(_ fontInfo: FontInfo) -> Self {
-        currentFontInfo = VexFont.validate(fontInfo: fontInfo)
+        let info = VexFont.validate(fontInfo: fontInfo)
+        fontCSSString = VexFont.toCSSString(info)
+        let fontAttributes: [(String, SVGAttributeValue)] = [
+            ("font-family", .string(info.family)),
+            ("font-size", .string(info.size)),
+            ("font-weight", .string(info.weight)),
+            ("font-style", .string(info.style)),
+        ]
+        for (k, v) in fontAttributes {
+            attributes[k] = v
+            state[k] = v
+        }
         return self
     }
 
     public func getFont() -> String {
-        VexFont.toCSSString(currentFontInfo)
+        fontCSSString
     }
 
-    // MARK: - RenderContext: grouping
+    // MARK: - Output
 
-    public func openGroup(_ cls: String?, _ id: String?) -> Any? {
-        let group = SVGGroupNode(cls: cls, id: id)
-        groupStack.append(group)
-        return groupStack.count - 1
-    }
-
-    public func closeGroup() {
-        guard let group = groupStack.popLast() else { return }
-        appendElement(groupElement(group))
-    }
-
-    public func add(_ child: Any) {
-        if let child = child as? String {
-            appendElement(child)
-        }
-    }
-
-    // MARK: - SVG output
-
+    /// Serialize the document.
     public func getSVG() -> String {
-        while !groupStack.isEmpty {
-            closeGroup()
-        }
-
-        let width = fmt(canvasWidth)
-        let height = fmt(canvasHeight)
-        var header = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"\(width)\" height=\"\(height)\""
-        if options.includeViewBox {
-            let visibleWidth = fmt(effectiveVisibleWidth())
-            let visibleHeight = fmt(effectiveVisibleHeight())
-            header += " viewBox=\"0 0 \(visibleWidth) \(visibleHeight)\""
-        }
-        header += ">"
-
-        let body = rootElements.joined(separator: "\n")
-        let footer = "</svg>"
-
-        var output = "\(header)\n\(body)\n\(footer)"
-        if options.includeXMLHeader {
-            output = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + output
-        }
-        return output + "\n"
-    }
-
-    // MARK: - Private helpers
-
-    private func scaled(_ x: Double, _ y: Double) -> (x: Double, y: Double) {
-        (x, y)
-    }
-
-    private func scaledRect(_ x: Double, _ y: Double, _ width: Double, _ height: Double) -> (x: Double, y: Double, width: Double, height: Double) {
-        var originX = x
-        var originY = y
-        var resolvedWidth = width
-        var resolvedHeight = height
-
-        // Canvas allows negative rect dimensions; normalize to canonical SVG rect coordinates.
-        if resolvedWidth < 0 {
-            originX += resolvedWidth
-            resolvedWidth = -resolvedWidth
-        }
-        if resolvedHeight < 0 {
-            originY += resolvedHeight
-            resolvedHeight = -resolvedHeight
-        }
-
-        return (
-            x: originX,
-            y: originY,
-            width: resolvedWidth,
-            height: resolvedHeight
-        )
-    }
-
-    private func currentPathData() -> String? {
-        guard !currentPathCommands.isEmpty else { return nil }
-        return currentPathCommands.joined(separator: " ")
-    }
-
-    private func pathElement(d: String, fill: String?, stroke: String?, includeStrokeAttrs: Bool) -> String {
-        var attrs = "d=\"\(escape(d))\""
-        if let fill {
-            attrs += " fill=\"\(escape(fill))\""
-        }
-        if let stroke {
-            attrs += " stroke=\"\(escape(stroke))\""
-        }
-        if includeStrokeAttrs {
-            attrs += " stroke-width=\"\(fmt(currentLineWidth))\""
-            attrs += " stroke-linecap=\"\(currentLineCap.rawValue)\""
-            if !currentLineDash.isEmpty {
-                attrs += " stroke-dasharray=\"\(currentLineDash.map(fmt).joined(separator: ","))\""
-            }
-        }
-        return "<path \(attrs) />"
-    }
-
-    private func appendElement(_ element: String) {
-        if let group = groupStack.last {
-            group.children.append(element)
-        } else {
-            rootElements.append(element)
-        }
-    }
-
-    private func groupElement(_ group: SVGGroupNode) -> String {
-        var attrs: [String] = []
-        if let cls = group.cls, !cls.isEmpty {
-            attrs.append("class=\"\(escape(cls))\"")
-        }
-        if let id = group.id, !id.isEmpty {
-            attrs.append("id=\"\(escape(id))\"")
-        }
-        let open = attrs.isEmpty ? "<g>" : "<g \(attrs.joined(separator: " "))>"
-        let body = group.children.joined(separator: "\n")
-        return "\(open)\n\(body)\n</g>"
-    }
-
-    private func primaryFontFamily(from cssFamily: String) -> String {
-        let parts = cssFamily.split(separator: ",").map {
-            $0.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return parts.first ?? "Arial"
-    }
-
-#if canImport(AppKit) && canImport(CoreText)
-    private static func ensureUpstreamTextFontsRegistered(forFamily family: String) {
-        let normalizedFamily = family.lowercased()
-        guard normalizedFamily.contains("roboto slab") else { return }
-        _ = Self.registerUpstreamTextFontsOnce
-    }
-
-    private func chromiumParityMeasureText(_ text: String, font: NSFont) -> TextMeasure? {
-        let measuredText = String(text.drop { $0.isWhitespace })
-        guard !measuredText.isEmpty else {
-            return TextMeasure(x: 0, y: 0, width: 0, height: 0)
-        }
-
-        let attributed = NSAttributedString(string: measuredText, attributes: [.font: font])
-        let line = CTLineCreateWithAttributedString(attributed)
-
-        var ascent: CGFloat = 0
-        var descent: CGFloat = 0
-        var leading: CGFloat = 0
-        let typographicWidth = Double(CTLineGetTypographicBounds(line, &ascent, &descent, &leading))
-        let glyphBounds = CTLineGetBoundsWithOptions(line, [.useGlyphPathBounds])
-        let glyphMinX = Double(glyphBounds.minX)
-        let glyphMaxX = Double(glyphBounds.maxX)
-        let glyphMinY = Double(glyphBounds.minY)
-        let isNumericLike = measuredText.unicodeScalars.allSatisfy { scalar in
-            CharacterSet.decimalDigits.contains(scalar)
-                || scalar == "/"
-                || scalar == "-"
-                || scalar == "."
-        }
-
-        let familyLower = (font.familyName ?? "").lowercased()
-        let requestedFamilyLower = currentFontInfo.family.lowercased()
-        let isTimesItalic = familyLower.contains("times")
-            && VexFont.isItalic(currentFontInfo.style)
-            && !VexFont.isBold(currentFontInfo.weight)
-        let isArialFamily = familyLower.contains("arial")
-        let isArial = isArialFamily
-            && !VexFont.isItalic(currentFontInfo.style)
-            && !VexFont.isBold(currentFontInfo.weight)
-        let isSansSerifFallback = requestedFamilyLower.contains("sans-serif")
-            && !VexFont.isItalic(currentFontInfo.style)
-            && !VexFont.isBold(currentFontInfo.weight)
-        let isArialLikeSans = isArial || isSansSerifFallback
-        let isRobotoSlab = (familyLower.contains("roboto slab") || familyLower.contains("robotoslab"))
-            && !VexFont.isItalic(currentFontInfo.style)
-            && !VexFont.isBold(currentFontInfo.weight)
-
-        let x = min(0, glyphMinX)
-        let right = max(typographicWidth, glyphMaxX)
-        var width = right - x
-        if x == 0 {
-            if isTimesItalic {
-                width = quantize(width, step: 1.0 / 128.0)
-            } else if isArialLikeSans && isNumericLike {
-                // Chromium canvas text layout for Arial regular trends slightly wider than
-                // CoreText on macOS in parity mode.
-                let bias = currentScaleX >= 1 ? (1.0 / 512.0) : (-1.0 / 512.0)
-                width += bias
-
-                // Additional small per-pattern corrections observed in upstream fixtures.
-                if measuredText.count == 1 {
-                    width -= 0.003
-                } else if measuredText.count == 2 {
-                    width -= 0.005
-                }
-            } else if isRobotoSlab {
-                if measuredText.count >= 30 {
-                    width -= 1.0 / 16.0
-                } else {
-                    width -= 1.0 / 128.0
-                }
-            }
-        } else if isRobotoSlab {
-            width -= 1.0 / 256.0
-        }
-        if isArialLikeSans,
-           measuredText.count == 3,
-           measuredText.hasPrefix("("),
-           measuredText.hasSuffix(")") {
-            // Ghost fret strings like "(4)" render a touch narrower in Chromium.
-            width -= 0.005
-        }
-
-        let yAbs = roundToHalf(Double(ascent))
-        var baseBottom = floorToHalf(Double(descent))
-        if isTimesItalic, abs(Double(font.pointSize) - 20.0) < 0.5 {
-            baseBottom = ceilToHalf(Double(descent))
-        }
-        let glyphBottom = abs(min(0, glyphMinY))
-        var bottom = max(baseBottom, glyphBottom)
-        if isArialFamily {
-            // Chromium tends to produce integer bottom extents for Arial at these sizes.
-            bottom = ceil(bottom)
-        }
-        let height = max(yAbs + bottom, 0)
-
-        return TextMeasure(x: x, y: -yAbs, width: width, height: height)
-    }
-
-    private func quantize(_ value: Double, step: Double) -> Double {
-        guard step > 0 else { return value }
-        return (value / step).rounded() * step
-    }
-
-    private func roundToHalf(_ value: Double) -> Double {
-        (value * 2).rounded() / 2
-    }
-
-    private func floorToHalf(_ value: Double) -> Double {
-        floor(value * 2) / 2
-    }
-
-    private func ceilToHalf(_ value: Double) -> Double {
-        ceil(value * 2) / 2
-    }
-#endif
-
-    private func normalizedArcDelta(startAngle: Double, endAngle: Double, counterclockwise: Bool) -> Double {
-        var delta = endAngle - startAngle
-
-        if !counterclockwise {
-            while delta < 0 { delta += 2 * .pi }
-            while delta > 2 * .pi { delta -= 2 * .pi }
-        } else {
-            while delta > 0 { delta -= 2 * .pi }
-            while delta < -(2 * .pi) { delta += 2 * .pi }
-        }
-
-        return delta
-    }
-
-    private func effectiveVisibleWidth() -> Double {
-        guard currentScaleX.isFinite, abs(currentScaleX) > 1e-10 else { return canvasWidth }
-        return canvasWidth / currentScaleX
-    }
-
-    private func effectiveVisibleHeight() -> Double {
-        guard currentScaleY.isFinite, abs(currentScaleY) > 1e-10 else { return canvasHeight }
-        return canvasHeight / currentScaleY
-    }
-
-    private func fmt(_ value: Double) -> String {
-        if value.isNaN || value.isInfinite { return "0" }
-        if options.precision == 0 {
-            let rounded = jsRound(value)
-            if rounded == -0 { return "0" }
-            return String(Int(rounded))
-        }
-
-        let pow10 = pow(10.0, Double(options.precision))
-        let rounded = jsRound(value * pow10) / pow10
-        var text = String(rounded)
-        if text.contains("e") || text.contains("E") {
-            text = String(format: "%.\(options.precision)f", rounded)
-        }
-        if text.contains(".") {
-            while text.last == "0" { text.removeLast() }
-            if text.last == "." { text.removeLast() }
-        }
-        if text == "-0" { return "0" }
-        return text
-    }
-
-    /// Match JavaScript Math.round semantics, especially for negative half ties.
-    private func jsRound(_ value: Double) -> Double {
-        if value.isNaN || value.isInfinite { return value }
-        let floorValue = floor(value)
-        let fraction = value - floorValue
-        if fraction < 0.5 { return floorValue }
-        return floorValue + 1
-    }
-
-    private func escape(_ text: String) -> String {
-        text
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "\"", with: "&quot;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
+        var out = options.includeXMLHeader ? "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" : ""
+        svg.serialize(into: &out, isRoot: true)
+        return out
     }
 }

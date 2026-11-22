@@ -5,7 +5,7 @@ import Foundation
 /// Mutable runtime state for VexFoundation.
 ///
 /// This context owns state that was historically shared via module-level static
-/// variables (default registry, font stack, glyph cache, auto IDs, etc.).
+/// variables (default registry, metrics and fonts, auto IDs, etc.).
 /// Create separate contexts to isolate tests or independent rendering sessions.
 public final class VexRuntimeContext {
     private let lock = NSRecursiveLock()
@@ -13,33 +13,25 @@ public final class VexRuntimeContext {
     private var nextElementID: Int
     private weak var defaultRegistry: Registry?
 
-    private var fontsByName: [String: VexFont]
-
-    private var musicFontStack: [VexFont]
-    private var glyphCache: GlyphCache
-    private var glyphCacheKey: String
-
-    private var chordSymbolGlobalMetricsByCacheKey: [String: [String: Any]]
-
     private var unisonEnabled: Bool
     private var staveLineThickness: Double
     private var upstreamParityModeValue: Bool
+
+    /// Metrics tree (fonts, sizes, paddings) for this context. See `Metrics`.
+    public let metrics: MetricsStore
 
     public init(
         nextElementID: Int = 1000,
         unisonEnabled: Bool = true,
         staveLineThickness: Double = 1,
-        upstreamParityMode: Bool = false
+        upstreamParityMode: Bool = false,
+        metrics: MetricsStore = MetricsStore()
     ) {
-        self.upstreamParityModeValue = upstreamParityMode
         self.nextElementID = nextElementID
-        self.fontsByName = [:]
-        self.musicFontStack = []
-        self.glyphCache = GlyphCache()
-        self.glyphCacheKey = ""
-        self.chordSymbolGlobalMetricsByCacheKey = [:]
         self.unisonEnabled = unisonEnabled
         self.staveLineThickness = staveLineThickness
+        self.upstreamParityModeValue = upstreamParityMode
+        self.metrics = metrics
     }
 
     public func generateElementID() -> String {
@@ -62,61 +54,16 @@ public final class VexRuntimeContext {
         defaultRegistry = registry
     }
 
-    public func loadFont(name: String, data: FontData? = nil, metrics: FontMetrics? = nil) -> VexFont {
-        lock.lock()
-        defer { lock.unlock() }
-
-        let font = fontsByName[name] ?? VexFont(name: name)
-        fontsByName[name] = font
-
-        if let data {
-            font.data = data
-        }
-        if let metrics {
-            font.metrics = metrics
-        }
-
-        return font
+    /// Set the music and text font stack, e.g. `setFonts("Bravura", "Academico")`.
+    /// Port of `VexFlow.setFonts()`.
+    public func setFonts(_ fontNames: [String]) {
+        metrics.set("fontFamily", fontNames.joined(separator: ","))
+        metrics.clear()
     }
 
-    public func getMusicFontStack() -> [VexFont] {
-        lock.lock()
-        defer { lock.unlock() }
-        return musicFontStack
-    }
-
-    public func setMusicFontStack(_ fonts: [VexFont]) {
-        lock.lock()
-        defer { lock.unlock() }
-
-        musicFontStack = fonts
-        glyphCacheKey = fonts.map(\.name).joined(separator: ",")
-        glyphCache = GlyphCache()
-        chordSymbolGlobalMetricsByCacheKey.removeAll()
-    }
-
-    func getGlyphCache() -> GlyphCache {
-        lock.lock()
-        defer { lock.unlock() }
-        return glyphCache
-    }
-
-    public func getGlyphCacheKey() -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        return glyphCacheKey
-    }
-
-    public func getChordSymbolGlobalMetrics(cacheKey: String) -> [String: Any]? {
-        lock.lock()
-        defer { lock.unlock() }
-        return chordSymbolGlobalMetricsByCacheKey[cacheKey]
-    }
-
-    public func setChordSymbolGlobalMetrics(cacheKey: String, value: [String: Any]) {
-        lock.lock()
-        defer { lock.unlock() }
-        chordSymbolGlobalMetricsByCacheKey[cacheKey] = value
+    /// The current font family names. Port of `VexFlow.getFonts()`.
+    public func getFonts() -> [String] {
+        (metrics.get("fontFamily") as? String ?? "").split(separator: ",").map(String.init)
     }
 
     public func getUnisonEnabled() -> Bool {

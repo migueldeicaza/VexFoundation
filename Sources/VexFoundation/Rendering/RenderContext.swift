@@ -121,6 +121,17 @@ public protocol RenderContext: AnyObject {
     /// Clear a rectangle to transparent.
     @discardableResult func clearRect(_ x: Double, _ y: Double, _ width: Double, _ height: Double) -> Self
 
+    /// Add an invisible rectangle that receives pointer events (SVG). No-op for raster back ends.
+    @discardableResult func pointerRect(_ x: Double, _ y: Double, _ width: Double, _ height: Double) -> Self
+
+    // MARK: - Rotation
+
+    /// Start a rotation of `angleDegrees` around (`x`, `y`) for the next drawing operations.
+    func openRotation(_ angleDegrees: Double, _ x: Double, _ y: Double)
+
+    /// End the rotation started with `openRotation`.
+    func closeRotation()
+
     // MARK: - Text
 
     /// Draw filled text at the given position (baseline origin).
@@ -162,76 +173,37 @@ extension RenderContext {
     @discardableResult
     public func setFont(_ cssString: String) -> Self {
         let trimmed = cssString.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return setFont(VexFont.validate())
-        }
-
-        let tokens = trimmed.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard
-            let sizeIndex = tokens.firstIndex(where: {
-                $0.range(of: #"^[0-9]*\.?[0-9]+(pt|px|em|%|in|mm|cm)$"#, options: .regularExpression) != nil
-            })
-        else {
-            let info = VexFont.validate(family: trimmed)
-            return setFont(info)
-        }
-
-        var style: String?
-        var weight: String?
-        if sizeIndex > 0 {
-            for token in tokens[0..<sizeIndex] {
-                let lower = token.lowercased()
-                if ["italic", "oblique"].contains(lower) {
-                    style = token
-                    continue
-                }
-                if lower == "normal" {
-                    if style == nil {
-                        style = token
-                    } else if weight == nil {
-                        weight = token
-                    }
-                    continue
-                }
-                if lower == "bold" || Int(lower) != nil {
-                    weight = token
-                }
-            }
-        }
-
-        let size = tokens[sizeIndex]
-        let family = sizeIndex + 1 < tokens.count
-            ? tokens[(sizeIndex + 1)...].joined(separator: " ")
-            : trimmed
-
-        let info = VexFont.validate(
-            family: family,
-            size: size,
-            weight: weight,
-            style: style
-        )
-        return setFont(info)
+        guard !trimmed.isEmpty else { return setFont(VexFont.validate()) }
+        return setFont(VexFont.fromCSSString(trimmed))
     }
 
     /// Apply an ElementStyle to this context, saving state first.
+    @available(*, deprecated, message: "Use ctx.save(); element.applyStyle(context: ctx); ...; ctx.restore().")
     @discardableResult
     public func applyStyle(_ style: ElementStyle?) -> Self {
         guard let style else { return self }
         save()
-        if let sc = style.shadowColor { setShadowColor(sc) }
-        if let sb = style.shadowBlur { setShadowBlur(sb) }
-        if let fs = style.fillStyle { setFillStyle(fs) }
-        if let ss = style.strokeStyle { setStrokeStyle(ss) }
-        if let lw = style.lineWidth { setLineWidth(lw) }
+        VexElement.apply(style, to: self)
         return self
     }
 
     /// Restore the context after applyStyle.
+    @available(*, deprecated, message: "Use ctx.save() / ctx.restore().")
     @discardableResult
     public func restoreStyle(_ style: ElementStyle?) -> Self {
         guard style != nil else { return self }
         return restore()
     }
+
+    /// Default: no pointer rectangle.
+    @discardableResult
+    public func pointerRect(_ x: Double, _ y: Double, _ width: Double, _ height: Double) -> Self { self }
+
+    /// Default: rotation is not supported.
+    public func openRotation(_ angleDegrees: Double, _ x: Double, _ y: Double) {}
+
+    /// Default: rotation is not supported.
+    public func closeRotation() {}
 }
 
 // MARK: - Debug Helper

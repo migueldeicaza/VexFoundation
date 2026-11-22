@@ -11,14 +11,18 @@ public struct ElementStyle: Sendable {
     public var fillStyle: String?
     public var strokeStyle: String?
     public var lineWidth: Double?
+    /// SVG `stroke-dasharray` style dash pattern, e.g. `"3 3"`.
+    public var lineDash: String?
 
     public init(
         shadowColor: String? = nil,
         shadowBlur: Double? = nil,
         fillStyle: String? = nil,
         strokeStyle: String? = nil,
-        lineWidth: Double? = nil
+        lineWidth: Double? = nil,
+        lineDash: String? = nil
     ) {
+        self.lineDash = lineDash
         self.shadowColor = shadowColor
         self.shadowBlur = shadowBlur
         self.fillStyle = fillStyle

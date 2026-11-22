@@ -315,33 +315,41 @@ public final class SwiftUICanvasContext: RenderContext {
 
     @discardableResult
     public func fillText(_ text: String, _ x: Double, _ y: Double) -> Self {
-        let resolved = gc.resolve(makeText(text))
-        // SwiftUI draws text with the origin at the top-left of the text bounds.
-        // VexFlow (like HTML Canvas) draws text at the baseline.
-        // We offset by the ascent to align baselines.
-        let ascent = resolvedAscent(text)
-        gc.draw(resolved, at: scaled(x, y - ascent))
+        guard !text.isEmpty else { return self }
+        // Draw the glyph outlines so that bundled SMuFL fonts render without
+        // process-wide font registration.
+        let layout = TextMeasurer.layout(text, fontInfo: currentFontInfo)
+        var transform = CGAffineTransform(scaleX: currentScaleX, y: currentScaleY)
+        guard let cgPath = layout.path(x: x, y: y).copy(using: &transform) else { return self }
+        applyShadowIfNeeded()
+        gc.fill(Path(cgPath), with: .color(currentFillColor))
         return self
     }
 
     public func measureText(_ text: String) -> TextMeasure {
-        let ctFont = makeCTFont()
-        let attrString = NSAttributedString(
-            string: text,
-            attributes: [.font: ctFont]
-        )
-        let line = CTLineCreateWithAttributedString(attrString)
-        var ascent: CGFloat = 0
-        var descent: CGFloat = 0
-        var leading: CGFloat = 0
-        let width = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
-        let height = ascent + descent
+        let m = TextMeasurer.measure(text, fontInfo: currentFontInfo)
         return TextMeasure(
             x: 0,
-            y: -Double(ascent),
-            width: Double(width),
-            height: Double(height)
+            y: -m.actualBoundingBoxAscent,
+            width: m.width,
+            height: m.actualBoundingBoxAscent + m.actualBoundingBoxDescent
         )
+    }
+
+    // MARK: - Rotation
+
+    private var rotationStack: [GraphicsContext] = []
+
+    public func openRotation(_ angleDegrees: Double, _ x: Double, _ y: Double) {
+        rotationStack.append(gc)
+        let p = scaled(x, y)
+        gc.translateBy(x: p.x, y: p.y)
+        gc.rotate(by: .degrees(angleDegrees))
+        gc.translateBy(x: -p.x, y: -p.y)
+    }
+
+    public func closeRotation() {
+        if let saved = rotationStack.popLast() { gc = saved }
     }
 
     @discardableResult
@@ -353,7 +361,7 @@ public final class SwiftUICanvasContext: RenderContext {
     ) -> Self {
         currentFontInfo = VexFont.validate(
             family: family,
-            size: size != nil ? "\(size!)pt" : nil,
+            size: size.map { "\(formatJSNumber($0))pt" },
             weight: weight,
             style: style
         )
@@ -402,58 +410,5 @@ public final class SwiftUICanvasContext: RenderContext {
     private func clearShadow() {
         // Reset shadow by not applying it on next draw.
         // GraphicsContext filters are applied per-draw, so we don't need explicit cleanup.
-    }
-
-    private func makeText(_ text: String) -> Text {
-        let sizeInPt = VexFont.convertSizeToPointValue(currentFontInfo.size)
-        var swiftFont = Font.system(size: sizeInPt)
-
-        let family = currentFontInfo.family
-        if !family.isEmpty && !family.contains("sans-serif") && !family.contains("serif") {
-            // Try to use the specific font family
-            let primaryFamily = family.split(separator: ",").first.map(String.init)?.trimmingCharacters(in: .whitespaces) ?? family
-            swiftFont = Font.custom(primaryFamily, size: sizeInPt)
-        }
-
-        if VexFont.isBold(currentFontInfo.weight) {
-            swiftFont = swiftFont.bold()
-        }
-        if VexFont.isItalic(currentFontInfo.style) {
-            swiftFont = swiftFont.italic()
-        }
-
-        return Text(text)
-            .font(swiftFont)
-            .foregroundColor(currentFillColor)
-    }
-
-    private func makeCTFont() -> CTFont {
-        let sizeInPt = VexFont.convertSizeToPointValue(currentFontInfo.size)
-        var traits: CTFontSymbolicTraits = []
-        if VexFont.isBold(currentFontInfo.weight) {
-            traits.insert(.boldTrait)
-        }
-        if VexFont.isItalic(currentFontInfo.style) {
-            traits.insert(.italicTrait)
-        }
-
-        let family = currentFontInfo.family
-            .split(separator: ",").first
-            .map(String.init)?
-            .trimmingCharacters(in: .whitespaces) ?? "Arial"
-
-        let baseFont = CTFontCreateWithName(family as CFString, sizeInPt, nil)
-        if traits.isEmpty {
-            return baseFont
-        }
-        if let modified = CTFontCreateCopyWithSymbolicTraits(baseFont, sizeInPt, nil, traits, traits) {
-            return modified
-        }
-        return baseFont
-    }
-
-    private func resolvedAscent(_ text: String) -> Double {
-        let ctFont = makeCTFont()
-        return Double(CTFontGetAscent(ctFont))
     }
 }

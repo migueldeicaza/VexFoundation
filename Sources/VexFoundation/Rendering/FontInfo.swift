@@ -15,8 +15,9 @@ public enum VexFontStyle: String, Sendable {
     case italic = "italic"
 }
 
-/// Describes a text font (not a music glyph font).
-public struct FontInfo: Sendable {
+/// Describes a font: CSS family list, size, weight and style.
+/// In VexFlow 5 the same type describes music fonts and text fonts.
+public struct FontInfo: Sendable, Equatable, Hashable {
     /// CSS font-family, e.g., "Arial", "Times New Roman".
     public var family: String
     /// Font size as a string with units (e.g., "10pt", "12px") or as a point value.
@@ -28,7 +29,7 @@ public struct FontInfo: Sendable {
 
     public init(
         family: String = VexFont.SANS_SERIF,
-        size: String = "\(VexFont.SIZE)pt",
+        size: String = "10pt",
         weight: String = VexFontWeight.normal.rawValue,
         style: String = VexFontStyle.normal.rawValue
     ) {
@@ -45,65 +46,8 @@ public struct FontInfo: Sendable {
         style: String = VexFontStyle.normal.rawValue
     ) {
         self.family = family
-        self.size = "\(size)pt"
+        self.size = "\(formatJSNumber(size))pt"
         self.weight = weight
         self.style = style
     }
 }
-
-/// Data for an individual music font glyph.
-public struct FontGlyph: Sendable {
-    public var xMin: Double
-    public var xMax: Double
-    public var yMin: Double?
-    public var yMax: Double?
-    /// Horizontal advance width.
-    public var ha: Double
-    public var leftSideBearing: Double?
-    public var advanceWidth: Double?
-    /// Glyph outline string (SMuFL format). Parsed on demand.
-    public var outline: String?
-    /// Cached parsed outline as numeric commands.
-    public var cachedOutline: [Double]?
-
-    public init(
-        xMin: Double, xMax: Double,
-        yMin: Double? = nil, yMax: Double? = nil,
-        ha: Double,
-        leftSideBearing: Double? = nil,
-        advanceWidth: Double? = nil,
-        outline: String? = nil
-    ) {
-        self.xMin = xMin
-        self.xMax = xMax
-        self.yMin = yMin
-        self.yMax = yMax
-        self.ha = ha
-        self.leftSideBearing = leftSideBearing
-        self.advanceWidth = advanceWidth
-        self.outline = outline
-    }
-}
-
-/// Complete font dataset with all glyphs.
-public struct FontData: Sendable {
-    public var glyphs: [String: FontGlyph]
-    public var fontFamily: String?
-    public var resolution: Double
-    public var generatedOn: String?
-
-    public init(
-        glyphs: [String: FontGlyph],
-        fontFamily: String? = nil,
-        resolution: Double,
-        generatedOn: String? = nil
-    ) {
-        self.glyphs = glyphs
-        self.fontFamily = fontFamily
-        self.resolution = resolution
-        self.generatedOn = generatedOn
-    }
-}
-
-/// Font metrics for positioning and layout, specified per music font.
-public typealias FontMetrics = [String: Any]
