@@ -1831,7 +1831,9 @@ struct UpstreamSVGParityTests {
 
         let fontsToRun = referenceFontsOverride ?? configuredFonts
         for font in fontsToRun {
-            try Flow.withRuntimeContext(Flow.makeRuntimeContext()) {
+            let runtime = Flow.makeRuntimeContext()
+            runtime.upstreamParityMode = true
+            try Flow.withRuntimeContext(runtime) {
                 FontLoader.loadDefaultFonts()
                 try applyUpstreamFontStack(fontName: font)
 

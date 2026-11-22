@@ -23,12 +23,15 @@ public final class VexRuntimeContext {
 
     private var unisonEnabled: Bool
     private var staveLineThickness: Double
+    private var upstreamParityModeValue: Bool
 
     public init(
         nextElementID: Int = 1000,
         unisonEnabled: Bool = true,
-        staveLineThickness: Double = 1
+        staveLineThickness: Double = 1,
+        upstreamParityMode: Bool = false
     ) {
+        self.upstreamParityModeValue = upstreamParityMode
         self.nextElementID = nextElementID
         self.fontsByName = [:]
         self.musicFontStack = []
@@ -126,6 +129,13 @@ public final class VexRuntimeContext {
         lock.lock()
         defer { lock.unlock() }
         unisonEnabled = enabled
+    }
+
+    /// When `true`, local VexFlowPatch deviations (OSMD-derived behavior) are
+    /// disabled so rendering matches upstream VexFlow exactly. Parity tests set this.
+    public var upstreamParityMode: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return upstreamParityModeValue }
+        set { lock.lock(); defer { lock.unlock() }; upstreamParityModeValue = newValue }
     }
 
     public func getStaveLineThickness() -> Double {

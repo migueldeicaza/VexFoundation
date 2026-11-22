@@ -58,7 +58,7 @@ public final class ChordSymbol: Modifier {
     /// Match upstream `ChordSymbol.TEXT_FONT`.
     override public class var textFont: FontInfo {
         let musicFontName = Glyph.MUSIC_FONT_STACK.first?.name.lowercased() ?? ""
-        let parityMode = ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_SVG_PARITY"] == "1"
+        let parityMode = VexRuntime.getCurrentContext().upstreamParityMode
         let family: String
         if musicFontName == "petaluma" {
             // Upstream SVG fixtures for Petaluma chord symbols are generated with text fallback

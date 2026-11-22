@@ -725,7 +725,7 @@ open class Stave: VexElement {
                 width = 10
             }
             x += pad
-            if ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_SVG_PARITY"] == "1" {
+            if VexRuntime.getCurrentContext().upstreamParityMode {
                 modifier.setModifierX(x)
             } else {
                 // VexFlowPatch: don't overwrite modifier.x when it was already shifted further
@@ -740,7 +740,7 @@ open class Stave: VexElement {
             x += width
             if pad + width == 0 { offset -= 1 }
         }
-        if ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_SVG_PARITY"] == "1" {
+        if VexRuntime.getCurrentContext().upstreamParityMode {
             startX = x
         } else if x > startX {
             // VexFlowPatch: don't overwrite start_x if it's already bigger (alignment)

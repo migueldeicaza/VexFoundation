@@ -445,7 +445,7 @@ public final class SVGRenderContext: RenderContext {
         }
 
         let family = primaryFontFamily(from: currentFontInfo.family).replacingOccurrences(of: "\"", with: "")
-        let isParityMode = ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_SVG_PARITY"] == "1"
+        let isParityMode = VexRuntime.getCurrentContext().upstreamParityMode
         if isParityMode {
             Self.ensureUpstreamTextFontsRegistered(forFamily: family)
         }

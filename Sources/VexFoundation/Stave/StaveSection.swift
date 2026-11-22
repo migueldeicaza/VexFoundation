@@ -69,7 +69,7 @@ public final class StaveSection: StaveModifier {
 
         let textMeasure = ctx.measureText(section)
         let textWidth = textMeasure.width
-        let useUpstreamParity = ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_SVG_PARITY"] == "1"
+        let useUpstreamParity = VexRuntime.getCurrentContext().upstreamParityMode
         var parityHeadroom = 0.0
         let textHeight: Double
         if useUpstreamParity {

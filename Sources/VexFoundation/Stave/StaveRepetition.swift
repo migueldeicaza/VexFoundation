@@ -176,7 +176,7 @@ public final class StaveRepetition: StaveModifier {
         switch symbolType {
         case .codaLeft:
             textX = modifierX + stave.getVerticalBarWidth()
-            let parityCorrection = ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_SVG_PARITY"] == "1"
+            let parityCorrection = VexRuntime.getCurrentContext().upstreamParityMode
                 ? -0.0065
                 : 0
             symbolX = textX + textWidth + symbolTextOffsetX + parityCorrection
