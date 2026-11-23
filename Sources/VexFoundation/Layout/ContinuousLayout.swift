@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/continuouslayout.ts` (VexFlow 5.6.0).
+// Port of `src/continuouslayout.ts` (VexFlow 5.7.0).
 // Row-dependent notation for a responsive EasyScore composition. Source measures and notes keep their identity.
 
 import Foundation
@@ -54,7 +54,8 @@ public struct ContinuousBoundary: Sendable, Equatable {
     }
 }
 
-/// Unflagged heads on different staves sharing an onset, duration and stem direction. (VexFlow 5.4.0)
+/// Aligned half or quarter notes, or eighth notes with a native beam on one of the two staves.
+/// (VexFlow 5.4.0, eighths in 5.7.0)
 public struct ContinuousSplitChord: Sendable, Equatable {
     public var id: String
     public var upper: String
@@ -181,8 +182,22 @@ private func resolveTabTie(_ span: ContinuousSpan, _ first: TabNote, _ last: Tab
     resolved.fromHead = fromHead
     resolved.toHead = toHead
     resolved.string = string
-    resolved.side = span.side ?? .above
+    if span.bend != nil, Double(from.fret) == nil { throw invalid("A tied bend needs a pitched fret.") }
+    resolved.side = span.side ?? (span.bend != nil ? .below : .above)
     return resolved
+}
+
+/// A string sustains into the immediately following event of the same rhythmic voice. (VexFlow 5.7.0)
+private func adjacentBendEvents(_ notes: [[[[Tickable]]]], _ first: SpanAnchor, _ last: SpanAnchor) -> Bool {
+    let parts = notes[first.measure][first.staff]
+    guard let voice = parts.firstIndex(where: { group in group.contains { $0 === first.note } }),
+          last.measure <= first.measure + 1 else { return false }
+    let members = parts[voice].filter { !$0.shouldIgnoreTicks() }
+    guard let index = members.firstIndex(where: { $0 === first.note }) else { return false }
+    if first.measure == last.measure { return index + 1 < members.count && members[index + 1] === last.note }
+    let next = notes[last.measure][last.staff]
+    return index == members.count - 1 && voice < next.count
+        && next[voice].first(where: { !$0.shouldIgnoreTicks() }) === last.note
 }
 
 private struct Marks {
@@ -197,6 +212,10 @@ private struct Unit {
     var width: Double { breakUnit.width }
     var start: Double { breakUnit.start }
     var end: Double { breakUnit.end }
+    var after: Double {
+        get { breakUnit.after }
+        set { breakUnit.after = newValue }
+    }
 }
 
 private struct PlacedMeasure {
@@ -237,8 +256,8 @@ public final class ContinuousLayout {
     private var splitChords: [(id: String, measure: Int, upper: StaveNote, lower: StaveNote)] = []
     private var spelledSpans = Set<Int>()
     private let options: ContinuousOptions
-    /// A leading tab fret needs room for the incoming tie after the repeated clef. (VexFlow 5.6.0)
-    private var tabTiePadding: [ObjectIdentifier: Double] = [:]
+    /// Keep incoming ties and beams clear of the repeated clef at a row start. (VexFlow 5.7.0)
+    private var continuationPadding: [ObjectIdentifier: Double] = [:]
     private var arrivals: [Int: [Arrival]] = [:]
     /// The composition arrays (final when the layout is created). The layout does not keep the composition,
     /// which owns the sheet that owns this layout.
@@ -398,27 +417,40 @@ public final class ContinuousLayout {
                 for i in from.measure...to.measure { spelledSpans.insert(i) }
             }
         }
+        var beamedMembers = Set<ObjectIdentifier>()
         for chord in options.splitChords {
             let a = locate(chord.upper), b = locate(chord.lower)
             guard !chord.id.isEmpty, !seen.contains(chord.id), let a, let b, a.measure == b.measure, a.staff < b.staff,
                   let upper = a.note as? StaveNote, let lower = b.note as? StaveNote,
                   !upper.isRest(), !lower.isRest(),
-                  ["h", "q", "2", "4"].contains(upper.getDuration()),
+                  ["h", "q", "2", "4", "8"].contains(upper.getDuration()),
                   upper.getDuration() == lower.getDuration(),
                   upper.getStemDirection() == lower.getStemDirection(),
                   upper.getTicks().equals(lower.getTicks()),
                   onset(upper).equals(onset(lower))
             else {
-                throw invalid("A split stem needs matching simultaneous half or quarter notes on ordered staves.")
+                throw invalid("A split stem needs matching simultaneous half, quarter or eighth notes on ordered staves.")
+            }
+            if upper.getDuration() == "8" {
+                if beamedMembers.contains(ObjectIdentifier(upper)) || beamedMembers.contains(ObjectIdentifier(lower)) {
+                    throw invalid("A beamed note can belong to only one split chord.")
+                }
+                beamedMembers.insert(ObjectIdentifier(upper))
+                beamedMembers.insert(ObjectIdentifier(lower))
             }
             seen.insert(chord.id)
             splitChords.append((chord.id, a.measure, upper, lower))
         }
+        var pendingBeams: [(index: Int, members: [ContinuousBeamMember])] = []
+        var claimedNotes = Set<ObjectIdentifier>()
         for span in options.spans {
             guard !span.id.isEmpty, !seen.contains(span.id), let first = locate(span.from), let last = locate(span.to),
                   first.measure <= last.measure
             else { throw invalid("Expected a unique span ID and ordered composition anchors.") }
             var spec = span
+            if span.bend != nil && !(span.kind == .tie && first.note is TabNote && last.note is TabNote) {
+                throw invalid("A tied bend needs two TAB endpoints.")
+            }
             if span.string != nil && !(span.kind == .tie && first.note is TabNote) {
                 throw invalid("A string selector requires a tab tie.")
             }
@@ -441,9 +473,15 @@ public final class ContinuousLayout {
                 }
                 if span.kind == .tie {
                     spec = try resolveTabTie(span, a, b)
+                    if let bend = span.bend {
+                        if !adjacentBendEvents(score.notes, first, last) {
+                            throw invalid("A tied bend needs adjacent events in the same TAB voice.")
+                        }
+                        spec.bend = try copyTiedBend(bend)
+                    }
                     if first.measure != last.measure && onset(b).numerator == 0 {
                         let stave = b.checkStave()
-                        tabTiePadding[ObjectIdentifier(stave)] = stave.space(1.5)
+                        continuationPadding[ObjectIdentifier(stave)] = stave.space(1.5)
                     }
                 }
             } else {
@@ -453,6 +491,17 @@ public final class ContinuousLayout {
                 for (head, n) in [(span.fromHead ?? 0, first.note), (span.toHead ?? 0, last.note)]
                 where head < 0 || head >= n.getKeys().count {
                     throw invalid("Invalid span head index.")
+                }
+            }
+            if span.kind == .glissando {
+                if first.staff != last.staff || first.note.isRest() || last.note.isRest()
+                    || (first.measure == last.measure && onset(first.note).equals(onset(last.note))) {
+                    throw invalid("A glissando needs two ordered pitched attacks on the same staff.")
+                }
+                // Reserve a visible lead-in after the clef when the arrival is the first attack on its row.
+                if first.measure != last.measure && onset(last.note).numerator == 0 {
+                    let stave = last.note.checkStave()
+                    continuationPadding[ObjectIdentifier(stave)] = stave.space(1.5)
                 }
             }
             if first.measure == last.measure && onset(first.note).greaterThan(onset(last.note)) {
@@ -480,8 +529,27 @@ public final class ContinuousLayout {
                 }
             }
             seen.insert(span.id)
-            spans.append(ResolvedSpan(spec: spec, first: first, last: last, label: spanLabel(spec)))
+            var resolved = ResolvedSpan(spec: spec, first: first, last: last, label: spanLabel(spec))
+            if let bend = spec.bend { resolved.bendLabel = VexElement(category: "Bend").setText(bendAmount(bend)) }
+            if span.kind == .beam {
+                let members = try beamMembers(score.notes, score.staves, first, last)
+                for member in members {
+                    let note = member.note
+                    if note.getBeam() != nil || claimedNotes.contains(ObjectIdentifier(note)) {
+                        throw invalid("A continuous beam member already belongs to a beam.")
+                    }
+                    claimedNotes.insert(ObjectIdentifier(note))
+                    if member.measure > first.measure {
+                        let stave = note.checkStave()
+                        continuationPadding[ObjectIdentifier(stave)] = stave.space(1.5)
+                    }
+                }
+                pendingBeams.append((spans.count, members))
+            }
+            spans.append(resolved)
         }
+        // Resolve every span before attaching beams to caller-owned notes.
+        for pending in pendingBeams { spans[pending.index].beam = try ContinuousBeam(pending.members) }
     }
 
     /// Only undecorated, wholly resting measures can disappear into a numbered rest.
@@ -522,7 +590,7 @@ public final class ContinuousLayout {
             let marks = self.marks[i][j]
             s.setBoundaryModifiers(
                 (start ? marks.start : []) + (end ? marks.end : []),
-                notePadding: start ? tabTiePadding[ObjectIdentifier(s)] ?? 0 : 0
+                notePadding: start ? continuationPadding[ObjectIdentifier(s)] ?? 0 : 0
             )
             let bar = s.getModifiers(position: .end, category: Barline.category).first as? Barline
             return max(s.getX() + s.getWidth() - s.getNoteEndX(), -(bar?.getLayoutMetrics()?.xMin ?? 0))
@@ -562,6 +630,7 @@ public final class ContinuousLayout {
                     width: max(base + padding, last > i ? 68 : 0, reserve, headers[0], headers[1]),
                     start: max(0, prefix),
                     end: tail,
+                    after: 0,
                     breakBefore: boundaries[i]?.breakBefore
                 )
             ))
@@ -641,25 +710,41 @@ public final class ContinuousLayout {
             if matches.count != 1 { throw invalid("Expected one lyric annotation on the source note: " + id) }
             spans[k].syllable = matches[0]
         }
-        hidden.removeAll()
-        diagnostics.removeAll()
-        fragments.removeAll()
-        rows.removeAll()
-        drawing = []
-        let units = try self.units(options.measurePadding)
-        let groups = chooseSystemBreaks(
-            units.map { $0.breakUnit },
-            width: options.width,
-            gap: options.measureGap,
-            indent: { self.indent(units[$0].first) },
-            mode: self.options.mode ?? .balanced
-        )
-        var y = options.y
-        for indices in groups {
-            let row = try layoutRow(indices.map { units[$0] }, options, y)
-            rows.append(row)
-            y += row.height + options.rowGap
+        // A caller may attach the native beam after composition. Validate every owner before modifying either voice.
+        let eighths = splitChords.filter { $0.upper.getDuration() == "8" }
+        for chord in eighths
+        where (chord.upper.getBeam() != nil) == (chord.lower.getBeam() != nil)
+            || chord.upper.getStemDirection() != chord.lower.getStemDirection() {
+            throw invalid(
+                "A split eighth-note chord needs a beam on exactly one of its two notes and matching stem directions."
+            )
         }
+        for chord in eighths { linkSplitStem(chord.upper, chord.lower) }
+        for span in spans { span.beam?.clearRows() }
+        var units = try self.units(options.measurePadding)
+        var padding: [ObjectIdentifier: Double] = [:]
+        repeat {
+            for span in spans { span.beam?.clearRows() }
+            hidden.removeAll()
+            diagnostics.removeAll()
+            fragments.removeAll()
+            rows.removeAll()
+            drawing = []
+            for k in units.indices { units[k].after = padding[ObjectIdentifier(score.systems[units[k].first])] ?? 0 }
+            let groups = chooseSystemBreaks(
+                units.map { $0.breakUnit },
+                width: options.width,
+                gap: options.measureGap,
+                indent: { self.indent(units[$0].first) },
+                mode: self.options.mode ?? .balanced
+            )
+            var y = options.y
+            for indices in groups {
+                let row = try layoutRow(indices.map { units[$0] }, options, y)
+                rows.append(row)
+                y += row.height + options.rowGap
+            }
+        } while try reserveChordSpacing(rows.map { $0.systems }, &padding)
         for s in spans {
             let indices = fragments.indices.filter { fragments[$0].id == s.spec.id }
             let total = indices.reduce(0.0) { $0 + fragments[$1].x2 - fragments[$1].x1 }
@@ -668,9 +753,21 @@ public final class ContinuousLayout {
                 let length = fragments[k].x2 - fragments[k].x1
                 fragments[k].progress = (prior / total, (prior + length) / total)
                 prior += length
-                let fragment = fragments[k], label = s.label
-                drawing.append { ctx in drawSpan(ctx, fragment, label: label) }
+                if fragments[k].kind == .glissando {
+                    let measures = rows[fragments[k].row].measures
+                    let firstStave = score.staves[measures[0] - 1][s.first.staff]
+                    let lastStave = score.staves[measures[measures.count - 1] - 1][s.last.staff]
+                    fragments[k].y1 = glissandoY(s, firstStave, fragments[k].progress.0)
+                    fragments[k].y2 = glissandoY(s, lastStave, fragments[k].progress.1)
+                }
+                let fragment = fragments[k], label = s.label, bendLabel = s.bendLabel
+                if s.beam == nil { drawing.append { ctx in drawSpan(ctx, fragment, label: label, bendLabel: bendLabel) } }
             }
+        }
+        for span in spans {
+            guard let beam = span.beam else { continue }
+            beam.finishRows()
+            drawing.append { ctx in try beam.setContext(ctx).drawWithStyle() }
         }
         return rows
     }
@@ -707,10 +804,18 @@ public final class ContinuousLayout {
                             take(min(e.topY, e.baseY), max(e.topY, e.baseY))
                         }
                         guard let n = n as? StaveNote, n.getStave() === stave else { continue }
-                        let bridge = n.getBeam()?.getNotes().contains { $0.getStave() !== stave } ?? false
-                        let parts = bridge ? n.getHeadInk() : ((try? measureEngraving(n))?.parts ?? [])
-                        for box in parts { take(box.y, box.y + box.h) }
-                        if let beam = n.getBeam(), !bridge, let box = beam.getBoundingBox() {
+                        let shared = splitStemFor(n)
+                        let beam = shared.map { $0.owner.getBeam() } ?? n.getBeam()
+                        let tipStave = beam != nil ? beamStave(n) : nil
+                        let bridge = !(beam is ContinuousBeam)
+                            && (beam?.getNotes().contains { beamStave($0) !== tipStave } ?? false)
+                        let parts = bridge && shared == nil ? n.getHeadInk() : ((try? measureEngraving(n))?.parts ?? [])
+                        for (index, box) in parts.enumerated() {
+                            // The shared stem spans this very gap and must not increase it.
+                            if shared?.owner !== n || index != n.noteHeads.count { take(box.y, box.y + box.h) }
+                        }
+                        if let beam, !(beam is ContinuousBeam), !bridge, tipStave === stave,
+                           let box = beam.getBoundingBox() {
                             take(box.y, box.y + box.h)
                         }
                         for t in n.getTupletStack() {
@@ -750,7 +855,9 @@ public final class ContinuousLayout {
         let visible = self.visible(first, last)
         let spans = self.spans.filter { $0.first.measure <= last && first <= $0.last.measure }
         let indent = self.indent(first)
-        let minimum = indent + units.reduce(0) { $0 + $1.width } + units[0].start + units[units.count - 1].end
+        let minimum = indent
+            + units.enumerated().reduce(0) { $0 + $1.element.width + ($1.offset + 1 < units.count ? $1.element.after : 0) }
+            + units[0].start + units[units.count - 1].end
             + Double(units.count - 1) * options.measureGap
         let extra = options.justify ? max(0, options.width - minimum) / Double(units.count) : 0
         var x = options.x + indent
@@ -760,8 +867,9 @@ public final class ContinuousLayout {
             let begin = k == 0, end = k == units.count - 1
             let sys = score.systems[u.first]
             sys.setX(x).setY(0)
-            let endPadding = install(u.first, u.last, begin, end)
-            let width = u.width + extra + (begin ? u.start : 0) + (end ? u.end : 0)
+            let chordPadding = end ? 0 : u.after
+            let endPadding = install(u.first, u.last, begin, end) + chordPadding
+            let width = u.width + extra + chordPadding + (begin ? u.start : 0) + (end ? u.end : 0)
             try sys.setWidthThrowing(width).formatThrowing(row: SystemRowLayout(endPadding: endPadding))
             for j in 1..<max(1, visible.count) {
                 let staves = sys.getStaves(), b = visible[j]
@@ -772,12 +880,25 @@ public final class ContinuousLayout {
             x += width + options.measureGap
             positions.append(PlacedMeasure(u: u, sys: sys, endPadding: endPadding))
         }
+        var fitted: [(beam: Beam, staff: Int)] = []
+        for s in spans {
+            if let beam = s.beam { fitted.append((try beam.measureRow(first, last), s.first.staff)) }
+        }
         var ink = measureStaffInk(positions, visible)
+        for (beam, staff) in fitted {
+            if let bounds = beam.getBoundingBox() {
+                let staveY = score.staves[first][staff].getY()
+                ink[staff].top = min(ink[staff].top, bounds.y - staveY)
+                ink[staff].bottom = max(ink[staff].bottom, bounds.y + bounds.h - staveY)
+            }
+            beam.resetLayout()
+        }
         var laneOf: [Int] = []
         // Prefer the nearest free lane. Non-overlapping spans can reuse it.
         var laneEnds: [String: [Int]] = [:]
         for s in spans {
-            if s.spec.kind == .tie || s.spec.kind == .slur {
+            if s.beam != nil || (s.spec.kind == .tie && s.spec.bend == nil) || s.spec.kind == .slur
+                || s.spec.kind == .glissando {
                 laneOf.append(0)
                 continue
             }
@@ -790,7 +911,7 @@ public final class ContinuousLayout {
                 laneOf.append(0)
                 continue
             }
-            let side = spanAbove(s.spec), staff = s.first.staff
+            let side = s.spec.bend != nil || spanAbove(s.spec), staff = s.first.staff
             let key = "\(staff)-\(side)"
             var ends = laneEnds[key] ?? []
             var lane = ends.firstIndex { $0 < s.first.measure } ?? -1
@@ -840,15 +961,20 @@ public final class ContinuousLayout {
             let bottom = b.getYs().min() ?? 0
             if abs(x - b.getStemX()) > Stem.WIDTH {
                 diagnostics.append(ContinuousDiagnostic(code: .splitStemAlignment, measures: [chord.measure + 1], source: chord.id))
-            } else {
+            } else if splitStemFor(a) == nil {
                 drawing.append { ctx in ctx.fillRect(x - Stem.WIDTH / 2, top, Stem.WIDTH, bottom - top) }
             }
         }
         for (index, s) in spans.enumerated() {
+            if let beam = s.beam {
+                fragments.append(try beam.placeRow(first, last, rows.count, s.spec.id))
+                continue
+            }
             let staff = s.first.staff
             let lane = Double(laneOf[index])
             let yBase = origin + offsets[staff]
-                + (spanAbove(s.spec) ? ink[staff].top - lane * 25 - 4 : ink[staff].bottom + lane * 25 + 14)
+                + (s.spec.bend != nil || spanAbove(s.spec)
+                    ? ink[staff].top - lane * 25 - 4 : ink[staff].bottom + lane * 25 + 14)
             addFragment(s, units, row, yBase)
         }
         return row
@@ -892,7 +1018,7 @@ public final class ContinuousLayout {
             if ends { x2 = s.last.note.getTieLeftX() }
             if let string = s.spec.string {
                 // Follow the same physical string at both row edges, with clearance for the fret numbers.
-                if !starts { x1 -= tabTiePadding[ObjectIdentifier(startStaff)] ?? 0 }
+                if !starts { x1 -= continuationPadding[ObjectIdentifier(startStaff)] ?? 0 }
                 let line = Double(string - 1)
                 let clearance = sign * space * 0.3
                 y1 = (starts ? s.first.note.checkStave() : startStaff).getYForLine(line) + clearance
@@ -904,6 +1030,18 @@ public final class ContinuousLayout {
                 y2 = (ends
                     ? s.last.note.getYs()[s.spec.toHead ?? 0]
                     : continuationPitch(s.last, endStaff, s.spec.toHead ?? 0)) + sign * space * (ends ? 0.5 : 1.1)
+            }
+        }
+        if kind == .glissando {
+            if starts, let note = s.first.note as? StaveNote {
+                let head = note.getHeadInk()[s.spec.fromHead ?? 0]
+                x1 = head.x + head.w + space * 0.3
+            } else if !starts {
+                x1 -= continuationPadding[ObjectIdentifier(startStaff)] ?? 0
+            }
+            if ends, let note = s.last.note as? StaveNote {
+                let head = note.getHeadInk()[s.spec.toHead ?? 0]
+                x2 = head.x - endStaff.space(0.3)
             }
         }
         if kind == .volta {
@@ -936,6 +1074,21 @@ public final class ContinuousLayout {
             above: above,
             space: space
         )
+        if let bend = s.spec.bend, let bendLabel = s.bendLabel, let string = s.spec.string {
+            fragment.bend = layoutTiedBend(
+                bend,
+                starts ? s.first.note : nil,
+                ends ? s.last.note : nil,
+                x1,
+                endStaff.getNoteEndX() - space * 0.35,
+                startStaff.getYForLine(Double(string - 1)),
+                baseline,
+                space,
+                bendLabel
+            )
+        }
+        if s.spec.niente == true && kind == .crescendo && starts { fragment.nienteTip = nienteTip(x1, y1, space, .left) }
+        if s.spec.niente == true && kind == .diminuendo && ends { fragment.nienteTip = nienteTip(x2, y2, space, .right) }
         if kind == .tie || kind == .slur {
             let events = units.flatMap { u -> [StaveNote] in
                 let staves = score.staves[u.first]

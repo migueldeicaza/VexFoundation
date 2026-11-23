@@ -361,7 +361,8 @@ public final class EasyScoreElements {
     /// Return a beam handle while preserving EasyScore's automatic/explicit stem policy.
     public func beam(
         notes: [StemmableNote], autoStem: Bool? = nil, secondaryBeamBreaks: [Int] = [],
-        partialBeamDirections: [Int: PartialBeamDirection] = [:]
+        partialBeamDirections: [Int: PartialBeamDirection] = [:],
+        feathered: FeatheredBeamDirection? = nil
     ) throws -> Beam {
         if notes.count < 2 || Set(notes.map { ObjectIdentifier($0) }).count != notes.count {
             throw VexError("BadArguments", "A beam needs at least two distinct notes.")
@@ -379,7 +380,7 @@ public final class EasyScoreElements {
         return try manage {
             try factory.BeamThrowing(
                 notes: notes, autoStem: autoStem, secondaryBeamBreaks: secondaryBeamBreaks,
-                partialBeamDirections: partialBeamDirections
+                partialBeamDirections: partialBeamDirections, feathered: feathered
             )
         }
     }

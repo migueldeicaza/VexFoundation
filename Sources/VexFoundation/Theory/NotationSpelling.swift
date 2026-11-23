@@ -1,10 +1,35 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/notationspelling.ts` (VexFlow 5.4.0).
-// Opt-in written pitch and rhythm spelling. Neither helper edits an existing voice.
+// Port of `src/notationspelling.ts` (VexFlow 5.7.0).
+// Written pitch, chord and rhythm spelling for constructing a score or transposed part.
 
 import Foundation
+
+/// A chord's transposable pitches and its literal quality, extensions and alterations. (VexFlow 5.7.0)
+public struct ChordHarmony: Equatable, Sendable {
+    public var root: String
+    public var quality: String?
+    public var bass: String?
+
+    public init(root: String, quality: String? = nil, bass: String? = nil) {
+        self.root = root
+        self.quality = quality
+        self.bass = bass
+    }
+}
+
+private let chordPitchPattern = try? NSRegularExpression(pattern: "^[A-Ga-g](?:#{1,2}|b{1,2}|\u{266F}{1,2}|\u{266D}{1,2})?$")
+
+/// Read an octave-free pitch name. Keep the letter so enharmonic roots transpose differently.
+private func chordPitch(_ name: String) throws -> String {
+    let range = NSRange(name.startIndex..., in: name)
+    guard let first = name.first, chordPitchPattern?.firstMatch(in: name, range: range) != nil else {
+        throw VexError("BadArguments", "Expected a chord pitch such as G, Bb or C#.")
+    }
+    let rest = name.dropFirst().replacingOccurrences(of: "\u{266F}", with: "#").replacingOccurrences(of: "\u{266D}", with: "b")
+    return first.uppercased() + rest
+}
 
 /// One printable segment. `tieNext` joins a pitched continuation across a requested boundary.
 public struct RhythmSegment: Equatable, Sendable {
@@ -55,6 +80,29 @@ public enum NotationSpelling {
             throw VexError("BadArguments", "Spelling requires more than a double accidental.")
         }
         return String(letters[letter]) + signs[delta + 2] + "/" + String(targetOctave)
+    }
+
+    /// Return a new harmony. Only its root and optional slash bass participate in pitch spelling. (VexFlow 5.7.0)
+    public static func transposeChord(_ harmony: ChordHarmony, semitones: Int, steps: Int) throws -> ChordHarmony {
+        func pitch(_ name: String) throws -> String {
+            // A reference octave lets the pitch helper account for crossings such as B to C-sharp.
+            let written = try transpose(try chordPitch(name) + "/4", semitones: semitones, steps: steps)
+                .split(separator: "/")[0]
+            return written.prefix(1).uppercased() + written.dropFirst()
+        }
+        var result = harmony
+        result.root = try pitch(harmony.root)
+        if let bass = harmony.bass { result.bass = try pitch(bass) }
+        return result
+    }
+
+    /// Print the spelled pitches with musical accidentals and copy the chord suffix verbatim. (VexFlow 5.7.0)
+    public static func chordText(_ harmony: ChordHarmony) throws -> String {
+        func print(_ name: String) throws -> String {
+            try chordPitch(name).replacingOccurrences(of: "#", with: "\u{266F}").replacingOccurrences(of: "b", with: "\u{266D}")
+        }
+        let bass = try harmony.bass.map { "/" + (try print($0)) } ?? ""
+        return try print(harmony.root) + (harmony.quality ?? "") + bass
     }
 
     /// Preserve the mode while spelling the transposed tonic. Reject unavailable standard signatures.

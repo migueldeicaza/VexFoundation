@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/scorenavigation.ts` (VexFlow 5.4.0).
+// Port of `src/scorenavigation.ts` (VexFlow 5.7.0).
 // A renderer-independent reading order and hit index for a formatted EasyScore composition.
 
 import Foundation
@@ -129,12 +129,19 @@ public final class ScoreNavigation {
         var events: [ScoreReadingEvent] = []
         var seen = Set<String>()
         let layout = score.sheet.getContinuousLayout()
-        var muteLabels: [String: [String]] = [:]
+        var techniqueLabels: [String: [String]] = [:]
         for fragment in layout?.fragments ?? [] {
             guard let strings = fragment.strings else { continue }
             let text = (strings.count == 1 ? "string " : "strings ") + strings.map(String.init).joined(separator: ", ")
-            for (id, prefix) in [(fragment.from, "Begin palm mute on "), (fragment.to, "Last palm-muted attack on ")] {
-                if let id, !id.isEmpty { muteLabels[id, default: []].append(prefix + text) }
+            if fragment.kind != .palmMute && fragment.bend == nil { continue }
+            let labels: [String]
+            if let amount = fragment.bend?.envelope.semitones {
+                labels = ["Bend \(formatJSNumber(amount)) semitone\(amount == 1 ? "" : "s") on ", "Sustain and release tied "]
+            } else {
+                labels = ["Begin palm mute on ", "Last palm-muted attack on "]
+            }
+            for (id, prefix) in [(fragment.from, labels[0]), (fragment.to, labels[1])] {
+                if let id, !id.isEmpty { techniqueLabels[id, default: []].append(prefix + text) }
             }
         }
         for (measure, staffNotes) in score.notes.enumerated() {
@@ -163,7 +170,7 @@ public final class ScoreNavigation {
                             "voice \(voice + 1)",
                             describe(note),
                             length + (note.isRest() ? " rest" : " note"),
-                        ] + (muteLabels[id] ?? [])
+                        ] + (techniqueLabels[id] ?? [])
                         ordered.append((time, ScoreReadingEvent(
                             id: id,
                             source: sources[id],
@@ -196,16 +203,24 @@ public final class ScoreNavigation {
             }
             // A conservative target includes the curve and enough space to select a thin stroke.
             let pad = max(fragment.space, abs(fragment.rise ?? 0))
+            var bounds = BoundingBox(
+                min(fragment.x1, fragment.x2),
+                min(fragment.y1, fragment.y2) - pad,
+                abs(fragment.x2 - fragment.x1),
+                abs(fragment.y2 - fragment.y1) + 2 * pad
+            )
+            if let bend = fragment.bend { bounds.mergeWith(bend.bounds) }
+            if let tip = fragment.nienteTip { bounds.mergeWith(nienteBounds(tip, 0.5)) }
             regions.append(ScoreHitRegion(
                 id: fragment.id,
                 kind: .span,
                 source: sources[fragment.id],
                 strings: fragment.strings,
                 row: fragment.row,
-                x: min(fragment.x1, fragment.x2),
-                y: min(fragment.y1, fragment.y2) - pad,
-                w: abs(fragment.x2 - fragment.x1),
-                h: abs(fragment.y2 - fragment.y1) + 2 * pad
+                x: bounds.x,
+                y: bounds.y,
+                w: bounds.w,
+                h: bounds.h
             ))
         }
         self.events = events

@@ -278,29 +278,29 @@ Commits: `git -C ../vexflow log --oneline 5.6.1..5.7.0`. Release notes: `changel
 
 | upstream file | +/- | Swift file |
 |---|---|---|
-| `src/alternatingtremolo.ts` | +138/-37 | ? |
+| `src/alternatingtremolo.ts` | +138/-37 | Modifiers/AlternatingTremolo.swift |
 | `src/beam.ts` | +74/-9 | Formatting/Beam.swift |
-| `src/chordspacing.ts` | +77/-0 | NEW |
+| `src/chordspacing.ts` | +77/-0 | Layout/ChordSpacing.swift (NEW) |
 | `src/chordsymbol.ts` | +27/-12 | Modifiers/ChordSymbol.swift |
-| `src/continuousbeam.ts` | +146/-0 | NEW |
-| `src/continuouslayout.ts` | +191/-46 | ? |
-| `src/continuousspan.ts` | +32/-1 | ? |
+| `src/continuousbeam.ts` | +146/-0 | Layout/ContinuousBeam.swift (NEW) |
+| `src/continuouslayout.ts` | +191/-46 | Layout/ContinuousLayout.swift |
+| `src/continuousspan.ts` | +32/-1 | Layout/ContinuousSpan.swift |
 | `src/easyscore.ts` | +1/-11 | API/EasyScore.swift |
-| `src/easyscore/composition.ts` | +13/-5 | ? |
+| `src/easyscore/composition.ts` | +13/-5 | API/EasyScore/Composition.swift |
 | `src/factory.ts` | +3/-1 | API/Factory.swift |
-| `src/guitargesture.ts` | +31/-6 | ? |
-| `src/hairpintip.ts` | +30/-0 | NEW |
-| `src/index.ts` | +1/-1 | ? |
-| `src/notationspelling.ts` | +36/-1 | ? |
-| `src/phraselayout.ts` | +15/-7 | ? |
-| `src/publication.ts` | +1/-0 | ? |
-| `src/scorenavigation.ts` | +22/-10 | ? |
-| `src/sheet.ts` | +22/-18 | ? |
-| `src/splitstem.ts` | +34/-0 | NEW |
+| `src/guitargesture.ts` | +31/-6 | Instruments/GuitarGesture.swift |
+| `src/hairpintip.ts` | +30/-0 | Stave/HairpinTip.swift (NEW) |
+| `src/index.ts` | +1/-1 | (public API: `TiedBend` is public) |
+| `src/notationspelling.ts` | +36/-1 | Theory/NotationSpelling.swift |
+| `src/phraselayout.ts` | +15/-7 | Layout/PhraseLayout.swift |
+| `src/publication.ts` | +1/-0 | Publication/Publication.swift |
+| `src/scorenavigation.ts` | +22/-10 | API/ScoreNavigation.swift |
+| `src/sheet.ts` | +22/-18 | Layout/Sheet.swift |
+| `src/splitstem.ts` | +34/-0 | Layout/SplitStem.swift (NEW) |
 | `src/stavehairpin.ts` | +35/-30 | Stave/StaveHairpin.swift |
 | `src/stavenote.ts` | +16/-7 | Notes/StaveNote.swift |
-| `src/systembreaks.ts` | +3/-1 | ? |
-| `src/tiedbend.ts` | +87/-0 | NEW |
+| `src/systembreaks.ts` | +3/-1 | Layout/SystemBreaks.swift |
+| `src/tiedbend.ts` | +87/-0 | Instruments/TiedBend.swift (NEW) |
 
 ## 5.8.0 (from 5.7.0)
 

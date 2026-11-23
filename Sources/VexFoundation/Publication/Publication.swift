@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/publication.ts` (VexFlow 5.5.0).
+// Port of `src/publication.ts` (VexFlow 5.7.0).
 // Print-ready SVG pages over independent EasyScore views. Public dimensions are millimeters.
 //
 // Swift: upstream draws into a hidden DOM host and reads `getBBox()`, canvas `measureText()` and computed
@@ -640,6 +640,16 @@ private func buildPages(
                 pairs.append(("strings", .array(strings.map { .number(Double($0)) })))
                 if let from = f.from { pairs.append(("from", .string(from))) }
                 if let to = f.to { pairs.append(("to", .string(to))) }
+            }
+            if let bend = f.bend?.envelope {
+                // VexFlow 5.7.0: the authored envelope of a tied bend.
+                func phase(_ p: GesturePhase) -> JSON { .array([.number(Double(p.0)), .number(Double(p.1))]) }
+                var envelope: [(String, JSON)] = [
+                    ("semitones", .number(bend.semitones)), ("rise", phase(bend.rise)),
+                    ("hold", phase(bend.hold)), ("release", phase(bend.release)),
+                ]
+                if let label = bend.label { envelope.append(("label", .string(label))) }
+                pairs.append(("bend", .object(envelope)))
             }
             return .object(pairs)
         }

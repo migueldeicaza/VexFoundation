@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Aaron (@AaronDavidNewman)
 //
-// Port of `src/chordsymbol.ts` (VexFlow 5.2.0).
+// Port of `src/chordsymbol.ts` (VexFlow 5.7.0).
 //
 // This implements chord symbols above/below a chord.
 // Chord symbols are modifiers that can be attached to notes.
@@ -511,6 +511,40 @@ public final class ChordSymbol: Modifier {
 
     public func getHorizontal() -> ChordSymbolHorizontalJustify { horizontal }
 
+    // MARK: - Horizontal ink (VexFlow 5.7.0)
+
+    /// Use the same note anchor for drawing and for spacing chords before a draw.
+    private func originX(_ note: Note) -> Double {
+        let start = note.getModifierStartXY(position: .above, index: index ?? 0)
+        switch horizontal {
+        case .left:
+            return start.x
+        case .right:
+            return kernedRuns != nil ? start.x - getWidth() : start.x + getWidth()
+        case .center:
+            return start.x - getWidth() / 2
+        case .centerStem:
+            return ((note as? StemmableNote)?.getStemX() ?? start.x) - getWidth() / 2
+        }
+    }
+
+    /// Horizontal ink of the formatted symbol at its current attachment, including italic overhangs.
+    public func getHorizontalInk() throws -> (left: Double, right: Double) {
+        let x = originX(try checkAttachedNoteThrowing())
+        let parts: [(offset: Double, metrics: TextMetrics)] = kernedRuns.map { runs in
+            runs.map { (offset: $0.x, metrics: $0.metrics) }
+        } ?? symbolBlocks.map { (offset: $0.getXShift(), metrics: $0.textMetrics) }
+        var left = Double.infinity
+        var right = -Double.infinity
+        for part in parts {
+            let m = part.metrics
+            if m.actualBoundingBoxLeft + m.actualBoundingBoxRight <= 0 { continue }
+            left = min(left, x + part.offset - m.actualBoundingBoxLeft)
+            right = max(right, x + part.offset + m.actualBoundingBoxRight)
+        }
+        return right > left ? (left, right) : (x, x)
+    }
+
     // MARK: - Draw
 
     /// Render text and glyphs above/below the note.
@@ -521,7 +555,6 @@ public final class ChordSymbol: Modifier {
 
         _ = ctx.openGroup(groupClass("chordsymbol"), getAttribute("id"))
 
-        let start = note.getModifierStartXY(position: .above, index: index ?? 0)
         ctx.setFont(fontInfo)
 
         var y: Double
@@ -551,17 +584,7 @@ public final class ChordSymbol: Modifier {
             }
         }
 
-        var x = start.x
-        switch horizontal {
-        case .left:
-            x = start.x
-        case .right:
-            x = kernedRuns != nil ? start.x - getWidth() : start.x + getWidth()
-        case .center:
-            x = start.x - getWidth() / 2
-        case .centerStem:
-            x = ((note as? StemmableNote)?.getStemX() ?? start.x) - getWidth() / 2
-        }
+        let x = originX(note)
 
         if let kernedRuns {
             kerningOrigin = (x, y)

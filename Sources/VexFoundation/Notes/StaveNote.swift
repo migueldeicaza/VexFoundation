@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stavenote.ts` (VexFlow 5.6.0).
+// Port of `src/stavenote.ts` (VexFlow 5.7.0).
 // This file implements notes for standard notation. A note has one or more
 // `NoteHead`s, an optional stem, and an optional flag.
 
@@ -414,6 +414,9 @@ private func mergeStyles(_ base: ElementStyle?, _ override: ElementStyle?) -> El
 open class StaveNote: StemmableNote {
 
     override open class var category: String { "StaveNote" }
+
+    /// Shared stem of a beamed split chord (VexFlow 5.7.0 `splitstem.ts`).
+    var splitStemLink: SplitStemLink?
 
     public static let LEDGER_LINE_OFFSET: Double = 3
 
@@ -1060,7 +1063,11 @@ open class StaveNote: StemmableNote {
         }
         let bounds = getNoteHeadBounds()
 
-        if !isRest() && hasStem(), let stem {
+        if splitStemFor(self)?.owner === self {
+            var stemBox = checkStem().getBoundingBox() ?? BoundingBox(x: 0, y: 0, w: 0, h: 0)
+            stemBox.setX(getStemX() - stemBox.w / 2)
+            _ = boundingBox.mergeWith(stemBox)
+        } else if !isRest() && hasStem(), let stem {
             let noteStemHeight = stem.getHeight()
             let stemY = getStemDirection() == Stem.DOWN
                 ? bounds.yTop - noteStemHeight - flag.getTextMetrics().actualBoundingBoxDescent
@@ -1126,11 +1133,12 @@ open class StaveNote: StemmableNote {
 
     /// True if the note has a stem.
     override public func hasStem() -> Bool {
-        glyphProps.stem
+        let shared = splitStemFor(self)
+        return glyphProps.stem && (shared == nil || shared?.owner === self)
     }
 
     override public func hasFlag() -> Bool {
-        super.hasFlag() && !isRest()
+        super.hasFlag() && splitStemFor(self) == nil
     }
 
     /// Use explicit font metadata first, then the bundled anchors for Bravura rhythm slashes. (VexFlow 5.6.0)
@@ -1199,6 +1207,14 @@ open class StaveNote: StemmableNote {
         if let stem {
             let bounds = getStemYBounds()
             stem.setYBounds(bounds.yTop, bounds.yBottom)
+            // The second staff assignment supplies the final pair of coordinates before the beam is fitted.
+            if let shared = splitStemFor(self) {
+                let other = shared.upper === self ? shared.lower : shared.upper
+                let otherBounds = other.getStemYBounds()
+                shared.owner.checkStem().setYBounds(
+                    min(bounds.yTop, otherBounds.yTop), max(bounds.yBottom, otherBounds.yBottom)
+                )
+            }
         }
 
         return self
@@ -1655,10 +1671,7 @@ open class StaveNote: StemmableNote {
     // MARK: - Flag
 
     public func shouldDrawFlag() -> Bool {
-        let hasStem = stem != nil
-        let hasFlag = glyphProps.codeFlagUp != nil
-        let hasNoBeam = beam == nil
-        return hasStem && hasFlag && hasNoBeam && !isRest()
+        stem != nil && hasFlag()
     }
 
     /// Share flag coordinates between measurement and drawing.

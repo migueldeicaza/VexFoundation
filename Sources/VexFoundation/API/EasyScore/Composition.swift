@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/easyscore/composition.ts` (VexFlow 5.6.0).
+// Port of `src/easyscore/composition.ts` (VexFlow 5.7.0).
 // Structured construction delegates timing and layout to native Voice, System, and Sheet objects.
 
 import Foundation
@@ -40,13 +40,23 @@ struct EasyScoreResolvedStaffState: Equatable {
 }
 
 /// A written mark anchored by note ID on its owning staff and measure. (VexFlow 5.6.0)
+/// A chord mark has either literal `text` or a spelled `harmony` (VexFlow 5.7.0).
 public struct EasyScoreLeadMark: Equatable, Sendable {
     public var note: String
     public var text: String
+    /// A spelled harmony, printed with `NotationSpelling.chordText`. (VexFlow 5.7.0)
+    public var harmony: ChordHarmony?
 
     public init(note: String, text: String) {
         self.note = note
         self.text = text
+    }
+
+    /// A spelled chord. Use `NotationSpelling.transposeChord` to transpose it. (VexFlow 5.7.0)
+    public init(note: String, harmony: ChordHarmony) {
+        self.note = note
+        self.text = ""
+        self.harmony = harmony
     }
 }
 
@@ -54,12 +64,17 @@ public struct EasyScoreLeadMark: Equatable, Sendable {
 public struct EasyScoreLyricMark: Equatable, Sendable {
     public var note: String
     public var text: String
+    /// A second syllable sharing this attack and its verse baseline. (VexFlow 5.7.0)
+    public var elideWith: String?
     public var hyphenAfter: Bool
     public var extendTo: String?
 
-    public init(note: String, text: String, hyphenAfter: Bool = false, extendTo: String? = nil) {
+    public init(
+        note: String, text: String, hyphenAfter: Bool = false, extendTo: String? = nil, elideWith: String? = nil
+    ) {
         self.note = note
         self.text = text
+        self.elideWith = elideWith
         self.hyphenAfter = hyphenAfter
         self.extendTo = extendTo
     }
@@ -505,8 +520,11 @@ private func addLeadMarks(
     var chordLanes: [(stave: Stave, marks: [Annotation])] = []
     for chord in measure.chords {
         let note = try anchor(chord.note)
-        if chord.text.isEmpty { throw invalid("A chord label needs text.") }
-        let mark = try score.make.annotation(text: chord.text, vJustify: .top, font: Metrics.getFontInfo("ChordSymbol"))
+        if chord.harmony != nil && !chord.text.isEmpty { throw invalid("Choose either chord harmony or literal text.") }
+        let text = try chord.harmony.map { try NotationSpelling.chordText($0) } ?? chord.text
+        if text.isEmpty { throw invalid("A chord label needs text.") }
+        let mark = try score.make.annotation(text: text, vJustify: .top, font: Metrics.getFontInfo("ChordSymbol"))
+        addLeadChordAnnotation(mark)
         _ = try score.attach(note, mark)
         if let note = note as? StaveNote {
             let stave = note.checkStave()
@@ -530,7 +548,7 @@ private func addLeadMarks(
         let syllables = try verse.map { mark in
             PhraseSyllable(
                 note: try lyricAnchor(mark.note), text: mark.text, hyphenAfter: mark.hyphenAfter,
-                extendTo: try mark.extendTo.map { try lyricAnchor($0) }
+                extendTo: try mark.extendTo.map { try lyricAnchor($0) }, elideWith: mark.elideWith
             )
         }
         try system.getPhraseLayout().addVerse(syllables[0].note.checkStave(), syllables)

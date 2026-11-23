@@ -2,9 +2,9 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Raffaele Viglianti, 2012 http://itisnotsound.wordpress.com/
 //
-// Port of `src/stavehairpin.ts` (VexFlow 5.4.0).
+// Port of `src/stavehairpin.ts` (VexFlow 5.7.0).
 // This class implements hairpins between notes.
-// Hairpins can be either crescendo or decrescendo.
+// Hairpins can be either crescendo or decrescendo, with an optional circled niente tip.
 
 import Foundation
 
@@ -32,6 +32,8 @@ public enum HairpinType: Int, Sendable {
 // MARK: - Hairpin Render Options
 
 public struct HairpinRenderOptions {
+    /// Draw an open niente circle at the closed end of the wedge.
+    public var niente: Bool
     public var rightShiftTicks: Double?
     public var leftShiftTicks: Double?
     public var leftShiftPx: Double
@@ -45,8 +47,10 @@ public struct HairpinRenderOptions {
         height: Double = 10,
         yShift: Double = 0,
         rightShiftTicks: Double? = 0,
-        leftShiftTicks: Double? = 0
+        leftShiftTicks: Double? = 0,
+        niente: Bool = false
     ) {
+        self.niente = niente
         self.leftShiftPx = leftShiftPx
         self.rightShiftPx = rightShiftPx
         self.height = height
@@ -110,14 +114,11 @@ public final class StaveHairpin: VexElement {
         let leftShiftPx = ppt * (options.leftShiftTicks ?? 0)
         let rightShiftPx = ppt * (options.rightShiftTicks ?? 0)
 
-        let hairpinOptions = HairpinRenderOptions(
-            leftShiftPx: leftShiftPx,
-            rightShiftPx: rightShiftPx,
-            height: options.height,
-            yShift: options.yShift,
-            rightShiftTicks: 0,
-            leftShiftTicks: 0
-        )
+        var hairpinOptions = options
+        hairpinOptions.leftShiftPx = leftShiftPx
+        hairpinOptions.rightShiftPx = rightShiftPx
+        hairpinOptions.rightShiftTicks = 0
+        hairpinOptions.leftShiftTicks = 0
 
         try StaveHairpin(validating: firstNote, lastNote: lastNote, type: type)
             .setContext(ctx)
@@ -239,7 +240,17 @@ public final class StaveHairpin: VexElement {
         public var height: Double
     }
 
-    private func edges(firstX: Double, lastX: Double, firstY: Double, staffHeight: Double) -> LayoutEdges {
+    private struct Edges {
+        var top: Double
+        var left: Double
+        var right: Double
+        var height: Double
+        var closedX: Double
+        var openX: Double
+        var tip: NienteTip?
+    }
+
+    private func edges(firstX: Double, lastX: Double, firstY: Double, staffHeight: Double) -> Edges {
         let yShift = renderOptions.yShift
         let height = renderOptions.height
         let above = position == .above
@@ -249,29 +260,45 @@ public final class StaveHairpin: VexElement {
         } else {
             top = firstY + (above ? 10 - staffHeight - yShift : 20 + yShift)
         }
+        let left = firstX + renderOptions.leftShiftPx + layoutLeft
+        let right = lastX + renderOptions.rightShiftPx - layoutRight
+        let crescendo = hairpin == .crescendo
+        let closedX = crescendo ? left : right
+        let openX = crescendo ? right : left
+        let space = firstNote?.getStave()?.space(1) ?? Tables.STAVE_LINE_DISTANCE
+        let side: NienteSide = (right >= left) == crescendo ? .left : .right
+        let tip = renderOptions.niente ? nienteTip(closedX, top + height / 2, space, side) : nil
+        return Edges(top: top, left: left, right: right, height: height, closedX: closedX, openX: openX, tip: tip)
+    }
+
+    private func edges(_ p: Parameters) -> Edges {
+        edges(firstX: p.firstX, lastX: p.lastX, firstY: p.firstY, staffHeight: p.staffHeight)
+    }
+
+    /// Horizontal extents for spacing adjacent dynamics, including the diameter of a circled tip.
+    public func getLayoutEdges() throws -> LayoutEdges {
+        let e = edges(try parameters())
+        let outerTip = e.tip.map { 2 * $0.x - e.closedX } ?? e.closedX
         return LayoutEdges(
-            top: top,
-            left: firstX + renderOptions.leftShiftPx + layoutLeft,
-            right: lastX + renderOptions.rightShiftPx - layoutRight,
-            height: height
+            top: e.top,
+            left: hairpin == .crescendo ? outerTip : e.left,
+            right: hairpin == .decrescendo ? outerTip : e.right,
+            height: e.height
         )
     }
 
-    /// Signed endpoint order is available to diagnose a wedge squeezed between two dynamics.
-    public func getLayoutEdges() throws -> LayoutEdges {
-        let p = try parameters()
-        return edges(firstX: p.firstX, lastX: p.lastX, firstY: p.firstY, staffHeight: p.staffHeight)
-    }
-
     override public func getBoundingBox() -> BoundingBox? {
-        guard let e = try? getLayoutEdges() else { return nil }
+        guard let p = try? parameters() else { return nil }
+        let e = edges(p)
         let pad = (getStyle()?.lineWidth ?? 1) / 2
-        return BoundingBox(
+        var box = BoundingBox(
             min(e.left, e.right) - pad,
             min(e.top, e.top + e.height) - pad,
             abs(e.right - e.left) + 2 * pad,
             abs(e.height) + 2 * pad
         )
+        if let tip = e.tip { box.mergeWith(nienteBounds(tip, pad)) }
+        return box
     }
 
     // MARK: - Render
@@ -280,21 +307,16 @@ public final class StaveHairpin: VexElement {
                               staffHeight: Double) throws {
         let ctx = try checkContext()
         let e = edges(firstX: firstX, lastX: lastX, firstY: firstY, staffHeight: staffHeight)
+        let middle = e.top + e.height / 2
         ctx.beginPath()
-
-        switch hairpin {
-        case .crescendo:
-            ctx.moveTo(e.right, e.top)
-            ctx.lineTo(e.left, e.top + e.height / 2)
-            ctx.lineTo(e.right, e.top + e.height)
-        case .decrescendo:
-            ctx.moveTo(e.left, e.top)
-            ctx.lineTo(e.right, e.top + e.height / 2)
-            ctx.lineTo(e.left, e.top + e.height)
-        }
-
+        ctx.moveTo(e.openX, e.top)
+        ctx.lineTo(e.closedX, middle)
+        // At a circled tip use separate arms to keep a sharp miter out of the circle.
+        if e.tip != nil { ctx.moveTo(e.closedX, middle) }
+        ctx.lineTo(e.openX, e.top + e.height)
         ctx.stroke()
         ctx.closePath()
+        if let tip = e.tip { drawNienteTip(ctx, tip) }
     }
 
     // MARK: - Draw

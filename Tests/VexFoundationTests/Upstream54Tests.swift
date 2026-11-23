@@ -493,7 +493,7 @@ struct Upstream54InstrumentTests {
             let bad = try AlternatingTremolo(first: notes[0], last: notes[2], strokes: 3)
             _ = bad.setContext(svg)
             expectError("BadArguments") { try bad.draw() }
-            expectError("BadArguments") { _ = try AlternatingTremolo(first: notes[0], last: notes[1], strokes: 4) }
+            expectError("BadArguments") { _ = try AlternatingTremolo(first: notes[0], last: notes[1], strokes: 5) }
             expectError("BadArguments") {
                 _ = try AlternatingTremolo.endpoint(try StaveNoteStruct(parsingKeys: ["c/4"], duration: "8"), strokes: 1)
             }

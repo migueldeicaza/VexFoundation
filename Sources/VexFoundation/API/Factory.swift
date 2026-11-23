@@ -686,13 +686,15 @@ public final class Factory {
         notes: [StemmableNote],
         autoStem: Bool = false,
         secondaryBeamBreaks: [Int] = [],
-        partialBeamDirections: [Int: PartialBeamDirection] = [:]
+        partialBeamDirections: [Int: PartialBeamDirection] = [:],
+        feathered: FeatheredBeamDirection? = nil
     ) -> VexFoundation.Beam? {
         try? BeamThrowing(
             notes: notes,
             autoStem: autoStem,
             secondaryBeamBreaks: secondaryBeamBreaks,
-            partialBeamDirections: partialBeamDirections
+            partialBeamDirections: partialBeamDirections,
+            feathered: feathered
         )
     }
 
@@ -701,10 +703,12 @@ public final class Factory {
         notes: [StemmableNote],
         autoStem: Bool = false,
         secondaryBeamBreaks: [Int] = [],
-        partialBeamDirections: [Int: PartialBeamDirection] = [:]
+        partialBeamDirections: [Int: PartialBeamDirection] = [:],
+        feathered: FeatheredBeamDirection? = nil
     ) throws -> VexFoundation.Beam {
         let beam = try inRuntimeContext { try VexFoundation.Beam(notes, autoStem: autoStem) }
         if let ctx = context { _ = beam.setContext(ctx) }
+        if let feathered { beam.renderOptions.feathered = feathered }
         _ = beam.breakSecondaryAt(secondaryBeamBreaks)
         for (noteIndex, direction) in partialBeamDirections {
             _ = beam.setPartialBeamSideAt(noteIndex, side: direction)

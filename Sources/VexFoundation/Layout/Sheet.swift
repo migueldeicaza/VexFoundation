@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/sheet.ts` (VexFlow 5.4.0).
+// Port of `src/sheet.ts` (VexFlow 5.7.0).
 // Optional continuous-sheet layout for existing Systems. No music data model or pagination.
 
 import Foundation
@@ -131,13 +131,16 @@ public final class Sheet {
             return self
         }
         let widths = try measureSystems()
-        rows = []
-        var y = options.y
-        for indices in packRows(widths) {
-            let row = try formatRow(indices, widths, y)
-            rows.append(row)
-            y += row.height + options.rowGap
-        }
+        var padding: [ObjectIdentifier: Double] = [:]
+        repeat {
+            rows = []
+            var y = options.y
+            for indices in packRows(widths, padding) {
+                let row = try formatRow(indices, widths, padding, y)
+                rows.append(row)
+                y += row.height + options.rowGap
+            }
+        } while try reserveChordSpacing(rows.map { $0.systems }, &padding)
         return self
     }
 
@@ -151,18 +154,18 @@ public final class Sheet {
     }
 
     /// Greedy packing keeps measure order and gives oversized measures their own rows.
-    private func packRows(_ widths: [Double]) -> [[Int]] {
+    private func packRows(_ widths: [Double], _ padding: [ObjectIdentifier: Double]) -> [[Int]] {
         var groups: [[Int]] = []
         var group: [Int] = []
         var used: Double = 0
         for (index, width) in widths.enumerated() {
-            let gap = group.isEmpty ? 0 : options.measureGap
+            let gap = options.measureGap + (index > 0 ? padding[ObjectIdentifier(systems[index - 1])] ?? 0 : 0)
             if !group.isEmpty && used + gap + width > options.width {
                 groups.append(group)
                 group = []
                 used = 0
             }
-            used += (group.isEmpty ? 0 : options.measureGap) + width
+            used += (group.isEmpty ? 0 : gap) + width
             group.append(index)
         }
         if !group.isEmpty { groups.append(group) }
@@ -204,8 +207,15 @@ public final class Sheet {
     }
 
     /// Justify a row horizontally, then place every measure on a shared baseline.
-    private func formatRow(_ indices: [Int], _ widths: [Double], _ y: Double) throws -> SheetRow {
-        let minimum = indices.reduce(0) { $0 + widths[$1] } + options.measureGap * Double(indices.count - 1)
+    private func formatRow(
+        _ indices: [Int], _ widths: [Double], _ padding: [ObjectIdentifier: Double], _ y: Double
+    ) throws -> SheetRow {
+        let last = indices[indices.count - 1]
+        func endPadding(_ index: Int) -> Double {
+            index == last ? 0 : padding[ObjectIdentifier(systems[index])] ?? 0
+        }
+        let minimum = indices.reduce(0) { $0 + widths[$1] + endPadding($1) }
+            + options.measureGap * Double(indices.count - 1)
         let extra = options.justify ? max(0, options.width - minimum) / Double(indices.count) : 0
         var x = options.x
         var top: Double = 0
@@ -213,16 +223,16 @@ public final class Sheet {
         let rowSystems = indices.map { systems[$0] }
         for index in indices {
             let system = systems[index]
-            try system.setX(x).setY(0).setWidthThrowing(widths[index] + extra)
-            try system.formatThrowing()
+            try system.setX(x).setY(0).setWidthThrowing(widths[index] + extra + endPadding(index))
+            try system.formatThrowing(row: SystemRowLayout(endPadding: endPadding(index)))
             let bounds = verticalBounds(system)
             top = min(top, bounds.top)
             bottom = max(bottom, bounds.bottom)
             x += system.getWidth() + options.measureGap
         }
-        for system in rowSystems {
-            system.setY(y - top)
-            try system.formatThrowing()
+        for index in indices {
+            systems[index].setY(y - top)
+            try systems[index].formatThrowing(row: SystemRowLayout(endPadding: endPadding(index)))
         }
         let width = x - options.x - options.measureGap
         return SheetRow(

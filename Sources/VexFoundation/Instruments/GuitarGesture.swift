@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/guitargesture.ts` (VexFlow 5.4.0).
+// Port of `src/guitargesture.ts` (VexFlow 5.7.0).
 // Guitar performance data and its written signs on paired notation and tablature.
 
 import Foundation
@@ -76,12 +76,46 @@ extension TimedStringBend: Equatable {
     }
 }
 
+/// A string tie carries the target between two adjacent events. Rise belongs to the first event, and
+/// hold and release are measured from the start of the tied continuation. (VexFlow 5.7.0)
+public struct TiedBend: Sendable {
+    public var semitones: Double
+    public var rise: GesturePhase
+    public var hold: GesturePhase
+    public var release: GesturePhase
+    public var label: String?
+
+    public init(semitones: Double, rise: GesturePhase, hold: GesturePhase, release: GesturePhase, label: String? = nil) {
+        self.semitones = semitones
+        self.rise = rise
+        self.hold = hold
+        self.release = release
+        self.label = label
+    }
+}
+
+extension TiedBend: Equatable {
+    public static func == (a: TiedBend, b: TiedBend) -> Bool {
+        a.semitones == b.semitones && a.rise == b.rise && a.hold == b.hold && a.release == b.release
+            && a.label == b.label
+    }
+}
+
 /// Normalize the written amount independently of the bend's horizontal length.
 public func bendAmount(_ bend: TimedStringBend) -> String {
-    if let label = bend.label { return label }
-    if bend.semitones == 2 { return "full" }
-    if bend.semitones == 1 { return "½" }
-    return formatJSNumber(bend.semitones) + " st"
+    bendAmount(semitones: bend.semitones, label: bend.label)
+}
+
+/// Normalize the written amount of a tied bend. (VexFlow 5.7.0)
+public func bendAmount(_ bend: TiedBend) -> String {
+    bendAmount(semitones: bend.semitones, label: bend.label)
+}
+
+private func bendAmount(semitones: Double, label: String?) -> String {
+    if let label { return label }
+    if semitones == 2 { return "full" }
+    if semitones == 1 { return "½" }
+    return formatJSNumber(semitones) + " st"
 }
 
 /// `a.0 / a.1 <= b.0 / b.1` for positive denominators, without overflow (upstream `BigInt`).
@@ -91,21 +125,36 @@ private func phaseAtMost(_ a: GesturePhase, _ b: GesturePhase) -> Bool {
     return lhs.high < rhs.high || (lhs.high == rhs.high && lhs.low <= rhs.low)
 }
 
-/// Validate the performed order before constructing a modifier or changing a note.
-public func copyBend(_ bend: TimedStringBend) throws -> TimedStringBend {
-    if bend.string < 1 || !bend.semitones.isFinite || bend.semitones <= 0 {
-        throw VexError("BadArguments", "A timed bend needs a string and positive semitone amount.")
-    }
+/// Validate increasing fractions within one written event.
+private func checkPhases(_ ends: [GesturePhase]) throws {
     var previous: GesturePhase = (0, 1)
-    var ends = [bend.rise]
-    if let hold = bend.hold { ends.append(hold) }
-    if let release = bend.release { ends.append(release) }
     for end in ends {
         if end.1 <= 0 || end.0 <= 0 || end.0 > end.1 || phaseAtMost(end, previous) {
             throw VexError("BadArguments", "Bend endpoints must increase within the written duration.")
         }
         previous = end
     }
+}
+
+/// Check the clocks of the initial attack and tied continuation independently. (VexFlow 5.7.0)
+public func copyTiedBend(_ bend: TiedBend) throws -> TiedBend {
+    if !bend.semitones.isFinite || bend.semitones <= 0 {
+        throw VexError("BadArguments", "A tied bend needs a positive semitone amount.")
+    }
+    try checkPhases([bend.rise])
+    try checkPhases([bend.hold, bend.release])
+    return bend
+}
+
+/// Validate the performed order before constructing a modifier or changing a note.
+public func copyBend(_ bend: TimedStringBend) throws -> TimedStringBend {
+    if bend.string < 1 || !bend.semitones.isFinite || bend.semitones <= 0 {
+        throw VexError("BadArguments", "A timed bend needs a string and positive semitone amount.")
+    }
+    var ends = [bend.rise]
+    if let hold = bend.hold { ends.append(hold) }
+    if let release = bend.release { ends.append(release) }
+    try checkPhases(ends)
     return bend
 }
 

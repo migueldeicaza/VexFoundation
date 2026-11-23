@@ -28,6 +28,9 @@ public final class Annotation: Modifier {
 
     override public class var category: String { "Annotation" }
 
+    /// EasyScore lead-sheet chord (VexFlow 5.7.0 `chordspacing.ts` `leadChordAnnotations`).
+    var isLeadChord = false
+
     /// Text annotations can be positioned and justified relative to the note.
     public static let horizontalJustifyString: [String: AnnotationHorizontalJustify] = [
         "left": .left,

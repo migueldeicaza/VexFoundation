@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/easyscore/rhythm.ts` (VexFlow 5.2.0).
+// Port of `src/easyscore/rhythm.ts` (VexFlow 5.7.0).
 // Automatic beaming reuses native rational grouping with an explicit EasyScore stem policy.
 
 import Foundation
@@ -17,6 +17,8 @@ public struct EasyScoreAutoBeamOptions {
     public var flatBeams: Bool
     public var flatBeamOffset: Double?
     public var secondaryBreaks: String?
+    /// Fan the secondary beams of each generated beam. (VexFlow 5.7.0)
+    public var feathered: FeatheredBeamDirection?
     /// `true` recalculates every stem, `false` preserves every stem, `nil` respects explicit stems.
     public var autoStem: Bool?
 
@@ -24,8 +26,9 @@ public struct EasyScoreAutoBeamOptions {
         groups: [Fraction]? = nil, stemDirection: StemDirection? = nil, beamRests: Bool = false,
         beamMiddleOnly: Bool = false, showStemlets: Bool = false, maintainStemDirections: Bool = false,
         flatBeams: Bool = false, flatBeamOffset: Double? = nil, secondaryBreaks: String? = nil,
-        autoStem: Bool? = nil
+        autoStem: Bool? = nil, feathered: FeatheredBeamDirection? = nil
     ) {
+        self.feathered = feathered
         self.groups = groups
         self.stemDirection = stemDirection
         self.beamRests = beamRests
@@ -70,7 +73,8 @@ func easyScoreAutoBeam(_ score: EasyScore, _ notes: [StemmableNote], _ options: 
         flatBeams: options.flatBeams,
         flatBeamOffset: options.flatBeamOffset,
         secondaryBreaks: options.secondaryBreaks,
-        stemPolicy: stemPolicy
+        stemPolicy: stemPolicy,
+        feathered: options.feathered
     )
     return try score.build { score in
         try Beam.generateBeams(notes, config: config).map { try score.adopt($0, role: .drawable) }

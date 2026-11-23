@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/beam.ts` (VexFlow 5.4.0).
+// Port of `src/beam.ts` (VexFlow 5.7.0).
 // Beam grouping, slope fitting and stem geometry for rhythmic notation.
 
 import Foundation
@@ -12,6 +12,10 @@ public enum BeamError: Error, LocalizedError, Equatable, Sendable {
     case notesNotShorterThanQuarter
     case nonMetricalTimeSignature(String)
     case noLastBeamX
+    /// A continuing beam edge with a progress outside zero to one. (VexFlow 5.7.0)
+    case badContinuationProgress
+    /// A continuing beam edge without a finite x or a positive beam count. (VexFlow 5.7.0)
+    case badContinuationEdge
 
     public var errorDescription: String? {
         switch self {
@@ -25,6 +29,10 @@ public enum BeamError: Error, LocalizedError, Equatable, Sendable {
             return "Cannot derive beam groups from \(raw)."
         case .noLastBeamX:
             return "lastBeamX undefined."
+        case .badContinuationProgress:
+            return "A continuing beam needs progress between zero and one."
+        case .badContinuationEdge:
+            return "A continuing beam requires a finite edge and a positive beam count."
         }
     }
 }
@@ -41,9 +49,40 @@ public let BEAM_LEFT: PartialBeamDirection = .left
 public let BEAM_RIGHT: PartialBeamDirection = .right
 public let BEAM_BOTH: PartialBeamDirection = .both
 
+/// End of a feathered group where secondary beams have their full separation. (VexFlow 5.7.0)
+public enum FeatheredBeamDirection: String, Sendable {
+    case left
+    case right
+}
+
+/// Coordinates and number of beam levels which continue at a system boundary. (VexFlow 5.7.0)
+public struct BeamContinuation: Sendable {
+    public struct Edge: Sendable {
+        public var x: Double
+        public var levels: Int
+        public var progress: Double?
+
+        public init(x: Double, levels: Int, progress: Double? = nil) {
+            self.x = x
+            self.levels = levels
+            self.progress = progress
+        }
+    }
+
+    public var left: Edge?
+    public var right: Edge?
+
+    public init(left: Edge? = nil, right: Edge? = nil) {
+        self.left = left
+        self.right = right
+    }
+}
+
 // MARK: - Beam Render Options
 
 public struct BeamRenderOptions {
+    /// Fan the secondary beams toward this end. The primary beam and written timing stay fixed. (VexFlow 5.7.0)
+    public var feathered: FeatheredBeamDirection?
     public var flatBeamOffset: Double?
     public var flatBeams: Bool = false
     public var secondaryBreakTicks: Double?
@@ -95,6 +134,8 @@ public struct BeamConfig {
     public var maintainStemDirections: Bool = false
     /// Optional facade policy. `nil` keeps the native generator's historical behavior. (VexFlow 5.2.0)
     public var stemPolicy: BeamStemPolicy?
+    /// Fan the secondary beams of each generated beam. (VexFlow 5.7.0)
+    public var feathered: FeatheredBeamDirection?
     public var flatBeams: Bool = false
     public var flatBeamOffset: Double?
     public var secondaryBreaks: String?
@@ -109,8 +150,10 @@ public struct BeamConfig {
         flatBeams: Bool = false,
         flatBeamOffset: Double? = nil,
         secondaryBreaks: String? = nil,
-        stemPolicy: BeamStemPolicy? = nil
+        stemPolicy: BeamStemPolicy? = nil,
+        feathered: FeatheredBeamDirection? = nil
     ) {
+        self.feathered = feathered
         self.stemPolicy = stemPolicy
         self.groups = groups
         self.stemDirection = stemDirection
@@ -145,7 +188,7 @@ private func getStemSlope(_ firstNote: StemmableNote, _ lastNote: StemmableNote)
     let firstStemX = firstNote.getStemX()
     let lastStemTipY = lastNote.getStemExtents().topY
     let lastStemX = lastNote.getStemX()
-    return (lastStemTipY - firstStemTipY) / (lastStemX - firstStemX)
+    return firstNote === lastNote ? 0 : (lastStemTipY - firstStemTipY) / (lastStemX - firstStemX)
 }
 
 /// JavaScript `parseInt(s, 10)`: leading decimal digits (with sign), `nil` for NaN.
@@ -167,7 +210,8 @@ private func jsParseInt(_ s: String) -> Int? {
 // MARK: - Beam
 
 /// `Beams` span over a set of `StemmableNotes`.
-public final class Beam: VexElement {
+/// Not `final`: `ContinuousBeam` (VexFlow 5.7.0) refines the fit and the drawing.
+public class Beam: VexElement {
 
     override public class var category: String { "Beam" }
 
@@ -513,6 +557,7 @@ public final class Beam: VexElement {
         for group in beamedNoteGroups {
             let beam = try Beam(group)
 
+            if let feathered = config.feathered { beam.renderOptions.feathered = feathered }
             if config.showStemlets {
                 beam.renderOptions.showStemlets = true
             }
@@ -547,14 +592,27 @@ public final class Beam: VexElement {
 
     // MARK: - Init
 
-    public init(_ notes: [StemmableNote], autoStem: Bool = false) throws {
+    /// System-boundary edges of a beam piece in a continuous layout. (VexFlow 5.7.0)
+    public internal(set) var continuation: BeamContinuation?
+
+    public init(_ notes: [StemmableNote], autoStem: Bool = false, continuation: BeamContinuation? = nil) throws {
         if notes.isEmpty {
             throw BeamError.noNotes
         }
 
-        if notes.count == 1 {
+        for edge in [continuation?.left, continuation?.right] {
+            guard let edge else { continue }
+            if let progress = edge.progress, !(progress >= 0 && progress <= 1) {
+                throw BeamError.badContinuationProgress
+            }
+            if !edge.x.isFinite || edge.levels < 1 {
+                throw BeamError.badContinuationEdge
+            }
+        }
+        if notes.count == 1 && continuation?.left == nil && continuation?.right == nil {
             throw BeamError.tooFewNotes
         }
+        self.continuation = continuation
 
         // Validate beam line, direction and ticks.
         self._ticks = notes[0].getIntrinsicTicks()
@@ -751,7 +809,7 @@ public final class Beam: VexElement {
         let peers = contexts
             .flatMap { $0.getTickables() }
             .compactMap { $0 as? StaveNote }
-            .filter { $0.getBeam() !== self && $0.getStave() === stave && !$0.isRest() }
+            .filter { peer in !notes.contains { $0 === peer } && peer.getStave() === stave && !peer.isRest() }
         if peers.isEmpty { return }
         let firstX = first.getStemX()
         let space = stave.getSpacingBetweenLines()
@@ -785,9 +843,17 @@ public final class Beam: VexElement {
                     let left = max(min(strip.x1, strip.x2), box.x)
                     let right = min(max(strip.x1, strip.x2), box.x + box.w)
                     if right <= left { continue }
-                    let offset = (strip.y1 - origin - (strip.x1 - firstX) * slope) * -sign
-                    outer = max(outer, max(tip(left), tip(right)) + offset)
-                    inner = min(inner, min(tip(left), tip(right)) + offset - width)
+                    if renderOptions.feathered != nil {
+                        // A feathered secondary has its own slope. Sample its actual edge over the peer head.
+                        let stripSlope = (strip.y2 - strip.y1) / (strip.x2 - strip.x1)
+                        func at(_ x: Double) -> Double { (strip.y1 + (x - strip.x1) * stripSlope) * -sign }
+                        outer = max(outer, at(left), at(right))
+                        inner = min(inner, at(left) - width, at(right) - width)
+                    } else {
+                        let offset = (strip.y1 - origin - (strip.x1 - firstX) * slope) * -sign
+                        outer = max(outer, max(tip(left), tip(right)) + offset)
+                        inner = min(inner, min(tip(left), tip(right)) + offset - width)
+                    }
                 }
                 if outer == -Double.infinity { continue }
                 let a = box.y * -sign
@@ -1084,6 +1150,28 @@ public final class Beam: VexElement {
         if let last = beamLines.indices.last, beamLines[last].end == nil {
             beamLines[last].end = beamLines[last].start - partialBeamLength
         }
+        // Continue the levels shared with the next row. A lone endpoint replaces its ordinary partial hook.
+        if let edge = continuation, !beamLines.isEmpty, let quarter = Tables.durationToTicks("4") {
+            let level = 1 + log2(Double(quarter) / tickOfDuration)
+            let first = notes[0]
+            let last = notes[notes.count - 1]
+            let lastIndex = beamLines.count - 1
+            var incoming = false
+            if let left = edge.left, Double(left.levels) >= level, first.getIntrinsicTicks() < tickOfDuration {
+                incoming = true
+                if !(notes.count > 1 && notes[1].getIntrinsicTicks() < tickOfDuration) {
+                    beamLines[0].end = first.getStemX()
+                }
+                beamLines[0].start = left.x
+            }
+            if let right = edge.right, Double(right.levels) >= level, last.getIntrinsicTicks() < tickOfDuration {
+                if !(notes.count == 1 && incoming)
+                    && !(notes.count >= 2 && notes[notes.count - 2].getIntrinsicTicks() < tickOfDuration) {
+                    beamLines[lastIndex].start = last.getStemX() - Stem.WIDTH / 2
+                }
+                beamLines[lastIndex].end = right.x
+            }
+        }
         return beamLines
     }
 
@@ -1115,6 +1203,20 @@ public final class Beam: VexElement {
         var beamY = beamYStart ?? getBeamYToDraw()
         let firstX = notes[0].getStemX()
         let thickness = renderOptions.beamWidth * _stemDirection.signDouble
+        let primaryY = beamY
+        let direction = renderOptions.feathered
+        // Use the whole strip extent so a broken secondary or partial hook follows the same fan.
+        let left = continuation?.left?.x ?? firstX - Stem.WIDTH / 2
+        let right = continuation?.right?.x ?? notes[notes.count - 1].getStemX() - Stem.WIDTH / 2
+        func originAt(_ x: Double) -> Double {
+            guard let direction, right > left, beamY != primaryY else { return beamY }
+            let local = max(0, min(1, (x - left) / (right - left)))
+            let start = continuation?.left?.progress ?? 0
+            let end = continuation?.right?.progress ?? 1
+            let progress = start + local * (end - start)
+            let spread = direction == .right ? progress : 1 - progress
+            return primaryY + (beamY - primaryY) * spread
+        }
         var strips: [Strip] = []
         for duration in ["4", "8", "16", "32", "64", "128", "256", "512", "1024"] {
             for line in getBeamLines(duration) {
@@ -1122,8 +1224,8 @@ public final class Beam: VexElement {
                 strips.append(Strip(
                     x1: line.start,
                     x2: end + 1,
-                    y1: getSlopeY(line.start, firstX, beamY, slope),
-                    y2: getSlopeY(end, firstX, beamY, slope),
+                    y1: getSlopeY(line.start, firstX, originAt(line.start), slope),
+                    y2: getSlopeY(end, firstX, originAt(end), slope),
                     thickness: thickness
                 ))
             }

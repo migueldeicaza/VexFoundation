@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/phraselayout.ts` (VexFlow 5.6.0).
+// Port of `src/phraselayout.ts` (VexFlow 5.7.0).
 // Place attachments and lyrics within one formatted system. All solver coordinates are renderer pixels.
 
 import Foundation
@@ -10,12 +10,17 @@ import Foundation
 public struct PhraseSyllable {
     public var note: StaveNote
     public var text: String
+    /// A second syllable sung on this attack, joined to the first by an engraved undertie. (VexFlow 5.7.0)
+    public var elideWith: String?
     public var hyphenAfter: Bool
     public var extendTo: StaveNote?
 
-    public init(note: StaveNote, text: String, hyphenAfter: Bool = false, extendTo: StaveNote? = nil) {
+    public init(
+        note: StaveNote, text: String, hyphenAfter: Bool = false, extendTo: StaveNote? = nil, elideWith: String? = nil
+    ) {
         self.note = note
         self.text = text
+        self.elideWith = elideWith
         self.hyphenAfter = hyphenAfter
         self.extendTo = extendTo
     }
@@ -76,6 +81,8 @@ public enum PhraseLayoutError: Error, LocalizedError, Equatable, Sendable {
     case invalidLaneBaseline
     case invalidSyllables
     case foreignSyllable
+    /// VexFlow 5.7.0.
+    case invalidElision
 
     public var errorDescription: String? {
         switch self {
@@ -84,6 +91,7 @@ public enum PhraseLayoutError: Error, LocalizedError, Equatable, Sendable {
         case .invalidLaneBaseline: return "Expected a finite lane baseline."
         case .invalidSyllables: return "Expected syllables with a following syllable for each hyphen."
         case .foreignSyllable: return "A syllable must belong to the requested stave."
+        case .invalidElision: return "An elision needs a second syllable."
         }
     }
 }
@@ -237,13 +245,20 @@ public final class PhraseLayout {
         }) {
             throw PhraseLayoutError.invalidSyllables
         }
+        if syllables.contains(where: { s in
+            s.elideWith.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? false
+        }) {
+            throw PhraseLayoutError.invalidElision
+        }
         if syllables.contains(where: { $0.note.getStave() != nil && $0.note.getStave() !== stave }) {
             throw PhraseLayoutError.foreignSyllable
         }
         var marks: [Annotation] = []
         for (i, s) in syllables.enumerated() {
             let hyphenated = s.hyphenAfter || (i > 0 && syllables[i - 1].hyphenAfter)
-            marks.append(try Annotation(s.text)
+            // Shape and reserve the entire group together. The lyric font stack includes the active music face.
+            let text = s.elideWith.map { s.text + Glyphs.lyricsElision + $0 } ?? s.text
+            marks.append(try Annotation(text)
                 .setFont(Metrics.getFontInfo("Annotation.lyric"))
                 .setVerticalJustification(options.side == .above ? .top : .bottom)
                 .setConnectorPadding(hyphenated ? stave.space(0.4) : 0))
@@ -321,7 +336,8 @@ public final class PhraseLayout {
             }
             let geometry = engrave(n, GeometryOptions(extension: { $0 === n ? nil : EngravingShape() }))
             if !geometry.diagnostics.isEmpty { report(.unsupportedGeometry, n) }
-            let bridge = beam?.getNotes().contains(where: { $0.getStave() !== stave }) ?? false
+            let bridge = splitStemFor(n)?.owner === n
+                || (beam?.getNotes().contains(where: { beamStave($0) !== stave }) ?? false)
             for (i, b) in geometry.parts.enumerated() {
                 addParts(n, stave, [b], bridge && i == n.noteHeads.count)
             }
@@ -336,13 +352,13 @@ public final class PhraseLayout {
         }
         for beam in beams {
             let owners = beam.getNotes()
-            let stave = owners[0].checkStave()
-            let bridge = owners.contains { $0.getStave() !== stave }
-            let strips = beam.getStripBounds()
             var ownerStaves: [Stave] = []
-            for n in owners where !ownerStaves.contains(where: { $0 === n.checkStave() }) {
-                ownerStaves.append(n.checkStave())
+            for n in owners {
+                guard let s = beamStave(n) else { continue }
+                if !ownerStaves.contains(where: { $0 === s }) { ownerStaves.append(s) }
             }
+            let bridge = ownerStaves.count > 1
+            let strips = beam.getStripBounds()
             for s in ownerStaves {
                 addParts(beam, s, strips, bridge)
                 if bridge {
@@ -575,7 +591,9 @@ public final class PhraseLayout {
             guard let text = ink[i].owner as? Annotation else { continue }
             let origin = ((try? text.computeY().y) ?? 0) + text.getYShift()
             let b = ink[i].box
-            if !isSupportedText(s.text) { report(.unsupportedScript, text) }
+            if !isSupportedText(s.text) || (s.elideWith.map { !isSupportedText($0) } ?? false) {
+                report(.unsupportedScript, text)
+            }
             if s.extendTo == nil && !s.hyphenAfter { continue }
             let left = b.x + b.w + gap / 2
             let right: Double

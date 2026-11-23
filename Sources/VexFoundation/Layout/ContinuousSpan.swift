@@ -1,15 +1,19 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/continuousspan.ts` (VexFlow 5.6.0).
+// Port of `src/continuousspan.ts` (VexFlow 5.7.0).
 // Logical event anchors and renderer-independent drawing of continuous-score span fragments.
 
 import Foundation
 
 /// The kinds of relationship that a continuous score splits at system breaks. (VexFlow 5.4.0)
 public enum ContinuousSpanKind: String, Sendable, CaseIterable {
+    /// An ordinary beam that can cross a barline and split at a system break. (VexFlow 5.7.0)
+    case beam
     case tie
     case slur
+    /// A straight line between two pitched attacks on one staff. (VexFlow 5.7.0)
+    case glissando
     case crescendo
     case diminuendo
     case pedal
@@ -31,6 +35,11 @@ public enum ContinuousSpanSide: String, Sendable {
 /// A relationship between two composition notes, named by their IDs. (VexFlow 5.4.0)
 public struct ContinuousSpan: Sendable, Equatable {
     public var kind: ContinuousSpanKind
+    /// Mark the closed musical endpoint of a crescendo or diminuendo with an open circle. (VexFlow 5.7.0)
+    public var niente: Bool?
+    /// Bend one TAB string through this tie, with rise on the first event and release on the second.
+    /// (VexFlow 5.7.0)
+    public var bend: TiedBend?
     /// One-based string of a tab tie. Defaults to the string of the selected chord position. (VexFlow 5.6.0)
     public var string: Int?
     /// Required for `palmMute`. String numbers are one-based.
@@ -53,8 +62,10 @@ public struct ContinuousSpan: Sendable, Equatable {
     public init(
         id: String, kind: ContinuousSpanKind, from: String, to: String, fromHead: Int? = nil, toHead: Int? = nil,
         side: ContinuousSpanSide? = nil, text: String? = nil, strings: [Int]? = nil, string: Int? = nil,
-        labelFontSize: Double? = nil, syllableId: String? = nil
+        labelFontSize: Double? = nil, syllableId: String? = nil, niente: Bool? = nil, bend: TiedBend? = nil
     ) {
+        self.niente = niente
+        self.bend = bend
         self.string = string
         self.labelFontSize = labelFontSize
         self.syllableId = syllableId
@@ -85,6 +96,10 @@ public struct ResolvedSpan {
     public var label: VexElement?
     /// The source lyric annotation of an anchored extender. (VexFlow 5.6.0)
     public var syllable: Annotation?
+    /// The native beam of a `beam` span. (VexFlow 5.7.0)
+    public var beam: ContinuousBeam?
+    /// The measured amount label of a tied bend. (VexFlow 5.7.0)
+    public var bendLabel: VexElement?
 }
 
 /// The part of a span that a fragment draws. (VexFlow 5.4.0)
@@ -107,6 +122,10 @@ public struct SpanFragment: Sendable, Equatable {
     public var y2: Double
     /// Fraction of the drawn span used to interpolate the aperture across a system break.
     public var progress: (Double, Double)
+    /// Present only on the fragment that owns the closed musical endpoint. (VexFlow 5.7.0)
+    public var nienteTip: NienteTip?
+    /// Row-local geometry and authored envelope of a tied string bend. (VexFlow 5.7.0)
+    public var bend: TiedBendDrawing?
     /// String numbers covered by a tab tie or palm-mute fragment.
     public var strings: [Int]?
     /// Authored TAB endpoints appear on the fragments containing them.
@@ -120,6 +139,7 @@ public struct SpanFragment: Sendable, Equatable {
         a.id == b.id && a.kind == b.kind && a.row == b.row && a.part == b.part && a.x1 == b.x1 && a.x2 == b.x2
             && a.y1 == b.y1 && a.y2 == b.y2 && a.progress == b.progress && a.strings == b.strings && a.from == b.from
             && a.to == b.to && a.rise == b.rise && a.above == b.above && a.space == b.space
+            && a.nienteTip == b.nienteTip && a.bend == b.bend
     }
 }
 
@@ -153,6 +173,16 @@ public func continuationPitch(_ anchor: SpanAnchor, _ stave: Stave, _ index: Int
     let from = (try? Tables.keyProperties(key, clef: source.getClef()).line) ?? 0
     let to = (try? Tables.keyProperties(key, clef: stave.getClef()).line) ?? 0
     return stave.getYForLine(0) + stave.space(offset + from - to)
+}
+
+/// Interpolate the two written heads on this staff, so a broken slide keeps its direction across rows.
+/// (VexFlow 5.7.0)
+public func glissandoY(_ span: ResolvedSpan, _ stave: Stave, _ progress: Double) -> Double {
+    if progress == 0 { return span.first.note.getYs()[span.spec.fromHead ?? 0] }
+    if progress == 1 { return span.last.note.getYs()[span.spec.toHead ?? 0] }
+    let from = continuationPitch(span.first, stave, span.spec.fromHead ?? 0)
+    let to = continuationPitch(span.last, stave, span.spec.toHead ?? 0)
+    return from + progress * (to - from)
 }
 
 /// Share control geometry between the clearance search and the renderer.
@@ -200,7 +230,7 @@ public func fitSpan(_ f: inout SpanFragment, _ obstacles: [BoundingBox]) -> Bool
 }
 
 /// Draw only the hooks, labels and wedge apertures belonging to this particular segment. (VexFlow 5.4.0)
-public func drawSpan(_ ctx: RenderContext, _ f: SpanFragment, label: VexElement? = nil) {
+public func drawSpan(_ ctx: RenderContext, _ f: SpanFragment, label: VexElement? = nil, bendLabel: VexElement? = nil) {
     let kind = f.kind, space = f.space, x1 = f.x1, x2 = f.x2, y1 = f.y1, y2 = f.y2, above = f.above
     let start = f.part == .single || f.part == .first
     let end = f.part == .single || f.part == .last
@@ -213,6 +243,11 @@ public func drawSpan(_ ctx: RenderContext, _ f: SpanFragment, label: VexElement?
     }
     ctx.save()
     defer { ctx.restore() }
+    if kind == .glissando {
+        line(x1, y1, x2, y2)
+        return
+    }
+    if let bend = f.bend, let bendLabel { drawTiedBend(ctx, bend, f.space, bendLabel) }
     if kind == .slur || kind == .tie {
         let (dx, a, b) = controls(f)
         ctx.beginPath()
@@ -234,6 +269,7 @@ public func drawSpan(_ ctx: RenderContext, _ f: SpanFragment, label: VexElement?
         let left = aperture(f.progress.0), right = aperture(f.progress.1)
         line(x1, y1 - left, x2, y2 - right)
         line(x1, y1 + left, x2, y2 + right)
+        if let tip = f.nienteTip { drawNienteTip(ctx, tip) }
         return
     }
     if kind == .tuplet {

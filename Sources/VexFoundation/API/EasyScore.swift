@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/easyscore.ts` (VexFlow 5.2.0).
+// Port of `src/easyscore.ts` (VexFlow 5.7.0).
 // Compose native notation through EasyScore, with pure diagnostics and staged strict construction.
 //
 // Swift notes:
@@ -1155,14 +1155,16 @@ public final class EasyScore {
         _ notes: [StemmableNote],
         autoStem: Bool? = nil,
         secondaryBeamBreaks: [Int] = [],
-        partialBeamDirections: [Int: PartialBeamDirection] = [:]
+        partialBeamDirections: [Int: PartialBeamDirection] = [:],
+        feathered: FeatheredBeamDirection? = nil
     ) -> [StemmableNote] {
         do {
             return try beamThrowing(
                 notes,
                 autoStem: autoStem,
                 secondaryBeamBreaks: secondaryBeamBreaks,
-                partialBeamDirections: partialBeamDirections
+                partialBeamDirections: partialBeamDirections,
+                feathered: feathered
             )
         } catch {
             lastError = error
@@ -1175,13 +1177,14 @@ public final class EasyScore {
         _ notes: [StemmableNote],
         autoStem: Bool? = nil,
         secondaryBeamBreaks: [Int] = [],
-        partialBeamDirections: [Int: PartialBeamDirection] = [:]
+        partialBeamDirections: [Int: PartialBeamDirection] = [:],
+        feathered: FeatheredBeamDirection? = nil
     ) throws -> [StemmableNote] {
         try VexRuntime.withContext(runtimeContext) {
             if options.strictOptions {
                 _ = try make.beam(
                     notes: notes, autoStem: autoStem, secondaryBeamBreaks: secondaryBeamBreaks,
-                    partialBeamDirections: partialBeamDirections
+                    partialBeamDirections: partialBeamDirections, feathered: feathered
                 )
             } else {
                 let autoStem = autoStem ?? resolveBeamStems(notes)
@@ -1189,7 +1192,8 @@ public final class EasyScore {
                     try self.references.add(try self.factory.BeamThrowing(
                         notes: notes, autoStem: autoStem,
                         secondaryBeamBreaks: secondaryBeamBreaks,
-                        partialBeamDirections: partialBeamDirections
+                        partialBeamDirections: partialBeamDirections,
+                        feathered: feathered
                     ))
                 }
             }

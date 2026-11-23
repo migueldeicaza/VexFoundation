@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/systembreaks.ts` (VexFlow 5.4.0).
+// Port of `src/systembreaks.ts` (VexFlow 5.7.0).
 // Select continuous-score rows from measured boundary costs and hard musical breaks.
 
 import Foundation
@@ -25,12 +25,15 @@ public struct BreakUnit: Sendable, Equatable {
     public var width: Double
     public var start: Double
     public var end: Double
+    /// Space reserved for a chord across the following barline on the same row. (VexFlow 5.7.0)
+    public var after: Double
     public var breakBefore: BreakConstraint?
 
-    public init(width: Double, start: Double, end: Double, breakBefore: BreakConstraint? = nil) {
+    public init(width: Double, start: Double, end: Double, after: Double = 0, breakBefore: BreakConstraint? = nil) {
         self.width = width
         self.start = start
         self.end = end
+        self.after = after
         self.breakBefore = breakBefore
     }
 }
@@ -56,7 +59,7 @@ public func chooseSystemBreaks(
         var found = false
         for j in i..<n {
             if j > i && units[j].breakBefore == .force { break }
-            body += units[j].width + (j > i ? gap : 0)
+            body += units[j].width + (j > i ? gap + units[j - 1].after : 0)
             if j + 1 < n && units[j + 1].breakBefore == .keep { continue }
             let spare = width - body - units[j].end
             if spare < 0 && found {
