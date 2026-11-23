@@ -257,12 +257,12 @@ extension UpstreamSVGParityTests {
             let notes = try specs.map { try makeTupletNote(factory, key: $0.0, duration: $0.1, stemDirection: .up) }
             _ = factory.Beam(notes: Array(notes[2..<7]))
             _ = factory.Tuplet(
-                notes: Array(notes[0..<7]).map { $0 as Note },
-                options: TupletOptions(numNotes: 3, notesOccupied: 2)
-            )
-            _ = factory.Tuplet(
                 notes: Array(notes[2..<7]).map { $0 as Note },
                 options: TupletOptions(numNotes: 5, notesOccupied: 4)
+            )
+            _ = factory.Tuplet(
+                notes: Array(notes[0..<7]).map { $0 as Note },
+                options: TupletOptions(numNotes: 3, notesOccupied: 2)
             )
 
             let voice = factory.Voice()
@@ -283,10 +283,6 @@ extension UpstreamSVGParityTests {
             let notes = try specs.map { try makeTupletNote(factory, key: $0.0, duration: $0.1, stemDirection: .up) }
             _ = factory.Beam(notes: Array(notes[1..<4]))
             _ = factory.Tuplet(
-                notes: Array(notes[0..<6]).map { $0 as Note },
-                options: TupletOptions(numNotes: 4, notesOccupied: 3, bracketed: true, ratioed: true)
-            )
-            _ = factory.Tuplet(
                 notes: Array(notes[0..<1]).map { $0 as Note },
                 options: TupletOptions(numNotes: 3, notesOccupied: 2, ratioed: true)
             )
@@ -297,6 +293,10 @@ extension UpstreamSVGParityTests {
             _ = factory.Tuplet(
                 notes: Array(notes[4..<5]).map { $0 as Note },
                 options: TupletOptions(numNotes: 3, notesOccupied: 2, bracketed: true, ratioed: true)
+            )
+            _ = factory.Tuplet(
+                notes: Array(notes[0..<6]).map { $0 as Note },
+                options: TupletOptions(numNotes: 4, notesOccupied: 3, bracketed: true, ratioed: true)
             )
 
             let voice = factory.Voice(timeSignature: .meter(4, 4))

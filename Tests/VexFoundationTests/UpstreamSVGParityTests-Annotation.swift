@@ -150,71 +150,85 @@ extension UpstreamSVGParityTests {
         }
     }
 
+    @Test("Annotation.Bounding_Box")
+    func annotationBoundingBoxMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Annotation", test: "Bounding_Box", width: 750, height: 300) { factory, context in
+            try drawAnnotationPlacement(factory, context, drawBoundingBox: true)
+        }
+    }
+
     @Test("Annotation.Placement")
     func annotationPlacementMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Annotation", test: "Placement", width: 750, height: 300) { _, context in
-            let stave = Stave(x: 10, y: 50, width: 750).addClef(.treble)
-            _ = stave.setContext(context)
-            try stave.draw()
+        try runCategorySVGParityCase(module: "Annotation", test: "Placement", width: 750, height: 300) { factory, context in
+            try drawAnnotationPlacement(factory, context, drawBoundingBox: false)
+        }
+    }
 
-            func annotation(_ text: String, size: Double, vj: AnnotationVerticalJustify) -> Annotation {
-                Annotation(text)
-                    .setFontSize(size)
-                    .setVerticalJustification(vj)
-            }
+    private func drawAnnotationPlacement(_ _: Factory, _ context: SVGRenderContext, drawBoundingBox: Bool) throws {
+        let stave = Stave(x: 10, y: 50, width: 750).addClef(.treble)
+        _ = stave.setContext(context)
+        try stave.draw()
 
-            let notes: [StaveNote] = [
-                StaveNote(try StaveNoteStruct(parsingKeys: ["e/4"], duration: "q", stemDirection: .down))
-                    .addModifier(Articulation("a.").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.above), index: 0)
-                    .addModifier(annotation("v1", size: 10, vj: .top), index: 0)
-                    .addModifier(annotation("v2", size: 10, vj: .top), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["b/4"], duration: "q", stemDirection: .down))
-                    .addModifier(Articulation("a.").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.above), index: 0)
-                    .addModifier(annotation("v1", size: 10, vj: .top), index: 0)
-                    .addModifier(annotation("v2", size: 10, vj: .top), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["c/5"], duration: "q", stemDirection: .down))
-                    .addModifier(Articulation("a.").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.above), index: 0)
-                    .addModifier(annotation("v1", size: 10, vj: .top), index: 0)
-                    .addModifier(annotation("v2", size: 10, vj: .top), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["f/4"], duration: "q"))
-                    .addModifier(annotation("v1", size: 14, vj: .top), index: 0)
-                    .addModifier(annotation("v2", size: 14, vj: .top), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["f/4"], duration: "q", stemDirection: .down))
-                    .addModifier(Articulation("am").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a.").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.above), index: 0)
-                    .addModifier(annotation("v1", size: 10, vj: .top), index: 0)
-                    .addModifier(annotation("v2", size: 20, vj: .top), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["f/5"], duration: "q"))
-                    .addModifier(annotation("v1", size: 11, vj: .top), index: 0)
-                    .addModifier(annotation("v2", size: 11, vj: .top), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["f/5"], duration: "q"))
-                    .addModifier(annotation("v1", size: 11, vj: .top), index: 0)
-                    .addModifier(annotation("v2", size: 20, vj: .top), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["f/4"], duration: "q"))
-                    .addModifier(annotation("v1", size: 12, vj: .bottom), index: 0)
-                    .addModifier(annotation("v2", size: 12, vj: .bottom), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["f/5"], duration: "q"))
-                    .addModifier(Articulation("a.").setPosition(.below), index: 0)
-                    .addModifier(annotation("v1", size: 11, vj: .bottom), index: 0)
-                    .addModifier(annotation("v2", size: 20, vj: .bottom), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["f/5"], duration: "q", stemDirection: .down))
-                    .addModifier(Articulation("am").setPosition(.below), index: 0)
-                    .addModifier(annotation("v1", size: 10, vj: .bottom), index: 0)
-                    .addModifier(annotation("v2", size: 20, vj: .bottom), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["f/4"], duration: "q", stemDirection: .down))
-                    .addModifier(annotation("v1", size: 10, vj: .bottom), index: 0)
-                    .addModifier(annotation("v2", size: 20, vj: .bottom), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["f/5"], duration: "w"))
-                    .addModifier(Articulation("a@u").setPosition(.below), index: 0)
-                    .addModifier(annotation("v1", size: 11, vj: .bottom), index: 0)
-                    .addModifier(annotation("v2", size: 16, vj: .bottom), index: 0),
-            ]
+        func annotation(_ text: String, size: Double, vj: AnnotationVerticalJustify) -> Annotation {
+            Annotation(text)
+                .setFontSize(size)
+                .setVerticalJustification(vj)
+        }
 
-            try Formatter.FormatAndDraw(ctx: context, stave: stave, notes: notes)
+        let notes: [StaveNote] = [
+            StaveNote(try StaveNoteStruct(parsingKeys: ["e/4"], duration: "q", stemDirection: .down))
+                .addModifier(Articulation("a.").setPosition(.above), index: 0)
+                .addModifier(Articulation("a-").setPosition(.above), index: 0)
+                .addModifier(annotation("v1", size: 10, vj: .top), index: 0)
+                .addModifier(annotation("v2", size: 10, vj: .top), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["b/4"], duration: "q", stemDirection: .down))
+                .addModifier(Articulation("a.").setPosition(.above), index: 0)
+                .addModifier(Articulation("a-").setPosition(.above), index: 0)
+                .addModifier(annotation("v1", size: 10, vj: .top), index: 0)
+                .addModifier(annotation("v2", size: 10, vj: .top), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["c/5"], duration: "q", stemDirection: .down))
+                .addModifier(Articulation("a.").setPosition(.above), index: 0)
+                .addModifier(Articulation("a-").setPosition(.above), index: 0)
+                .addModifier(annotation("v1", size: 10, vj: .top), index: 0)
+                .addModifier(annotation("v2", size: 10, vj: .top), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["f/4"], duration: "q"))
+                .addModifier(annotation("v1", size: 14, vj: .top), index: 0)
+                .addModifier(annotation("v2", size: 14, vj: .top), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["f/4"], duration: "q", stemDirection: .down))
+                .addModifier(Articulation("am").setPosition(.above), index: 0)
+                .addModifier(Articulation("a.").setPosition(.above), index: 0)
+                .addModifier(Articulation("a-").setPosition(.above), index: 0)
+                .addModifier(annotation("v1", size: 10, vj: .top), index: 0)
+                .addModifier(annotation("v2", size: 20, vj: .top), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["f/5"], duration: "q"))
+                .addModifier(annotation("v1", size: 11, vj: .top), index: 0)
+                .addModifier(annotation("v2", size: 11, vj: .top), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["f/5"], duration: "q"))
+                .addModifier(annotation("v1", size: 11, vj: .top), index: 0)
+                .addModifier(annotation("v2", size: 20, vj: .top), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["f/4"], duration: "q"))
+                .addModifier(annotation("v1", size: 12, vj: .bottom), index: 0)
+                .addModifier(annotation("v2", size: 12, vj: .bottom), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["f/5"], duration: "q"))
+                .addModifier(Articulation("a.").setPosition(.below), index: 0)
+                .addModifier(annotation("v1", size: 11, vj: .bottom), index: 0)
+                .addModifier(annotation("v2", size: 20, vj: .bottom), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["f/5"], duration: "q", stemDirection: .down))
+                .addModifier(Articulation("am").setPosition(.below), index: 0)
+                .addModifier(annotation("v1", size: 10, vj: .bottom), index: 0)
+                .addModifier(annotation("v2", size: 20, vj: .bottom), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["f/4"], duration: "q", stemDirection: .down))
+                .addModifier(annotation("v1", size: 10, vj: .bottom), index: 0)
+                .addModifier(annotation("v2", size: 20, vj: .bottom), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["f/5"], duration: "w"))
+                .addModifier(Articulation("a@u").setPosition(.below), index: 0)
+                .addModifier(annotation("v1", size: 11, vj: .bottom), index: 0)
+                .addModifier(annotation("v2", size: 16, vj: .bottom), index: 0),
+        ]
+
+        try Formatter.FormatAndDraw(ctx: context, stave: stave, notes: notes)
+        if drawBoundingBox {
+            for note in notes { drawUpstreamBoundingBoxes(context, note.getModifiersByType(Annotation.category)) }
         }
     }
 

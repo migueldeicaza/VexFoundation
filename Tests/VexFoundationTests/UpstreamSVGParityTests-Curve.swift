@@ -22,6 +22,22 @@ extension UpstreamSVGParityTests {
         }
     }
 
+    @Test("Curve.Opening_Direction___up")
+    func curveOpeningDirectionUpMatchesUpstream() throws {
+        try runCurveParityCase(testName: "Opening_Direction___up", noteGroup1: ("c4/8, f5, d5, g5", ["stem": "up"]), noteGroup2: ("d6/8, f5, d5, g5", ["stem": "down"])) { factory, notes in
+            _ = factory.Curve(from: notes[0], to: notes[3], options: CurveOptions(openingDirection: .up))
+            _ = factory.Curve(from: notes[4], to: notes[7], options: CurveOptions(openingDirection: .up))
+        }
+    }
+
+    @Test("Curve.Opening_Direction___down")
+    func curveOpeningDirectionDownMatchesUpstream() throws {
+        try runCurveParityCase(testName: "Opening_Direction___down", noteGroup1: ("c4/8, f5, d5, g5", ["stem": "up"]), noteGroup2: ("d6/8, f5, d5, g5", ["stem": "down"])) { factory, notes in
+            _ = factory.Curve(from: notes[0], to: notes[3], options: CurveOptions(openingDirection: .down))
+            _ = factory.Curve(from: notes[4], to: notes[7], options: CurveOptions(openingDirection: .down))
+        }
+    }
+
     @Test("Curve.Rounded_Curve")
     func curveRoundedMatchesUpstream() throws {
         try runCurveParityCase(testName: "Rounded_Curve", noteGroup1: ("c5/8, f4, d4, g5", ["stem": "up"]), noteGroup2: ("d5/8, d6, d6, g5", ["stem": "down"])) { factory, notes in

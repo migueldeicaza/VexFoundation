@@ -2,6 +2,18 @@ import Testing
 @testable import VexFoundation
 
 extension UpstreamSVGParityTests {
+    @Test("GlyphNote.Bounding_Box")
+    func glyphNoteBoundingBoxMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "GlyphNote",
+            test: "Bounding_Box",
+            width: 300,
+            height: 200
+        ) { factory, context in
+            try drawGlyphNoteWithChordSymbols(factory, context, drawBoundingBox: true)
+        }
+    }
+
     @Test("GlyphNote.GlyphNote_with_ChordSymbols")
     func glyphNoteWithChordSymbolsMatchesUpstream() throws {
         try runCategorySVGParityCase(
@@ -9,58 +21,65 @@ extension UpstreamSVGParityTests {
             test: "GlyphNote_with_ChordSymbols",
             width: 300,
             height: 200
-        ) { factory, _ in
-            Registry.enableDefaultRegistry(Registry())
-            defer { Registry.disableDefaultRegistry() }
+        ) { factory, context in
+            try drawGlyphNoteWithChordSymbols(factory, context, drawBoundingBox: false)
+        }
+    }
 
-            let system = factory.System(options: SystemOptions(
-                noPadding: false,
-                debugFormatter: false,
-                x: 50,
-                width: 250
-            ))
-            let score = factory.EasyScore()
+    private func drawGlyphNoteWithChordSymbols(_ factory: Factory, _ context: SVGRenderContext, drawBoundingBox: Bool) throws {
+        Registry.enableDefaultRegistry(Registry())
+        defer { Registry.disableDefaultRegistry() }
 
-            let notes: [GlyphNote] = try [
-                factory.GlyphNote(
-                    glyph: Glyphs.repeatBarSlash,
-                    noteStruct: NoteStruct(duration: "q")
-                ),
-                factory.GlyphNote(
-                    glyph: Glyphs.repeatBarSlash,
-                    noteStruct: NoteStruct(duration: "q")
-                ),
-                factory.GlyphNote(
-                    glyph: Glyphs.repeatBarSlash,
-                    noteStruct: NoteStruct(duration: "q")
-                ),
-                factory.GlyphNote(
-                    glyph: Glyphs.repeatBarSlash,
-                    noteStruct: NoteStruct(duration: "q")
-                ),
-            ]
+        let system = factory.System(options: SystemOptions(
+            noPadding: false,
+            debugFormatter: false,
+            x: 50,
+            width: 250
+        ))
+        let score = factory.EasyScore()
 
-            let chord1 = factory
-                .ChordSymbol()
-                .addText("F7")
-                .setHorizontal(.left)
-                .addGlyphOrText("(#11b9)", symbolModifier: .sup)
+        let notes: [GlyphNote] = try [
+            factory.GlyphNote(
+                glyph: Glyphs.repeatBarSlash,
+                noteStruct: NoteStruct(duration: "q")
+            ),
+            factory.GlyphNote(
+                glyph: Glyphs.repeatBarSlash,
+                noteStruct: NoteStruct(duration: "q")
+            ),
+            factory.GlyphNote(
+                glyph: Glyphs.repeatBarSlash,
+                noteStruct: NoteStruct(duration: "q")
+            ),
+            factory.GlyphNote(
+                glyph: Glyphs.repeatBarSlash,
+                noteStruct: NoteStruct(duration: "q")
+            ),
+        ]
 
-            let chord2 = factory
-                .ChordSymbol()
-                .addText("F7")
-                .setHorizontal(.left)
-                .addGlyphOrText("#11", symbolModifier: .sup)
-                .addGlyphOrText("b9", symbolModifier: .sub)
+        let chord1 = factory
+            .ChordSymbol()
+            .addText("F7")
+            .setHorizontal(.left)
+            .addGlyphOrText("(#11b9)", symbolModifier: .sup)
 
-            _ = notes[0].addModifier(chord1, index: 0)
-            _ = notes[2].addModifier(chord2, index: 0)
+        let chord2 = factory
+            .ChordSymbol()
+            .addText("F7")
+            .setHorizontal(.left)
+            .addGlyphOrText("#11", symbolModifier: .sup)
+            .addGlyphOrText("b9", symbolModifier: .sub)
 
-            let voice = score.voice(notes.map { $0 as Note })
-            _ = system.addStave(SystemStave(voices: [voice], debugNoteMetrics: false))
-            _ = system.addConnector().setType(.bracket)
+        _ = notes[0].addModifier(chord1, index: 0)
+        _ = notes[2].addModifier(chord2, index: 0)
 
-            try factory.draw()
+        let voice = score.voice(notes.map { $0 as Note })
+        _ = system.addStave(SystemStave(voices: [voice], debugNoteMetrics: false))
+        _ = system.addConnector().setType(.bracket)
+
+        try factory.draw()
+        if drawBoundingBox {
+            drawUpstreamBoundingBoxes(context, notes)
         }
     }
 

@@ -2,73 +2,87 @@ import Testing
 @testable import VexFoundation
 
 extension UpstreamSVGParityTests {
-    @Test("Articulation.Articulation___Vertical_Placement")
-    func articulationVerticalPlacementMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Articulation", test: "Articulation___Vertical_Placement", width: 750, height: 300) { _, context in
-            let stave = Stave(x: 10, y: 50, width: 750).addClef(.treble)
-            _ = stave.setContext(context)
-            try stave.draw()
-
-            let notes: [StaveNote] = [
-                StaveNote(try StaveNoteStruct(parsingKeys: ["f/4"], duration: "q"))
-                    .addModifier(Articulation("a@u").setPosition(.below), index: 0)
-                    .addModifier(Articulation("a.").setPosition(.below), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.below), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["g/4"], duration: "q", stemDirection: .down))
-                    .addModifier(Articulation("a@u").setPosition(.below), index: 0)
-                    .addModifier(Articulation("a.").setPosition(.below), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.below), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["c/5"], duration: "q"))
-                    .addModifier(Articulation("a@u").setPosition(.below), index: 0)
-                    .addModifier(Articulation("a.").setPosition(.below), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.below), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["f/4"], duration: "q"))
-                    .addModifier(Articulation("a.").setPosition(.below), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.below), index: 0)
-                    .addModifier(Articulation("a@u").setPosition(.below), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["g/4"], duration: "q", stemDirection: .down))
-                    .addModifier(Articulation("a.").setPosition(.below), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.below), index: 0)
-                    .addModifier(Articulation("a@u").setPosition(.below), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["c/5"], duration: "q"))
-                    .addModifier(Articulation("a.").setPosition(.below), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.below), index: 0)
-                    .addModifier(Articulation("a@u").setPosition(.below), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["a/5"], duration: "q", stemDirection: .down))
-                    .addModifier(Articulation("a@a").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a.").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.above), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["f/5"], duration: "q"))
-                    .addModifier(Articulation("a@a").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a.").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.above), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["b/4"], duration: "q", stemDirection: .down))
-                    .addModifier(Articulation("a@a").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a.").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.above), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["a/5"], duration: "q", stemDirection: .down))
-                    .addModifier(Articulation("a.").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a@a").setPosition(.above), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["f/5"], duration: "q"))
-                    .addModifier(Articulation("a.").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a@a").setPosition(.above), index: 0),
-                StaveNote(try StaveNoteStruct(parsingKeys: ["b/4"], duration: "q", stemDirection: .down))
-                    .addModifier(Articulation("a.").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a-").setPosition(.above), index: 0)
-                    .addModifier(Articulation("a@a").setPosition(.above), index: 0),
-            ]
-
-            try Formatter.FormatAndDraw(ctx: context, stave: stave, notes: notes)
+    @Test("Articulation.Bounding_Box")
+    func articulationBoundingBoxMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Articulation", test: "Bounding_Box", width: 750, height: 300) { factory, context in
+            try drawArticulationVerticalPlacement(factory, context, drawBoundingBox: true)
         }
     }
 
-    @Test("Articulation.Articulation___Vertical_Placement__Glyph_codes_")
+    @Test("Articulation.Vertical_Placement")
+    func articulationVerticalPlacementMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Articulation", test: "Vertical_Placement", width: 750, height: 300) { factory, context in
+            try drawArticulationVerticalPlacement(factory, context, drawBoundingBox: false)
+        }
+    }
+
+    private func drawArticulationVerticalPlacement(_ _: Factory, _ context: SVGRenderContext, drawBoundingBox: Bool) throws {
+        let stave = Stave(x: 10, y: 50, width: 750).addClef(.treble)
+        _ = stave.setContext(context)
+        try stave.draw()
+
+        let notes: [StaveNote] = [
+            StaveNote(try StaveNoteStruct(parsingKeys: ["f/4"], duration: "q"))
+                .addModifier(Articulation("a@u").setPosition(.below), index: 0)
+                .addModifier(Articulation("a.").setPosition(.below), index: 0)
+                .addModifier(Articulation("a-").setPosition(.below), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["g/4"], duration: "q", stemDirection: .down))
+                .addModifier(Articulation("a@u").setPosition(.below), index: 0)
+                .addModifier(Articulation("a.").setPosition(.below), index: 0)
+                .addModifier(Articulation("a-").setPosition(.below), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["c/5"], duration: "q"))
+                .addModifier(Articulation("a@u").setPosition(.below), index: 0)
+                .addModifier(Articulation("a.").setPosition(.below), index: 0)
+                .addModifier(Articulation("a-").setPosition(.below), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["f/4"], duration: "q"))
+                .addModifier(Articulation("a.").setPosition(.below), index: 0)
+                .addModifier(Articulation("a-").setPosition(.below), index: 0)
+                .addModifier(Articulation("a@u").setPosition(.below), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["g/4"], duration: "q", stemDirection: .down))
+                .addModifier(Articulation("a.").setPosition(.below), index: 0)
+                .addModifier(Articulation("a-").setPosition(.below), index: 0)
+                .addModifier(Articulation("a@u").setPosition(.below), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["c/5"], duration: "q"))
+                .addModifier(Articulation("a.").setPosition(.below), index: 0)
+                .addModifier(Articulation("a-").setPosition(.below), index: 0)
+                .addModifier(Articulation("a@u").setPosition(.below), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["a/5"], duration: "q", stemDirection: .down))
+                .addModifier(Articulation("a@a").setPosition(.above), index: 0)
+                .addModifier(Articulation("a.").setPosition(.above), index: 0)
+                .addModifier(Articulation("a-").setPosition(.above), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["f/5"], duration: "q"))
+                .addModifier(Articulation("a@a").setPosition(.above), index: 0)
+                .addModifier(Articulation("a.").setPosition(.above), index: 0)
+                .addModifier(Articulation("a-").setPosition(.above), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["b/4"], duration: "q", stemDirection: .down))
+                .addModifier(Articulation("a@a").setPosition(.above), index: 0)
+                .addModifier(Articulation("a.").setPosition(.above), index: 0)
+                .addModifier(Articulation("a-").setPosition(.above), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["a/5"], duration: "q", stemDirection: .down))
+                .addModifier(Articulation("a.").setPosition(.above), index: 0)
+                .addModifier(Articulation("a-").setPosition(.above), index: 0)
+                .addModifier(Articulation("a@a").setPosition(.above), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["f/5"], duration: "q"))
+                .addModifier(Articulation("a.").setPosition(.above), index: 0)
+                .addModifier(Articulation("a-").setPosition(.above), index: 0)
+                .addModifier(Articulation("a@a").setPosition(.above), index: 0),
+            StaveNote(try StaveNoteStruct(parsingKeys: ["b/4"], duration: "q", stemDirection: .down))
+                .addModifier(Articulation("a.").setPosition(.above), index: 0)
+                .addModifier(Articulation("a-").setPosition(.above), index: 0)
+                .addModifier(Articulation("a@a").setPosition(.above), index: 0),
+        ]
+
+        try Formatter.FormatAndDraw(ctx: context, stave: stave, notes: notes)
+        if drawBoundingBox {
+            for note in notes { drawUpstreamBoundingBoxes(context, note.getModifiersByType(Articulation.category)) }
+        }
+    }
+
+    @Test("Articulation.Vertical_Placement__Glyph_codes_")
     func articulationVerticalPlacementGlyphCodesMatchesUpstream() throws {
         try runCategorySVGParityCase(
             module: "Articulation",
-            test: "Articulation___Vertical_Placement__Glyph_codes_",
+            test: "Vertical_Placement__Glyph_codes_",
             width: 750,
             height: 300
         ) { _, context in
@@ -131,25 +145,25 @@ extension UpstreamSVGParityTests {
         }
     }
 
-    @Test("Articulation.Articulation___Staccato_Staccatissimo")
+    @Test("Articulation.Staccato_Staccatissimo")
     func articulationStaccatoStaccatissimoMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Articulation", test: "Articulation___Staccato_Staccatissimo", width: 675, height: 195) { factory, context in
+        try runCategorySVGParityCase(module: "Articulation", test: "Staccato_Staccatissimo", width: 675, height: 195) { factory, context in
             try drawUpstreamArticulationRows(factory: factory, context: context, sym1: "a.", sym2: "av")
         }
     }
 
-    @Test("Articulation.Articulation___Accent_Tenuto")
+    @Test("Articulation.Accent_Tenuto")
     func articulationAccentTenutoMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Articulation", test: "Articulation___Accent_Tenuto", width: 675, height: 195) { factory, context in
+        try runCategorySVGParityCase(module: "Articulation", test: "Accent_Tenuto", width: 675, height: 195) { factory, context in
             try drawUpstreamArticulationRows(factory: factory, context: context, sym1: "a>", sym2: "a-")
         }
     }
 
-    @Test("Articulation.Articulation___Marcato_L_H__Pizzicato")
+    @Test("Articulation.Marcato_L_H__Pizzicato")
     func articulationMarcatoPizzicatoMatchesUpstream() throws {
         try runCategorySVGParityCase(
             module: "Articulation",
-            test: "Articulation___Marcato_L_H__Pizzicato",
+            test: "Marcato_L_H__Pizzicato",
             width: 675,
             height: 195
         ) { factory, context in
@@ -157,11 +171,11 @@ extension UpstreamSVGParityTests {
         }
     }
 
-    @Test("Articulation.Articulation___Snap_Pizzicato_Fermata")
+    @Test("Articulation.Snap_Pizzicato_Fermata")
     func articulationSnapPizzicatoFermataMatchesUpstream() throws {
         try runCategorySVGParityCase(
             module: "Articulation",
-            test: "Articulation___Snap_Pizzicato_Fermata",
+            test: "Snap_Pizzicato_Fermata",
             width: 675,
             height: 195
         ) { factory, context in
@@ -169,25 +183,25 @@ extension UpstreamSVGParityTests {
         }
     }
 
-    @Test("Articulation.Articulation___Up_stroke_Down_Stroke")
+    @Test("Articulation.Up_stroke_Down_Stroke")
     func articulationUpStrokeDownStrokeMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Articulation", test: "Articulation___Up_stroke_Down_Stroke", width: 675, height: 195) { factory, context in
+        try runCategorySVGParityCase(module: "Articulation", test: "Up_stroke_Down_Stroke", width: 675, height: 195) { factory, context in
             try drawUpstreamArticulationRows(factory: factory, context: context, sym1: "a|", sym2: "am")
         }
     }
 
-    @Test("Articulation.Articulation___Fermata_Above_Below")
+    @Test("Articulation.Fermata_Above_Below")
     func articulationFermataAboveBelowMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Articulation", test: "Articulation___Fermata_Above_Below", width: 400, height: 195) { factory, context in
+        try runCategorySVGParityCase(module: "Articulation", test: "Fermata_Above_Below", width: 400, height: 195) { factory, context in
             try drawUpstreamFermataRows(factory: factory, context: context, sym1: "a@a", sym2: "a@u")
         }
     }
 
-    @Test("Articulation.Articulation___Fermata_Short_Above_Below")
+    @Test("Articulation.Fermata_Short_Above_Below")
     func articulationFermataShortAboveBelowMatchesUpstream() throws {
         try runCategorySVGParityCase(
             module: "Articulation",
-            test: "Articulation___Fermata_Short_Above_Below",
+            test: "Fermata_Short_Above_Below",
             width: 400,
             height: 195
         ) { factory, context in
@@ -195,11 +209,11 @@ extension UpstreamSVGParityTests {
         }
     }
 
-    @Test("Articulation.Articulation___Fermata_Long_Above_Below")
+    @Test("Articulation.Fermata_Long_Above_Below")
     func articulationFermataLongAboveBelowMatchesUpstream() throws {
         try runCategorySVGParityCase(
             module: "Articulation",
-            test: "Articulation___Fermata_Long_Above_Below",
+            test: "Fermata_Long_Above_Below",
             width: 400,
             height: 195
         ) { factory, context in
@@ -207,11 +221,11 @@ extension UpstreamSVGParityTests {
         }
     }
 
-    @Test("Articulation.Articulation___Fermata_Very_Long_Above_Below")
+    @Test("Articulation.Fermata_Very_Long_Above_Below")
     func articulationFermataVeryLongAboveBelowMatchesUpstream() throws {
         try runCategorySVGParityCase(
             module: "Articulation",
-            test: "Articulation___Fermata_Very_Long_Above_Below",
+            test: "Fermata_Very_Long_Above_Below",
             width: 400,
             height: 195
         ) { factory, context in
@@ -219,9 +233,9 @@ extension UpstreamSVGParityTests {
         }
     }
 
-    @Test("Articulation.Articulation___Inline_Multiple")
+    @Test("Articulation.Inline_Multiple")
     func articulationInlineMultipleMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Articulation", test: "Articulation___Inline_Multiple", width: 1500, height: 195) { factory, context in
+        try runCategorySVGParityCase(module: "Articulation", test: "Inline_Multiple", width: 1500, height: 195) { factory, context in
             _ = context.scale(0.8, 0.8)
 
             let stave1 = Stave(x: 10, y: 50, width: 500)

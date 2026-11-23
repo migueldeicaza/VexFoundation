@@ -2,91 +2,110 @@ import Testing
 @testable import VexFoundation
 
 extension UpstreamSVGParityTests {
+    @Test("ChordSymbol.Bounding_Box")
+    func chordSymbolBoundingBoxMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "ChordSymbol", test: "Bounding_Box", width: 750, height: 580) { factory, context in
+            try drawChordSymbolWithModifiers(factory, context, drawBoundingBox: true)
+        }
+    }
+
     @Test("ChordSymbol.Chord_Symbol_With_Modifiers")
     func chordSymbolWithModifiersMatchesUpstream() throws {
         try runCategorySVGParityCase(module: "ChordSymbol", test: "Chord_Symbol_With_Modifiers", width: 750, height: 580) { factory, context in
-            _ = context.scale(1.5, 1.5)
-
-            func drawRow(_ chords: [ChordSymbol], y: Double) throws {
-                let notes: [StaveNote] = [
-                    try chordSymbolNote(factory, ["c/4"], "q", chords[0])
-                        .addModifier(factory.Ornament("doit"), index: 0),
-                    try chordSymbolNote(factory, ["c/4"], "q", chords[1]),
-                    try chordSymbolNote(factory, ["c/4"], "q", chords[2])
-                        .addModifier(factory.Ornament("fall"), index: 0),
-                    try chordSymbolNote(factory, ["c/4"], "q", chords[3]),
-                ]
-
-                let score = factory.EasyScore()
-                let voice = score.voice(notes.map { $0 as Note }, time: .meter(4, 4))
-                let formatter = factory.Formatter()
-                _ = formatter.joinVoices([voice])
-                let voiceWidth = formatter.preCalculateMinTotalWidth([voice])
-                let staffWidth = voiceWidth + Stave.defaultPadding + chordSymbolGClefWidth()
-                _ = formatter.format([voice], justifyWidth: voiceWidth)
-
-                let stave = factory.Stave(x: 10, y: y, width: staffWidth).addClef(.treble)
-                _ = stave.setContext(context)
-                try stave.draw()
-                try voice.draw(context: context, stave: stave)
-            }
-
-            var chords: [ChordSymbol] = [
-                makeChordSymbol(factory, fontSize: 10)
-                    .addText("F7")
-                    .addGlyph("leftParenTall")
-                    .addGlyphOrText("b9", symbolModifier: .sup)
-                    .addGlyphOrText("#11", symbolModifier: .sub)
-                    .addGlyph("rightParenTall"),
-                makeChordSymbol(factory, fontSize: 12)
-                    .addText("F7")
-                    .addGlyphOrText("b9", symbolModifier: .sup)
-                    .addGlyphOrText("#11", symbolModifier: .sub),
-                makeChordSymbol(factory, fontSize: 14)
-                    .addText("F7")
-                    .addGlyph("leftParenTall")
-                    .addGlyphOrText("add 3", symbolModifier: .sup)
-                    .addGlyphOrText("omit 9", symbolModifier: .sub)
-                    .addGlyph("rightParenTall"),
-                makeChordSymbol(factory, fontSize: 16)
-                    .addText("F7")
-                    .addGlyph("leftParenTall")
-                    .addGlyphOrText("b9", symbolModifier: .sup)
-                    .addGlyphOrText("#11", symbolModifier: .sub)
-                    .addGlyph("rightParenTall"),
-            ]
-            try drawRow(chords, y: 40)
-
-            chords = [
-                makeChordSymbol(factory, fontSize: 10)
-                    .setFontSize(10)
-                    .addText("F7")
-                    .addGlyphOrText("#11", symbolModifier: .sup)
-                    .addGlyphOrText("b9", symbolModifier: .sub),
-                makeChordSymbol(factory, fontSize: 12)
-                    .addText("F7")
-                    .addGlyphOrText("#11", symbolModifier: .sup)
-                    .addGlyphOrText("b9", symbolModifier: .sub),
-                makeChordSymbol(factory, fontSize: 14)
-                    .addText("F7")
-                    .addGlyphOrText("#11", symbolModifier: .sup)
-                    .addGlyphOrText("b9", symbolModifier: .sub),
-                makeChordSymbol(factory, fontSize: 16)
-                    .setFontSize(16)
-                    .addText("F7")
-                    .addGlyphOrText("#11", symbolModifier: .sup)
-                    .addGlyphOrText("b9", symbolModifier: .sub),
-            ]
-            try drawRow(chords, y: 140)
-
-            chords = [
-                makeChordSymbol(factory, fontSize: 10).addGlyphOrText("Ab").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
-                makeChordSymbol(factory, fontSize: 14).addGlyphOrText("C#").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
-                makeChordSymbol(factory, fontSize: 16).addGlyphOrText("Ab").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
-                makeChordSymbol(factory, fontSize: 18).addGlyphOrText("C#").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
-            ]
-            try drawRow(chords, y: 240)
+            try drawChordSymbolWithModifiers(factory, context, drawBoundingBox: false)
         }
+    }
+
+    /// Upstream `withModifiers`; `drawBoundingBox` draws each chord symbol box after its row.
+    private func drawChordSymbolWithModifiers(
+        _ factory: Factory,
+        _ context: SVGRenderContext,
+        drawBoundingBox: Bool
+    ) throws {
+        _ = context.scale(1.5, 1.5)
+
+        func drawRow(_ chords: [ChordSymbol], y: Double) throws {
+            let notes: [StaveNote] = [
+                try chordSymbolNote(factory, ["c/4"], "q", chords[0])
+                    .addModifier(factory.Ornament("doit"), index: 0),
+                try chordSymbolNote(factory, ["c/4"], "q", chords[1]),
+                try chordSymbolNote(factory, ["c/4"], "q", chords[2])
+                    .addModifier(factory.Ornament("fall"), index: 0),
+                try chordSymbolNote(factory, ["c/4"], "q", chords[3]),
+            ]
+
+            let score = factory.EasyScore()
+            let voice = score.voice(notes.map { $0 as Note }, time: .meter(4, 4))
+            let formatter = factory.Formatter()
+            _ = formatter.joinVoices([voice])
+            let voiceWidth = formatter.preCalculateMinTotalWidth([voice])
+            let staffWidth = voiceWidth + Stave.defaultPadding + chordSymbolGClefWidth()
+            _ = formatter.format([voice], justifyWidth: voiceWidth)
+
+            let stave = factory.Stave(x: 10, y: y, width: staffWidth).addClef(.treble)
+            _ = stave.setContext(context)
+            try stave.draw()
+            try voice.draw(context: context, stave: stave)
+        }
+
+        var chords: [ChordSymbol] = [
+            makeChordSymbol(factory, fontSize: 10)
+                .addText("F7")
+                .addGlyph("leftParenTall")
+                .addGlyphOrText("b9", symbolModifier: .sup)
+                .addGlyphOrText("#11", symbolModifier: .sub)
+                .addGlyph("rightParenTall"),
+            makeChordSymbol(factory, fontSize: 12)
+                .addText("F7")
+                .addGlyphOrText("b9", symbolModifier: .sup)
+                .addGlyphOrText("#11", symbolModifier: .sub),
+            makeChordSymbol(factory, fontSize: 14)
+                .addText("F7")
+                .addGlyph("leftParenTall")
+                .addGlyphOrText("add 3", symbolModifier: .sup)
+                .addGlyphOrText("omit 9", symbolModifier: .sub)
+                .addGlyph("rightParenTall"),
+            makeChordSymbol(factory, fontSize: 16)
+                .addText("F7")
+                .addGlyph("leftParenTall")
+                .addGlyphOrText("b9", symbolModifier: .sup)
+                .addGlyphOrText("#11", symbolModifier: .sub)
+                .addGlyph("rightParenTall"),
+        ]
+        try drawRow(chords, y: 40)
+        if drawBoundingBox { drawUpstreamBoundingBoxes(context, chords) }
+
+        chords = [
+            makeChordSymbol(factory, fontSize: 10)
+                .setFontSize(10)
+                .addText("F7")
+                .addGlyphOrText("#11", symbolModifier: .sup)
+                .addGlyphOrText("b9", symbolModifier: .sub),
+            makeChordSymbol(factory, fontSize: 12)
+                .addText("F7")
+                .addGlyphOrText("#11", symbolModifier: .sup)
+                .addGlyphOrText("b9", symbolModifier: .sub),
+            makeChordSymbol(factory, fontSize: 14)
+                .addText("F7")
+                .addGlyphOrText("#11", symbolModifier: .sup)
+                .addGlyphOrText("b9", symbolModifier: .sub),
+            makeChordSymbol(factory, fontSize: 16)
+                .setFontSize(16)
+                .addText("F7")
+                .addGlyphOrText("#11", symbolModifier: .sup)
+                .addGlyphOrText("b9", symbolModifier: .sub),
+        ]
+        try drawRow(chords, y: 140)
+        if drawBoundingBox { drawUpstreamBoundingBoxes(context, chords) }
+
+        chords = [
+            makeChordSymbol(factory, fontSize: 10).addGlyphOrText("Ab").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
+            makeChordSymbol(factory, fontSize: 14).addGlyphOrText("C#").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
+            makeChordSymbol(factory, fontSize: 16).addGlyphOrText("Ab").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
+            makeChordSymbol(factory, fontSize: 18).addGlyphOrText("C#").addGlyphOrText("7(#11b9)", symbolModifier: .sup),
+        ]
+        try drawRow(chords, y: 240)
+        if drawBoundingBox { drawUpstreamBoundingBoxes(context, chords) }
     }
 
     @Test("ChordSymbol.Chord_Symbol_Font_Size_Tests")
@@ -383,6 +402,45 @@ extension UpstreamSVGParityTests {
                 chords2: chords2,
                 staveWidth: 450
             )
+        }
+    }
+
+    @Test("ChordSymbol.Wide_Chord_Symbols")
+    func chordSymbolWideMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "ChordSymbol", test: "Wide_Chord_Symbols", width: 300 * 1.5, height: 680) { factory, context in
+            _ = context.scale(1.5, 1.5)
+
+            func drawRow(_ chord1: ChordSymbol, _ chord2: ChordSymbol, y: Double) throws {
+                let stave = Stave(x: 10, y: y, width: 250).addClef(.treble)
+                _ = stave.setContext(context)
+                try stave.drawWithStyle()
+
+                let notes: [StaveNote] = [
+                    try chordSymbolNote(factory, ["e/4", "a/4", "d/5"], "h", chord1)
+                        .addModifier(Accidental(.flat), index: 0),
+                    try chordSymbolNote(factory, ["c/4", "e/4", "B/4"], "h", chord2),
+                ]
+                _ = try Formatter.FormatAndDraw(ctx: context, stave: stave, notes: notes)
+            }
+
+            var chord1 = makeChordSymbol(factory)
+                .addText("FrogToad7")
+                .setHorizontal(.left)
+                .addGlyphOrText("(#11b9)", symbolModifier: .sup)
+            var chord2 = makeChordSymbol(factory, hJustify: .left)
+                .addText("CToShiningC")
+                .addGlyphSuperscript("majorSeventh")
+            try drawRow(chord1, chord2, y: 40)
+
+            chord1 = makeChordSymbol(factory, hJustify: .right)
+                .addText("FrogToad7")
+                .setHorizontal(.left)
+                .addGlyphOrText("#11", symbolModifier: .sup)
+                .addGlyphOrText("b9", symbolModifier: .sub)
+            chord2 = makeChordSymbol(factory, hJustify: .left)
+                .addText("CToShiningC")
+                .addTextSuperscript("Maj.")
+            try drawRow(chord1, chord2, y: 240)
         }
     }
 

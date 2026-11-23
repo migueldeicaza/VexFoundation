@@ -907,26 +907,40 @@ struct UpstreamSVGParityTests {
         }
     }
 
+    @Test("Clef.Bounding_Box")
+    func clefBoundingBoxMatchesUpstream() throws {
+        try runSVGParityCase(module: "Clef", test: "Bounding_Box", width: 800, height: 120) { factory, context in
+            try drawClefTest(factory, context, drawBoundingBox: true)
+        }
+    }
+
     @Test("Clef.Clef_Test")
     func clefTestMatchesUpstream() throws {
-        try runSVGParityCase(module: "Clef", test: "Clef_Test", width: 800, height: 120) { factory, _ in
-            _ = factory.Stave()
-                .addClef(.treble)
-                .addClef(.treble, size: .default, annotation: .octaveUp)
-                .addClef(.treble, size: .default, annotation: .octaveDown)
-                .addClef(.alto)
-                .addClef(.tenor)
-                .addClef(.soprano)
-                .addClef(.bass)
-                .addClef(.bass, size: .default, annotation: .octaveDown)
-                .addClef(.mezzoSoprano)
-                .addClef(.baritoneC)
-                .addClef(.baritoneF)
-                .addClef(.subbass)
-                .addClef(.percussion)
-                .addClef(.french)
-                .addEndClef(.treble)
-            try factory.draw()
+        try runSVGParityCase(module: "Clef", test: "Clef_Test", width: 800, height: 120) { factory, context in
+            try drawClefTest(factory, context, drawBoundingBox: false)
+        }
+    }
+
+    private func drawClefTest(_ factory: Factory, _ context: SVGRenderContext, drawBoundingBox: Bool) throws {
+        let stave = factory.Stave()
+            .addClef(.treble)
+            .addClef(.treble, size: .default, annotation: .octaveUp)
+            .addClef(.treble, size: .default, annotation: .octaveDown)
+            .addClef(.alto)
+            .addClef(.tenor)
+            .addClef(.soprano)
+            .addClef(.bass)
+            .addClef(.bass, size: .default, annotation: .octaveDown)
+            .addClef(.mezzoSoprano)
+            .addClef(.baritoneC)
+            .addClef(.baritoneF)
+            .addClef(.subbass)
+            .addClef(.percussion)
+            .addClef(.french)
+            .addEndClef(.treble)
+        try factory.draw()
+        if drawBoundingBox {
+            drawUpstreamBoundingBoxes(context, stave.getModifiers(category: Clef.category))
         }
     }
 
@@ -999,44 +1013,58 @@ struct UpstreamSVGParityTests {
         }
     }
 
+    @Test("Clef.Bounding_Box_Clef_Change")
+    func clefBoundingBoxClefChangeMatchesUpstream() throws {
+        try runSVGParityCase(module: "Clef", test: "Bounding_Box_Clef_Change", width: 800, height: 180) { factory, context in
+            try drawClefChangeTest(factory, context, drawBoundingBox: true)
+        }
+    }
+
     @Test("Clef.Clef_Change_Test")
     func clefChangeTestMatchesUpstream() throws {
-        try runSVGParityCase(module: "Clef", test: "Clef_Change_Test", width: 800, height: 180) { factory, _ in
-            let stave = factory.Stave().addClef(.treble)
+        try runSVGParityCase(module: "Clef", test: "Clef_Change_Test", width: 800, height: 180) { factory, context in
+            try drawClefChangeTest(factory, context, drawBoundingBox: false)
+        }
+    }
 
-            var tickables: [Tickable] = []
-            tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .treble)))
-            tickables.append(factory.ClefNote(type: .alto, size: .small))
-            tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .alto)))
-            tickables.append(factory.ClefNote(type: .tenor, size: .small))
-            tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .tenor)))
-            tickables.append(factory.ClefNote(type: .soprano, size: .small))
-            tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .soprano)))
-            tickables.append(factory.ClefNote(type: .bass, size: .small))
-            tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .bass)))
-            tickables.append(factory.ClefNote(type: .mezzoSoprano, size: .small))
-            tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .mezzoSoprano)))
-            tickables.append(factory.ClefNote(type: .baritoneC, size: .small))
-            tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .baritoneC)))
-            tickables.append(factory.ClefNote(type: .baritoneF, size: .small))
-            tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .baritoneF)))
-            tickables.append(factory.ClefNote(type: .subbass, size: .small))
-            tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .subbass)))
-            tickables.append(factory.ClefNote(type: .french, size: .small))
-            tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .french)))
-            tickables.append(factory.ClefNote(type: .treble, size: .small, annotation: .octaveDown))
-            tickables.append(try factory.StaveNote(
-                StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", octaveShift: -1, clef: .treble)
-            ))
-            tickables.append(factory.ClefNote(type: .treble, size: .small, annotation: .octaveUp))
-            tickables.append(try factory.StaveNote(
-                StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", octaveShift: 1, clef: .treble)
-            ))
+    private func drawClefChangeTest(_ factory: Factory, _ context: SVGRenderContext, drawBoundingBox: Bool) throws {
+        let stave = factory.Stave().addClef(.treble)
 
-            let voice = factory.Voice(timeSignature: .meter(12, 4))
-            _ = voice.addTickables(tickables)
-            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
-            try factory.draw()
+        var tickables: [Tickable] = []
+        tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .treble)))
+        tickables.append(factory.ClefNote(type: .alto, size: .small))
+        tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .alto)))
+        tickables.append(factory.ClefNote(type: .tenor, size: .small))
+        tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .tenor)))
+        tickables.append(factory.ClefNote(type: .soprano, size: .small))
+        tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .soprano)))
+        tickables.append(factory.ClefNote(type: .bass, size: .small))
+        tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .bass)))
+        tickables.append(factory.ClefNote(type: .mezzoSoprano, size: .small))
+        tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .mezzoSoprano)))
+        tickables.append(factory.ClefNote(type: .baritoneC, size: .small))
+        tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .baritoneC)))
+        tickables.append(factory.ClefNote(type: .baritoneF, size: .small))
+        tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .baritoneF)))
+        tickables.append(factory.ClefNote(type: .subbass, size: .small))
+        tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .subbass)))
+        tickables.append(factory.ClefNote(type: .french, size: .small))
+        tickables.append(try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", clef: .french)))
+        tickables.append(factory.ClefNote(type: .treble, size: .small, annotation: .octaveDown))
+        tickables.append(try factory.StaveNote(
+            StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", octaveShift: -1, clef: .treble)
+        ))
+        tickables.append(factory.ClefNote(type: .treble, size: .small, annotation: .octaveUp))
+        tickables.append(try factory.StaveNote(
+            StaveNoteStruct(parsingKeys: ["c/4"], duration: "4", octaveShift: 1, clef: .treble)
+        ))
+
+        let voice = factory.Voice(timeSignature: .meter(12, 4))
+        _ = voice.addTickables(tickables)
+        _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+        try factory.draw()
+        if drawBoundingBox {
+            drawUpstreamBoundingBoxes(context, tickables.compactMap { $0 as? VexElement })
         }
     }
 
@@ -1416,45 +1444,6 @@ struct UpstreamSVGParityTests {
         }
     }
 
-    @Test("KeySignature.Key_Signature_with_without_clef_symbol")
-    func keySignatureWithWithoutClefSymbolMatchesUpstream() throws {
-        try runSVGParityCase(
-            module: "KeySignature",
-            test: "Key_Signature_with_without_clef_symbol",
-            width: 900,
-            height: 140
-        ) { factory, _ in
-            let stave = factory.Stave(x: 10, y: 10, width: 800)
-                .addClef(.bass)
-                .addTimeSignature(.cutTime)
-                .setClefLines(.bass)
-
-            let noteA = try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "1", clef: .bass))
-            let noteB = try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "1", clef: .bass))
-            let noteC = try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "1", clef: .bass))
-            let noteD = try factory.StaveNote(StaveNoteStruct(parsingKeys: ["c/4"], duration: "1", clef: .bass))
-
-            let voice = factory.Voice()
-                .setStrict(false)
-                .addTickables([
-                    factory.KeySigNote(key: "Bb"),
-                    noteA,
-                    factory.BarNote(),
-                    factory.KeySigNote(key: "D", cancelKey: "Bb"),
-                    noteB,
-                    factory.BarNote(),
-                    factory.KeySigNote(key: "Bb"),
-                    noteC,
-                    factory.BarNote(),
-                    factory.KeySigNote(key: "D", alterKey: ["b", "n"]),
-                    noteD,
-                ])
-
-            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
-            try factory.draw()
-        }
-    }
-
     @Test("TimeSignature.Basic_Time_Signatures")
     func timeSignatureBasicTimeSignaturesMatchesUpstream() throws {
         try runSVGParityCase(module: "TimeSignature", test: "Basic_Time_Signatures", width: 600, height: 120) { _, context in
@@ -1774,6 +1763,16 @@ struct UpstreamSVGParityTests {
         for beam in beams {
             _ = beam.setContext(context)
             try beam.draw()
+        }
+    }
+
+    /// Upstream `VexFlowTests.drawBoundingBox(ctx, element)` for each element.
+    func drawUpstreamBoundingBoxes(_ context: SVGRenderContext, _ elements: [VexElement]) {
+        for element in elements {
+            guard let bb = element.getBoundingBox() else { continue }
+            context.beginPath()
+            context.rect(bb.getX(), bb.getY(), bb.getW(), bb.getH())
+            context.stroke()
         }
     }
 

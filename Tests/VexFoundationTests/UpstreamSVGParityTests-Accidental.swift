@@ -3,19 +3,33 @@ import Testing
 @testable import VexFoundation
 
 extension UpstreamSVGParityTests {
+    @Test("Accidental.Bounding_Box")
+    func accidentalBoundingBoxMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Accidental", test: "Bounding_Box", width: 700, height: 240) { factory, context in
+            try drawAccidentalBasic(factory, context, drawBoundingBox: true)
+        }
+    }
+
     @Test("Accidental.Basic")
     func accidentalBasicMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Accidental", test: "Basic", width: 700, height: 240) { _, context in
-            let stave = Stave(x: 10, y: 10, width: 550)
-            _ = stave.setContext(context)
-
-            let notes = try makeAccidentalBasicNotes(stemDown: false)
-            prepareSimpleFormattedAccidentalNotes(notes, stave: stave, x: 10, paddingBetween: 45)
-            notes.forEach { drawUpstreamAccidentalNoteMetrics(context: context, note: $0, yPos: 140) }
-            try stave.draw()
-            try drawPreparedAccidentalNotes(notes, context: context)
-            drawUpstreamAccidentalNoteWidthLegend(context: context, x: 480, y: 140)
+        try runCategorySVGParityCase(module: "Accidental", test: "Basic", width: 700, height: 240) { factory, context in
+            try drawAccidentalBasic(factory, context, drawBoundingBox: false)
         }
+    }
+
+    private func drawAccidentalBasic(_ _: Factory, _ context: SVGRenderContext, drawBoundingBox: Bool) throws {
+        let stave = Stave(x: 10, y: 10, width: 550)
+        _ = stave.setContext(context)
+
+        let notes = try makeAccidentalBasicNotes(stemDown: false)
+        prepareSimpleFormattedAccidentalNotes(notes, stave: stave, x: 10, paddingBetween: 45)
+        notes.forEach { drawUpstreamAccidentalNoteMetrics(context: context, note: $0, yPos: 140) }
+        try stave.draw()
+        try drawPreparedAccidentalNotes(notes, context: context)
+        if drawBoundingBox {
+            for note in notes { drawUpstreamBoundingBoxes(context, note.getModifiersByType(Accidental.category)) }
+        }
+        drawUpstreamAccidentalNoteWidthLegend(context: context, x: 480, y: 140)
     }
 
     @Test("Accidental.Stem_Down")

@@ -166,6 +166,22 @@ public enum TextMeasurer {
         return nil
     }
 
+    /// Ink bounds of one glyph, from its outline.
+    ///
+    /// Browsers report `actualBoundingBox*` from the exact outline. For CFF
+    /// fonts (Gonville, Petaluma), `CTFontGetBoundingRectsForGlyphs` returns
+    /// bounds that are rounded outward (for example, 0.44px below a Gonville
+    /// fermata that sits on the baseline), so use the path bounds.
+    static func inkBounds(_ font: CTFont, _ glyph: CGGlyph) -> CGRect {
+        if let path = CTFontCreatePathForGlyph(font, glyph, nil) {
+            return path.boundingBoxOfPath
+        }
+        var glyph = glyph
+        var rect = CGRect.zero
+        CTFontGetBoundingRectsForGlyphs(font, .default, &glyph, &rect, 1)
+        return rect
+    }
+
     private static func computeLayout(_ text: String, fontInfo: FontInfo) -> TextLayout {
         let fonts = fonts(for: fontInfo)
         guard !text.isEmpty, let primary = fonts.first else {
@@ -214,8 +230,7 @@ public enum TextMeasurer {
                 var notdef: [CGGlyph] = [0]
                 var advance = CGSize.zero
                 CTFontGetAdvancesForGlyphs(primary, .default, &notdef, &advance, 1)
-                var rect = CGRect.zero
-                CTFontGetBoundingRectsForGlyphs(primary, .default, &notdef, &rect, 1)
+                let rect = inkBounds(primary, notdef[0])
                 var glyphs: [CGGlyph] = []
                 var positions: [CGPoint] = []
                 for _ in segment.text {
@@ -241,8 +256,7 @@ public enum TextMeasurer {
                 glyphs = glyphs.filter { $0 != 0 }
                 var advances = [CGSize](repeating: .zero, count: glyphs.count)
                 CTFontGetAdvancesForGlyphs(font, .default, glyphs, &advances, glyphs.count)
-                var rects = [CGRect](repeating: .zero, count: glyphs.count)
-                CTFontGetBoundingRectsForGlyphs(font, .default, glyphs, &rects, glyphs.count)
+                let rects = glyphs.map { inkBounds(font, $0) }
                 var positions: [CGPoint] = []
                 for i in 0..<glyphs.count {
                     positions.append(CGPoint(x: penX, y: 0))
@@ -280,8 +294,7 @@ public enum TextMeasurer {
                 CTRunGetPositions(ctRun, CFRange(location: 0, length: count), &positions)
                 for i in 0..<count { positions[i].x += penX }
 
-                var rects = [CGRect](repeating: .zero, count: count)
-                CTFontGetBoundingRectsForGlyphs(runFont, .default, glyphs, &rects, count)
+                let rects = glyphs.map { inkBounds(runFont, $0) }
                 for i in 0..<count where !rects[i].isEmpty && !rects[i].isNull {
                     let r = rects[i].offsetBy(dx: positions[i].x, dy: positions[i].y)
                     minX = min(minX, r.minX); maxX = max(maxX, r.maxX)

@@ -168,6 +168,33 @@ extension UpstreamSVGParityTests {
         }
     }
 
+    @Test("StaveTie.Tie_Algorithms")
+    func staveTieTieAlgorithmsMatchesUpstream() throws {
+        try runStaveTieParityCase(
+            testName: "Tie_Algorithms",
+            notesData: "(c4 e4 g4)/2, (c4 e4 g4)",
+            notesOptions: ["stem": "up"]
+        ) { factory, notes, _ in
+            _ = factory.StaveTie(
+                notes: TieNotes(
+                    firstNote: notes[0],
+                    lastNote: notes[1],
+                    firstIndices: [0],
+                    lastIndices: [0]
+                )
+            )
+            _ = factory.StaveTie(
+                notes: TieNotes(
+                    firstNote: notes[0],
+                    lastNote: notes[1],
+                    firstIndices: [1, 2],
+                    lastIndices: [1, 2]
+                ),
+                direction: .down
+            )
+        }
+    }
+
     private func runStaveTieParityCase(
         testName: String,
         notesData: String,

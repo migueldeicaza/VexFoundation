@@ -2,9 +2,9 @@ import Testing
 @testable import VexFoundation
 
 extension UpstreamSVGParityTests {
-    @Test("Strokes.Strokes___Brush_Roll_Rasquedo")
-    func strokesBrushRollRasquedoMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Strokes", test: "Strokes___Brush_Roll_Rasquedo", width: 600, height: 200) {
+    @Test("Strokes.Brush_Roll_Rasgueado")
+    func strokesBrushRollRasgueadoMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Strokes", test: "Brush_Roll_Rasgueado", width: 600, height: 200) {
             factory,
             _ in
             let score = factory.EasyScore()
@@ -28,9 +28,9 @@ extension UpstreamSVGParityTests {
             let notes2 = score.notes("(c4 d4 g4)/4, (c4 d4 g4), (c4 d4 g4), (c4 d4 a4)", options: ["stem": "up"])
             _ = notes2[0].addModifier(Stroke(type: .rollDown), index: 0)
             _ = notes2[1].addModifier(Stroke(type: .rollUp), index: 0)
-            _ = notes2[2].addModifier(Stroke(type: .rasquedoDown), index: 0)
+            _ = notes2[2].addModifier(Stroke(type: .rasgueadoDown), index: 0)
             _ = notes2[3]
-                .addModifier(Stroke(type: .rasquedoUp), index: 0)
+                .addModifier(Stroke(type: .rasgueadoUp), index: 0)
                 .addModifier(factory.Accidental(type: .doubleFlat), index: 0)
                 .addModifier(factory.Accidental(type: .doubleFlat), index: 1)
                 .addModifier(factory.Accidental(type: .doubleFlat), index: 2)
@@ -41,11 +41,11 @@ extension UpstreamSVGParityTests {
         }
     }
 
-    @Test("Strokes.Strokes___Arpeggio_directionless__without_arrows_")
+    @Test("Strokes.Arpeggio_directionless__without_arrows_")
     func strokesArpeggioDirectionlessMatchesUpstream() throws {
         try runCategorySVGParityCase(
             module: "Strokes",
-            test: "Strokes___Arpeggio_directionless__without_arrows_",
+            test: "Arpeggio_directionless__without_arrows_",
             width: 700,
             height: 200
         ) { factory, _ in
@@ -89,16 +89,16 @@ extension UpstreamSVGParityTests {
         }
     }
 
-    @Test("Strokes.Strokes___Multi_Voice")
+    @Test("Strokes.Multi_Voice")
     func strokesMultiVoiceMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Strokes", test: "Strokes___Multi_Voice", width: 500, height: 200) { factory, _ in
+        try runCategorySVGParityCase(module: "Strokes", test: "Multi_Voice", width: 500, height: 200) { factory, _ in
             let score = factory.EasyScore()
             let stave = factory.Stave()
 
             let notes1 = score.notes("(c4 e4 g4)/4, (c4 e4 g4), (c4 d4 a4), (c4 d4 a4)", options: ["stem": "up"])
-            _ = notes1[0].addModifier(Stroke(type: .rasquedoDown), index: 0)
+            _ = notes1[0].addModifier(Stroke(type: .rasgueadoDown), index: 0)
             _ = notes1[1]
-                .addModifier(Stroke(type: .rasquedoUp), index: 0)
+                .addModifier(Stroke(type: .rasgueadoUp), index: 0)
                 .addModifier(factory.Accidental(type: .sharp), index: 0)
                 .addModifier(factory.Accidental(type: .sharp), index: 2)
             _ = notes1[2].addModifier(Stroke(type: .brushUp), index: 0)
@@ -114,11 +114,11 @@ extension UpstreamSVGParityTests {
         }
     }
 
-    @Test("Strokes.Strokes___Notation_and_Tab")
+    @Test("Strokes.Notation_and_Tab")
     func strokesNotationAndTabMatchesUpstream() throws {
         try runCategorySVGParityCase(
             module: "Strokes",
-            test: "Strokes___Notation_and_Tab",
+            test: "Notation_and_Tab",
             width: 500,
             height: 300,
             signatureEpsilonOverride: 0.0015
@@ -210,15 +210,15 @@ extension UpstreamSVGParityTests {
             _ = notes[1].addModifier(Stroke(type: .brushUp), index: 0)
             _ = notes[2].addModifier(Stroke(type: .rollDown), index: 0)
             _ = notes[3].addModifier(Stroke(type: .rollUp), index: 0)
-            _ = notes[4].addModifier(Stroke(type: .rasquedoDown), index: 0)
-            _ = notes[5].addModifier(Stroke(type: .rasquedoUp), index: 0)
+            _ = notes[4].addModifier(Stroke(type: .rasgueadoDown), index: 0)
+            _ = notes[5].addModifier(Stroke(type: .rasgueadoUp), index: 0)
 
             _ = tabNotes[0].addModifier(Stroke(type: .brushDown), index: 0)
             _ = tabNotes[1].addModifier(Stroke(type: .brushUp), index: 0)
             _ = tabNotes[2].addModifier(Stroke(type: .rollDown), index: 0)
             _ = tabNotes[3].addModifier(Stroke(type: .rollUp), index: 0)
-            _ = tabNotes[4].addModifier(Stroke(type: .rasquedoDown), index: 0)
-            _ = tabNotes[5].addModifier(Stroke(type: .rasquedoUp), index: 0)
+            _ = tabNotes[4].addModifier(Stroke(type: .rasgueadoDown), index: 0)
+            _ = tabNotes[5].addModifier(Stroke(type: .rasgueadoUp), index: 0)
 
             let bracket = StaveConnector(topStave: stave, bottomStave: tabStave).setType(.bracket).setContext(context)
             let line = StaveConnector(topStave: stave, bottomStave: tabStave).setType(.singleLeft).setContext(context)
@@ -238,11 +238,11 @@ extension UpstreamSVGParityTests {
         }
     }
 
-    @Test("Strokes.Strokes___Multi_Voice_Notation_and_Tab")
+    @Test("Strokes.Multi_Voice_Notation_and_Tab")
     func strokesMultiVoiceNotationAndTabMatchesUpstream() throws {
         try runCategorySVGParityCase(
             module: "Strokes",
-            test: "Strokes___Multi_Voice_Notation_and_Tab",
+            test: "Multi_Voice_Notation_and_Tab",
             width: 400,
             height: 275
         ) { factory, context in
@@ -251,7 +251,7 @@ extension UpstreamSVGParityTests {
 
             let notes1 = score.notes("(g4 b4 e5)/4, (g4 b4 e5), (g4 b4 e5), (g4 b4 e5)", options: ["stem": "up"])
             _ = notes1[0].addModifier(Stroke(type: .rollDown, allVoices: false), index: 0)
-            _ = notes1[1].addModifier(Stroke(type: .rasquedoUp), index: 0)
+            _ = notes1[1].addModifier(Stroke(type: .rasgueadoUp), index: 0)
             _ = notes1[2].addModifier(Stroke(type: .brushUp, allVoices: false), index: 0)
             _ = notes1[3].addModifier(Stroke(type: .brushDown), index: 0)
 
@@ -272,7 +272,7 @@ extension UpstreamSVGParityTests {
                 case 0:
                     _ = note.addModifier(Stroke(type: .rollDown, allVoices: false), index: 0)
                 case 1:
-                    _ = note.addModifier(Stroke(type: .rasquedoUp), index: 0)
+                    _ = note.addModifier(Stroke(type: .rasgueadoUp), index: 0)
                 case 2:
                     _ = note.addModifier(Stroke(type: .brushUp, allVoices: false), index: 0)
                 default:
@@ -311,8 +311,7 @@ extension UpstreamSVGParityTests {
         }
     }
 
-    // VexFlow 5.1.0: Stroke.getBoundingBox(). Upstream renamed the stroke cases
-    // ("Strokes - Brush/Roll/Rasgueado" became "Brush/Roll/Rasgueado").
+    // VexFlow 5.1.0: Stroke.getBoundingBox().
     @Test("Strokes.Brush_Roll_Rasgueado___bounding_box")
     func strokesBrushRollRasgueadoBoundingBoxMatchesUpstream() throws {
         try runCategorySVGParityCase(module: "Strokes", test: "Brush_Roll_Rasgueado___bounding_box", width: 600, height: 200) {

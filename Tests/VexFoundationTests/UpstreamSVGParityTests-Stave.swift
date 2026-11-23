@@ -182,6 +182,7 @@ extension UpstreamSVGParityTests {
             let blockHeight = 80.0
             var x = 10.0
             var y = 0.0
+            var bracketType: RepeatBracketType = .none
 
             func drawStavesInTwoLines(_ endBarLine: BarlineType) throws {
                 try drawUpstreamEndModifierStave(
@@ -190,6 +191,7 @@ extension UpstreamSVGParityTests {
                     y: y,
                     width: staveWidth + 50,
                     beginBarLine: .repeatBegin,
+                    repeatBracket: bracketType,
                     beginClef: .treble,
                     beginKeySignature: "A",
                     endBarLine: endBarLine,
@@ -203,6 +205,7 @@ extension UpstreamSVGParityTests {
                     y: y,
                     width: staveWidth,
                     beginBarLine: .repeatBegin,
+                    repeatBracket: bracketType,
                     endBarLine: endBarLine,
                     endKeySignature: "E"
                 )
@@ -214,6 +217,7 @@ extension UpstreamSVGParityTests {
                     y: y,
                     width: staveWidth,
                     beginBarLine: .repeatBegin,
+                    repeatBracket: bracketType,
                     endBarLine: endBarLine,
                     endTimeSignature: .meter(2, 4)
                 )
@@ -226,6 +230,7 @@ extension UpstreamSVGParityTests {
                     y: y,
                     width: staveWidth,
                     beginBarLine: .repeatBegin,
+                    repeatBracket: bracketType,
                     endBarLine: endBarLine,
                     endClef: .bass,
                     endTimeSignature: .meter(2, 4)
@@ -238,6 +243,7 @@ extension UpstreamSVGParityTests {
                     y: y,
                     width: staveWidth,
                     beginBarLine: .repeatBegin,
+                    repeatBracket: bracketType,
                     endBarLine: endBarLine,
                     endClef: .treble,
                     endKeySignature: "Ab"
@@ -250,6 +256,7 @@ extension UpstreamSVGParityTests {
                     y: y,
                     width: staveWidth,
                     beginBarLine: .repeatBegin,
+                    repeatBracket: bracketType,
                     endBarLine: endBarLine,
                     endClef: .bass,
                     endKeySignature: "Ab",
@@ -266,9 +273,11 @@ extension UpstreamSVGParityTests {
             try drawStavesInTwoLines(.double)
             y += blockHeight + 10
             x = 10
+            bracketType = .straight
             try drawStavesInTwoLines(.repeatEnd)
             y += blockHeight + 10
             x = 10
+            bracketType = .curved
             try drawStavesInTwoLines(.repeatBoth)
         }
     }
@@ -662,6 +671,7 @@ extension UpstreamSVGParityTests {
         y: Double,
         width: Double,
         beginBarLine: BarlineType? = nil,
+        repeatBracket: RepeatBracketType = .none,
         beginClef: ClefName? = nil,
         beginKeySignature: String? = nil,
         beginTimeSignature: TimeSignatureSpec? = nil,
@@ -673,7 +683,7 @@ extension UpstreamSVGParityTests {
         let staveBar = Stave(x: x, y: y, width: width - 10)
 
         if let beginBarLine {
-            _ = staveBar.setBegBarType(beginBarLine)
+            _ = staveBar.setBegBarType(beginBarLine, repeatBracket: repeatBracket)
         }
         if let beginClef {
             _ = staveBar.addClef(beginClef)
@@ -686,7 +696,7 @@ extension UpstreamSVGParityTests {
         }
 
         if let endBarLine {
-            _ = staveBar.setEndBarType(endBarLine)
+            _ = staveBar.setEndBarType(endBarLine, repeatBracket: repeatBracket)
         }
         if let endClef {
             _ = staveBar.addEndClef(endClef)

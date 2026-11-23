@@ -35,7 +35,7 @@
 
 - `Stroke.text` is `bold italic`. Academico has regular and bold faces only. Chromium uses the bold face with a synthetic italic (`R` advance 9.933px at 10pt). The Swift lookup uses the regular face (9.627px), so the rasgueado `R` is 0.152px too far right.
 - Needed change: when bold+italic is requested and the family has no bold-italic face, use the bold face.
-- Affected cases (Bravura, Gonville; 0.15px): `Strokes.Strokes___Multi_Voice`, `Strokes.Strokes___Notation_and_Tab`, `Strokes.Strokes___Multi_Voice_Notation_and_Tab`, `StringNumber.Multi_Voice_With_Strokes__String___Finger_Numbers`.
+- Affected cases (Bravura, Gonville; 0.15px): `Strokes.Multi_Voice`, `Strokes.Notation_and_Tab`, `Strokes.Multi_Voice_Notation_and_Tab`, `StringNumber.Multi_Voice_With_Strokes__String___Finger_Numbers`.
 
 ### `Rendering/TextMetrics.swift`: synthetic bold bounds (same cause as the Stave item above)
 
@@ -48,8 +48,8 @@
 
 ### Environment-dependent cases (SMuFL glyph missing from the music font; not fixable)
 
-- Gonville: `Accidental.Sagittal`, `Accidental.Cautionary_Accidental`, `Accidental.Microtonal__Iranian_` (U+E460/E461), `Annotation.Fingerpicking` (U+EAB0), `ChordSymbol.*` (all 8 cases: U+E870-E87C, U+ED60/ED62, U+E5D5/E5D7), `Ornament.Jazz_Ornaments` (U+E5D0-E5E7), `Strokes.Strokes___Arpeggio_directionless__without_arrows_` (U+E053), `Vibrato.Simple_Vibrato`, `Vibrato.Harsh_Vibrato`, `Vibrato.Vibrato_with_Bend` (U+EAB0, U+EAC0, U+EAE2), `VibratoBracket.*` (3 cases).
-- Petaluma: `Accidental.Sagittal`, `Accidental.Cautionary_Accidental`, `Strokes.Strokes___Multi_Voice`, `Strokes.Strokes___Notation_and_Tab`, `Strokes.Strokes___Multi_Voice_Notation_and_Tab`, `StringNumber.Multi_Voice_With_Strokes__String___Finger_Numbers` (arrowheads U+EB78/EB7C).
+- Gonville: `Accidental.Sagittal`, `Accidental.Cautionary_Accidental`, `Accidental.Microtonal__Iranian_` (U+E460/E461), `Annotation.Fingerpicking` (U+EAB0), `ChordSymbol.*` (all 8 cases: U+E870-E87C, U+ED60/ED62, U+E5D5/E5D7), `Ornament.Jazz_Ornaments` (U+E5D0-E5E7), `Strokes.Arpeggio_directionless__without_arrows_` (U+E053), `Vibrato.Simple_Vibrato`, `Vibrato.Harsh_Vibrato`, `Vibrato.Vibrato_with_Bend` (U+EAB0, U+EAC0, U+EAE2), `VibratoBracket.*` (3 cases).
+- Petaluma: `Accidental.Sagittal`, `Accidental.Cautionary_Accidental`, `Strokes.Multi_Voice`, `Strokes.Notation_and_Tab`, `Strokes.Multi_Voice_Notation_and_Tab`, `StringNumber.Multi_Voice_With_Strokes__String___Finger_Numbers` (arrowheads U+EB78/EB7C).
 
 ## Notes group (StaveNote, NoteHead, Percussion, Rests, Rhythm, Dot, GhostNote, GlyphNote, Grace_Notes, Unison, Three_Voice_Rests, Beam, Auto_Beaming, CrossBeam, Tuplet, Formatter, Voice, EasyScore)
 
