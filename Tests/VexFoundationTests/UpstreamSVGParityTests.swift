@@ -824,7 +824,7 @@ struct UpstreamSVGParityTests {
         try runSVGParityCase(module: "StaveModifier", test: "Stave_Draw_Test", width: 400, height: 120) { _, context in
             let stave = Stave(x: 10, y: 10, width: 300)
             _ = stave.setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
         }
     }
 
@@ -846,7 +846,7 @@ struct UpstreamSVGParityTests {
             _ = stave.setEndTimeSignature(.meter(9, 8))
             _ = stave.setEndKeySignature("G", cancelKeySpec: "C#")
             _ = stave.setEndBarType(.double)
-            try stave.draw()
+            try stave.drawWithStyle()
 
             _ = stave.setY(100)
             _ = stave.setTimeSignature(.meter(3, 4))
@@ -857,7 +857,7 @@ struct UpstreamSVGParityTests {
             _ = stave.setTimeSignature(.commonTime, position: .end)
             _ = stave.setKeySignature("F", position: .end)
             _ = stave.setEndBarType(.single)
-            try stave.draw()
+            try stave.drawWithStyle()
         }
     }
 
@@ -873,9 +873,9 @@ struct UpstreamSVGParityTests {
             _ = connector.setType(.singleLeft)
             _ = connector.setContext(context)
 
-            try stave1.draw()
-            try stave2.draw()
-            try connector.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try connector.drawWithStyle()
         }
     }
 
@@ -900,10 +900,10 @@ struct UpstreamSVGParityTests {
             _ = connectorRight.setType(.singleRight)
             _ = connectorRight.setContext(context)
 
-            try stave1.draw()
-            try stave2.draw()
-            try connectorLeft.draw()
-            try connectorRight.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try connectorLeft.drawWithStyle()
+            try connectorRight.drawWithStyle()
         }
     }
 
@@ -1084,10 +1084,10 @@ struct UpstreamSVGParityTests {
             _ = stave2.setContext(context)
             _ = stave3.setContext(context)
             _ = stave4.setContext(context)
-            try stave1.draw()
-            try stave2.draw()
-            try stave3.draw()
-            try stave4.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try stave3.drawWithStyle()
+            try stave4.drawWithStyle()
         }
     }
 
@@ -1115,8 +1115,8 @@ struct UpstreamSVGParityTests {
 
             _ = stave1.setContext(context)
             _ = stave2.setContext(context)
-            try stave1.draw()
-            try stave2.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
         }
     }
 
@@ -1143,7 +1143,7 @@ struct UpstreamSVGParityTests {
             }
 
             _ = stave1.setContext(context)
-            try stave1.draw()
+            try stave1.drawWithStyle()
             for modifier in stave1.getModifiers() {
                 // Upstream 5.0: VexFlowTests.drawBoundingBox(ctx, modifier)
                 if let bb = modifier.getBoundingBox() {
@@ -1153,7 +1153,7 @@ struct UpstreamSVGParityTests {
                 }
             }
             _ = stave2.setContext(context)
-            try stave2.draw()
+            try stave2.drawWithStyle()
         }
     }
 
@@ -1181,8 +1181,8 @@ struct UpstreamSVGParityTests {
 
             _ = stave1.setContext(context)
             _ = stave2.setContext(context)
-            try stave1.draw()
-            try stave2.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
         }
     }
 
@@ -1210,8 +1210,8 @@ struct UpstreamSVGParityTests {
 
             _ = stave1.setContext(context)
             _ = stave2.setContext(context)
-            try stave1.draw()
-            try stave2.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
         }
     }
 
@@ -1273,10 +1273,10 @@ struct UpstreamSVGParityTests {
             _ = stave2.setContext(context)
             _ = stave3.setContext(context)
             _ = stave4.setContext(context)
-            try stave1.draw()
-            try stave2.draw()
-            try stave3.draw()
-            try stave4.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try stave3.drawWithStyle()
+            try stave4.drawWithStyle()
         }
     }
 
@@ -1320,7 +1320,7 @@ struct UpstreamSVGParityTests {
                         .addKeySignature(key, cancelKeySpec: cancelKey)
                         .addKeySignature(key)
                         .setContext(context)
-                    try stave.draw()
+                    try stave.drawWithStyle()
                     tx += width
                 }
                 y += 80
@@ -1371,10 +1371,10 @@ struct UpstreamSVGParityTests {
             _ = stave2.setContext(context)
             _ = stave3.setContext(context)
             _ = stave4.setContext(context)
-            try stave1.draw()
-            try stave2.draw()
-            try stave3.draw()
-            try stave4.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try stave3.drawWithStyle()
+            try stave4.drawWithStyle()
         }
     }
 
@@ -1466,6 +1466,7 @@ struct UpstreamSVGParityTests {
                 .addTimeSignature(.meter(6, 8))
                 .addTimeSignature(.commonTime)
                 .addTimeSignature(.cutTime)
+                .addTimeSignature(.topOnly(try #require(TimeSignatureDigits(rawValue: "3"))))
                 .addTimeSignature(.meter(2, 2), position: .end)
                 .addTimeSignature(.meter(3, 4), position: .end)
                 .addTimeSignature(.meter(4, 4), position: .end)
@@ -1474,7 +1475,7 @@ struct UpstreamSVGParityTests {
                 .addTimeSignature(.commonTime, position: .end)
                 .addTimeSignature(.cutTime, position: .end)
                 .setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
         }
     }
 
@@ -1491,7 +1492,7 @@ struct UpstreamSVGParityTests {
                 .addTimeSignature(threePart)
                 .addTimeSignature(fourPart)
                 .setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
         }
     }
 
@@ -1503,7 +1504,7 @@ struct UpstreamSVGParityTests {
             _ = stave
                 .addTimeSignature(additive)
                 .setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
         }
     }
 
@@ -1520,7 +1521,7 @@ struct UpstreamSVGParityTests {
                 .addTimeSignature(plus)
                 .addTimeSignature(threeFour)
                 .setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
         }
     }
 
@@ -1542,7 +1543,7 @@ struct UpstreamSVGParityTests {
                 .addTimeSignature(minus)
                 .addTimeSignature(twoFour)
                 .setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
         }
     }
 
@@ -1562,7 +1563,7 @@ struct UpstreamSVGParityTests {
                 .addTimeSignature(plus)
                 .addTimeSignature(fiveFour)
                 .setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
         }
     }
 
@@ -1579,7 +1580,7 @@ struct UpstreamSVGParityTests {
                 .addTimeSignature(plus)
                 .addTimeSignature(threeEight)
                 .setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
         }
     }
 
@@ -1599,35 +1600,35 @@ struct UpstreamSVGParityTests {
                 .addClef(.percussion)
                 .addTimeSignature(.meter(4, 4), customPadding: 25)
                 .setContext(context)
-            try stave1.draw()
+            try stave1.drawWithStyle()
 
             let stave2 = Stave(x: 15, y: 110, width: 300)
             _ = stave2
                 .addClef(.treble)
                 .addTimeSignature(.meter(4, 4))
                 .setContext(context)
-            try stave2.draw()
+            try stave2.drawWithStyle()
 
             let stave3 = Stave(x: 15, y: 220, width: 300)
             _ = stave3
                 .addClef(.bass)
                 .addTimeSignature(.meter(4, 4))
                 .setContext(context)
-            try stave3.draw()
+            try stave3.drawWithStyle()
 
             Stave.formatBegModifiers([stave1, stave2, stave3])
 
             let connector1 = StaveConnector(topStave: stave1, bottomStave: stave2)
             _ = connector1.setType(.singleLeft).setContext(context)
-            try connector1.draw()
+            try connector1.drawWithStyle()
 
             let connector2 = StaveConnector(topStave: stave2, bottomStave: stave3)
             _ = connector2.setType(.singleLeft).setContext(context)
-            try connector2.draw()
+            try connector2.drawWithStyle()
 
             let connector3 = StaveConnector(topStave: stave2, bottomStave: stave3)
             _ = connector3.setType(.brace).setContext(context)
-            try connector3.draw()
+            try connector3.drawWithStyle()
         }
     }
 
@@ -1661,7 +1662,7 @@ struct UpstreamSVGParityTests {
         try runSVGParityCase(module: "Stave", test: "Stave_Draw_Test", width: 400, height: 150) { _, context in
             let stave = Stave(x: 10, y: 10, width: 300)
             _ = stave.setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
         }
     }
 
@@ -1670,11 +1671,11 @@ struct UpstreamSVGParityTests {
         try runSVGParityCase(module: "Stave", test: "Open_Stave_Draw_Test", width: 400, height: 350) { _, context in
             let leftOpen = Stave(x: 10, y: 10, width: 300, options: StaveOptions(leftBar: false))
             _ = leftOpen.setContext(context)
-            try leftOpen.draw()
+            try leftOpen.drawWithStyle()
 
             let rightOpen = Stave(x: 10, y: 150, width: 300, options: StaveOptions(rightBar: false))
             _ = rightOpen.setContext(context)
-            try rightOpen.draw()
+            try rightOpen.drawWithStyle()
         }
     }
 
@@ -1689,7 +1690,7 @@ struct UpstreamSVGParityTests {
                 .setConfigForLine(3, config: StaveLineConfig(visible: false))
                 .setConfigForLine(4, config: StaveLineConfig(visible: true))
                 .setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
         }
     }
 
@@ -1708,7 +1709,7 @@ struct UpstreamSVGParityTests {
             _ = stave
                 .setConfigForLines(lineConfig)
                 .setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
         }
     }
 
@@ -1958,8 +1959,8 @@ struct UpstreamSVGParityTests {
         for index in 0..<clefs.count {
             _ = flatStaves[index].setContext(context)
             _ = sharpStaves[index].setContext(context)
-            try flatStaves[index].draw()
-            try sharpStaves[index].draw()
+            try flatStaves[index].drawWithStyle()
+            try sharpStaves[index].drawWithStyle()
         }
     }
 

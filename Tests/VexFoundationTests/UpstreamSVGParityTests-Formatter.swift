@@ -763,7 +763,6 @@ extension UpstreamSVGParityTests {
             .addClef(ClefName.treble)
             .addTimeSignature(TimeSignatureSpec.meter(4, 4))
 
-        try system.formatThrowing()
         try factory.draw()
     }
 
@@ -797,7 +796,7 @@ extension UpstreamSVGParityTests {
                     _ = note.addModifier(
                         Annotation(cfg.lyrics[index])
                             .setVerticalJustification(.bottom)
-                            .setFont(FontInfo(family: VexFont.SERIF, size: 12, weight: VexFontWeight.normal.rawValue)),
+                            .setFont(FontInfo(family: Metrics.getString("fontFamily"), size: 12, weight: VexFontWeight.normal.rawValue)),
                         index: 0
                     )
                 }
@@ -810,7 +809,7 @@ extension UpstreamSVGParityTests {
 
             var notesToBeam: [StemmableNote] = []
             for note in notes {
-                if note.getIntrinsicTicks() < Double(Tables.RESOLUTION) {
+                if note.getIntrinsicTicks() < 4096 {
                     notesToBeam.append(note)
                     if notesToBeam.count >= beamGroup {
                         beams.append(try Beam(notesToBeam))
@@ -873,7 +872,6 @@ extension UpstreamSVGParityTests {
                 .addTimeSignature(TimeSignatureSpec.meter(1, 4))
         }
         _ = system.addConnector(type: ConnectorType.bracket)
-        try system.formatThrowing()
         try factory.draw()
         _ = context
     }

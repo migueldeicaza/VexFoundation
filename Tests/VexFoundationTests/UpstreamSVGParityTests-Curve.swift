@@ -18,7 +18,7 @@ extension UpstreamSVGParityTests {
                 options: CurveOptions(
                     cps: [(x: 0, y: 10), (x: 0, y: 20)]
                 )
-            )
+            ).setStyle(ElementStyle(lineDash: "10 10"))
         }
     }
 
@@ -40,7 +40,7 @@ extension UpstreamSVGParityTests {
                 options: CurveOptions(
                     cps: [(x: 0, y: 50), (x: 0, y: 50)]
                 )
-            )
+            ).setStyle(ElementStyle(lineDash: "20"))
         }
     }
 

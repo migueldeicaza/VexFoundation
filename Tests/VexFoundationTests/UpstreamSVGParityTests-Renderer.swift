@@ -73,7 +73,7 @@ extension UpstreamSVGParityTests {
         let stave = factory.Stave()
             .addClef(.bass)
             .addTimeSignature(.meter(3, 4))
-        try stave.draw()
+        try stave.drawWithStyle()
 
         let notes: [StaveNote] = try [
             factory.StaveNote(StaveNoteStruct(parsingKeys: ["C/4"], duration: "4")),

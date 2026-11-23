@@ -21,7 +21,7 @@ extension UpstreamSVGParityTests {
             _ = stave.setText("Above Text", position: .above)
             _ = stave.setText("Below Text", position: .below)
             _ = stave.setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
         }
     }
 
@@ -46,7 +46,7 @@ extension UpstreamSVGParityTests {
                 options: StaveTextOptions(shiftY: 10, justification: .right)
             )
             _ = stave.setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
         }
     }
 
@@ -81,7 +81,7 @@ extension UpstreamSVGParityTests {
                 .addClef(.treble)
                 .addKeySignature("A")
                 .setContext(context)
-            try staveBar1.draw()
+            try staveBar1.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: staveBar1, notes: try makeUpstreamStaveCommonQuarterBar())
 
             let staveBar2 = Stave(
@@ -93,7 +93,7 @@ extension UpstreamSVGParityTests {
                 .setBegBarType(.repeatBegin)
                 .setEndBarType(.repeatEnd)
                 .setContext(context)
-            try staveBar2.draw()
+            try staveBar2.drawWithStyle()
 
             let notesBar2Part1 = try makeUpstreamMultipleStaveBarlineEighthRun()
             let notesBar2Part2 = try makeUpstreamMultipleStaveBarlineEighthRun()
@@ -106,10 +106,10 @@ extension UpstreamSVGParityTests {
             try Formatter.FormatAndDraw(ctx: context, stave: staveBar2, notes: notesBar2)
 
             _ = beam1.setContext(context)
-            try beam1.draw()
+            try beam1.drawWithStyle()
 
             _ = beam2.setContext(context)
-            try beam2.draw()
+            try beam2.drawWithStyle()
 
             let staveBar3 = Stave(
                 x: staveBar2.getWidth() + staveBar2.getX(),
@@ -117,7 +117,7 @@ extension UpstreamSVGParityTests {
                 width: 50
             )
             _ = staveBar3.setContext(context)
-            try staveBar3.draw()
+            try staveBar3.drawWithStyle()
             let notesBar3 = [
                 try StaveNote(validating: StaveNoteStruct(parsingKeys: ["d/5"], duration: "wr")),
             ]
@@ -132,7 +132,7 @@ extension UpstreamSVGParityTests {
                 .setBegBarType(.repeatBegin)
                 .setEndBarType(.repeatEnd)
                 .setContext(context)
-            try staveBar4.draw()
+            try staveBar4.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: staveBar4, notes: try makeUpstreamStaveCommonQuarterBar())
         }
     }
@@ -285,9 +285,9 @@ extension UpstreamSVGParityTests {
                 .addClef(.treble)
                 .addKeySignature("A")
                 .setMeasure(1)
-                .setSection("A", y: 0)
+                .addModifier(StaveSection(section: "A"))
                 .setContext(context)
-            try mm1.draw()
+            try mm1.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm1, notes: try makeUpstreamVoltaNote("c/4"))
 
             let mm2 = Stave(x: mm1.getWidth() + mm1.getX(), y: mm1.getY(), width: 60)
@@ -295,7 +295,7 @@ extension UpstreamSVGParityTests {
                 .setRepetitionType(.codaRight)
                 .setMeasure(2)
                 .setContext(context)
-            try mm2.draw()
+            try mm2.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm2, notes: try makeUpstreamVoltaNote("d/4"))
 
             let mm3 = Stave(x: mm2.getWidth() + mm2.getX(), y: mm1.getY(), width: 60)
@@ -303,7 +303,7 @@ extension UpstreamSVGParityTests {
                 .setVoltaType(.begin, number: "1.", yShift: -5)
                 .setMeasure(3)
                 .setContext(context)
-            try mm3.draw()
+            try mm3.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm3, notes: try makeUpstreamVoltaNote("e/4"))
 
             let mm4 = Stave(x: mm3.getWidth() + mm3.getX(), y: mm1.getY(), width: 60)
@@ -311,7 +311,7 @@ extension UpstreamSVGParityTests {
                 .setVoltaType(.mid, number: "", yShift: -5)
                 .setMeasure(4)
                 .setContext(context)
-            try mm4.draw()
+            try mm4.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm4, notes: try makeUpstreamVoltaNote("f/4"))
 
             let mm5 = Stave(x: mm4.getWidth() + mm4.getX(), y: mm1.getY(), width: 60)
@@ -320,7 +320,7 @@ extension UpstreamSVGParityTests {
                 .setVoltaType(.end, number: "", yShift: -5)
                 .setMeasure(5)
                 .setContext(context)
-            try mm5.draw()
+            try mm5.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm5, notes: try makeUpstreamVoltaNote("g/4"))
 
             let mm6 = Stave(x: mm5.getWidth() + mm5.getX(), y: mm1.getY(), width: 60)
@@ -329,15 +329,15 @@ extension UpstreamSVGParityTests {
                 .setEndBarType(.double)
                 .setMeasure(6)
                 .setContext(context)
-            try mm6.draw()
+            try mm6.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm6, notes: try makeUpstreamVoltaNote("a/4"))
 
             let mm7 = Stave(x: mm6.getWidth() + mm6.getX(), y: mm1.getY(), width: 60)
             _ = mm7
                 .setMeasure(7)
-                .setSection("B", y: 0)
+                .addModifier(StaveSection(section: "B").setPadding(4))
                 .setContext(context)
-            try mm7.draw()
+            try mm7.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm7, notes: try makeUpstreamVoltaNote("b/4"))
 
             let mm8 = Stave(x: mm7.getWidth() + mm7.getX(), y: mm1.getY(), width: 60)
@@ -346,7 +346,7 @@ extension UpstreamSVGParityTests {
                 .setRepetitionType(.dsAlCoda)
                 .setMeasure(8)
                 .setContext(context)
-            try mm8.draw()
+            try mm8.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm8, notes: try makeUpstreamVoltaNote("c/5"))
 
             let mm9 = Stave(x: mm8.getWidth() + mm8.getX() + 20, y: mm1.getY(), width: 125)
@@ -357,7 +357,7 @@ extension UpstreamSVGParityTests {
                 .addKeySignature("A")
                 .setMeasure(9)
                 .setContext(context)
-            try mm9.draw()
+            try mm9.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm9, notes: try makeUpstreamVoltaNote("d/5"))
         }
     }
@@ -379,7 +379,7 @@ extension UpstreamSVGParityTests {
                 .setMeasure(1)
                 .setSection("A", y: 0)
                 .setContext(context)
-            try mm1.draw()
+            try mm1.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm1, notes: try makeUpstreamVoltaNote("c/4"))
 
             let mm2 = Stave(x: mm1.getX() + mm1.getWidth(), y: mm1.getY(), width: 175)
@@ -391,7 +391,7 @@ extension UpstreamSVGParityTests {
                 .addKeySignature("A")
                 .setMeasure(2)
                 .setContext(context)
-            try mm2.draw()
+            try mm2.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm2, notes: try makeUpstreamVoltaNote("c/4"))
 
             let mm3 = Stave(x: mm2.getX() + mm2.getWidth(), y: mm2.getY(), width: 175)
@@ -403,7 +403,7 @@ extension UpstreamSVGParityTests {
                 .setMeasure(3)
                 .setSection("B", y: 0)
                 .setContext(context)
-            try mm3.draw()
+            try mm3.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm3, notes: try makeUpstreamVoltaNote("c/4"))
 
             let mm4 = Stave(x: mm3.getX() + mm3.getWidth(), y: mm3.getY(), width: 175)
@@ -415,7 +415,7 @@ extension UpstreamSVGParityTests {
                 .setMeasure(4)
                 .setSection("C", y: 0)
                 .setContext(context)
-            try mm4.draw()
+            try mm4.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm4, notes: try makeUpstreamVoltaNote("c/4"))
 
             let mm5 = Stave(x: mm4.getX() + mm4.getWidth(), y: mm4.getY(), width: 175)
@@ -427,7 +427,7 @@ extension UpstreamSVGParityTests {
                 .setMeasure(5)
                 .setSection("D", y: 0)
                 .setContext(context)
-            try mm5.draw()
+            try mm5.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm5, notes: try makeUpstreamVoltaNote("c/4"))
 
             let mm6 = Stave(x: mm5.getX() + mm5.getWidth(), y: mm5.getY(), width: 175)
@@ -436,7 +436,7 @@ extension UpstreamSVGParityTests {
                 .setMeasure(6)
                 .setSection("E", y: 0)
                 .setContext(context)
-            try mm6.draw()
+            try mm6.drawWithStyle()
             try Formatter.FormatAndDraw(ctx: context, stave: mm6, notes: try makeUpstreamVoltaNote("c/4"))
         }
     }
@@ -461,7 +461,7 @@ extension UpstreamSVGParityTests {
                 _ = staveBar
                     .setTempo(tempo, y: tempoY)
                     .setContext(context)
-                try staveBar.draw()
+                try staveBar.drawWithStyle()
 
                 let notesBar = try notes ?? makeUpstreamStaveTempoQuarterBar()
                 try Formatter.FormatAndDraw(ctx: context, stave: staveBar, notes: notesBar)
@@ -470,7 +470,7 @@ extension UpstreamSVGParityTests {
 
             try drawTempoStaveBar(
                 120,
-                try StaveTempoOptions(bpm: 80, duration: "q", dots: 1)
+                StaveTempoOptions(duration: .quarter, dots: 1, bpmText: "80-90")
             )
             try drawTempoStaveBar(
                 100,
@@ -486,7 +486,7 @@ extension UpstreamSVGParityTests {
             )
             try drawTempoStaveBar(
                 250,
-                StaveTempoOptions(bpm: 120, name: "Andante"),
+                StaveTempoOptions(bpm: 120, duration: .quarter, name: "Andante"),
                 -20,
                 try [
                     StaveNote(validating: StaveNoteStruct(parsingKeys: ["c/4"], duration: "8")),
@@ -509,11 +509,11 @@ extension UpstreamSVGParityTests {
             )
             try drawTempoStaveBar(
                 100,
-                try StaveTempoOptions(bpm: 90, duration: "h")
+                StaveTempoOptions(duration: .half, duration2: .quarter, dots2: 1)
             )
             try drawTempoStaveBar(
                 100,
-                try StaveTempoOptions(bpm: 96, duration: "q")
+                StaveTempoOptions(duration: .quarter, dots: 1, parenthesis: true, duration2: .half)
             )
             try drawTempoStaveBar(
                 100,
@@ -545,7 +545,7 @@ extension UpstreamSVGParityTests {
             .setSection("A", y: 0, xOffset: 0, fontSize: sectionFontSize, drawRect: false)
             .addClef(.treble)
             .setContext(context)
-        try staveBar1.draw()
+        try staveBar1.drawWithStyle()
 
         let notesBar1 = try makeUpstreamMultipleStaveBarlineNotesBar1()
         try Formatter.FormatAndDraw(ctx: context, stave: staveBar1, notes: notesBar1)
@@ -559,7 +559,7 @@ extension UpstreamSVGParityTests {
             .setSection("B", y: 0, xOffset: 0, fontSize: sectionFontSize)
             .setEndBarType(.end)
             .setContext(context)
-        try staveBar2.draw()
+        try staveBar2.drawWithStyle()
 
         let notesBar2Part1 = try makeUpstreamMultipleStaveBarlineEighthRun()
         let notesBar2Part2 = try makeUpstreamMultipleStaveBarlineEighthRun()
@@ -570,10 +570,10 @@ extension UpstreamSVGParityTests {
         try Formatter.FormatAndDraw(ctx: context, stave: staveBar2, notes: notesBar2)
 
         _ = beam1.setContext(context)
-        try beam1.draw()
+        try beam1.drawWithStyle()
 
         _ = beam2.setContext(context)
-        try beam2.draw()
+        try beam2.drawWithStyle()
     }
 
     private func makeUpstreamMultipleStaveBarlineNotesBar1() throws -> [StaveNote] {
@@ -619,7 +619,7 @@ extension UpstreamSVGParityTests {
             .setRepetitionType(.dsAlFine, yShift: yShift)
             .setMeasure(1)
             .setContext(context)
-        try mm1.draw()
+        try mm1.drawWithStyle()
         try Formatter.FormatAndDraw(ctx: context, stave: mm1, notes: try makeUpstreamStaveRepetitionQuarterBar())
 
         let mm2 = Stave(x: mm1.getWidth() + mm1.getX(), y: mm1.getY(), width: 150)
@@ -627,7 +627,7 @@ extension UpstreamSVGParityTests {
             .setRepetitionType(.toCoda, yShift: yShift)
             .setMeasure(2)
             .setContext(context)
-        try mm2.draw()
+        try mm2.drawWithStyle()
         try Formatter.FormatAndDraw(ctx: context, stave: mm2, notes: try makeUpstreamStaveRepetitionQuarterBar())
 
         let mm3 = Stave(x: mm2.getWidth() + mm2.getX(), y: mm1.getY(), width: 150)
@@ -635,7 +635,7 @@ extension UpstreamSVGParityTests {
             .setRepetitionType(.dsAlCoda, yShift: yShift)
             .setMeasure(3)
             .setContext(context)
-        try mm3.draw()
+        try mm3.drawWithStyle()
         try Formatter.FormatAndDraw(ctx: context, stave: mm3, notes: try makeUpstreamStaveRepetitionQuarterBar())
 
         let mm4 = Stave(x: mm3.getWidth() + mm3.getX(), y: mm1.getY(), width: 150)
@@ -643,7 +643,7 @@ extension UpstreamSVGParityTests {
             .setRepetitionType(.codaLeft, yShift: yShift)
             .setMeasure(4)
             .setContext(context)
-        try mm4.draw()
+        try mm4.drawWithStyle()
         try Formatter.FormatAndDraw(ctx: context, stave: mm4, notes: try makeUpstreamStaveRepetitionQuarterBar())
     }
 
@@ -699,7 +699,7 @@ extension UpstreamSVGParityTests {
         }
 
         _ = staveBar.setContext(context)
-        try staveBar.draw()
+        try staveBar.drawWithStyle()
 
         try Formatter.FormatAndDraw(
             ctx: context,

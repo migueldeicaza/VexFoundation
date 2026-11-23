@@ -128,6 +128,15 @@ public enum TextMeasurer {
         return result
     }
 
+    /// Skia's fake-bold stroke factor: interpolates 1/24 (at 9px) to 1/32 (at 36px).
+    static func fakeBoldScale(_ textSize: CGFloat) -> CGFloat {
+        let (k0, k1): (CGFloat, CGFloat) = (9, 36)
+        let (v0, v1): (CGFloat, CGFloat) = (1.0 / 24.0, 1.0 / 32.0)
+        if textSize <= k0 { return v0 }
+        if textSize >= k1 { return v1 }
+        return v0 + (v1 - v0) * (textSize - k0) / (k1 - k0)
+    }
+
     /// Resolve the CSS family list of `fontInfo` to fonts, in order.
     public static func fonts(for fontInfo: FontInfo) -> [CTFont] {
         let sizePx = VexFont.convertSizeToPixelValue(fontInfo.size)
@@ -223,6 +232,30 @@ public enum TextMeasurer {
                 continue
             }
             let font = searchFonts[fontIndex]
+            if segment.text.unicodeScalars.allSatisfy({ (0xE000...0xF8FF).contains($0.value) }) {
+                // SMuFL symbols: browsers measure the plain sum of glyph
+                // advances (no ligatures, no kerning), so skip shaping.
+                let utf16 = Array(segment.text.utf16)
+                var glyphs = [CGGlyph](repeating: 0, count: utf16.count)
+                _ = CTFontGetGlyphsForCharacters(font, utf16, &glyphs, utf16.count)
+                glyphs = glyphs.filter { $0 != 0 }
+                var advances = [CGSize](repeating: .zero, count: glyphs.count)
+                CTFontGetAdvancesForGlyphs(font, .default, glyphs, &advances, glyphs.count)
+                var rects = [CGRect](repeating: .zero, count: glyphs.count)
+                CTFontGetBoundingRectsForGlyphs(font, .default, glyphs, &rects, glyphs.count)
+                var positions: [CGPoint] = []
+                for i in 0..<glyphs.count {
+                    positions.append(CGPoint(x: penX, y: 0))
+                    if !rects[i].isEmpty && !rects[i].isNull {
+                        let r = rects[i].offsetBy(dx: penX, dy: 0)
+                        minX = min(minX, r.minX); maxX = max(maxX, r.maxX)
+                        minY = min(minY, r.minY); maxY = max(maxY, r.maxY)
+                    }
+                    penX += advances[i].width
+                }
+                runs.append(TextGlyphRun(font: font, glyphs: glyphs, positions: positions))
+                continue
+            }
             // Match browser shaping: kerning applies only when the font has a
             // legacy `kern` table or a GPOS script that matches the text
             // (`latn` for Latin, `DFLT` for symbols). See `FontKerning`.
@@ -257,6 +290,16 @@ public enum TextMeasurer {
                 runs.append(TextGlyphRun(font: runFont, glyphs: glyphs, positions: positions))
             }
             penX += CGFloat(lineWidth)
+        }
+
+        // Synthetic bold (bold requested, face is not bold): browsers (Skia)
+        // embolden the outline, which grows the ink bounds on every side.
+        if VexFont.isBold(fontInfo.weight), minX.isFinite,
+           let firstRun = runs.first,
+           !CTFontGetSymbolicTraits(firstRun.font).contains(.traitBold) {
+            let textSize = CGFloat(VexFont.convertSizeToPixelValue(fontInfo.size))
+            let outset = textSize * TextMeasurer.fakeBoldScale(textSize) / 2
+            minX -= outset; maxX += outset; minY -= outset; maxY += outset
         }
 
         var metrics = TextMetrics()

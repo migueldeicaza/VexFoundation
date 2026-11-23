@@ -15,7 +15,7 @@ extension UpstreamSVGParityTests {
 
             let stave = TabStave(x: 10, y: 10, width: 550)
             _ = stave.setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
 
             let specs: [UpstreamTabNoteSpec] = [
                 .init(positions: [.init(str: 6, fret: 6)], duration: "4"),
@@ -56,7 +56,7 @@ extension UpstreamSVGParityTests {
             _ = context.setFont(FontInfo(family: "Arial", size: "10pt"))
             let stave = TabStave(x: 10, y: 30, width: 550)
             _ = stave.setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
 
             let notes = try makeUpstreamTabStemSequence().map { spec in
                 let note = try TabNote(validating: spec)
@@ -79,7 +79,7 @@ extension UpstreamSVGParityTests {
             _ = context.setFont(FontInfo(family: "Arial", size: "10pt"))
             let stave = TabStave(x: 10, y: 10, width: 550)
             _ = stave.setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
 
             let notes = try makeUpstreamTabStemSequence().map { spec in
                 let note = try TabNote(validating: spec)
@@ -103,7 +103,7 @@ extension UpstreamSVGParityTests {
             _ = context.setFont(FontInfo(family: "Arial", size: "10pt"))
             let stave = TabStave(x: 10, y: 30, width: 550)
             _ = stave.setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
 
             let notes = try makeUpstreamTabStemSequence().map { spec in
                 let note = try TabNote(validating: spec)
@@ -113,7 +113,7 @@ extension UpstreamSVGParityTests {
             }
 
             _ = context.setFont(FontInfo(
-                family: VexFont.SANS_SERIF,
+                family: Metrics.getString("fontFamily"),
                 size: 10,
                 weight: VexFontWeight.bold.rawValue
             ))
@@ -138,7 +138,7 @@ extension UpstreamSVGParityTests {
                 options: StaveOptions(numLines: 8)
             )
             _ = stave.setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
 
             let specs: [UpstreamTabNoteSpec] = [
                 .init(positions: [.init(str: 3, fret: 6), .init(str: 4, fret: 25)], duration: "4"),
@@ -178,7 +178,7 @@ extension UpstreamSVGParityTests {
             _ = context.setFont(FontInfo(family: "Arial", size: "10pt"))
             let stave = TabStave(x: 10, y: 10, width: 550)
             _ = stave.setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
 
             let specs: [TabNoteStruct] = try [
                 TabNoteStruct(
@@ -257,7 +257,7 @@ extension UpstreamSVGParityTests {
         _ = TickContext().addTickable(note).preFormat().setX(x)
         _ = note.setContext(context)
         _ = note.setStave(stave)
-        try note.draw()
+        try note.drawWithStyle()
         return note
     }
 }

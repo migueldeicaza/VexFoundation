@@ -513,10 +513,6 @@ extension UpstreamSVGParityTests {
                 score.voice(score.notes("e4/8, e4/8/r, e4/q/r, e4/h/r")),
             ]))
 
-            try system1.formatThrowing()
-            try system2.formatThrowing()
-            try system3.formatThrowing()
-            try system4.formatThrowing()
             try factory.draw()
         }
     }
@@ -573,10 +569,6 @@ extension UpstreamSVGParityTests {
                 score.voice(score.notes("e4/8, e4/8/r, e4/q/r, e4/h/r")),
             ]))
 
-            try system1.formatThrowing()
-            try system2.formatThrowing()
-            try system3.formatThrowing()
-            try system4.formatThrowing()
             try factory.draw()
         }
     }
@@ -787,10 +779,6 @@ extension UpstreamSVGParityTests {
             score.voice(score.notes("e4/8, e4/8, e4/q, e4/h")),
         ]))
 
-        try system1.formatThrowing()
-        try system2.formatThrowing()
-        try system3.formatThrowing()
-        try system4.formatThrowing()
     }
 
     private func runUpstreamStaveNoteDrawBasicCase(
@@ -899,8 +887,12 @@ extension UpstreamSVGParityTests {
                 try StaveNoteStruct(parsingKeys: ["x/4"], duration: "h"),
             ]
 
-            for (index, noteStruct) in noteStructs.enumerated() {
-                let note = StaveNote(noteStruct)
+            let notes = noteStructs.map { StaveNote($0) }
+            _ = notes[2].addModifier(Ornament("tr"), index: 0)
+            _ = notes[2].addModifier(Accidental(.flat), index: 0)
+            Dot.buildAndAttach([notes[2]], all: true)
+
+            for (index, note) in notes.enumerated() {
                 _ = try drawUpstreamStaveNote(
                     note,
                     stave: stave,

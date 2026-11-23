@@ -102,11 +102,10 @@ extension UpstreamSVGParityTests {
                 let textY = stave.getYForLine(-0.5)
                 let text = "TACET"
 
-                _ = context.save()
-                _ = context.setFont(FontInfo(family: VexFont.SERIF, size: 16, weight: VexFontWeight.bold.rawValue))
-                let metrics = context.measureText(text)
-                _ = context.fillText(text, xs.left + (xs.right - xs.left) * 0.5 - metrics.width * 0.5, textY)
-                _ = context.restore()
+                let element = VexElement()
+                _ = element.setText(text)
+                _ = element.setFont(family: Metrics.getString("fontFamily"), size: "16pt", weight: VexFontWeight.bold.rawValue)
+                element.renderText(context, xPos: xs.left + (xs.right - xs.left) * 0.5 - element.getWidth() * 0.5, yPos: textY)
             }
         }
     }

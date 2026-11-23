@@ -94,7 +94,7 @@ extension UpstreamSVGParityTests {
                 _ = staveModifiers[2].setStyle(upstreamStyle(fillStyle: "blue"))
             }
             _ = stave.setContext(context)
-            try stave.draw()
+            try stave.drawWithStyle()
 
             let firstNote = TabNote(TabNoteStruct(
                 positions: [

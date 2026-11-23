@@ -23,7 +23,6 @@ extension UpstreamSVGParityTests {
         try runCategorySVGParityCase(module: "Rests", test: "Dotted", width: 700, height: 150) { _, context in
             let stave = try setupRestsContext(context: context, width: 700, height: 150)
             let notes: [StaveNote] = try [
-                restsNote(["b/4"], duration: "1/2r", stemDirection: .up),
                 restsNote(["b/4"], duration: "wr", stemDirection: .up),
                 restsNote(["b/4"], duration: "hr", stemDirection: .up),
                 restsNote(["b/4"], duration: "4r", stemDirection: .up),
@@ -32,7 +31,6 @@ extension UpstreamSVGParityTests {
                 restsNote(["b/4"], duration: "32r", stemDirection: .up),
                 restsNote(["b/4"], duration: "64r", stemDirection: .up),
                 restsNote(["b/4"], duration: "128r", stemDirection: .up),
-                restsNote(["b/4"], duration: "256r", stemDirection: .up),
             ]
             Dot.buildAndAttach(notes.map { $0 as Note }, all: true)
             _ = try Formatter.FormatAndDraw(ctx: context, stave: stave, notes: notes)

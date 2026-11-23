@@ -55,44 +55,77 @@ extension UpstreamSVGParityTests {
 
     @Test("Accidental.Cautionary_Accidental")
     func accidentalCautionaryMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "Accidental", test: "Cautionary_Accidental", width: 850, height: 2110) { _, context in
-            let staveCount = 12
-            let scale = 0.85
-            let staveWidth = 840.0
+        // Mirrors 5.0.0 accidental_tests.ts `cautionary`.
+        let staveCount = 20
+        let notesPerStave = 22
+        let scale = 0.85
+        let staveWidth = 900.0
+        let staveHeight = 75.0
+        try runCategorySVGParityCase(
+            module: "Accidental",
+            test: "Cautionary_Accidental",
+            width: staveWidth + 10,
+            height: staveHeight * Double(staveCount) + 10
+        ) { factory, context in
             context.scale(scale, scale)
 
-            let accids = upstreamCautionaryAccidentalTypes()
-            let mod = max(1, Int((Double(accids.count) / Double(staveCount)).rounded()))
-
-            for row in 0..<staveCount {
-                let stave = Stave(x: 0, y: 10 + 200 * Double(row), width: staveWidth / scale)
-                _ = stave.setContext(context)
-                try stave.draw()
-
+            let accids = upstreamGenAccidentals().filter { $0 != "{" && $0 != "}" }
+            for i in 0..<staveCount {
+                let stave = factory.Stave(x: 0, y: 10 + (staveHeight / scale) * Double(i), width: staveWidth / scale)
+                _ = stave
+                let score = factory.EasyScore()
                 var rowMap: [String] = []
-                var index = 0
-                while index < mod && index + row * staveCount < accids.count {
-                    rowMap.append(accids[index + row * staveCount])
-                    index += 1
+                var j = 0
+                while j < notesPerStave && j + i * notesPerStave < accids.count {
+                    rowMap.append(accids[j + i * notesPerStave])
+                    j += 1
                 }
-                guard !rowMap.isEmpty else { continue }
-
-                let notes = try rowMap.map { accidental in
-                    try StaveNote(validating: StaveNoteStruct(
-                        parsingKeys: ["a/4"],
-                        duration: "4",
-                        stemDirection: .up
-                    ))
-                    .addModifier(try makeUpstreamAccidental(accidental).setAsCautionary(), index: 0)
+                let notes: [StaveNote] = try rowMap.map { accidType in
+                    try factory.StaveNote(StaveNoteStruct(parsingKeys: ["a/4"], duration: "4", stemDirection: .up))
+                        .addModifier(try factory.Accidental(parsing: accidType), index: 0)
                 }
-
-                let voice = Voice(time: VoiceTime(numBeats: rowMap.count, beatValue: 4))
-                    .addTickables(notes.map { $0 as Tickable })
-
-                _ = Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
-                try voice.draw(context: context, stave: stave)
+                let voice = score.voice(notes, time: .meter(rowMap.count, 4))
+                for tickable in voice.getTickables() {
+                    for modifier in tickable.getModifiers() {
+                        if let accid = modifier as? Accidental { _ = accid.setAsCautionary() }
+                    }
+                }
+                _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+                try factory.draw()
             }
         }
+    }
+
+    /// Mirrors 5.0.0 accidental_tests.ts `genAccidentals`.
+    private func upstreamGenAccidentals() -> [String] {
+        var accs = ["#", "##", "b", "bb", "n", "{", "}", "db", "d", "++", "+", "+-"]
+        accs += ["bs", "bss", "o", "k", "bbs", "++-", "ashs", "afhf"]
+        func push(_ lo: UInt32, _ hi: UInt32, excluding: Set<UInt32> = []) {
+            for u in lo...hi where !excluding.contains(u) {
+                if let scalar = Unicode.Scalar(u) { accs.append(String(Character(scalar))) }
+            }
+        }
+        push(0xE260, 0xE269)
+        push(0xE270, 0xE27B)
+        push(0xE280, 0xE285)
+        push(0xE290, 0xE29C)
+        push(0xE2A0, 0xE2A5)
+        push(0xE2B0, 0xE2B7)
+        push(0xE2C0, 0xE2FB)
+        push(0xE300, 0xE30F)
+        push(0xE310, 0xE335, excluding: [0xE31A, 0xE31B, 0xE31E, 0xE31F])
+        push(0xE340, 0xE367)
+        push(0xE370, 0xE387)
+        push(0xE390, 0xE3AD)
+        push(0xE3B0, 0xE3EF)
+        push(0xE3F0, 0xE3F3)
+        push(0xE3F4, 0xE3F7)
+        push(0xE420, 0xE435)
+        push(0xE440, 0xE447)
+        push(0xE450, 0xE457)
+        push(0xE460, 0xE461)
+        push(0xE470, 0xE48F)
+        return accs
     }
 
     @Test("Accidental.Multi_Voice")
@@ -268,8 +301,9 @@ extension UpstreamSVGParityTests {
             let notes: [StaveNote] = [
                 try StaveNote(validating: StaveNoteStruct(parsingKeys: ["e##/5"], duration: "8d"))
                     .addModifier(try makeUpstreamAccidental("##"), index: 0),
-                try StaveNote(validating: StaveNoteStruct(parsingKeys: ["b/4"], duration: "16"))
-                    .addModifier(try makeUpstreamAccidental("b"), index: 0),
+                try StaveNote(validating: StaveNoteStruct(parsingKeys: ["Bb/4", "Bn/4"], duration: "16"))
+                    .addModifier(try makeUpstreamAccidental("b"), index: 0)
+                    .addModifier(try makeUpstreamAccidental("n"), index: 0),
                 try StaveNote(validating: StaveNoteStruct(parsingKeys: ["f/3"], duration: "8")),
                 try StaveNote(validating: StaveNoteStruct(parsingKeys: ["a/3"], duration: "16")),
                 try StaveNote(validating: StaveNoteStruct(parsingKeys: ["e/4", "g/4"], duration: "16"))
@@ -282,7 +316,9 @@ extension UpstreamSVGParityTests {
                 try StaveNote(validating: StaveNoteStruct(parsingKeys: ["g/4"], duration: "32")),
                 try StaveNote(validating: StaveNoteStruct(parsingKeys: ["a/4"], duration: "32")),
                 try StaveNote(validating: StaveNoteStruct(parsingKeys: ["g/4"], duration: "16")),
-                try StaveNote(validating: StaveNoteStruct(parsingKeys: ["d/4"], duration: "q")),
+                try StaveNote(validating: StaveNoteStruct(parsingKeys: ["Db/4", "Dn/4"], duration: "q"))
+                    .addModifier(try makeUpstreamAccidental("b"), index: 0)
+                    .addModifier(try makeUpstreamAccidental("n"), index: 0),
             ]
 
             Dot.buildAndAttach([notes[0]], all: true)
@@ -942,51 +978,6 @@ extension UpstreamSVGParityTests {
         }
     }
 
-    private func upstreamCautionaryAccidentalTypes() -> [String] {
-        let fallback = ["#", "##", "b", "bb", "n", "db", "d", "++", "+", "+-", "bs", "bss", "o", "k", "bbs", "++-", "ashs", "afhf"]
-        let sourcePath = "../vexflow/src/tables.ts"
-        guard let source = try? String(contentsOfFile: sourcePath, encoding: .utf8) else {
-            return fallback
-        }
-
-        guard let keyRegex = try? NSRegularExpression(
-            pattern: #"^\s*(?:'([^']+)'|([A-Za-z0-9_]+)):\s*\{"#,
-            options: []
-        ) else {
-            return fallback
-        }
-
-        var inAccidentals = false
-        var keys: [String] = []
-
-        for rawLine in source.split(separator: "\n", omittingEmptySubsequences: false) {
-            let line = String(rawLine)
-
-            if !inAccidentals {
-                if line.contains("const accidentals:") {
-                    inAccidentals = true
-                }
-                continue
-            }
-
-            if line.trimmingCharacters(in: .whitespacesAndNewlines) == "};" {
-                break
-            }
-
-            let nsRange = NSRange(line.startIndex..<line.endIndex, in: line)
-            guard let match = keyRegex.firstMatch(in: line, options: [], range: nsRange) else { continue }
-
-            if let quotedRange = Range(match.range(at: 1), in: line) {
-                keys.append(String(line[quotedRange]))
-            } else if let bareRange = Range(match.range(at: 2), in: line) {
-                keys.append(String(line[bareRange]))
-            }
-        }
-
-        let filtered = keys.filter { $0 != "{" && $0 != "}" }
-        return filtered.isEmpty ? fallback : filtered
-    }
-
     private func prepareSimpleFormattedAccidentalNotes(
         _ notes: [StaveNote],
         stave: Stave,
@@ -1041,7 +1032,7 @@ extension UpstreamSVGParityTests {
         let xWidth = xEnd - xStart
 
         _ = context.save()
-        _ = context.setFont(FontInfo(family: VexFont.SANS_SERIF, size: "8pt"))
+        _ = context.setFont(FontInfo(family: Metrics.getString("fontFamily"), size: "8pt"))
         _ = context.fillText("\(Int(xWidth.rounded()))px", xStart + note.getXShift(), yPos)
 
         let y = yPos + 7
@@ -1087,7 +1078,7 @@ extension UpstreamSVGParityTests {
 
     private func drawUpstreamAccidentalNoteWidthLegend(context: SVGRenderContext, x: Double, y: Double) {
         _ = context.save()
-        _ = context.setFont(FontInfo(family: VexFont.SANS_SERIF, size: "8pt"))
+        _ = context.setFont(FontInfo(family: Metrics.getString("fontFamily"), size: "8pt"))
         let spacing = 12.0
         var lastY = y
 

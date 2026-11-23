@@ -18,9 +18,9 @@ extension UpstreamSVGParityTests {
             let connector = StaveConnector(topStave: stave1, bottomStave: stave2)
             _ = connector.setType(.singleLeft).setContext(context)
 
-            try stave1.draw()
-            try stave2.draw()
-            try connector.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try connector.drawWithStyle()
         }
     }
 
@@ -37,10 +37,10 @@ extension UpstreamSVGParityTests {
             let line = StaveConnector(topStave: stave1, bottomStave: stave2)
             _ = line.setType(.singleLeft).setContext(context)
 
-            try stave1.draw()
-            try stave2.draw()
-            try connector.draw()
-            try line.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try connector.drawWithStyle()
+            try line.drawWithStyle()
         }
     }
 
@@ -59,9 +59,9 @@ extension UpstreamSVGParityTests {
             let connector = StaveConnector(topStave: stave1, bottomStave: stave2)
             _ = connector.setType(.boldDoubleLeft).setContext(context)
 
-            try stave1.draw()
-            try stave2.draw()
-            try connector.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try connector.drawWithStyle()
         }
     }
 
@@ -80,9 +80,9 @@ extension UpstreamSVGParityTests {
             let connector = StaveConnector(topStave: stave1, bottomStave: stave2)
             _ = connector.setType(.boldDoubleRight).setContext(context)
 
-            try stave1.draw()
-            try stave2.draw()
-            try connector.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try connector.drawWithStyle()
         }
     }
 
@@ -101,9 +101,9 @@ extension UpstreamSVGParityTests {
             let connector = StaveConnector(topStave: stave1, bottomStave: stave2)
             _ = connector.setType(.thinDouble).setContext(context)
 
-            try stave1.draw()
-            try stave2.draw()
-            try connector.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try connector.drawWithStyle()
         }
     }
 
@@ -141,14 +141,14 @@ extension UpstreamSVGParityTests {
             _ = connector3.setType(.boldDoubleLeft)
             _ = connector4.setType(.boldDoubleRight)
 
-            try stave1.draw()
-            try stave2.draw()
-            try stave3.draw()
-            try stave4.draw()
-            try connector1.draw()
-            try connector2.draw()
-            try connector3.draw()
-            try connector4.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try stave3.drawWithStyle()
+            try stave4.drawWithStyle()
+            try connector1.drawWithStyle()
+            try connector2.drawWithStyle()
+            try connector3.drawWithStyle()
+            try connector4.drawWithStyle()
         }
     }
 
@@ -203,15 +203,15 @@ extension UpstreamSVGParityTests {
             _ = connector1.setXShift(stave1.getModifierXShift())
             _ = connector3.setXShift(stave3.getModifierXShift())
 
-            try stave1.draw()
-            try stave2.draw()
-            try stave3.draw()
-            try stave4.draw()
-            try connector1.draw()
-            try connector2.draw()
-            try connector3.draw()
-            try connector4.draw()
-            try connector5.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try stave3.drawWithStyle()
+            try stave4.drawWithStyle()
+            try connector1.drawWithStyle()
+            try connector2.drawWithStyle()
+            try connector3.drawWithStyle()
+            try connector4.drawWithStyle()
+            try connector5.drawWithStyle()
         }
     }
 
@@ -264,15 +264,15 @@ extension UpstreamSVGParityTests {
             _ = connector1.setXShift(stave1.getModifierXShift())
             _ = connector3.setXShift(stave3.getModifierXShift())
 
-            try stave1.draw()
-            try stave2.draw()
-            try stave3.draw()
-            try stave4.draw()
-            try connector1.draw()
-            try connector2.draw()
-            try connector3.draw()
-            try connector4.draw()
-            try connector5.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try stave3.drawWithStyle()
+            try stave4.drawWithStyle()
+            try connector1.drawWithStyle()
+            try connector2.drawWithStyle()
+            try connector3.drawWithStyle()
+            try connector4.drawWithStyle()
+            try connector5.drawWithStyle()
         }
     }
 
@@ -292,10 +292,10 @@ extension UpstreamSVGParityTests {
             let line = StaveConnector(topStave: stave1, bottomStave: stave2)
             _ = line.setType(.singleLeft).setContext(context)
 
-            try stave1.draw()
-            try stave2.draw()
-            try connector.draw()
-            try line.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try connector.drawWithStyle()
+            try line.drawWithStyle()
         }
     }
 
@@ -312,10 +312,10 @@ extension UpstreamSVGParityTests {
             let line = StaveConnector(topStave: stave1, bottomStave: stave2)
             _ = line.setType(.singleLeft).setContext(context)
 
-            try stave1.draw()
-            try stave2.draw()
-            try connector.draw()
-            try line.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try connector.drawWithStyle()
+            try line.drawWithStyle()
         }
     }
 
@@ -332,10 +332,10 @@ extension UpstreamSVGParityTests {
             let line = StaveConnector(topStave: stave1, bottomStave: stave2)
             _ = line.setType(.singleLeft).setContext(context)
 
-            try stave1.draw()
-            try stave2.draw()
-            try connector.draw()
-            try line.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try connector.drawWithStyle()
+            try line.drawWithStyle()
         }
     }
 
@@ -374,19 +374,19 @@ extension UpstreamSVGParityTests {
 
             [connSingle, connDouble, connBracket, connNone, connBrace].forEach { _ = $0.setContext(context) }
 
-            try stave1.draw()
-            try stave2.draw()
-            try stave3.draw()
-            try stave4.draw()
-            try stave5.draw()
-            try stave6.draw()
-            try stave7.draw()
+            try stave1.drawWithStyle()
+            try stave2.drawWithStyle()
+            try stave3.drawWithStyle()
+            try stave4.drawWithStyle()
+            try stave5.drawWithStyle()
+            try stave6.drawWithStyle()
+            try stave7.drawWithStyle()
 
-            try connSingle.draw()
-            try connDouble.draw()
-            try connBracket.draw()
-            try connNone.draw()
-            try connBrace.draw()
+            try connSingle.drawWithStyle()
+            try connDouble.drawWithStyle()
+            try connBracket.drawWithStyle()
+            try connNone.drawWithStyle()
+            try connBrace.drawWithStyle()
         }
     }
 

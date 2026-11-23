@@ -23,6 +23,12 @@ public struct StaveNoteStruct {
     public var strokePx: Double?
     public var octaveShift: Int?
     public var clef: ClefName?
+    /// The duration token as the caller wrote it (see `NoteStruct.durationToken`).
+    public var durationToken: String?
+    /// The key strings as the caller wrote them, when the keys were parsed from strings.
+    /// `StaffKeySpec` maps the "x/" shorthand to octave 4; upstream keeps the key without
+    /// an octave (NaN line). `toNoteStruct()` uses the raw key for such keys.
+    public var rawKeys: [String]?
 
     public init(
         keys: NonEmptyArray<StaffKeySpec>,
@@ -93,6 +99,8 @@ public struct StaveNoteStruct {
             octaveShift: octaveShift,
             clef: clef
         )
+        self.durationToken = Note.durationToken(of: duration)
+        self.rawKeys = keys
     }
 
     /// Failable parser convenience.
@@ -188,6 +196,7 @@ public struct StaveNoteStruct {
             octaveShift: octaveShift,
             clef: clef
         )
+        self.rawKeys = keys
     }
 
     /// Failable string-key parser for typed duration inputs.
@@ -224,10 +233,22 @@ public struct StaveNoteStruct {
 
         /// Convert to NoteStruct for superclass init.
     func toNoteStruct() -> NoteStruct {
-        NoteStruct(
-            keys: keys.array.map(\.rawValue), duration: duration, line: line, dots: dots,
+        let keyStrings = keys.array.enumerated().map { index, spec -> String in
+            // Keep a raw key that has no octave (upstream gives it a NaN line).
+            if let raw = rawKeys, index < raw.count {
+                let pieces = raw[index].split(separator: "/", omittingEmptySubsequences: false)
+                if pieces.count == 2, pieces[1].trimmingCharacters(in: .whitespaces).isEmpty {
+                    return raw[index]
+                }
+            }
+            return spec.rawValue
+        }
+        var noteStruct = NoteStruct(
+            keys: keyStrings, duration: duration, line: line, dots: dots,
             type: type, alignCenter: alignCenter, durationOverride: durationOverride
         )
+        noteStruct.durationToken = durationToken
+        return noteStruct
     }
 }
 
@@ -513,8 +534,8 @@ open class StaveNote: StemmableNote {
                         } // Very close whole notes
                     } else if lineDiff < 1 {
                         xShift = voiceXShift + 2
-                        // Upstream compares the duration strings.
-                        if noteU.note.duration < noteL.note.duration {
+                        // Upstream compares the duration strings as written (for example "8" < "w").
+                        if noteU.note.durationToken < noteL.note.durationToken {
                             // upper voice is shorter, so shift it right
                             noteU.note.setXShift(xShift)
                         } else {

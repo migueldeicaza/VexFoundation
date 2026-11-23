@@ -29,12 +29,15 @@ public struct NotePiece {
 public class Piece {
     public var chord: [NotePiece] = []
     public var duration: NoteDurationSpec
+    /// The duration as written (upstream `piece.duration`, for example `"h"`).
+    public var durationToken: String?
     public var dots: Int = 0
     public var type: NoteType?
     public var options: [String: String] = [:]
 
-    public init(duration: NoteDurationSpec) {
+    public init(duration: NoteDurationSpec, durationToken: String? = nil) {
         self.duration = duration
+        self.durationToken = durationToken
     }
 }
 
@@ -225,6 +228,8 @@ public final class Builder {
     public var piece: Piece
     public var commitHooks: [CommitHook] = []
     public var rollingDuration: NoteDurationSpec = .eighth
+    /// The rolling duration as written (upstream `rollingDuration`, default `"8"`).
+    public var rollingDurationToken: String? = "8"
     public private(set) var lastError: EasyScoreBuilderError?
 
     public init(factory: Factory) {
@@ -245,6 +250,7 @@ public final class Builder {
         }
         elements = BuilderElements()
         rollingDuration = .eighth
+        rollingDurationToken = "8"
         lastError = nil
         resetPiece()
     }
@@ -257,7 +263,7 @@ public final class Builder {
     }
 
     public func resetPiece() {
-        piece = Piece(duration: rollingDuration)
+        piece = Piece(duration: rollingDuration, durationToken: rollingDurationToken)
     }
 
     public func setNoteDots(_ dots: [Match]) {
@@ -271,8 +277,10 @@ public final class Builder {
                 return
             }
             rollingDuration = parsed
+            rollingDurationToken = Note.durationToken(of: duration)
         }
         piece.duration = rollingDuration
+        piece.durationToken = rollingDurationToken
     }
 
     public func setNoteType(_ type: String?) {
@@ -373,7 +381,7 @@ public final class Builder {
         if type == .ghost {
             note = factory.GhostNote(duration: duration.value, dots: dots)
         } else {
-            guard let noteStruct = StaveNoteStruct(
+            guard var noteStruct = StaveNoteStruct(
                 parsingKeysOrNil: keys,
                 duration: duration,
                 dots: dots,
@@ -385,6 +393,7 @@ public final class Builder {
                 resetPiece()
                 return
             }
+            noteStruct.durationToken = piece.durationToken
             note = factory.StaveNote(noteStruct)
         }
         if let explicitStemDirection {

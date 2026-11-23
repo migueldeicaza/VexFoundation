@@ -118,7 +118,7 @@ extension UpstreamSVGParityTests {
                 makeUpstreamTextNote(factory, duration: "8", text: "V", superscript: "7"),
             ]
             for note in notes2 {
-                _ = note.setFont(FontInfo(family: VexFont.SERIF, size: "15pt"))
+                _ = note.setFontSize(15)
                 _ = note.setLine(13)
                 _ = note.setJustification(.left)
             }
@@ -153,8 +153,8 @@ extension UpstreamSVGParityTests {
                 makeUpstreamTextNote(factory, duration: "8", glyph: "p"),
                 makeUpstreamTextNote(factory, duration: "8", glyph: "m"),
                 makeUpstreamTextNote(factory, duration: "8", glyph: "z"),
-                makeUpstreamTextNote(factory, duration: "16", glyph: "mordent_upper"),
-                makeUpstreamTextNote(factory, duration: "16", glyph: "mordent_lower"),
+                makeUpstreamTextNote(factory, duration: "16", glyph: "mordentUpper"),
+                makeUpstreamTextNote(factory, duration: "16", glyph: "mordentLower"),
                 makeUpstreamTextNote(factory, duration: "8", glyph: "segno"),
                 makeUpstreamTextNote(factory, duration: "8", glyph: "coda"),
             ]
@@ -188,11 +188,11 @@ extension UpstreamSVGParityTests {
             let voice2 = factory.Voice()
             let notes2: [TextNote] = try [
                 makeUpstreamTextNote(factory, duration: "16", glyph: "turn"),
-                makeUpstreamTextNote(factory, duration: "16", glyph: "turn_inverted"),
-                makeUpstreamTextNote(factory, duration: "8", glyph: "pedal_open").setLine(10),
-                makeUpstreamTextNote(factory, duration: "8", glyph: "pedal_close").setLine(10),
-                makeUpstreamTextNote(factory, duration: "8", glyph: "caesura_curved").setLine(3),
-                makeUpstreamTextNote(factory, duration: "8", glyph: "caesura_straight").setLine(3),
+                makeUpstreamTextNote(factory, duration: "16", glyph: "turnInverted"),
+                makeUpstreamTextNote(factory, duration: "8", glyph: "pedalOpen").setLine(10),
+                makeUpstreamTextNote(factory, duration: "8", glyph: "pedalClose").setLine(10),
+                makeUpstreamTextNote(factory, duration: "8", glyph: "caesuraCurved").setLine(3),
+                makeUpstreamTextNote(factory, duration: "8", glyph: "caesuraStraight").setLine(3),
                 makeUpstreamTextNote(factory, duration: "8", glyph: "breath").setLine(2),
                 makeUpstreamTextNote(factory, duration: "8", glyph: "tick").setLine(3),
                 makeUpstreamTextNote(factory, duration: "8", glyph: "tr", smooth: true).setJustification(.center),
@@ -316,7 +316,7 @@ extension UpstreamSVGParityTests {
         let xWidth = xEnd - xStart
 
         _ = context.save()
-        _ = context.setFont(FontInfo(family: VexFont.SANS_SERIF, size: "8pt"))
+        _ = context.setFont(FontInfo(family: Metrics.getString("fontFamily"), size: "8pt"))
         _ = context.fillText("\(Int(xWidth.rounded()))px", xStart + note.getXShift(), yPos)
 
         let y = yPos + 7

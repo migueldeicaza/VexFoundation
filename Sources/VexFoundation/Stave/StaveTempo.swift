@@ -163,8 +163,9 @@ public final class StaveTempo: StaveModifier {
         let el = VexElement(category: "StaveTempo.glyph")
         let elText = VexElement(category: "StaveTempo")
 
-        // VexFlowPatch: wrap entire tempo marking in an SVG group for DOM access
-        _ = ctx.openGroup("stavetempo", nil)
+        // VexFlowPatch (gated): wrap entire tempo marking in an SVG group for DOM access.
+        let useGroups = !VexRuntime.getCurrentContext().upstreamParityMode
+        if useGroups { _ = ctx.openGroup("stavetempo", nil) }
 
         if let name {
             text = name
@@ -191,8 +192,8 @@ public final class StaveTempo: StaveModifier {
                     x += el.getWidth() + 3
                 }
             }
-            // VexFlowPatch: wrap BPM text in its own SVG group
-            _ = ctx.openGroup("bpm", nil)
+            // VexFlowPatch (gated): wrap BPM text in its own SVG group
+            if useGroups { _ = ctx.openGroup("bpm", nil) }
             elText.setText("=")
             elText.renderText(ctx, xPos: x + xShift, yPos: y + yShift)
             x += elText.getWidth() + 3
@@ -217,10 +218,10 @@ public final class StaveTempo: StaveModifier {
                 elText.setText(")")
                 elText.renderText(ctx, xPos: x + xShift, yPos: y + yShift)
             }
-            ctx.closeGroup()
+            if useGroups { ctx.closeGroup() }
         }
 
-        ctx.closeGroup()
+        if useGroups { ctx.closeGroup() }
     }
 }
 

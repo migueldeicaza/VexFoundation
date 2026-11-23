@@ -267,11 +267,13 @@ public final class TextBracket: VexElement {
         }
 
         if renderOptions.dashed {
-            // VexFlowPatch: prevent bracket from going backwards, also preventing overlap with text
-            if endX < startX + 5 && position == .top {
-                endX = startX + 5
-            } else if endX < startX + superWidth && position == .bottom {
-                endX = startX + superWidth
+            // VexFlowPatch (gated): prevent bracket from going backwards, also preventing overlap with text
+            if !VexRuntime.getCurrentContext().upstreamParityMode {
+                if endX < startX + 5 && position == .top {
+                    endX = startX + 5
+                } else if endX < startX + superWidth && position == .bottom {
+                    endX = startX + superWidth
+                }
             }
 
             // Main line

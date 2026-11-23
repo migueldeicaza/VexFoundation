@@ -184,7 +184,7 @@ extension UpstreamSVGParityTests {
                 makeGraceStaveNote(factory, keys: ["a/4"], duration: "4", autoStem: true)
                     .addModifier(factory.GraceNoteGroup(notes: graceNotes3).beamNotes(), index: 0),
                 makeGraceStaveNote(factory, keys: ["a/4"], duration: "4", autoStem: true)
-                    .addModifier(factory.GraceNoteGroup(notes: graceNotes4).beamNotes(), index: 0),
+                    .addModifier(factory.GraceNoteGroup(notes: graceNotes4).beamNotes().setPosition(.right), index: 0),
             ]
 
             let voice = makeGraceVoice(factory, notes)

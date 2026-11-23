@@ -281,7 +281,7 @@ extension UpstreamSVGParityTests {
             _ = factory.Beam(notes: Array(notes[0..<4]))
             _ = factory.Beam(notes: Array(notes[4..<8]))
 
-            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave, options: FormatParams(stave: stave))
             try factory.draw()
         }
     }
@@ -350,7 +350,7 @@ extension UpstreamSVGParityTests {
             let stave = factory.TabStave(y: 20)
             let specs = upstreamBeamTabSpecsUp()
             let notes = try specs.map { spec in
-                let note = try TabNote(validating: spec.toStruct())
+                let note = factory.TabNote(try spec.toStruct())
                 note.renderOptions.drawStem = true
                 return note
             }
@@ -371,7 +371,7 @@ extension UpstreamSVGParityTests {
             let stave = factory.TabStave(options: StaveOptions(numLines: 10))
             let specs = upstreamBeamTabSpecsDown()
             let notes = try specs.map { spec in
-                let note = try TabNote(validating: spec.toStruct())
+                let note = factory.TabNote(try spec.toStruct())
                 note.renderOptions.drawStem = true
                 note.renderOptions.drawDots = true
                 return note
@@ -401,7 +401,7 @@ extension UpstreamSVGParityTests {
             let stave = factory.TabStave()
             let specs = upstreamBeamTabSpecsAuto()
             let notes = try specs.map { spec in
-                let note = try TabNote(validating: spec.toStruct())
+                let note = factory.TabNote(try spec.toStruct())
                 note.renderOptions.drawStem = true
                 note.renderOptions.drawDots = true
                 return note
@@ -425,7 +425,7 @@ extension UpstreamSVGParityTests {
             let stave = factory.TabStave()
             let specs = upstreamBeamTabSpecsAutoStem()
             let notes = try specs.map { spec in
-                let note = try TabNote(validating: spec.toStruct())
+                let note = factory.TabNote(try spec.toStruct())
                 note.renderOptions.drawStem = true
                 note.renderOptions.drawDots = true
                 return note
@@ -445,7 +445,7 @@ extension UpstreamSVGParityTests {
         try runCategorySVGParityCase(module: "Beam", test: "Complex_Beams_with_Annotations", width: 500, height: 200) { factory, _ in
             let stave = factory.Stave(y: 40)
             let font = FontInfo(
-                family: VexFont.SERIF,
+                family: Metrics.getString("Annotation.fontFamily"),
                 size: 14,
                 weight: VexFontWeight.bold.rawValue,
                 style: VexFontStyle.italic.rawValue
@@ -467,7 +467,7 @@ extension UpstreamSVGParityTests {
                 .setMode(.soft)
                 .addTickables(notes1.map { $0 as Tickable })
                 .addTickables(notes2.map { $0 as Tickable })
-            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave, options: FormatParams(stave: stave))
             try factory.draw()
         }
     }
@@ -493,7 +493,7 @@ extension UpstreamSVGParityTests {
                 .setMode(.soft)
                 .addTickables(notes1.map { $0 as Tickable })
                 .addTickables(notes2.map { $0 as Tickable })
-            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave, options: FormatParams(stave: stave))
             try factory.draw()
         }
     }
@@ -536,7 +536,6 @@ extension UpstreamSVGParityTests {
 
             _ = system.addStave(SystemStave(voices: [voice1]))
             _ = system.addStave(SystemStave(voices: [voice2]))
-            try system.formatThrowing()
             try factory.draw()
         }
     }

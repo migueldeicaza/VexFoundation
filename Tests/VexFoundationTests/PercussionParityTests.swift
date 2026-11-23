@@ -51,7 +51,9 @@ struct PercussionParityTests {
 
         if let parsed {
             let note = StaveNote(parsed)
-            #expect(note.getKeys().first == "x/4")
+            // Upstream keeps the key as written; the key has no octave (NaN line, notehead on line 0).
+            #expect(note.getKeys().first == "x/")
+            #expect(note.noteHeads.first?.getLine() == 0)
             #expect(note.getKeyProps().first?.key == "X")
             #expect(note.noteHeads.first?.getText() == Glyphs.noteheadXBlack)
         }

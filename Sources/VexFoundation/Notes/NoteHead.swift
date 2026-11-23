@@ -201,7 +201,8 @@ public final class NoteHead: Note {
         self.index = noteHeadStruct.index
         self.displaced = noteHeadStruct.displaced
         self.stemDirection = noteHeadStruct.stemDirection
-        self.line = noteHeadStruct.line
+        // Upstream: `this.line = noteStruct.line || 0` (a NaN line becomes 0).
+        self.line = noteHeadStruct.line.isNaN ? 0 : noteHeadStruct.line
         self.slashed = noteHeadStruct.slashed
 
         super.init(NoteStruct(

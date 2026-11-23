@@ -101,7 +101,7 @@ extension UpstreamSVGParityTests {
         _ = context.setFont(FontInfo(family: "Arial", size: "10pt"))
         let stave = TabStave(x: 10, y: 10, width: 350).addTabGlyph()
         _ = stave.setContext(context)
-        try stave.draw()
+        try stave.drawWithStyle()
         return stave
     }
 }

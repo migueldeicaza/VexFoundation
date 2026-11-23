@@ -128,7 +128,7 @@ extension UpstreamSVGParityTests {
                 lastIndices: [0]
             ))
             _ = hammeron.setContext(context)
-            try hammeron.draw()
+            try hammeron.drawWithStyle()
 
             let pulloff = TabTie.createPulloff(notes: TieNotes(
                 firstNote: notes[1],
@@ -137,7 +137,7 @@ extension UpstreamSVGParityTests {
                 lastIndices: [0]
             ))
             _ = pulloff.setContext(context)
-            try pulloff.draw()
+            try pulloff.drawWithStyle()
         }
     }
 
@@ -145,7 +145,7 @@ extension UpstreamSVGParityTests {
         _ = context.setFont(FontInfo(family: "Arial", size: "10pt"))
         let stave = TabStave(x: 10, y: 10, width: width).addTabGlyph()
         _ = stave.setContext(context)
-        try stave.draw()
+        try stave.drawWithStyle()
         return stave
     }
 
@@ -196,7 +196,7 @@ extension UpstreamSVGParityTests {
             text: tieText
         )
         _ = tie.setContext(context)
-        try tie.draw()
+        try tie.drawWithStyle()
     }
 
     private func drawTabTieGroups(
@@ -219,7 +219,7 @@ extension UpstreamSVGParityTests {
                 lastIndices: indices
             ))
             _ = tie.setContext(context)
-            try tie.draw()
+            try tie.drawWithStyle()
         }
     }
 }

@@ -147,11 +147,18 @@ public final class FontRegistry: @unchecked Sendable {
         let size = CGFloat(sizePx)
         lock.lock()
         let exact = faces[FaceKey(family: family, bold: bold, italic: italic)]
+        // Like browsers: keep the weight when only the style is missing
+        // (bold face + synthetic italic), then the style, then regular.
+        let boldOnly = bold ? faces[FaceKey(family: family, bold: true, italic: false)] : nil
+        let italicOnly = italic ? faces[FaceKey(family: family, bold: false, italic: true)] : nil
         let regular = faces[FaceKey(family: family, bold: false, italic: false)]
         let anyFace = faces.first { $0.key.family == family }?.value
         lock.unlock()
 
         if let descriptor = exact {
+            return CTFontCreateWithFontDescriptor(descriptor, size, nil)
+        }
+        if let descriptor = boldOnly ?? italicOnly {
             return CTFontCreateWithFontDescriptor(descriptor, size, nil)
         }
         if let descriptor = regular ?? anyFace {

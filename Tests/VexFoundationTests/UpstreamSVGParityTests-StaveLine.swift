@@ -26,7 +26,7 @@ extension UpstreamSVGParityTests {
                     lastIndices: [0]
                 ),
                 text: "gliss.",
-                font: FontInfo(family: VexFont.SERIF, size: 12, style: VexFontStyle.italic.rawValue)
+                font: FontInfo(family: Metrics.getString("fontFamily"), size: 12, style: VexFontStyle.italic.rawValue)
             )
 
             let staveLine2 = factory.StaveLine(

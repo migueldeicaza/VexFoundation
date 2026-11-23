@@ -385,19 +385,27 @@ public enum Tables {
         guard let value = notesInfo[key] else {
             throw VexError("BadArguments", "Invalid key name: \(key)")
         }
-        guard var octave = Int(pieces[1].trimmingCharacters(in: .whitespaces)) else {
-            throw VexError("BadArguments", "Invalid octave: \(keyOctaveGlyph)")
+        let octaveToken = pieces[1].trimmingCharacters(in: .whitespaces)
+        // Upstream `parseInt('')` is NaN: a key without an octave (for example the "x/"
+        // shorthand) gets a NaN line. `NoteHead` then places it on line 0 (`line || 0`).
+        let octaveMissing = octaveToken.isEmpty
+        var octave = 0
+        if !octaveMissing {
+            guard let parsedOctave = Int(octaveToken) else {
+                throw VexError("BadArguments", "Invalid octave: \(keyOctaveGlyph)")
+            }
+            octave = parsedOctave
         }
 
         // .octaveShift is the shift to compensate for clef 8va/8vb.
         octave -= octaveShift
 
         let baseIndex = octave * 7 - 4 * 7
-        var line = Double(baseIndex + value.index) / 2
+        var line = octaveMissing ? Double.nan : Double(baseIndex + value.index) / 2
         line += Double(try clefPropertiesThrowing(clef).lineShift)
 
         // Integer value for note arithmetic.
-        let intValue: Int? = value.intVal.map { octave * 12 + $0 }
+        let intValue: Int? = octaveMissing ? nil : value.intVal.map { octave * 12 + $0 }
 
         // If the user specified a glyph, overwrite the glyph code.
         let glyphName: String

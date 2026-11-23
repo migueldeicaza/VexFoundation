@@ -219,7 +219,7 @@ public enum Flow {
             context.metrics.set("TabStave.lineWidth", newValue)
             context.metrics.clear("Stave")
             context.metrics.clear("TabStave")
-            context.setStaveLineThickness(newValue)
+            // Upstream leaves Tables.STAVE_LINE_THICKNESS unchanged here.
         }
     }
 

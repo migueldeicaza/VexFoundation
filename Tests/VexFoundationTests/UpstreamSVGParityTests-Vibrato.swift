@@ -66,7 +66,7 @@ extension UpstreamSVGParityTests {
     func vibratoWithBendMatchesUpstream() throws {
         try runCategorySVGParityCase(module: "Vibrato", test: "Vibrato_with_Bend", width: 500, height: 240) { _, context in
             _ = context.scale(1.3, 1.3)
-            _ = context.setFont(FontInfo(family: VexFont.SANS_SERIF, size: "\(VexFont.SIZE)pt"))
+            _ = context.setFont(FontInfo(family: Metrics.getString("fontFamily"), size: "10pt"))
 
             let stave = TabStave(x: 10, y: 10, width: 450).addTabGlyph()
             _ = stave.setContext(context)

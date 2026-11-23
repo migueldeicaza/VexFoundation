@@ -149,7 +149,7 @@ extension UpstreamSVGParityTests {
                 _ = note.addToModifierContext(modifierContext)
                 _ = TickContext().addTickable(note).preFormat().setX(Double(index) * 75)
                 _ = note.setStave(stave).setContext(context)
-                try note.draw()
+                try note.drawWithStyle()
                 drawUpstreamBendNoteMetrics(context: context, note: note, yPos: 140)
             }
         }
@@ -165,7 +165,11 @@ extension UpstreamSVGParityTests {
             signatureEpsilonOverride: 0.006
         ) { _, context in
             _ = context.scale(1.5, 1.5)
-            _ = context.setFont(FontInfo(family: VexFont.SANS_SERIF, size: "\(VexFont.SIZE)pt"))
+            // Upstream assigns `ctx.font = Metrics.get('Bend.fontSize') + Metrics.get('Bend.fontFamily')`,
+            // which is the invalid CSS string "10Bravura,Academico". The browser's font parser then keeps
+            // the value of its previous parse ("10pt Arial" from the earlier Bend tests), so the reference
+            // SVG uses 10pt Arial.
+            _ = context.setFont(FontInfo(family: "Arial", size: "10pt"))
 
             let stave = TabStave(x: 10, y: 10, width: 450).addTabGlyph()
             _ = stave.setContext(context)
@@ -192,7 +196,7 @@ extension UpstreamSVGParityTests {
                 _ = note.addToModifierContext(modifierContext)
                 _ = TickContext().addTickable(note).preFormat().setX(Double(index) * 75)
                 _ = note.setStave(stave).setContext(context)
-                try note.draw()
+                try note.drawWithStyle()
                 drawUpstreamBendNoteMetrics(context: context, note: note, yPos: 140)
             }
         }
@@ -257,7 +261,7 @@ extension UpstreamSVGParityTests {
         let xWidth = xEnd - xStart
 
         _ = context.save()
-        _ = context.setFont(FontInfo(family: VexFont.SANS_SERIF, size: "8pt"))
+        _ = context.setFont(FontInfo(family: Metrics.getString("fontFamily"), size: "8pt"))
         _ = context.fillText("\(Int(xWidth.rounded()))px", xStart + note.getXShift(), yPos)
 
         let y = yPos + 7

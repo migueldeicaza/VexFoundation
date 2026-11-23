@@ -26,7 +26,7 @@ extension UpstreamSVGParityTests {
                 direction: TabSlide.SLIDE_UP
             )
             _ = slide.setContext(context)
-            try slide.draw()
+            try slide.drawWithStyle()
         }
     }
 
@@ -82,7 +82,7 @@ extension UpstreamSVGParityTests {
 
         let stave = TabStave(x: 10, y: 10, width: width).addTabGlyph()
         _ = stave.setContext(context)
-        try stave.draw()
+        try stave.drawWithStyle()
         return stave
     }
 
@@ -132,7 +132,7 @@ extension UpstreamSVGParityTests {
             )
             let slide = builder(tieNotes)
             _ = slide.setContext(context)
-            try slide.draw()
+            try slide.drawWithStyle()
         }
     }
 }

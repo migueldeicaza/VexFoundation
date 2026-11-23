@@ -163,6 +163,11 @@ public struct NoteStruct {
     public var type: NoteType?
     public var alignCenter: Bool?
     public var durationOverride: Fraction?
+    /// The duration token as the caller wrote it (upstream `Note.parseDuration(...).duration`,
+    /// for example `"w"`, `"h"`, `"8"`). `nil` uses the canonical value (`duration.value.rawValue`).
+    /// Upstream keeps this string as `Note.duration` and compares it as a string in
+    /// `StaveNote.format()`.
+    public var durationToken: String?
 
     public init(
         keys: [String] = [],
@@ -214,6 +219,7 @@ public struct NoteStruct {
             alignCenter: alignCenter,
             durationOverride: durationOverride
         )
+        self.durationToken = Note.durationToken(of: duration)
     }
 
     /// Failable parser for convenience at call sites that don't want `throw`.
@@ -354,6 +360,20 @@ open class Note: Tickable {
     }
 
     /// Parse a duration string like "4d", "8", "qr" into components.
+    /// The duration part of a duration string, as upstream `Note.parseDuration()` returns it
+    /// (`/(\d*\/?\d+|[a-z])(d*)([nrhms]|$)/`, group 1). For example `"hd"` gives `"h"`
+    /// and `"8r"` gives `"8"`.
+    public static func durationToken(of durationString: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: "(\\d*\\/?\\d+|[a-z])(d*)([nrhms]|$)") else {
+            return nil
+        }
+        let range = NSRange(durationString.startIndex..., in: durationString)
+        guard let match = regex.firstMatch(in: durationString, range: range),
+              let tokenRange = Range(match.range(at: 1), in: durationString)
+        else { return nil }
+        return String(durationString[tokenRange])
+    }
+
     public static func parseDuration(_ durationString: String?) -> NoteDuration? {
         guard let durationString, !durationString.isEmpty else { return nil }
         guard let parsed = try? NoteDurationSpec(parsing: durationString) else { return nil }
@@ -435,6 +455,9 @@ open class Note: Tickable {
     public var renderOptions = NoteRenderOptions()
     /// The duration (sanitized, e.g. "4", "8", "1/2").
     public var duration: String
+    /// The duration token as the caller wrote it (upstream `this.duration`, for example `"w"`).
+    /// Upstream `StaveNote.format()` compares this string.
+    public var durationToken: String
     public var leftDisplacedHeadPx: Double = 0
     public var rightDisplacedHeadPx: Double = 0
     public var noteType: String
@@ -483,6 +506,7 @@ open class Note: Tickable {
         // Set note properties from parameters.
         self.keys = noteStruct.keys
         self.duration = parsed.duration.rawValue
+        self.durationToken = noteStruct.durationToken ?? parsed.duration.rawValue
         self.noteType = parsed.type.rawValue
         self.noteValue = parsed.duration
         self.noteTypeValue = parsed.type

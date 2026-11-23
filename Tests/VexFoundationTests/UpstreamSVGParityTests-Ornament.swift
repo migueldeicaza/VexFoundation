@@ -10,7 +10,7 @@ extension UpstreamSVGParityTests {
             try stave.draw()
 
             let notes = try (0..<13).map { _ in
-                try makeOrnamentNote(factory, key: "f/4", stemDirection: .up)
+                try makeOrnamentNote(factory, key: "c/4", stemDirection: .up)
             }
             let types = [
                 "mordent",

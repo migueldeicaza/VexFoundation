@@ -151,6 +151,6 @@ extension UpstreamSVGParityTests {
         if let options {
             _ = hairpin.setRenderOptions(options)
         }
-        try hairpin.draw()
+        try hairpin.drawWithStyle()
     }
 }

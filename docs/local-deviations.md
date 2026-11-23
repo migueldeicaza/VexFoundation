@@ -9,7 +9,7 @@ When `VexRuntimeContext.upstreamParityMode` is `true`, the items marked **(gated
 ## OSMD-derived patches (`VexFlowPatch` comments, commit b7f260a)
 
 - [ ] PedalMarking: extended pedal styles, multi-stave pedals, end-stave width adjustment (`Connectors/PedalMarking.swift`).
-- [ ] TextBracket: the bracket does not go backwards and does not overlap the text (`Connectors/TextBracket.swift`).
+- [ ] TextBracket: the bracket does not go backwards and does not overlap the text (`Connectors/TextBracket.swift`) **(gated)**.
 - [ ] Articulation: breath-mark position at a percentage of the distance to the next note; respect the modifier `yShift` (`Modifiers/Articulation.swift`).
 - [ ] Tables and NoteHead: notehead y-shift that does not depend on stem length (`stemUpYShift`, `stemDownYShift`).
 - [ ] Tables and Note: `useAlternativeXGlyph`, a classical X notehead for tab notes.
@@ -18,7 +18,7 @@ When `VexRuntimeContext.upstreamParityMode` is `true`, the items marked **(gated
 - [ ] Stave: do not overwrite `modifier.x` or `startX` when they are already larger (alignment) **(gated)**.
 - [ ] Barline: double heavy barline type.
 - [ ] TabNote: configurable background color instead of `clearRect`.
-- [ ] StaveTempo: SVG groups around the tempo marking and the BPM text.
+- [ ] StaveTempo: SVG groups around the tempo marking and the BPM text **(gated)**.
 - [x] StaveNote: `paddingRight`; keep notehead types (for example slash) across a notehead rebuild; ledger-line style; ledger SVG group **(gated)**.
 - [ ] Formatter: no tick-mismatch error between voices; guard against zero `totalTicks`; guard against GhostNote in key-props lookups.
 - [ ] Tuplet: option to hide the tuplet number.

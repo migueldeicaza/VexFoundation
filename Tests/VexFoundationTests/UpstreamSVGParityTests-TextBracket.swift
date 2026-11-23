@@ -61,7 +61,7 @@ extension UpstreamSVGParityTests {
                     superscript: "superscript",
                     position: .top,
                     font: FontInfo(
-                        family: VexFont.SANS_SERIF,
+                        family: "Arial",
                         size: 15,
                         weight: VexFontWeight.normal.rawValue,
                         style: VexFontStyle.normal.rawValue
@@ -77,12 +77,8 @@ extension UpstreamSVGParityTests {
                     superscript: "vb",
                     position: .bottom,
                     line: 3,
-                    font: FontInfo(
-                        family: VexFont.SERIF,
-                        size: 30,
-                        weight: VexFontWeight.normal.rawValue,
-                        style: VexFontStyle.italic.rawValue
-                    )
+                    // Upstream passes `font: { size: 30 }`; empty fields take the defaults.
+                    font: FontInfo(family: "", size: 30, weight: "", style: "")
                 ),
                 factory.TextBracket(
                     from: notes[2],

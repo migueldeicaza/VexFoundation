@@ -142,7 +142,7 @@ extension UpstreamSVGParityTests {
     func percussionSnare0MatchesUpstream() throws {
         try runPercussionSingleMeasureParityCase(testName: "Percussion_Snare0") { factory in
             let font = FontInfo(
-                family: VexFont.SERIF,
+                family: Metrics.getString("fontFamily"),
                 size: 14,
                 weight: VexFontWeight.bold.rawValue,
                 style: VexFontStyle.italic.rawValue

@@ -23,7 +23,7 @@ extension UpstreamSVGParityTests {
                 TabNote(TabNoteStruct(
                     positions: [TabNotePosition(str: 2, fret: 10)],
                     duration: .half
-                )).addModifier(Bend("Full").setTap("T"), index: 0),
+                )).addModifier(Bend([BendPhrase(type: Bend.UP, text: "Full")]).setTap("T"), index: 0),
             ]
 
             try Formatter.FormatAndDraw(ctx: context, stave: stave, notes: notes)
@@ -40,7 +40,7 @@ extension UpstreamSVGParityTests {
 
             let quiet = Annotation("quiet").setFont(
                 FontInfo(
-                    family: VexFont.SERIF,
+                    family: Metrics.getString("Annotation.fontFamily"),
                     size: VexFont.SIZE,
                     weight: VexFontWeight.normal.rawValue,
                     style: VexFontStyle.italic.rawValue
@@ -48,7 +48,7 @@ extension UpstreamSVGParityTests {
             )
             let allegro = Annotation("Allegro").setFont(
                 FontInfo(
-                    family: VexFont.SERIF,
+                    family: Metrics.getString("Annotation.fontFamily"),
                     size: VexFont.SIZE,
                     weight: VexFontWeight.normal.rawValue,
                     style: VexFontStyle.italic.rawValue
@@ -74,7 +74,7 @@ extension UpstreamSVGParityTests {
 
             let quiet = Annotation("quiet")
                 .setFont(FontInfo(
-                    family: VexFont.SERIF,
+                    family: Metrics.getString("Annotation.fontFamily"),
                     size: VexFont.SIZE,
                     weight: VexFontWeight.normal.rawValue,
                     style: VexFontStyle.italic.rawValue
@@ -82,7 +82,7 @@ extension UpstreamSVGParityTests {
                 .setStyle(ElementStyle(fillStyle: "#0F0"))
             let allegro = Annotation("Allegro")
                 .setFont(FontInfo(
-                    family: VexFont.SERIF,
+                    family: Metrics.getString("Annotation.fontFamily"),
                     size: VexFont.SIZE,
                     weight: VexFontWeight.normal.rawValue,
                     style: VexFontStyle.italic.rawValue
@@ -108,7 +108,7 @@ extension UpstreamSVGParityTests {
 
             func bottomAnnotation(_ text: String) -> Annotation {
                 Annotation(text)
-                    .setFont(FontInfo(family: VexFont.SERIF, size: VexFont.SIZE))
+                    .setFontSize(VexFont.SIZE)
                     .setVerticalJustification(.bottom)
             }
 
@@ -159,7 +159,7 @@ extension UpstreamSVGParityTests {
 
             func annotation(_ text: String, size: Double, vj: AnnotationVerticalJustify) -> Annotation {
                 Annotation(text)
-                    .setFont(FontInfo(family: VexFont.SERIF, size: size))
+                    .setFontSize(size)
                     .setVerticalJustification(vj)
             }
 
@@ -231,7 +231,7 @@ extension UpstreamSVGParityTests {
             var fontSize = VexFont.SIZE
             var x = 10.0
             var width = 170.0
-            let words = ["hand,", "and", "me", "pears", "lead", "the"]
+            let words = ["Handily", "and", "me", "Pears", "lead", "the"]
 
             for _ in 0..<3 {
                 let score = factory.EasyScore()
@@ -249,9 +249,9 @@ extension UpstreamSVGParityTests {
                     let noteGroupID = "n\(ix % 3)"
                     guard let noteGroup = registry.getElementById(noteGroupID) as? Note else { continue }
 
-                    let lyric = factory.Annotation(text: text)
-                        .setFont(FontInfo(family: "Roboto Slab", size: fontSize))
+                    let lyric = factory.Annotation(text: text).setFontSize(fontSize)
                     _ = lyric.setPosition(.below)
+                    if ix % 3 == 0 { _ = lyric.setJustification(.left) }
                     _ = noteGroup.addModifier(lyric, index: verse)
                 }
 
@@ -275,7 +275,7 @@ extension UpstreamSVGParityTests {
             _ = context.scale(1.5, 1.5)
             _ = context.setFont(FontInfo(family: "Arial", size: "10pt"))
 
-            let stave = TabStave(x: 10, y: 10, width: 450).addTabGlyph()
+            let stave = TabStave(x: 10, y: 10, width: 450).addClef(.tab)
             _ = stave.setContext(context)
             try stave.draw()
 
@@ -290,7 +290,7 @@ extension UpstreamSVGParityTests {
             ))
                 .addModifier(
                     Annotation("(8va)").setFont(FontInfo(
-                        family: VexFont.SERIF,
+                        family: Metrics.getString("Annotation.fontFamily"),
                         size: VexFont.SIZE,
                         weight: VexFontWeight.normal.rawValue,
                         style: VexFontStyle.italic.rawValue
@@ -306,15 +306,15 @@ extension UpstreamSVGParityTests {
     @Test("Annotation.Fingerpicking")
     func annotationFingerpickingMatchesUpstream() throws {
         try runCategorySVGParityCase(module: "Annotation", test: "Fingerpicking", width: 500, height: 240) { _, context in
-            _ = context.setFont(FontInfo(family: VexFont.SANS_SERIF, size: VexFont.SIZE))
+            _ = context.setFont(FontInfo(family: Metrics.getString("fontFamily"), size: VexFont.SIZE))
 
-            let stave = TabStave(x: 10, y: 10, width: 450).addTabGlyph()
+            let stave = TabStave(x: 10, y: 10, width: 450).addClef(.tab)
             _ = stave.setContext(context)
             try stave.draw()
 
             func pickingAnnotation(_ text: String) -> Annotation {
                 Annotation(text).setFont(FontInfo(
-                    family: VexFont.SERIF,
+                    family: Metrics.getString("Annotation.fontFamily"),
                     size: VexFont.SIZE,
                     weight: VexFontWeight.normal.rawValue,
                     style: VexFontStyle.italic.rawValue
@@ -455,7 +455,7 @@ extension UpstreamSVGParityTests {
             let voice = Voice(timeSignature: .meter(4, 4)).setMode(.soft)
             _ = voice.addTickables((notes1 + notes2 + notes3).map { $0 as Tickable })
 
-            _ = Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            _ = Formatter().joinVoices([voice]).formatToStave([voice], stave: stave, options: FormatParams(stave: stave))
             try voice.draw(context: context, stave: stave)
         }
     }
@@ -464,7 +464,7 @@ extension UpstreamSVGParityTests {
         let hJust = AnnotationHorizontalJustify(rawValue: h) ?? .center
         let vJust = AnnotationVerticalJustify(rawValue: v) ?? .top
         return Annotation(text)
-            .setFont(FontInfo(family: VexFont.SANS_SERIF, size: VexFont.SIZE))
+            .setFontSize(VexFont.SIZE)
             .setJustification(hJust)
             .setVerticalJustification(vJust)
     }
