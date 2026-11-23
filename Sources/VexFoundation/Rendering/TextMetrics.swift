@@ -223,7 +223,13 @@ public enum TextMeasurer {
                 continue
             }
             let font = searchFonts[fontIndex]
-            let attributes: [CFString: Any] = [kCTFontAttributeName: font]
+            // Match browser shaping: kerning applies only when the font has a
+            // legacy `kern` table or a GPOS script that matches the text
+            // (`latn` for Latin, `DFLT` for symbols). See `FontKerning`.
+            var attributes: [CFString: Any] = [kCTFontAttributeName: font]
+            if !FontKerning.appliesKerning(font: font, text: segment.text) {
+                attributes[kCTKernAttributeName] = 0.0
+            }
             guard let attributed = CFAttributedStringCreate(nil, segment.text as CFString, attributes as CFDictionary) else { continue }
             let line = CTLineCreateWithAttributedString(attributed)
             let lineWidth = CTLineGetTypographicBounds(line, nil, nil, nil)
@@ -264,5 +270,58 @@ public enum TextMeasurer {
             metrics.actualBoundingBoxDescent = Double(-minY)
         }
         return TextLayout(runs: runs, metrics: metrics)
+    }
+}
+
+/// Decides whether a browser (HarfBuzz in Chromium) would apply kerning.
+///
+/// HarfBuzz selects the GPOS script by tag. A font that registers its Latin
+/// kerning under an invalid tag (Academico uses `LATN`) is not kerned for Latin
+/// text, while CoreText kerns it anyway.
+enum FontKerning {
+    private final class Cache: @unchecked Sendable {
+        let lock = NSLock()
+        var scripts: [String: (hasKernTable: Bool, gposScripts: Set<String>)] = [:]
+    }
+    private static let cache = Cache()
+
+    static func appliesKerning(font: CTFont, text: String) -> Bool {
+        let info = tables(for: font)
+        if info.hasKernTable { return true }
+        let isSymbolText = text.unicodeScalars.allSatisfy { !$0.properties.isAlphabetic || (0xE000...0xF8FF).contains($0.value) }
+        if isSymbolText {
+            return info.gposScripts.contains("DFLT")
+        }
+        return info.gposScripts.contains("latn")
+    }
+
+    private static func tables(for font: CTFont) -> (hasKernTable: Bool, gposScripts: Set<String>) {
+        let key = CTFontCopyPostScriptName(font) as String
+        cache.lock.lock()
+        if let hit = cache.scripts[key] { cache.lock.unlock(); return hit }
+        cache.lock.unlock()
+
+        let kernTag = CTFontTableTag(0x6B65_726E) // 'kern'
+        let gposTag = CTFontTableTag(0x4750_4F53) // 'GPOS'
+        let hasKern = CTFontCopyTable(font, kernTag, []) != nil
+        var scripts = Set<String>()
+        if let data = CTFontCopyTable(font, gposTag, []) as Data?, data.count >= 10 {
+            let bytes = [UInt8](data)
+            func u16(_ o: Int) -> Int { o + 1 < bytes.count ? Int(bytes[o]) << 8 | Int(bytes[o + 1]) : 0 }
+            let scriptList = u16(4)
+            let count = u16(scriptList)
+            for i in 0..<count {
+                let rec = scriptList + 2 + i * 6
+                guard rec + 4 <= bytes.count else { break }
+                if let tag = String(bytes: bytes[rec..<rec + 4], encoding: .ascii) {
+                    scripts.insert(tag)
+                }
+            }
+        }
+        let result = (hasKern, scripts)
+        cache.lock.lock()
+        cache.scripts[key] = result
+        cache.lock.unlock()
+        return result
     }
 }
