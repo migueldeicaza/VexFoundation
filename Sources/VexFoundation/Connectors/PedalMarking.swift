@@ -365,7 +365,7 @@ public final class PedalMarking: VexElement {
                 // Adjustment for release+depress
                 xShift = prevNoteIsSame ? 5 : 0
 
-                if type == .mixed && !prevNoteIsSame {
+                if (type == .mixed || type == .mixedOpenEnd) && !prevNoteIsSame {
                     // For MIXED style, start with text instead of bracket
                     textWidth = ctx.measureText(depressText).width
                     ctx.fillText(depressText, x, y)
@@ -374,7 +374,9 @@ public final class PedalMarking: VexElement {
                 } else {
                     // Draw start bracket
                     ctx.beginPath()
-                    ctx.moveTo(x, y - renderOptions.bracketHeight)
+                    // VexFlowPatch: open-ended brackets continue across system breaks.
+                    let openBegin = index == 0 && (type == .bracketOpenBegin || type == .bracketOpenBoth)
+                    ctx.moveTo(x, openBegin ? y : y - renderOptions.bracketHeight)
                     ctx.lineTo(x + xShift, y)
                     ctx.stroke()
                     ctx.closePath()
@@ -387,7 +389,11 @@ public final class PedalMarking: VexElement {
                 ctx.moveTo(prevX ?? .nan, prevY ?? .nan)
                 ctx.lineTo(nextNoteIsSame ? x - 5 : noteEndX - 5, y)
                 // No shift if next note is the same
-                ctx.lineTo(nextNoteIsSame ? x : noteEndX - 5, y - renderOptions.bracketHeight)
+                let openEnd = index == notes.count - 1
+                    && (type == .bracketOpenEnd || type == .bracketOpenBoth || type == .mixedOpenEnd)
+                if !openEnd {
+                    ctx.lineTo(nextNoteIsSame ? x : noteEndX - 5, y - renderOptions.bracketHeight)
+                }
                 ctx.stroke()
                 ctx.closePath()
             }

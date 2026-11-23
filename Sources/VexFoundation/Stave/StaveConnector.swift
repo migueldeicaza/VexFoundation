@@ -163,8 +163,11 @@ public final class StaveConnector: VexElement {
         switch type {
         case .singleLeft:
             width = 1
+            // VexFlowPatch: honor xShift for measure-boundary connectors.
+            topX += xShift
         case .singleRight:
             width = 1
+            topX += xShift
         case .mensurstrich:
             // Read both facing lines on each draw so retained connectors follow staff spacing.
             topY = topStave.getYForDrawnLine(Double(topStave.getNumLines() - 1))

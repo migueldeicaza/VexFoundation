@@ -30,6 +30,27 @@ struct GraceNoteDynamicsBracketsLinesTests {
 
     // MARK: - GraceNote Creation
 
+    @Test(arguments: [0, 1, 2, 3])
+    func openPedalBracketOmitsContinuationHooks(variant: Int) throws {
+        let stave = Stave(x: 10, y: 20, width: 300)
+        let notes = (0..<4).map { _ in
+            StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter))
+        }
+        let voice = Voice(timeSignature: .meter(4, 4)).addTickables(notes.map { $0 as Tickable })
+        _ = Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+        let types: [PedalMarkingType] = [.bracket, .bracketOpenBegin, .bracketOpenEnd, .bracketOpenBoth]
+        let pedal = PedalMarking(notes: [notes[0], notes[2]]).setType(types[variant])
+        let context = SVGRenderContext(width: 400, height: 200)
+        _ = pedal.setContext(context)
+        try pedal.draw()
+        // Each closed hook rises above the bracket baseline: one at the start, one at the end.
+        let svg = context.getSVG()
+        let ys = svg.matches(of: /[ML][-\d.]+ ([-\d.]+)/).compactMap { Double($0.1) }
+        let baseline = ys.max() ?? 0
+        let hooks = ys.filter { $0 < baseline }.count
+        #expect(hooks == [2, 1, 1, 0][variant], "\(svg)")
+    }
+
     @Test func graceNoteCategory() {
         #expect(GraceNote.category == "GraceNote")
     }

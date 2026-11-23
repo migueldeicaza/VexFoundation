@@ -28,6 +28,7 @@ When `VexRuntimeContext.upstreamParityMode` is `true`, the items marked **(gated
 
 - [ ] `1af03ba`: `Factory.formatSystems()`; `applyStyle()`/`restoreStyle()` in the `draw()` of `Beam`, `Tuplet` and `Curve`.
 - [ ] `252b9a7`: TabStave tracks if `spacingBetweenLinesPx` was given (default 13, explicit value kept). Beam cap `endX + 1` (check upstream 5.x).
+- [x] `e3325af`: `StaveConnector` adds `xShift` to `singleLeft` and `singleRight` (upstream 5.9.0 ignores it for these types). `PedalMarking` types `bracketOpenBegin`, `bracketOpenEnd`, `bracketOpenBoth` and `mixedOpenEnd` omit the start or end hook, so a pedal line can continue across a system break. No effect on parity: the upstream tests use no x-shift on single connectors and do not have these pedal types.
 
 ## 4.x-branch fixes not in upstream 5.9.0
 
