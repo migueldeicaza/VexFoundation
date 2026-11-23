@@ -15,59 +15,9 @@ struct UpstreamSVGParityTests {
     private static let artifactsDirEnvKey = "VEXFOUNDATION_UPSTREAM_SVG_ARTIFACTS_DIR"
     private static let signatureEpsilonEnvKey = "VEXFOUNDATION_UPSTREAM_SVG_SIGNATURE_EPSILON"
     private static let disablePerCaseSignatureEpsilonEnvKey = "VEXFOUNDATION_UPSTREAM_SVG_DISABLE_PER_CASE_EPSILON"
-    // Per-case tolerances keep strict runs focused on structural parity blockers.
-    private static let caseSignatureEpsilonOverrides: [String: Double] = [
-        "Annotation.Fingerpicking": 0.353,
-        "Annotation.Harmonics": 0.418,
-        "Annotation.Simple_Annotation": 0.418,
-        "Annotation.TabNote_Annotations": 0.829,
-        "Beam.TabNote_Auto_Create_Beams": 0.381,
-        "Beam.TabNote_Beams_Auto_Stem": 0.381,
-        "Beam.TabNote_Beams_Down": 0.414,
-        "Beam.TabNote_Beams_Up": 0.378,
-        "Bend.Bend_Phrase": 0.007,
-        "Bend.Double_Bends": 0.939,
-        "Bend.Double_Bends_With_Release": 0.984,
-        "Bend.Reverse_Bends": 0.007,
-        "Bend.Whako_Bend": 0.007,
-        "Formatter.Notes_with_Tab": 0.450,
-        "Grace_Tab_Notes.Grace_Tab_Note_Simple": 0.011,
-        "Grace_Tab_Notes.Grace_Tab_Note_Slurred": 0.008,
-        "Ornament.Jazz_Ornaments": 2.001,
-        "Ornament.Ornaments___Delayed_turns": 1.001,
-        "Ornament.Ornaments___Delayed_turns__Multiple_Draws": 1.001,
-        "Ornament.Stacked": 2.001,
-        "Ornament.With_Upper_Lower_Accidentals": 2.001,
-        "PedalMarking.Custom_Text_2": 1.641,
-        "Stave.Multiple_Staves_Volta_Test": 0.002,
-        "Stave.Stave_Repetition__CODA__Positioning": 0.002,
-        "Stave.Stave_Repetition__CODA__Positioning___10_": 0.002,
-        "Stave.Stave_Repetition__CODA__Positioning___20_": 0.002,
-        "Style.TabNote_modifiers_Style": 0.626,
-        "TabNote.TabNote_Stems_Down": 0.006,
-        "TabNote.TabNote_Stems_Down_Through_Stave": 0.006,
-        "TabNote.TabNote_Stems_Up": 0.006,
-        "TabNote.TabNote_Stems_Up_Through_Stave": 0.006,
-        "TabNote.TabNote_Stems_with_Dots": 0.006,
-        "TextBracket.TextBracket_Styles": 0.317,
-        "TextFormatter.Accuracy": 0.042,
-        "TextFormatter.Box_Text": 0.010,
-        "TextNote.TextNote_Superscript_and_Subscript": 0.003,
-        "Vibrato.Harsh_Vibrato": 0.418,
-        "Vibrato.Simple_Vibrato": 0.418,
-        "Vibrato.Vibrato_with_Bend": 0.018,
-    ]
-    private static let caseFontSignatureEpsilonOverrides: [String: [String: Double]] = [
-        "ChordSymbol.Bottom_Chord_Symbols": ["Petaluma": 6.672],
-        "ChordSymbol.Bottom_Stem_Down_Chord_Symbols": ["Petaluma": 0.828],
-        "ChordSymbol.Chord_Symbol_Font_Size_Tests": ["Petaluma": 3.613],
-        "ChordSymbol.Chord_Symbol_Kerning_Tests": ["Petaluma": 4.801],
-        "ChordSymbol.Chord_Symbol_With_Modifiers": ["Petaluma": 4.511],
-        "ChordSymbol.Double_Bottom_Chord_Symbols": ["Petaluma": 4.801],
-        "ChordSymbol.Top_Chord_Symbols": ["Petaluma": 1.854],
-        "ChordSymbol.Top_Chord_Symbols_Justified": ["Petaluma": 3.278],
-        "GlyphNote.GlyphNote_with_ChordSymbols": ["Petaluma": 1.854],
-    ]
+    // Per-case tolerances (VexFlow 5.0.0 baseline). Each entry needs a reason comment.
+    private static let caseSignatureEpsilonOverrides: [String: Double] = [:]
+    private static let caseFontSignatureEpsilonOverrides: [String: [String: Double]] = [:]
 
     private let defaultFonts = ["Bravura", "Gonville", "Petaluma"]
 
