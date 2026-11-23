@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Mohit Cheppudira
 //
-// Port of `src/element.ts` (VexFlow 5.1.0).
+// Port of `src/element.ts` (VexFlow 5.2.0).
 
 import Foundation
 
@@ -57,6 +57,14 @@ open class VexElement {
     public var shouldDrawPointerRect: Bool
     private var attrs: ElementAttributes
     private weak var registry: Registry?
+    /// Independent ID indexes can validate changes without replacing the default Registry. (VexFlow 5.2.0)
+    private var idListeners: [(token: Int, validate: (String?) throws -> Void, changed: () -> Void)] = []
+    private var nextIDListenerToken = 0
+    /// The Factory that created or adopted this element (upstream `Factory.owners`, whose values are strong).
+    /// (VexFlow 5.2.0)
+    var factoryOwner: Factory?
+    /// Notation provenance recorded by an EasyScore (upstream `EasyScoreReferences.sources`). (VexFlow 5.2.0)
+    var easyScoreSource: EasyScoreSource?
 
     /// Parent element (set by `addChild`).
     public internal(set) weak var parent: VexElement?
@@ -287,8 +295,32 @@ open class VexElement {
         }
     }
 
+    /// Subscribe a local ID index. All validators run before an ID is changed.
+    /// Returns a function that removes the subscription. (VexFlow 5.2.0, internal upstream)
+    func onIdChange(validate: @escaping (String?) throws -> Void, changed: @escaping () -> Void) -> () -> Void {
+        let token = nextIDListenerToken
+        nextIDListenerToken += 1
+        idListeners.append((token, validate, changed))
+        return { [weak self] in self?.idListeners.removeAll { $0.token == token } }
+    }
+
+    /// Set an attribute. ID validators (score-local ID indexes) can reject an ID change. (VexFlow 5.2.0)
+    @discardableResult
+    public func setAttributeThrowing(_ name: String, _ value: String?) throws -> Self {
+        if name == "id" {
+            for listener in idListeners { try listener.validate(value) }
+        }
+        return applyAttribute(name, value)
+    }
+
+    /// Set an attribute such as `id`, `class` or `type`.
+    /// An ID that a score-local index rejects (see `setAttributeThrowing`) is not applied.
     @discardableResult
     public func setAttribute(_ name: String, _ value: String?) -> Self {
+        (try? setAttributeThrowing(name, value)) ?? self
+    }
+
+    private func applyAttribute(_ name: String, _ value: String?) -> Self {
         let oldID = attrs.id
         var oldValue: String?
         switch name {
@@ -306,14 +338,23 @@ open class VexElement {
         if name == "id" || name == "type" || name == "class" {
             _ = registry?.onUpdate(RegistryUpdate(id: oldID, name: name, value: value, oldValue: oldValue))
         }
+        if name == "id" {
+            for listener in idListeners { listener.changed() }
+        }
         return self
     }
 
     // MARK: - Registry
 
     /// Called when this element is registered with a Registry.
-    open func onRegister(_ registry: Registry) {
+    /// `nil` detaches the element after a failed registry transaction. (VexFlow 5.2.0)
+    open func onRegister(_ registry: Registry?) {
         self.registry = registry
+    }
+
+    /// Clear shared measurements after external font registration or custom context changes. (VexFlow 5.2.0)
+    public static func clearTextMeasurementCache() {
+        TextMeasurer.clearCache()
     }
 
     // MARK: - Bounding box

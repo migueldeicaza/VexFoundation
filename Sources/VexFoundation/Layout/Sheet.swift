@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/sheet.ts` (VexFlow 5.1.0).
+// Port of `src/sheet.ts` (VexFlow 5.2.0).
 // Optional continuous-sheet layout for existing Systems. No music data model or pagination.
 
 import Foundation
@@ -160,9 +160,26 @@ public final class Sheet {
         // Spanning marks and arbitrary annotations still need caller-supplied rowGap.
         for voice in system.getVoices() {
             for note in voice.getTickables() {
-                guard let box = note.getBoundingBox() else { continue }
-                top = min(top, box.y)
-                bottom = max(bottom, box.y + box.h)
+                // Modifier and generic text bounds may still contain coordinates from the last draw.
+                // Measure pitched heads/stems and inline clefs from current layout only. Other notes use
+                // their stave-relative Y positions; arbitrary labels and spans still need explicit rowGap.
+                if note is StaveNote || note is ClefNote {
+                    let box = (note as? StaveNote)?.getBoundingBox(includeModifiers: false) ?? note.getBoundingBox()
+                    guard let box else { continue }
+                    top = min(top, box.y)
+                    bottom = max(bottom, box.y + box.h)
+                } else if let note = note as? Note {
+                    let padding = note.checkStave().getSpacingBetweenLines()
+                    for y in note.getYs() {
+                        top = min(top, y - padding)
+                        bottom = max(bottom, y + padding)
+                    }
+                    if let stemmable = note as? StemmableNote, stemmable.hasStem() {
+                        let extents = stemmable.getStemExtents()
+                        top = min(top, extents.topY, extents.baseY)
+                        bottom = max(bottom, extents.topY, extents.baseY)
+                    }
+                }
             }
         }
         return (top, bottom)

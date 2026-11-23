@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stavenote.ts` (VexFlow 5.1.0).
+// Port of `src/stavenote.ts` (VexFlow 5.2.0).
 // This file implements notes for standard notation. A note has one or more
 // `NoteHead`s, an optional stem, and an optional flag.
 
@@ -535,7 +535,7 @@ open class StaveNote: StemmableNote {
                                     // same line, swap stem direction for one note
                                     if noteL.stemDirection == .up {
                                         noteL.stemDirection = .down
-                                        noteL.note.setStemDirection(.down)
+                                        noteL.note.setStemDirection(.down, autoStem: noteL.note.isAutoStem())
                                     }
                                 }
                             }
@@ -552,10 +552,10 @@ open class StaveNote: StemmableNote {
                         }
                     } else if noteU.note.hasStem() {
                         noteU.stemDirection = noteU.note.getStemDirection() == .up ? .down : .up
-                        noteU.note.setStemDirection(noteU.stemDirection)
+                        noteU.note.setStemDirection(noteU.stemDirection, autoStem: noteU.note.isAutoStem())
                     } else if noteL.note.hasStem() {
                         noteL.stemDirection = noteL.note.getStemDirection() == .up ? .down : .up
-                        noteL.note.setStemDirection(noteL.stemDirection)
+                        noteL.note.setStemDirection(noteL.stemDirection, autoStem: noteL.note.isAutoStem())
                     }
                 }
             }
@@ -584,11 +584,11 @@ open class StaveNote: StemmableNote {
                     noteM.note.setXShift(xShift)
                     if noteL.note.hasBeam() == false {
                         noteL.stemDirection = .down
-                        noteL.note.setStemDirection(.down)
+                        noteL.note.setStemDirection(.down, autoStem: noteL.note.isAutoStem())
                     }
                     if noteU.minLine <= noteL.maxLine && noteU.note.hasBeam() == false {
                         noteU.stemDirection = .up
-                        noteU.note.setStemDirection(.up)
+                        noteU.note.setStemDirection(.up, autoStem: noteU.note.isAutoStem())
                     }
                 }
                 // format complete
@@ -632,11 +632,11 @@ open class StaveNote: StemmableNote {
             noteM.note.setXShift(xShift)
             if noteL.note.hasBeam() == false {
                 noteL.stemDirection = .down
-                noteL.note.setStemDirection(.down)
+                noteL.note.setStemDirection(.down, autoStem: noteL.note.isAutoStem())
             }
             if noteU.minLine <= noteL.maxLine && noteU.note.hasBeam() == false {
                 noteU.stemDirection = .up
-                noteU.note.setStemDirection(.up)
+                noteU.note.setStemDirection(.up, autoStem: noteU.note.isAutoStem())
             }
         }
 
@@ -862,7 +862,7 @@ open class StaveNote: StemmableNote {
 
     /// Set the stem direction from the keys in the note.
     public func autoStem() {
-        setStemDirection(calculateOptimalStemDirection())
+        setStemDirection(calculateOptimalStemDirection(), autoStem: true)
     }
 
     public func calculateOptimalStemDirection() -> StemDirection {
@@ -967,6 +967,12 @@ open class StaveNote: StemmableNote {
     /// The `BoundingBox` of the entire note. Measures noteheads and flags from layout
     /// coordinates, including before `draw()`.
     override public func getBoundingBox() -> BoundingBox? {
+        getBoundingBox(includeModifiers: true)
+    }
+
+    /// Measure noteheads and flags from layout coordinates. With `includeModifiers: false`,
+    /// modifier bounds (which can hold coordinates from the last draw) are left out. (VexFlow 5.2.0)
+    public func getBoundingBox(includeModifiers: Bool) -> BoundingBox? {
         var boundingBox = BoundingBox(x: getAbsoluteX(), y: ys.first ?? 0, w: 0, h: 0)
         for notehead in noteHeads {
             let displacement = notehead.isDisplaced()
@@ -992,9 +998,11 @@ open class StaveNote: StemmableNote {
             bbFlag.y = position.y + flag.getYShift() - flag.getTextMetrics().actualBoundingBoxAscent
             _ = boundingBox.mergeWith(bbFlag)
         }
-        for modifier in modifiers {
-            if let bb = modifier.getBoundingBox() {
-                _ = boundingBox.mergeWith(bb)
+        if includeModifiers {
+            for modifier in modifiers {
+                if let bb = modifier.getBoundingBox() {
+                    _ = boundingBox.mergeWith(bb)
+                }
             }
         }
         return boundingBox

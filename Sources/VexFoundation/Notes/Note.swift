@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/note.ts` (VexFlow 5.1.0).
+// Port of `src/note.ts` (VexFlow 5.2.0).
 
 import Foundation
 
@@ -597,6 +597,17 @@ open class Note: Tickable {
 
     /// Get the target stave.
     override open func getStave() -> Stave? { stave }
+
+    /// The modifier (grace or subnote group) that owns this note (upstream `Factory.groups`). (VexFlow 5.2.0)
+    weak var factoryGroup: Modifier?
+
+    /// Release a staged stave assignment when managed composition fails. (VexFlow 5.2.0)
+    @discardableResult
+    public func clearStave() -> Self {
+        stave = nil
+        preFormatted = false
+        return self
+    }
 
     /// Check and get the target stave.
     public func checkStave() -> Stave {

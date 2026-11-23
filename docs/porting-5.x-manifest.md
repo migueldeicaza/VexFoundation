@@ -101,20 +101,20 @@ Commits: `git -C ../vexflow log --oneline 5.1.0..5.2.0`. Release notes: `changel
 | `src/accidental.ts` | +5/-0 | Modifiers/Accidental.swift |
 | `src/articulation.ts` | +31/-13 | Modifiers/Articulation.swift |
 | `src/beam.ts` | +15/-2 | Formatting/Beam.swift |
-| `src/chordkerning.ts` | +162/-0 | NEW |
+| `src/chordkerning.ts` | +162/-0 | Modifiers/ChordKerning.swift |
 | `src/chordsymbol.ts` | +135/-35 | Modifiers/ChordSymbol.swift |
 | `src/clef.ts` | +5/-0 | Stave/Clef.swift |
 | `src/clefnote.ts` | +7/-1 | Notes/ClefNote.swift |
 | `src/dot.ts` | +2/-1 | Modifiers/Dot.swift |
 | `src/easyscore.ts` | +624/-32 | API/EasyScore.swift |
-| `src/easyscore/composition.ts` | +425/-0 | NEW |
-| `src/easyscore/elementindex.ts` | +105/-0 | NEW |
-| `src/easyscore/elements.ts` | +458/-0 | NEW |
-| `src/easyscore/policies.ts` | +88/-0 | NEW |
-| `src/easyscore/rhythm.ts` | +43/-0 | NEW |
+| `src/easyscore/composition.ts` | +425/-0 | API/EasyScore/Composition.swift |
+| `src/easyscore/elementindex.ts` | +105/-0 | API/EasyScore/ElementIndex.swift |
+| `src/easyscore/elements.ts` | +458/-0 | API/EasyScore/Elements.swift |
+| `src/easyscore/policies.ts` | +88/-0 | API/EasyScore/Policies.swift |
+| `src/easyscore/rhythm.ts` | +43/-0 | API/EasyScore/Rhythm.swift |
 | `src/element.ts` | +23/-3 | Core/Element.swift |
 | `src/factory.ts` | +307/-75 | API/Factory.swift |
-| `src/font.ts` | +3/-1 | ? |
+| `src/font.ts` | +3/-1 | (FontRegistry generation; no change) |
 | `src/formatter.ts` | +41/-5 | Formatting/Formatter.swift |
 | `src/keysignature.ts` | +11/-1 | Stave/KeySignature.swift |
 | `src/keysignote.ts` | +2/-2 | Notes/KeySigNote.swift |
@@ -122,13 +122,13 @@ Commits: `git -C ../vexflow log --oneline 5.1.0..5.2.0`. Release notes: `changel
 | `src/note.ts` | +7/-0 | Notes/Note.swift |
 | `src/parenthesis.ts` | +2/-1 | Modifiers/Parenthesis.swift |
 | `src/parser.ts` | +9/-2 | API/Parser.swift |
-| `src/proportionalformatter.ts` | +247/-0 | NEW |
+| `src/proportionalformatter.ts` | +247/-0 | Formatting/ProportionalFormatter.swift |
 | `src/registry.ts` | +28/-0 | Core/Registry.swift |
-| `src/sheet.ts` | +22/-3 | ? |
+| `src/sheet.ts` | +22/-3 | Layout/Sheet.swift |
 | `src/stave.ts` | +8/-1 | Stave/Stave.swift |
 | `src/stavenote.ts` | +10/-12 | Notes/StaveNote.swift |
 | `src/stemmablenote.ts` | +13/-2 | Notes/StemmableNote.swift |
-| `src/textmetricscache.ts` | +113/-0 | NEW |
+| `src/textmetricscache.ts` | +113/-0 | Rendering/TextMetrics.swift (`TextMeasurer` cache) |
 | `src/tickable.ts` | +7/-0 | Formatting/Tickable.swift |
 | `src/tuplet.ts` | +2/-2 | Formatting/Tuplet.swift |
 | `src/vexflow.ts` | +2/-1 | Compatibility/Flow.swift |
@@ -145,8 +145,8 @@ Commits: `git -C ../vexflow log --oneline 5.2.0..5.3.0`. Release notes: `changel
 | `src/bend.ts` | +25/-18 | Modifiers/Bend.swift |
 | `src/curve.ts` | +31/-58 | Connectors/Curve.swift |
 | `src/dot.ts` | +17/-4 | Modifiers/Dot.swift |
-| `src/easyscore/composition.ts` | +56/-2 | ? |
-| `src/easyscore/policies.ts` | +33/-4 | ? |
+| `src/easyscore/composition.ts` | +56/-2 | API/EasyScore/Composition.swift |
+| `src/easyscore/policies.ts` | +33/-4 | API/EasyScore/Policies.swift |
 | `src/element.ts` | +11/-0 | Core/Element.swift |
 | `src/engravinggeometry.ts` | +170/-0 | NEW |
 | `src/engravingprofile.ts` | +66/-0 | NEW |
@@ -159,7 +159,7 @@ Commits: `git -C ../vexflow log --oneline 5.2.0..5.3.0`. Release notes: `changel
 | `src/modifiercontext.ts` | +17/-0 | Modifiers/ModifierContext.swift |
 | `src/notehead.ts` | +13/-6 | Notes/NoteHead.swift |
 | `src/ornament.ts` | +46/-33 | Modifiers/Ornament.swift |
-| `src/proportionalformatter.ts` | +71/-8 | ? |
+| `src/proportionalformatter.ts` | +71/-8 | Formatting/ProportionalFormatter.swift |
 | `src/stavenote.ts` | +141/-147 | Notes/StaveNote.swift |
 | `src/stavetie.ts` | +48/-7 | Connectors/StaveTie.swift |
 | `src/stem.ts` | +29/-13 | Notes/Stem.swift |
@@ -183,8 +183,8 @@ Commits: `git -C ../vexflow log --oneline 5.3.0..5.4.0`. Release notes: `changel
 | `src/continuouslayout.ts` | +832/-0 | NEW |
 | `src/continuousspan.ts` | +235/-0 | NEW |
 | `src/curve.ts` | +33/-2 | Connectors/Curve.swift |
-| `src/easyscore/composition.ts` | +20/-2 | ? |
-| `src/easyscore/policies.ts` | +7/-3 | ? |
+| `src/easyscore/composition.ts` | +20/-2 | API/EasyScore/Composition.swift |
+| `src/easyscore/policies.ts` | +7/-3 | API/EasyScore/Policies.swift |
 | `src/engravinggeometry.ts` | +10/-1 | ? |
 | `src/factory.ts` | +13/-4 | API/Factory.swift |
 | `src/font.ts` | +12/-1 | ? |
@@ -204,7 +204,7 @@ Commits: `git -C ../vexflow log --oneline 5.3.0..5.4.0`. Release notes: `changel
 | `src/publication.ts` | +532/-0 | NEW |
 | `src/publicationview.ts` | +176/-0 | NEW |
 | `src/scorenavigation.ts` | +224/-0 | NEW |
-| `src/sheet.ts` | +20/-2 | ? |
+| `src/sheet.ts` | +20/-2 | Layout/Sheet.swift |
 | `src/stave.ts` | +38/-15 | Stave/Stave.swift |
 | `src/stavebarline.ts` | +6/-7 | Stave/Barline.swift |
 | `src/staveconnector.ts` | +1/-0 | Stave/StaveConnector.swift |

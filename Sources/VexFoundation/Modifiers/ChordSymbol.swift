@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Aaron (@AaronDavidNewman)
 //
-// Port of `src/chordsymbol.ts` (VexFlow 5.1.0).
+// Port of `src/chordsymbol.ts` (VexFlow 5.2.0).
 //
 // This implements chord symbols above/below a chord.
 // Chord symbols are modifiers that can be attached to notes.
@@ -71,6 +71,12 @@ public final class ChordSymbolBlock: VexElement {
 }
 
 // MARK: - ChordSymbol
+
+/// Chord-symbol kerning mode (VexFlow 5.2.0). `.none` keeps the legacy block layout.
+public enum ChordSymbolKerning: String, Sendable {
+    case auto
+    case none
+}
 
 /// ChordSymbol is a modifier that creates a chord symbol above/below a chord.
 /// As a modifier, it is attached to an existing note.
@@ -158,32 +164,37 @@ public final class ChordSymbol: Modifier {
             let note = symbol.checkAttachedNote()
             var lineSpaces: Double = 1
 
-            for j in 0..<symbol.symbolBlocks.count {
-                let block = symbol.symbolBlocks[j]
-                let sup = block.isSuperscript()
-                let sub = block.isSubscript()
-                block.setXShift(width)
+            if let kernedWidth = symbol.formatKerning() {
+                width = kernedWidth
+                if symbol.symbolBlocks.contains(where: { $0.isSuperscript() || $0.isSubscript() }) { lineSpaces = 2 }
+            } else {
+                for j in 0..<symbol.symbolBlocks.count {
+                    let block = symbol.symbolBlocks[j]
+                    let sup = block.isSuperscript()
+                    let sub = block.isSubscript()
+                    block.setXShift(width)
 
-                // If there are super/subscripts, they extend beyond the line so
-                // assume they take up 2 lines
-                if sup || sub {
-                    lineSpaces = 2
-                }
-
-                // If a subscript immediately follows a superscript block, try to
-                // overlay them.
-                if sub && j > 0 {
-                    let prev = symbol.symbolBlocks[j - 1]
-                    if prev.isSuperscript() {
-                        // slide the symbol over so it lines up with superscript
-                        block.setXShift(width - prev.getWidth() - ChordSymbol.minPadding)
-                        block.vAlign = true
-                        width += -prev.getWidth()
-                            - ChordSymbol.minPadding
-                            + (prev.getWidth() > block.getWidth() ? prev.getWidth() - block.getWidth() : 0)
+                    // If there are super/subscripts, they extend beyond the line so
+                    // assume they take up 2 lines
+                    if sup || sub {
+                        lineSpaces = 2
                     }
+
+                    // If a subscript immediately follows a superscript block, try to
+                    // overlay them.
+                    if sub && j > 0 {
+                        let prev = symbol.symbolBlocks[j - 1]
+                        if prev.isSuperscript() {
+                            // slide the symbol over so it lines up with superscript
+                            block.setXShift(width - prev.getWidth() - ChordSymbol.minPadding)
+                            block.vAlign = true
+                            width += -prev.getWidth()
+                                - ChordSymbol.minPadding
+                                + (prev.getWidth() > block.getWidth() ? prev.getWidth() - block.getWidth() : 0)
+                        }
+                    }
+                    width += block.getWidth() + ChordSymbol.minPadding
                 }
-                width += block.getWidth() + ChordSymbol.minPadding
             }
 
             if symbol.getVertical() == .top {
@@ -209,8 +220,9 @@ public final class ChordSymbol: Modifier {
                         maxRightGlyphWidth = max(glyphWidth / 2, maxRightGlyphWidth)
                     }
                 }
-                symbol.width = width
             }
+            // Opt-in runs need their width for alignment even when they reserve no stave space.
+            if symbol.getReportWidth() || symbol.kernedRuns != nil { symbol.width = width }
             width = 0 // reset symbol width
         }
         let rightOverlap = min(
@@ -233,6 +245,75 @@ public final class ChordSymbol: Modifier {
     public var horizontal: ChordSymbolHorizontalJustify = .left
     public var vertical: ChordSymbolVerticalJustify = .top
     public var reportWidth: Bool = true
+
+    // MARK: - Kerning (VexFlow 5.2.0)
+
+    /// Default rendering stays compatible; only a matching opt-in profile uses shaped runs.
+    public private(set) var kerning: ChordSymbolKerning = .none
+    public private(set) var kerningProfile: ChordSymbolKerningProfile?
+    /// The positioned runs of the last format pass, or `nil` for the legacy block layout.
+    public private(set) var kernedRuns: [ChordSymbolRun]?
+    private var kerningMeasurement: VexElement?
+    private var kerningOrigin: (x: Double, y: Double) = (0, 0)
+
+    /// Select optical kerning. Format the score again after changing layout settings.
+    @discardableResult
+    public func setKerning(_ mode: ChordSymbolKerning) -> Self {
+        kerning = mode
+        kernedRuns = nil
+        return self
+    }
+
+    public func getKerning() -> ChordSymbolKerning { kerning }
+
+    /// Replace the font-specific table for this chord only. Pass `nil` to restore the built-in profiles.
+    @discardableResult
+    public func setKerningProfile(_ profile: ChordSymbolKerningProfile?) throws -> Self {
+        if let profile {
+            let invalid = profile.textFont.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || profile.musicFont.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || profile.pairs.contains { pair in
+                    pair.left.unicodeScalars.count != 1 || pair.right.unicodeScalars.count != 1
+                        || !pair.adjustmentEm.isFinite
+                }
+            if invalid { throw VexError("BadArgument", "Invalid chord kerning profile.") }
+        }
+        kerningProfile = profile
+        kernedRuns = nil
+        return self
+    }
+
+    /// Re-measure on every format pass; the shared text cache handles reuse.
+    func formatKerning() -> Double? {
+        kernedRuns = nil
+        if kerning == .none { return nil }
+        guard let profile = chordKerningProfile(fontInfo, custom: kerningProfile) else { return nil }
+        let measurement = kerningMeasurement ?? VexElement()
+        kerningMeasurement = measurement
+        let layout = layoutChordRuns(
+            symbolBlocks.map { block in
+                ChordSymbolText(
+                    text: block.getText(),
+                    position: block.isSuperscript() ? .superscript : block.isSubscript() ? .subscript : .baseline
+                )
+            },
+            font: fontInfo,
+            profile: profile,
+            options: ChordSymbolRunOptions(
+                spacing: ChordSymbol.spacingBetweenBlocks,
+                ratio: ChordSymbol.superSubRatio,
+                superscript: ChordSymbol.superscriptOffset,
+                subscript: ChordSymbol.subscriptOffset
+            ),
+            measure: { text, font in
+                measurement.setText(text)
+                measurement.setFont(font)
+                return measurement.measureText()
+            }
+        )
+        kernedRuns = layout.runs
+        return layout.width
+    }
 
     // MARK: - Init
 
@@ -475,17 +556,25 @@ public final class ChordSymbol: Modifier {
         case .left:
             x = start.x
         case .right:
-            x = start.x + getWidth()
+            x = kernedRuns != nil ? start.x - getWidth() : start.x + getWidth()
         case .center:
             x = start.x - getWidth() / 2
         case .centerStem:
             x = ((note as? StemmableNote)?.getStemX() ?? start.x) - getWidth() / 2
         }
 
-        for symbol in symbolBlocks {
-            symbol.setX(x)
-            symbol.setY(y)
-            symbol.renderText(ctx, xPos: 0, yPos: 0)
+        if let kernedRuns {
+            kerningOrigin = (x, y)
+            for run in kernedRuns {
+                ctx.setFont(run.font)
+                ctx.fillText(run.text, x + run.x, y + run.y)
+            }
+        } else {
+            for symbol in symbolBlocks {
+                symbol.setX(x)
+                symbol.setY(y)
+                symbol.renderText(ctx, xPos: 0, yPos: 0)
+            }
         }
         drawPointerRect()
         ctx.closeGroup()
@@ -493,9 +582,24 @@ public final class ChordSymbol: Modifier {
 
     // MARK: - Bounding Box
 
-    /// Get the `BoundingBox` for the entire chord.
+    /// Return fresh ink bounds, including script offsets and overhangs. Empty symbols have empty bounds.
     override public func getBoundingBox() -> BoundingBox? {
-        guard var boundingBox = symbolBlocks.first?.getBoundingBox() else { return nil }
+        if let kernedRuns {
+            let (x, y) = kerningOrigin
+            var box: BoundingBox?
+            for run in kernedRuns {
+                let m = run.metrics
+                let ink = BoundingBox(
+                    x: x + run.x - m.actualBoundingBoxLeft,
+                    y: y + run.y - m.actualBoundingBoxAscent,
+                    w: m.actualBoundingBoxLeft + m.actualBoundingBoxRight,
+                    h: m.actualBoundingBoxAscent + m.actualBoundingBoxDescent
+                )
+                if box != nil { box?.mergeWith(ink) } else { box = ink }
+            }
+            return box ?? BoundingBox(x: x, y: y, w: 0, h: 0)
+        }
+        guard var boundingBox = symbolBlocks.first?.getBoundingBox() else { return BoundingBox(x: 0, y: 0, w: 0, h: 0) }
         for block in symbolBlocks.dropFirst() {
             if let bb = block.getBoundingBox() {
                 boundingBox.mergeWith(bb)

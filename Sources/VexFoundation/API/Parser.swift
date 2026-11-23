@@ -1,7 +1,9 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/parser.ts` (VexFlow 5.0.0).
+// Port of `src/parser.ts` (VexFlow 5.2.0).
+//
+// Source offsets count `Character`s (upstream counts UTF-16 code units). They are the same for ASCII input.
 
 import Foundation
 
@@ -20,6 +22,17 @@ public typealias RuleFunction = () -> Rule
 /// A trigger function called when a rule matches.
 public typealias TriggerFunction = (_ matches: [Match]) -> Void
 
+/// The state given to a `runState` trigger: the matches and the matched rule range
+/// (zero-based, end-exclusive offsets in the input). (VexFlow 5.2.0)
+public struct TriggerState {
+    public var matches: [Match]
+    public var start: Int
+    public var end: Int
+}
+
+/// A trigger function that also receives the matched source range. (VexFlow 5.2.0)
+public typealias TriggerStateFunction = (_ state: TriggerState) -> Void
+
 /// A parsing or lexing rule.
 public struct Rule {
     // Lexer rules
@@ -33,12 +46,16 @@ public struct Rule {
     public var maybe: Bool = false
     public var or: Bool = false
     public var run: TriggerFunction?
+    /// Like `run`, with the matched source range. (VexFlow 5.2.0)
+    public var runState: TriggerStateFunction?
 
     public init(token: String? = nil, noSpace: Bool = false,
                 expect: [RuleFunction]? = nil,
                 zeroOrMore: Bool = false, oneOrMore: Bool = false,
                 maybe: Bool = false, or: Bool = false,
-                run: TriggerFunction? = nil) {
+                run: TriggerFunction? = nil,
+                runState: TriggerStateFunction? = nil) {
+        self.runState = runState
         self.token = token
         self.noSpace = noSpace
         self.expect = expect
@@ -64,6 +81,8 @@ public struct ParseResult {
     public var numMatches: Int?
     public var results: [ParseResultItem] = []
     public var errorPos: Int?
+    /// Furthest failed token, for editor diagnostics. `-1` on success. (VexFlow 5.2.0)
+    public var furthestErrorPos: Int?
     public var parserError: ParserError?
 
     public init(success: Bool) {
@@ -146,6 +165,7 @@ public final class Parser {
     private var line: String = ""
     private var pos: Int = 0
     private var errorPos: Int = NO_ERROR_POS
+    private var furthestErrorPos: Int = NO_ERROR_POS
     public private(set) var lastError: ParserError?
 
     public init(grammar: Grammar) {
@@ -160,12 +180,14 @@ public final class Parser {
         self.line = line
         self.pos = 0
         self.errorPos = NO_ERROR_POS
+        self.furthestErrorPos = NO_ERROR_POS
         self.lastError = nil
         var result = expect(grammar.begin())
         if lastError != nil {
             result.success = false
         }
         result.errorPos = errorPos
+        result.furthestErrorPos = result.success ? NO_ERROR_POS : furthestErrorPos
         result.parserError = lastError
         return result
     }
@@ -201,6 +223,7 @@ public final class Parser {
         let workingLine = String(line.dropFirst(pos))
         let range = NSRange(workingLine.startIndex..., in: workingLine)
         guard let match = regex.firstMatch(in: workingLine, range: range) else {
+            furthestErrorPos = max(furthestErrorPos, pos)
             var r = ParseResult(success: false)
             r.pos = pos
             return r
@@ -314,6 +337,7 @@ public final class Parser {
         }
 
         let rule = ruleFunc()
+        let start = pos
         var result: ParseResult
 
         if let token = rule.token {
@@ -351,6 +375,9 @@ public final class Parser {
         // Execute trigger
         if let run = rule.run, result.success {
             run(matches)
+        }
+        if let runState = rule.runState, result.success {
+            runState(TriggerState(matches: matches, start: start, end: pos))
         }
 
         if lastError != nil {

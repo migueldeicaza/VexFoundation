@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Mohit Cheppudira
 //
-// Port of `src/registry.ts` (VexFlow 5.1.0).
+// Port of `src/registry.ts` (VexFlow 5.2.0).
 
 import Foundation
 
@@ -59,10 +59,46 @@ public final class Registry {
         "class": [:],
     ]
     private let indexLock = NSRecursiveLock()
+    /// Registrations made during nested synchronous construction scopes. (VexFlow 5.2.0)
+    private var transactions: [[VexElement]] = []
 
     // MARK: - Init
 
     public init() {}
+
+    // MARK: - Transactions (VexFlow 5.2.0)
+
+    /// Restore indexes and detach new elements if construction fails. External mutations are not undone.
+    public func transaction<T>(_ build: () throws -> T) rethrows -> T {
+        indexLock.lock()
+        let before = index
+        let existing = Set((before["id"] ?? [:]).values.flatMap { $0.values }.map { ObjectIdentifier($0) })
+        transactions.append([])
+        indexLock.unlock()
+        do {
+            let result = try build()
+            indexLock.lock()
+            transactions.removeLast()
+            indexLock.unlock()
+            return result
+        } catch {
+            indexLock.lock()
+            let created = transactions.removeLast()
+            index = before
+            indexLock.unlock()
+            for element in created where !existing.contains(ObjectIdentifier(element)) {
+                element.onRegister(nil)
+            }
+            throw error
+        }
+    }
+
+    /// All elements in the ID index.
+    public func getRegisteredElements() -> [VexElement] {
+        indexLock.lock()
+        defer { indexLock.unlock() }
+        return (index["id"] ?? [:]).values.flatMap { $0.values }
+    }
 
     // MARK: - Clear
 
@@ -129,6 +165,8 @@ public final class Registry {
         guard !elemId.isEmpty else {
             throw RegistryError.missingElementID
         }
+
+        for i in transactions.indices { transactions[i].append(elem) }
 
         _ = elem.setAttribute("id", elemId)
         setIndexValue(name: "id", value: elemId, id: elemId, elem: elem)

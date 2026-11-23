@@ -27,6 +27,8 @@ public final class MetricsStore {
 
     /// Clear cached lookups for `key`, or all cached lookups.
     public func clear(_ key: String? = nil) {
+        // VexFlow 5.2.0: clearing metrics also clears the shared text measurements.
+        TextMeasurer.clearCache()
         lock.lock(); defer { lock.unlock() }
         if let key {
             cacheFont.removeValue(forKey: key)

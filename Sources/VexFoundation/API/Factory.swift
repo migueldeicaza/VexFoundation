@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Mohit Cheppudira
 //
-// Port of `src/factory.ts` (VexFlow 5.1.0).
+// Port of `src/factory.ts` (VexFlow 5.2.0).
 //
 // Local changes (see docs/local-deviations.md):
 // - Every object is created inside the factory runtime context.
@@ -26,6 +26,14 @@ public struct FactoryOptions {
         self.width = width
         self.height = height
     }
+}
+
+/// Explicit drawing role for a native extension adopted into a Factory. (VexFlow 5.2.0)
+public enum FactoryElementRole: String, Sendable {
+    case note
+    case modifier
+    case staveModifier
+    case drawable
 }
 
 public enum FactoryError: Error, LocalizedError, Equatable, Sendable {
@@ -62,6 +70,152 @@ public final class Factory {
     private var retained = false
     /// Foreground defaults (score colors). They survive `reset()`, like renderer options.
     private var scoreStyle = ElementStyle()
+    /// Elements created by nested construction scopes (see `transaction(_:)`). (VexFlow 5.2.0)
+    private var constructionScopes: [[VexElement]] = []
+    /// Undo actions of note groups created by nested construction scopes.
+    private var groupScopes: [[() -> Void]] = []
+
+    // MARK: - Ownership (VexFlow 5.2.0)
+
+    /// A grouped note draws only through its modifier, never through a main voice or queue.
+    public static func getGroup(_ note: Note) -> Modifier? { note.factoryGroup }
+
+    /// Identify the Factory that created an element, without changing its draw role.
+    public static func getOwner(_ element: VexElement) -> Factory? { element.factoryOwner }
+
+    /// Record ownership of a new element. Elements owned by another Factory are rejected.
+    @discardableResult
+    func ownThrowing<T: VexElement>(_ element: T) throws -> T {
+        if let owner = element.factoryOwner {
+            if owner === self { return element }
+            throw VexError("BadArguments", "Element belongs to another Factory.")
+        }
+        element.factoryOwner = self
+        for i in constructionScopes.indices { constructionScopes[i].append(element) }
+        return element
+    }
+
+    /// Record ownership of an element that this Factory just constructed.
+    @discardableResult
+    private func own<T: VexElement>(_ element: T) -> T {
+        (try? ownThrowing(element)) ?? element
+    }
+
+    /// Adopt a native extension without guessing its drawing role. Attachment and layout remain explicit.
+    /// Repeating adoption cannot enqueue an element twice. Ownership survives draw/reset.
+    @discardableResult
+    public func adopt<T: VexElement>(_ element: T, role: FactoryElementRole) throws -> T {
+        let valid: Bool
+        switch role {
+        case .note: valid = element is VexFoundation.Note
+        case .modifier: valid = element is VexFoundation.Modifier
+        case .staveModifier: valid = element is VexFoundation.StaveModifier
+        case .drawable:
+            valid = !(element is VexFoundation.Note) && !(element is VexFoundation.Modifier)
+                && !(element is VexFoundation.Voice) && !(element is VexFoundation.Stave)
+                && !(element is VexFoundation.StaveModifier) && !(element is VexFoundation.System)
+        }
+        if !valid { throw VexError("BadArguments", "Invalid adopted element role: \(role.rawValue)") }
+        if let note = element as? VexFoundation.Note, note.factoryGroup != nil {
+            throw VexError("BadArguments", "A grouped note cannot be queued independently.")
+        }
+        try ownThrowing(element)
+        if (role == .note || role == .drawable) && !renderQ.contains(where: { $0 === element }) {
+            renderQ.append(element)
+        }
+        return element
+    }
+
+    /// Stage synchronous construction. Failed operations preserve existing queues and registry entries.
+    public func transaction<T>(_ build: () throws -> T) throws -> T {
+        let snapshot = (
+            staves: staves, voices: voices, renderQ: renderQ, systems: systems, sheets: sheets,
+            stave: currentStave, retained: retained
+        )
+        constructionScopes.append([])
+        groupScopes.append([])
+        return try withoutActuallyEscaping(build) { build in try transactionBody(build, snapshot) }
+    }
+
+    private func transactionBody<T>(
+        _ build: @escaping () throws -> T,
+        _ snapshot: (staves: [VexFoundation.Stave], voices: [VexFoundation.Voice], renderQ: [VexElement],
+                     systems: [VexFoundation.System], sheets: [VexFoundation.Sheet], stave: VexFoundation.Stave?,
+                     retained: Bool)
+    ) throws -> T {
+        let run: () throws -> T = {
+            do {
+                let result = try build()
+                self.constructionScopes.removeLast()
+                self.groupScopes.removeLast()
+                return result
+            } catch {
+                let created = self.constructionScopes.removeLast()
+                let grouped = self.groupScopes.removeLast()
+                self.staves = snapshot.staves
+                self.voices = snapshot.voices
+                self.renderQ = snapshot.renderQ
+                self.systems = snapshot.systems
+                self.sheets = snapshot.sheets
+                self.currentStave = snapshot.stave
+                self.retained = snapshot.retained
+                for element in created where element.factoryOwner === self { element.factoryOwner = nil }
+                for restore in grouped.reversed() { restore() }
+                throw error
+            }
+        }
+        if let registry = runtimeContext.getDefaultRegistry() {
+            return try registry.transaction(run)
+        }
+        return try run()
+    }
+
+    /// Transfer unvoiced notes to one modifier. Validation happens before native voice assignment.
+    public func groupNotes<T: VexFoundation.Modifier>(_ notes: [VexFoundation.Note], _ construct: () throws -> T) throws -> T {
+        if notes.isEmpty || Set(notes.map { ObjectIdentifier($0) }).count != notes.count {
+            throw VexError("BadArguments", "A note group needs distinct notes.")
+        }
+        for note in notes {
+            if let owner = note.factoryOwner, owner !== self {
+                throw VexError("BadArguments", "Group note belongs to another Factory.")
+            }
+            if note.factoryGroup != nil { throw VexError("BadArguments", "Note already belongs to a group.") }
+            if note.voice != nil { throw VexError("BadArguments", "A voiced note cannot be moved into a group.") }
+        }
+        let ignored = notes.map { $0.shouldIgnoreTicks() }
+        let restore = {
+            for (index, note) in notes.enumerated() {
+                note.factoryGroup = nil
+                note.clearVoice()
+                note.ignoreTicks = ignored[index]
+            }
+        }
+        let group: T
+        do {
+            let constructed = try construct()
+            if let ctx = context { _ = constructed.setContext(ctx) }
+            group = try ownThrowing(constructed)
+        } catch {
+            restore()
+            throw error
+        }
+        for i in groupScopes.indices { groupScopes[i].append(restore) }
+        for note in notes {
+            own(note)
+            note.factoryGroup = group
+        }
+        renderQ.removeAll { element in notes.contains { $0 === element } }
+        return group
+    }
+
+    /// The elements queued for drawing (upstream `renderQ`).
+    public func getRenderQueue() -> [VexElement] { renderQ }
+
+    /// The systems created by this Factory.
+    public func getSystems() -> [VexFoundation.System] { systems }
+
+    /// The sheets created by this Factory.
+    public func getSheets() -> [VexFoundation.Sheet] { sheets }
 
     // MARK: - Init
 
@@ -131,7 +285,7 @@ public final class Factory {
         staves.append(stave)
         if let ctx = context { _ = stave.setContext(ctx) }
         currentStave = stave
-        return stave
+        return own(stave)
     }
 
     @discardableResult
@@ -153,7 +307,7 @@ public final class Factory {
         staves.append(stave)
         if let ctx = context { _ = stave.setContext(ctx) }
         currentStave = stave
-        return stave
+        return own(stave)
     }
 
     // MARK: - Note Factory Methods
@@ -164,7 +318,7 @@ public final class Factory {
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
-        return note
+        return own(note)
     }
 
     @discardableResult
@@ -178,7 +332,7 @@ public final class Factory {
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
-        return note
+        return own(note)
     }
 
     @discardableResult
@@ -190,7 +344,7 @@ public final class Factory {
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
-        return note
+        return own(note)
     }
 
     @discardableResult
@@ -199,7 +353,7 @@ public final class Factory {
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
-        return note
+        return own(note)
     }
 
     @discardableResult
@@ -229,7 +383,7 @@ public final class Factory {
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
-        return note
+        return own(note)
     }
 
     @discardableResult
@@ -238,7 +392,7 @@ public final class Factory {
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
-        return note
+        return own(note)
     }
 
     @discardableResult
@@ -253,7 +407,7 @@ public final class Factory {
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
-        return note
+        return own(note)
     }
 
     @discardableResult
@@ -262,29 +416,29 @@ public final class Factory {
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
-        return note
+        return own(note)
     }
 
     @discardableResult
     public func KeySigNote(
-        key: String, cancelKey: String? = nil, alterKey: [String]? = nil
+        key: String, cancelKey: String? = nil, alterKey: [String]? = nil, clef: ClefName? = nil
     ) -> VexFoundation.KeySigNote {
         let note = inRuntimeContext {
-            VexFoundation.KeySigNote(keySpec: key, cancelKeySpec: cancelKey, alterKeySpec: alterKey)
+            VexFoundation.KeySigNote(keySpec: key, cancelKeySpec: cancelKey, alterKeySpec: alterKey, clef: clef)
         }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
-        return note
+        return own(note)
     }
 
     @discardableResult
-    public func TabNote(_ noteStruct: TabNoteStruct) -> VexFoundation.TabNote {
-        let note = inRuntimeContext { VexFoundation.TabNote(noteStruct) }
+    public func TabNote(_ noteStruct: TabNoteStruct, drawStem: Bool = false) -> VexFoundation.TabNote {
+        let note = inRuntimeContext { VexFoundation.TabNote(noteStruct, drawStem: drawStem) }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
         renderQ.append(note)
-        return note
+        return own(note)
     }
 
     @discardableResult
@@ -292,7 +446,7 @@ public final class Factory {
         let note = inRuntimeContext { VexFoundation.GraceNote(noteStruct) }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
-        return note
+        return own(note)
     }
 
     @discardableResult
@@ -303,7 +457,7 @@ public final class Factory {
             VexFoundation.GraceNoteGroup(graceNotes: notes, showSlur: slur)
         }
         if let ctx = context { _ = group.setContext(ctx) }
-        return group
+        return own(group)
     }
 
     // MARK: - Modifier Factory Methods
@@ -312,7 +466,7 @@ public final class Factory {
     public func Accidental(type: AccidentalType) -> VexFoundation.Accidental {
         let accid = inRuntimeContext { VexFoundation.Accidental(type) }
         if let ctx = context { _ = accid.setContext(ctx) }
-        return accid
+        return own(accid)
     }
 
     /// String convenience API that throws on invalid accidental input.
@@ -320,7 +474,7 @@ public final class Factory {
     public func Accidental(parsing type: String) throws -> VexFoundation.Accidental {
         let accid = try inRuntimeContext { try VexFoundation.Accidental(parsing: type) }
         if let ctx = context { _ = accid.setContext(ctx) }
-        return accid
+        return own(accid)
     }
 
     /// String convenience API that returns nil on invalid accidental input.
@@ -329,7 +483,7 @@ public final class Factory {
         let accid = inRuntimeContext { VexFoundation.Accidental(parsingOrNil: type) }
         guard let accid else { return nil }
         if let ctx = context { _ = accid.setContext(ctx) }
-        return accid
+        return own(accid)
     }
 
     @discardableResult
@@ -344,7 +498,7 @@ public final class Factory {
         _ = annotation.setVerticalJustification(vJustify)
         annotation.setFont(font)
         if let ctx = context { _ = annotation.setContext(ctx) }
-        return annotation
+        return own(annotation)
     }
 
     @discardableResult
@@ -371,7 +525,7 @@ public final class Factory {
             chordSymbol.setFontSize(fontSize)
         }
         if let ctx = context { _ = chordSymbol.setContext(ctx) }
-        return chordSymbol
+        return own(chordSymbol)
     }
 
     @discardableResult
@@ -384,7 +538,7 @@ public final class Factory {
         if let position { _ = articulation.setPosition(position) }
         if let betweenLines { _ = articulation.setBetweenLines(betweenLines) }
         if let ctx = context { _ = articulation.setContext(ctx) }
-        return articulation
+        return own(articulation)
     }
 
     @discardableResult
@@ -409,7 +563,7 @@ public final class Factory {
             _ = ornament.setDelayed(delayed)
         }
         if let ctx = context { _ = ornament.setContext(ctx) }
-        return ornament
+        return own(ornament)
     }
 
     @discardableResult
@@ -418,7 +572,7 @@ public final class Factory {
         if let stave = currentStave { _ = td.setStave(stave) }
         if let ctx = context { _ = td.setContext(ctx) }
         renderQ.append(td)
-        return td
+        return own(td)
     }
 
     @discardableResult
@@ -426,7 +580,7 @@ public final class Factory {
         let fingering = inRuntimeContext { FretHandFinger(number) }
         _ = fingering.setPosition(position)
         if let ctx = context { _ = fingering.setContext(ctx) }
-        return fingering
+        return own(fingering)
     }
 
     @discardableResult
@@ -436,7 +590,7 @@ public final class Factory {
         _ = sn.setPosition(position)
         if let ctx = context { _ = sn.setContext(ctx) }
         _ = sn.setDrawCircle(drawCircle)
-        return sn
+        return own(sn)
     }
 
     // MARK: - Context Factory Methods
@@ -461,7 +615,7 @@ public final class Factory {
         }
         if let ctx = context { _ = mmr.setContext(ctx) }
         renderQ.append(mmr)
-        return mmr
+        return own(mmr)
     }
 
     // MARK: - Voice
@@ -470,7 +624,7 @@ public final class Factory {
     public func Voice(time: VoiceTime? = nil) -> VexFoundation.Voice {
         let voice = inRuntimeContext { VexFoundation.Voice(time: time) }
         voices.append(voice)
-        return voice
+        return own(voice)
     }
 
     @discardableResult
@@ -482,7 +636,7 @@ public final class Factory {
     public func VoiceThrowing(timeSignature: TimeSignatureSpec) throws -> VexFoundation.Voice {
         let voice = try inRuntimeContext { try VexFoundation.Voice(validatingTimeSignature: timeSignature) }
         voices.append(voice)
-        return voice
+        return own(voice)
     }
 
     // MARK: - Connector, Formatter
@@ -499,7 +653,7 @@ public final class Factory {
         _ = connector.setType(type)
         if let ctx = context { _ = connector.setContext(ctx) }
         renderQ.append(connector)
-        return connector
+        return own(connector)
     }
 
     public func Formatter(options: FormatterOptions = FormatterOptions()) -> VexFoundation.Formatter {
@@ -518,7 +672,7 @@ public final class Factory {
         let tuplet = try inRuntimeContext { try VexFoundation.Tuplet(notes: notes, options: options) }
         if let ctx = context { _ = tuplet.setContext(ctx) }
         renderQ.append(tuplet)
-        return tuplet
+        return own(tuplet)
     }
 
     @discardableResult
@@ -550,7 +704,7 @@ public final class Factory {
             _ = beam.setPartialBeamSideAt(noteIndex, side: direction)
         }
         renderQ.append(beam)
-        return beam
+        return own(beam)
     }
 
     // MARK: - Curve, Tie, Line
@@ -560,7 +714,7 @@ public final class Factory {
         let curve = inRuntimeContext { VexFoundation.Curve(from: from, to: to, options: options) }
         if let ctx = context { _ = curve.setContext(ctx) }
         renderQ.append(curve)
-        return curve
+        return own(curve)
     }
 
     @discardableResult
@@ -570,7 +724,7 @@ public final class Factory {
         if let direction { _ = tie.setDirection(direction) }
         if let ctx = context { _ = tie.setContext(ctx) }
         renderQ.append(tie)
-        return tie
+        return own(tie)
     }
 
     @discardableResult
@@ -581,7 +735,7 @@ public final class Factory {
         if let font { _ = line.setFont(font) }
         if let ctx = context { _ = line.setContext(ctx) }
         renderQ.append(line)
-        return line
+        return own(line)
     }
 
     @discardableResult
@@ -589,11 +743,12 @@ public final class Factory {
         from: Note?, to: Note?, line: Double? = nil, code: Int? = nil
     ) -> VexFoundation.VibratoBracket {
         let vb = inRuntimeContext { VexFoundation.VibratoBracket(start: from, stop: to) }
-        if let line, line != 0 { _ = vb.setLine(line) }
-        if let code, code != 0 { _ = vb.setVibratoCode(code) }
+        // 5.2.0: an explicit 0 is applied (`!== undefined`).
+        if let line { _ = vb.setLine(line) }
+        if let code { _ = vb.setVibratoCode(code) }
         if let ctx = context { _ = vb.setContext(ctx) }
         renderQ.append(vb)
-        return vb
+        return own(vb)
     }
 
     @discardableResult
@@ -608,11 +763,12 @@ public final class Factory {
                 superscript: superscript, position: position
             )
         }
-        if let line, line != 0 { _ = tb.setLine(line) }
+        // 5.2.0: an explicit 0 is applied (`!== undefined`).
+        if let line { _ = tb.setLine(line) }
         if let font { _ = tb.setFont(font) }
         if let ctx = context { _ = tb.setContext(ctx) }
         renderQ.append(tb)
-        return tb
+        return own(tb)
     }
 
     // MARK: - System
@@ -628,7 +784,7 @@ public final class Factory {
         }
         if let ctx = context { _ = system.setContext(ctx) }
         systems.append(system)
-        return system
+        return own(system)
     }
 
     // MARK: - Score style and Sheet (VexFlow 5.1.0)
@@ -654,6 +810,7 @@ public final class Factory {
     // MARK: - EasyScore
 
     public func EasyScore(options: EasyScoreOptions = EasyScoreOptions()) -> VexFoundation.EasyScore {
+        // Upstream copies the options (`{ ...options, factory: this }`); Swift options are a value type.
         var opts = options
         opts.factory = self
         let resolvedRuntimeContext = opts.runtimeContext ?? runtimeContext
@@ -681,7 +838,7 @@ public final class Factory {
         _ = pedal.setType(type)
         if let ctx = context { _ = pedal.setContext(ctx) }
         renderQ.append(pedal)
-        return pedal
+        return own(pedal)
     }
 
     // MARK: - NoteSubGroup
@@ -690,7 +847,169 @@ public final class Factory {
     public func NoteSubGroup(notes: [Note] = []) -> VexFoundation.NoteSubGroup {
         let group = inRuntimeContext { VexFoundation.NoteSubGroup(subNotes: notes) }
         if let ctx = context { _ = group.setContext(ctx) }
-        return group
+        return own(group)
+    }
+
+    // MARK: - Native constructors with explicit drawing roles (VexFlow 5.2.0)
+
+    private func adoptNew<T: VexElement>(_ element: T, role: FactoryElementRole) -> T {
+        if let ctx = context { _ = element.setContext(ctx) }
+        // A new element has no owner and a valid role, so adoption cannot fail.
+        return (try? adopt(element, role: role)) ?? element
+    }
+
+    /// Construct a native Bend with an explicit drawing role.
+    @discardableResult
+    public func Bend(_ phrase: [BendPhrase]) -> VexFoundation.Bend {
+        adoptNew(inRuntimeContext { VexFoundation.Bend(phrase) }, role: .modifier)
+    }
+
+    /// Construct a native Clef with an explicit drawing role.
+    @discardableResult
+    public func Clef(
+        _ type: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil
+    ) -> VexFoundation.Clef {
+        adoptNew(inRuntimeContext { VexFoundation.Clef(type: type, size: size, annotation: annotation) }, role: .staveModifier)
+    }
+
+    /// Construct a native KeySignature with an explicit drawing role.
+    @discardableResult
+    public func KeySignature(
+        _ keySpec: String, cancelKeySpec: String? = nil, alterKeySpec: [String]? = nil
+    ) -> VexFoundation.KeySignature {
+        adoptNew(inRuntimeContext {
+            VexFoundation.KeySignature(keySpec: keySpec, cancelKeySpec: cancelKeySpec, alterKeySpec: alterKeySpec)
+        }, role: .staveModifier)
+    }
+
+    /// Construct a native TimeSignature with an explicit drawing role.
+    @discardableResult
+    public func TimeSignature(
+        _ timeSpec: TimeSignatureSpec = .default, customPadding: Double = 15
+    ) -> VexFoundation.TimeSignature {
+        adoptNew(inRuntimeContext {
+            VexFoundation.TimeSignature(timeSpec: timeSpec, customPadding: customPadding)
+        }, role: .staveModifier)
+    }
+
+    /// Construct a native Barline with an explicit drawing role.
+    @discardableResult
+    public func Barline(_ type: BarlineType) -> VexFoundation.Barline {
+        adoptNew(inRuntimeContext { VexFoundation.Barline(type) }, role: .staveModifier)
+    }
+
+    /// Construct a native Repetition with an explicit drawing role.
+    @discardableResult
+    public func Repetition(_ type: RepetitionType, x: Double, yShift: Double) -> VexFoundation.Repetition {
+        adoptNew(inRuntimeContext { VexFoundation.Repetition(type: type, x: x, yShift: yShift) }, role: .staveModifier)
+    }
+
+    /// Construct a native Volta with an explicit drawing role.
+    @discardableResult
+    public func Volta(_ type: VoltaType, number: String, x: Double, yShift: Double) -> VexFoundation.Volta {
+        adoptNew(inRuntimeContext {
+            VexFoundation.Volta(type: type, number: number, x: x, yShift: yShift)
+        }, role: .staveModifier)
+    }
+
+    /// Construct a native StaveSection with an explicit drawing role.
+    @discardableResult
+    public func StaveSection(
+        _ section: String, x: Double = 0, shiftY: Double = 0, drawRect: Bool = true
+    ) -> VexFoundation.StaveSection {
+        adoptNew(inRuntimeContext {
+            VexFoundation.StaveSection(section: section, x: x, shiftY: shiftY, drawRect: drawRect)
+        }, role: .staveModifier)
+    }
+
+    /// Construct a native StaveTempo with an explicit drawing role.
+    @discardableResult
+    public func StaveTempo(_ tempo: StaveTempoOptions, x: Double, shiftY: Double) -> VexFoundation.StaveTempo {
+        adoptNew(inRuntimeContext {
+            VexFoundation.StaveTempo(tempo: tempo, x: x, shiftY: shiftY)
+        }, role: .staveModifier)
+    }
+
+    /// Construct a native StaveText with an explicit drawing role.
+    @discardableResult
+    public func StaveText(
+        _ text: String, position: StaveModifierPosition, shiftX: Double = 0, shiftY: Double = 0,
+        justification: StaveTextJustification = .center
+    ) -> VexFoundation.StaveText {
+        adoptNew(inRuntimeContext {
+            VexFoundation.StaveText(
+                text: text, position: position, shiftX: shiftX, shiftY: shiftY, justification: justification
+            )
+        }, role: .staveModifier)
+    }
+
+    /// Construct a native TabTie with an explicit drawing role.
+    @discardableResult
+    public func TabTie(_ notes: TieNotes, text: String? = nil) -> VexFoundation.TabTie {
+        adoptNew(inRuntimeContext { VexFoundation.TabTie(notes: notes, text: text) }, role: .drawable)
+    }
+
+    /// Construct a native TabSlide with an explicit drawing role.
+    @discardableResult
+    public func TabSlide(_ notes: TieNotes, direction: TieDirection? = nil) -> VexFoundation.TabSlide {
+        adoptNew(inRuntimeContext { VexFoundation.TabSlide(notes: notes, direction: direction) }, role: .drawable)
+    }
+
+    /// Grace tab children draw through a GraceNoteGroup, never as standalone tickables.
+    @discardableResult
+    public func GraceTabNote(_ noteStruct: TabNoteStruct) -> VexFoundation.GraceTabNote {
+        let note = inRuntimeContext { VexFoundation.GraceTabNote(noteStruct) }
+        if let ctx = context { _ = note.setContext(ctx) }
+        return own(note)
+    }
+
+    /// Construct a native Dot for attachment.
+    @discardableResult
+    public func Dot() -> VexFoundation.Dot {
+        adoptNew(inRuntimeContext { VexFoundation.Dot() }, role: .modifier)
+    }
+
+    /// Construct a native Parenthesis for attachment.
+    @discardableResult
+    public func Parenthesis(_ position: ModifierPosition = .left) -> VexFoundation.Parenthesis {
+        adoptNew(inRuntimeContext { VexFoundation.Parenthesis(position: position) }, role: .modifier)
+    }
+
+    /// Construct a native Stroke for attachment.
+    @discardableResult
+    public func Stroke(_ type: StrokeType, allVoices: Bool = true) -> VexFoundation.Stroke {
+        adoptNew(inRuntimeContext { VexFoundation.Stroke(type: type, allVoices: allVoices) }, role: .modifier)
+    }
+
+    /// Construct a native Tremolo for attachment.
+    @discardableResult
+    public func Tremolo(_ num: Int) -> VexFoundation.Tremolo {
+        adoptNew(inRuntimeContext { VexFoundation.Tremolo(num) }, role: .modifier)
+    }
+
+    /// Construct a native Vibrato for attachment.
+    @discardableResult
+    public func Vibrato() -> VexFoundation.Vibrato {
+        adoptNew(inRuntimeContext { VexFoundation.Vibrato() }, role: .modifier)
+    }
+
+    /// Timed crescendo note; span hairpins have a separate constructor.
+    @discardableResult
+    public func Crescendo(_ noteStruct: NoteStruct) -> VexFoundation.Crescendo {
+        let note = inRuntimeContext { VexFoundation.Crescendo(noteStruct) }
+        if let stave = currentStave { _ = note.setStave(stave) }
+        return adoptNew(note, role: .note)
+    }
+
+    /// Stave-bound hairpin. The native renderer requires both endpoints.
+    @discardableResult
+    public func StaveHairpin(
+        from: VexFoundation.Note, to: VexFoundation.Note, type: HairpinType,
+        options: HairpinRenderOptions? = nil
+    ) -> VexFoundation.StaveHairpin {
+        let hairpin = inRuntimeContext { VexFoundation.StaveHairpin(firstNote: from, lastNote: to, type: type) }
+        if let options { _ = hairpin.setRenderOptions(options) }
+        return adoptNew(hairpin, role: .drawable)
     }
 
     // MARK: - Format & Draw

@@ -1,7 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/formatter.ts` (VexFlow 5.0.0).
+// Port of `src/formatter.ts` (VexFlow 5.2.0).
+// Engraving layout and opt-in placement on a strict musical-time grid.
 
 import Foundation
 
@@ -35,13 +36,17 @@ public enum FormatterError: Error, LocalizedError, Equatable, Sendable {
 
 /// Options for the Formatter layout engine.
 public struct FormatterOptions {
+    /// Omit (`nil`) to use the default engraving layout. (VexFlow 5.2.0)
+    public var spacing: ProportionalSpacing?
     public var softmaxFactor: Double = Tables.SOFTMAX_FACTOR
     public var globalSoftmax: Bool = false
     public var maxIterations: Int = 5
 
     public init(softmaxFactor: Double = Tables.SOFTMAX_FACTOR,
                 globalSoftmax: Bool = false,
-                maxIterations: Int = 5) {
+                maxIterations: Int = 5,
+                spacing: ProportionalSpacing? = nil) {
+        self.spacing = spacing
         self.softmaxFactor = softmaxFactor
         self.globalSoftmax = globalSoftmax
         self.maxIterations = maxIterations
@@ -147,6 +152,8 @@ public final class Formatter {
     public var totalShift: Double = 0
     public var tickContexts = AlignmentContexts()
     public var formatterOptions: FormatterOptions
+    /// Present only for the opt-in rational timeline. (VexFlow 5.2.0)
+    private var proportional: ProportionalFormatter?
     public var modifierContexts: [AlignmentModifierContexts] = []
     public var voices: [Voice] = []
     public var lossHistory: [Double] = []
@@ -418,6 +425,13 @@ public final class Formatter {
     }
 
     public func preCalculateMinTotalWidthThrowing(_ voices: [Voice]) throws -> Double {
+        if let spacing = formatterOptions.spacing {
+            try createTickContextsThrowing(voices)
+            guard let proportional else { throw VexError("BadArgument", "No voices to format") }
+            minTotalWidth = try proportional.minimumWidth(spacing)
+            hasMinTotalWidth = true
+            return minTotalWidth
+        }
         let unalignedPadding = Metrics.getDouble("Stave.unalignedNotePadding")
         // Calculate additional padding based on 3 methods:
         // 1) unaligned beats in voices, 2) variance of width, 3) variance of durations
@@ -560,7 +574,9 @@ public final class Formatter {
 
                 // Add this tickable to the TickContext.
                 _ = tickable.addToModifierContext(context)
-                ticksUsed.add(tickable.getTicks())
+                if formatterOptions.spacing == nil || !tickable.shouldIgnoreTicks() {
+                    ticksUsed.add(tickable.getTicks())
+                }
             }
         }
 
@@ -588,7 +604,18 @@ public final class Formatter {
     @discardableResult
     public func createTickContextsThrowing(_ voices: [Voice]) throws -> AlignmentContexts {
         if voices.isEmpty {
+            if formatterOptions.spacing != nil { throw VexError("BadArgument", "No voices to format") }
             tickContexts = AlignmentContexts(list: [], map: [:], array: [], resolutionMultiplier: 0)
+            return tickContexts
+        }
+
+        if formatterOptions.spacing != nil {
+            let proportional = try ProportionalFormatter(
+                voices: voices,
+                resolutionMultiplier: try Formatter.getResolutionMultiplierThrowing(voices)
+            )
+            self.proportional = proportional
+            tickContexts = proportional.contexts
             return tickContexts
         }
 
@@ -677,6 +704,13 @@ public final class Formatter {
             for voice in voicesParam {
                 try voice.setStave(stave).preFormatThrowing()
             }
+        }
+
+        if let proportional, let spacing = formatterOptions.spacing {
+            minTotalWidth = try proportional.minimumWidth(spacing)
+            self.justifyWidth = try proportional.format(spacing, justifyWidth)
+            hasMinTotalWidth = true
+            return evaluate()
         }
 
         // Now distribute the ticks to each tick context, and assign them their
@@ -1014,6 +1048,8 @@ public final class Formatter {
     /// - Parameter options: `alpha` is the learning rate (default 0.5).
     @discardableResult
     public func tune(options: (alpha: Double, Void)? = nil) -> Double {
+        // Tuning must never move strict rhythmic anchors, including when called by System.
+        if proportional != nil { return totalCost }
         let contexts = tickContexts
 
         let alpha = options?.alpha ?? 0.5
@@ -1059,9 +1095,10 @@ public final class Formatter {
             }
         }
 
-        for tick in tickContexts.list {
-            tickContexts.map[tick]?.postFormat()
-        }
+        let contexts = proportional != nil
+            ? tickContexts.array
+            : tickContexts.list.compactMap { tickContexts.map[$0] }
+        for context in contexts { context.postFormat() }
 
         return self
     }

@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // Co-author: Benjamin W. Bohl
 //
-// Port of `src/clef.ts` (VexFlow 5.1.0).
+// Port of `src/clef.ts` (VexFlow 5.2.0).
 
 import Foundation
 
@@ -92,6 +92,9 @@ public final class Clef: StaveModifier {
     }
 
     // MARK: - Methods
+
+    /// Return the named clef so staff attachments can retain musical state. (VexFlow 5.2.0)
+    public func getType() -> ClefName { type }
 
     /// Set clef type, size and annotation.
     @discardableResult

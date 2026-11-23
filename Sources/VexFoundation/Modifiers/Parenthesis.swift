@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Rodrigo Vilar
 //
-// Port of `src/parenthesis.ts` (VexFlow 5.0.0).
+// Port of `src/parenthesis.ts` (VexFlow 5.2.0).
 
 import Foundation
 
@@ -79,7 +79,8 @@ public final class Parenthesis: Modifier {
     @discardableResult
     public override func setNote(_ note: Note) -> Self {
         self.note = note
-        setFont(css: note.getFont())
+        // Copy structured font data so attachment also works without a browser document.
+        fontInfo = note.fontInfo
         return self
     }
 

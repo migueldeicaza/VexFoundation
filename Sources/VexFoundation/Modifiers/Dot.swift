@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/dot.ts` (VexFlow 5.0.0).
+// Port of `src/dot.ts` (VexFlow 5.2.0).
 // This class implements dot modifiers for notes.
 
 import Foundation

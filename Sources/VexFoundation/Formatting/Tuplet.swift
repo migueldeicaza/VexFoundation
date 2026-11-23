@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/tuplet.ts` (VexFlow 5.1.0).
+// Port of `src/tuplet.ts` (VexFlow 5.2.0).
 //
 // Create a new tuplet from the specified notes. The notes must
 // be part of the same voice. If they are of different rhythmic
@@ -129,16 +129,9 @@ public final class Tuplet: VexElement {
         self.ratioed = options.ratioed ?? (abs(notesOccupied - numNotes) > 1)
         let location = options.location ?? .top
         self.location = location
-        if let y = options.yOffset, y != 0 {
-            self.yOffset = y
-        } else {
-            self.yOffset = Metrics.getDouble("Tuplet.yOffset")
-        }
-        if let t = options.textYOffset, t != 0 {
-            self.textYOffset = t
-        } else {
-            self.textYOffset = Metrics.getDouble("Tuplet.textYOffset")
-        }
+        // 5.2.0: an explicit 0 is kept (`??` instead of `||`).
+        self.yOffset = options.yOffset ?? Metrics.getDouble("Tuplet.yOffset")
+        self.textYOffset = options.textYOffset ?? Metrics.getDouble("Tuplet.textYOffset")
         self.suffix = options.suffix ?? ""
         self.textElement = VexElement(category: "Tuplet")
         self.suffixElement = VexElement(category: "Tuplet.suffix")

@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/beam.ts` (VexFlow 5.1.0).
+// Port of `src/beam.ts` (VexFlow 5.2.0).
 
 import Foundation
 
@@ -61,6 +61,13 @@ public struct BeamRenderOptions {
 
 // MARK: - Beam Config
 
+/// Stem policy for `Beam.generateBeams` (VexFlow 5.2.0). `nil` keeps the native generator behavior.
+public enum BeamStemPolicy: String, Sendable {
+    case auto
+    case explicit
+    case preserve
+}
+
 /// Configuration for `Beam.generateBeams`.
 public struct BeamConfig {
     /// Array of `Fraction`s that represent the beat structure to beam the notes.
@@ -75,6 +82,8 @@ public struct BeamConfig {
     public var showStemlets: Bool = false
     /// Set to `true` to not apply new stem directions.
     public var maintainStemDirections: Bool = false
+    /// Optional facade policy. `nil` keeps the native generator's historical behavior. (VexFlow 5.2.0)
+    public var stemPolicy: BeamStemPolicy?
     public var flatBeams: Bool = false
     public var flatBeamOffset: Double?
     public var secondaryBreaks: String?
@@ -88,8 +97,10 @@ public struct BeamConfig {
         maintainStemDirections: Bool = false,
         flatBeams: Bool = false,
         flatBeamOffset: Double? = nil,
-        secondaryBreaks: String? = nil
+        secondaryBreaks: String? = nil,
+        stemPolicy: BeamStemPolicy? = nil
     ) {
+        self.stemPolicy = stemPolicy
         self.groups = groups
         self.stemDirection = stemDirection
         self.beamRests = beamRests
@@ -416,12 +427,28 @@ public final class Beam: VexElement {
 
         func applyStemDirection(_ group: [StemmableNote], _ direction: StemDirection) {
             for note in group {
-                _ = note.setStemDirection(direction)
+                _ = note.setStemDirection(direction, autoStem: config.stemDirection == nil && note.isAutoStem())
             }
         }
 
         func formatStems() {
             for group in noteGroups {
+                if config.stemPolicy == .preserve { continue }
+                if config.stemPolicy == .explicit {
+                    var explicit: [StemDirection] = []
+                    for note in group where !note.isRest() && !note.isAutoStem() {
+                        let direction = note.getStemDirection()
+                        if !explicit.contains(direction) { explicit.append(direction) }
+                    }
+                    // Cross-staff groups retain mixed explicit directions.
+                    // Automatic notes follow a sole explicit direction.
+                    if explicit.count > 1 { continue }
+                    let direction = explicit.first ?? calculateStemDirection(group)
+                    for note in group where note.isAutoStem() {
+                        _ = note.setStemDirection(direction, autoStem: true)
+                    }
+                    continue
+                }
                 let stemDirection: StemDirection
                 if config.maintainStemDirections {
                     let note = findFirstNote(group)
@@ -538,7 +565,7 @@ public final class Beam: VexElement {
         // Apply stem directions and attach beam to notes
         for note in notes {
             if autoStem {
-                _ = note.setStemDirection(stemDirection)
+                _ = note.setStemDirection(stemDirection, autoStem: true)
                 _stemDirection = stemDirection
             }
             _ = note.setBeam(self)

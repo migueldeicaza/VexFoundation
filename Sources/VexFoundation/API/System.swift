@@ -25,10 +25,14 @@ public enum SystemError: Error, LocalizedError, Equatable, Sendable {
 public struct SystemFormatterOptions {
     public var alpha: Double = 0.5
     public var softmaxFactor: Double = Tables.SOFTMAX_FACTOR
+    /// Strict proportional spacing (VexFlow 5.2.0 `FormatterOptions.spacing`). `nil` keeps engraving layout.
+    public var spacing: ProportionalSpacing?
 
-    public init(alpha: Double = 0.5, softmaxFactor: Double = Tables.SOFTMAX_FACTOR) {
+    public init(alpha: Double = 0.5, softmaxFactor: Double = Tables.SOFTMAX_FACTOR,
+                spacing: ProportionalSpacing? = nil) {
         self.alpha = alpha
         self.softmaxFactor = softmaxFactor
+        self.spacing = spacing
     }
 }
 
@@ -295,7 +299,10 @@ public final class System: VexElement {
     public func formatThrowing() throws {
         try VexRuntime.withContext(runtimeContext) {
             let alpha = options.details.alpha
-            let fmtOptions = FormatterOptions(softmaxFactor: options.details.softmaxFactor)
+            let fmtOptions = FormatterOptions(
+                softmaxFactor: options.details.softmaxFactor,
+                spacing: options.details.spacing
+            )
             let formatter = Formatter(options: fmtOptions)
             self.formatter = formatter
 

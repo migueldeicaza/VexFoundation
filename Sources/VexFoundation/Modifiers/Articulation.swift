@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Larry Kuhns.
 //
-// Port of `src/articulation.ts` (VexFlow 5.0.0).
+// Port of `src/articulation.ts` (VexFlow 5.2.0).
 
 import Foundation
 
@@ -340,27 +340,54 @@ public final class Articulation: Modifier {
 
     // MARK: - EasyScore Hook
 
-    /// Commit hook for EasyScore to auto-add articulations.
+    /// SMuFL values accepted by the native articulation constructor, cached for notation validation.
+    private static let easyScoreGlyphs = Set(Glyphs.byName.values)
+
+    /// Resolve EasyScore aliases, native codes, or named SMuFL glyphs without constructing a modifier.
+    /// Throws for an unknown name. (VexFlow 5.2.0)
+    public static func parseEasyScore(_ articulations: String) throws -> [(type: String, position: ModifierPosition?)] {
+        let aliases: [String: String] = [
+            "staccato": "a.",
+            "tenuto": "a-",
+            "accent": "a>",
+            "fermata": "a@",
+            "marcato": "a^",
+            "staccatissimo": "av",
+        ]
+        let suffix = try NSRegularExpression(pattern: "^(.*)\\.(above|below|left|right)$", options: [.dotMatchesLineSeparators])
+        func splitPosition(_ value: String) -> (name: String, position: String?) {
+            let range = NSRange(value.startIndex..., in: value)
+            guard let match = suffix.firstMatch(in: value, range: range),
+                  let name = Range(match.range(at: 1), in: value),
+                  let position = Range(match.range(at: 2), in: value)
+            else { return (value, nil) }
+            return (String(value[name]), String(value[position]))
+        }
+        let singleCode = splitPosition(articulations.trimmingCharacters(in: .whitespacesAndNewlines)).name
+        let items = Tables.articulationCodes(singleCode) != nil
+            ? [articulations]
+            : articulations.components(separatedBy: ",")
+        return try items.map { value in
+            // A native code can itself contain a dot (a.). Only consume a named position suffix.
+            let (name, position) = splitPosition(value.trimmingCharacters(in: .whitespacesAndNewlines))
+            let type = aliases[name] ?? name
+            let glyph = Glyphs.code(named: type) ?? type
+            if Tables.articulationCodes(type) == nil && !easyScoreGlyphs.contains(glyph) {
+                throw VexError("BadArguments", "Unknown EasyScore articulation: \(name)")
+            }
+            return (glyph, position.flatMap { Modifier.positionString[$0] })
+        }
+    }
+
+    /// Attach validated EasyScore articulations once, after note construction.
     public static func easyScoreHook(
         options: [String: String],
         note: StemmableNote,
         builder: Builder
-    ) {
-        guard let articulationStr = options["articulations"], !articulationStr.isEmpty else { return }
-
-        let articNameToCode: [String: String] = [
-            "staccato": "a.",
-            "tenuto": "a-",
-            "accent": "a>",
-        ]
-
-        for articString in articulationStr.split(separator: ",") {
-            let parts = articString.trimmingCharacters(in: .whitespaces).split(separator: ".")
-            guard let first = parts.first, let code = articNameToCode[String(first)] else { continue }
-            let artic = builder.getFactory().Articulation(type: code)
-            if parts.count > 1, let pos = Modifier.positionString[String(parts[1])] {
-                _ = artic.setPosition(pos)
-            }
+    ) throws {
+        guard let articulations = options["articulations"], !articulations.isEmpty else { return }
+        for params in try parseEasyScore(articulations) {
+            let artic = builder.getFactory().Articulation(type: params.type, position: params.position)
             _ = note.addModifier(artic, index: 0)
         }
     }

@@ -237,6 +237,50 @@ extension UpstreamSVGParityTests {
         }
     }
 
+    // VexFlow 5.2.0: compare engraving with fixed beats, including rational rhythms on separate staves.
+    @Test("Formatter.Strict_proportional_spacing")
+    func formatterStrictProportionalSpacingMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Formatter", test: "Strict_proportional_spacing", width: 850, height: 540
+        ) { factory, context in
+            let score = factory.EasyScore()
+            let notes = score.notes("C5/16, D5, E5, F5, G5/8, A5, B5/q, C6", options: ["stem": "up"])
+            score.beam(Array(notes[0..<4]))
+            score.beam(Array(notes[4..<6]))
+            let quarters = score.notes("C4/q, E4, G4, E4", options: ["stem": "down"])
+            let system = factory.System(options: SystemOptions(
+                formatIterations: 4,
+                autoWidth: true,
+                x: 25,
+                y: 40,
+                details: SystemFormatterOptions(spacing: ProportionalSpacing(pixelsPerQuarter: 140))
+            ))
+            system.addStave(SystemStave(voices: [score.voice(notes), score.voice(quarters)])).addClef(.treble)
+            let thirds = score.notes("C5/8, D5, E5, F5/q, G5/h")
+            let sevenths = score.notes("C4/8, D4, E4, F4, G4, A4, B4, C5/h")
+            score.tuplet(Array(thirds[0..<3]), options: TupletOptions(numNotes: 3, notesOccupied: 2))
+            score.tuplet(Array(sevenths[0..<7]), options: TupletOptions(numNotes: 7, notesOccupied: 4))
+            // EasyScore resolves automatic stems for each complete beam.
+            score.beam(Array(thirds[0..<3]))
+            score.beam(Array(sevenths[0..<7]))
+            system.addStave(SystemStave(voices: [score.voice(thirds)])).addClef(.treble)
+            system.addStave(SystemStave(voices: [score.voice(sevenths)])).addClef(.treble)
+            try factory.draw()
+            let origin = notes[0].getAbsoluteX()
+            context.save()
+            context.setStrokeStyle("#b6c4c0")
+            context.setLineWidth(0.5)
+            for beat in 0...4 {
+                let x = origin + Double(beat) * 140
+                context.beginPath()
+                context.moveTo(x, 55)
+                context.lineTo(x, 505)
+                context.stroke()
+            }
+            context.restore()
+        }
+    }
+
     @Test("Formatter.Mixtime")
     func formatterMixtimeMatchesUpstream() throws {
         try runCategorySVGParityCase(module: "Formatter", test: "Mixtime", width: 400 + Stave.defaultPadding, height: 250) { factory, context in

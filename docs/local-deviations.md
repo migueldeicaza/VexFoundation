@@ -43,6 +43,7 @@ When `VexRuntimeContext.upstreamParityMode` is `true`, the items marked **(gated
 - [ ] `VexRuntimeContext` and `VexRuntime.withContext` instead of module globals.
 - [ ] Render back ends: `SVGRenderContext` (string serializer), `SwiftUICanvasContext`, `VexCanvas`.
 - [ ] `Compatibility/` layer: `Flow`, `Vex`, `Version`.
+- [ ] EasyScore 5.2.0: string builder options, `Character` source offsets, typed composition specs, non-throwing variants that record `lastError` (see `docs/port-notes/5.2.0.md`).
 
 ## Rendering deviations introduced by the VexFlow 5 port
 

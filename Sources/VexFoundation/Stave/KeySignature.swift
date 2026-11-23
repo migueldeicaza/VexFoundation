@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Cyril Silverman
 //
-// Port of `src/keysignature.ts` (VexFlow 5.1.0).
+// Port of `src/keysignature.ts` (VexFlow 5.2.0).
 //
 // This file implements key signatures. A key signature sits on a stave
 // and indicates the notes with implicit accidentals.
@@ -21,6 +21,8 @@ public final class KeySignature: StaveModifier {
 
     public var paddingForced: Bool = false
     public var formatted: Bool = false
+    /// Clef that replaces the stave clef for an inline signature after an inline clef change. (VexFlow 5.2.0)
+    public private(set) var clefOverride: ClefName?
     public var cancelKeySpec: String?
     public var accList: [KeySignatureAccidental] = []
     public var keySpec: String?
@@ -195,6 +197,14 @@ public final class KeySignature: StaveModifier {
         return width
     }
 
+    /// Override the stave clef for an inline signature following an inline clef change. (VexFlow 5.2.0)
+    @discardableResult
+    public func setClef(_ clef: ClefName?) -> Self {
+        clefOverride = clef
+        formatted = false
+        return self
+    }
+
     /// Set the key signature to a specific key, ie: 'C' or 'Gm'.
     @discardableResult
     public func setKeySig(_ keySpec: String, cancelKeySpec: String? = nil, alterKeySpec: [String]? = nil) -> Self {
@@ -251,7 +261,7 @@ public final class KeySignature: StaveModifier {
         }
 
         if !accList.isEmpty {
-            let clef = (position == .end ? stave.getEndClef() : stave.getClef()) ?? stave.getClef()
+            let clef = clefOverride ?? ((position == .end ? stave.getEndClef() : stave.getClef()) ?? stave.getClef())
             // Upstream converts `cancelAccList.accList` and the local `accList` in place.
             // The local `accList` is the list from before the naturals were prepended, so
             // the naturals get only the cancel conversion and the key accidentals get only

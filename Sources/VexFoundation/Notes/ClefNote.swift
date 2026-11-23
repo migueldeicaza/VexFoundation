@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/clefnote.ts` (VexFlow 5.0.0).
+// Port of `src/clefnote.ts` (VexFlow 5.2.0).
 
 import Foundation
 
@@ -57,6 +57,10 @@ public final class ClefNote: Note {
     }
 
     override public func getBoundingBox() -> BoundingBox? {
-        clef.getBoundingBox()
+        guard var box = clef.getBoundingBox() else { return nil }
+        if let stave = getStave() {
+            box.y = stave.getYForLine(clef.line) + clef.getYShift() - clef.getTextMetrics().actualBoundingBoxAscent
+        }
+        return box
     }
 }

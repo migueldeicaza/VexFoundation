@@ -1,9 +1,10 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stemmablenote.ts` (VexFlow 5.1.0).
+// Port of `src/stemmablenote.ts` (VexFlow 5.2.0).
 // `StemmableNote` is an abstract interface for notes with optional stems.
 // Examples of stemmable notes are `StaveNote` and `TabNote`.
+// Retains whether stem direction is automatic or explicitly chosen.
 
 import Foundation
 
@@ -34,6 +35,8 @@ open class StemmableNote: Note {
     /// the element ids are generated in the upstream order.
     public var flag: Flag!
     public var stemExtensionOverride: Double?
+    /// Automatic stems may be resolved again when notes are grouped into a beam. (VexFlow 5.2.0)
+    var autoStemEnabled = false
 
     public override init(_ noteStruct: NoteStruct) {
         super.init(noteStruct)
@@ -146,9 +149,14 @@ open class StemmableNote: Note {
         return stemDirection
     }
 
+    /// True when layout, rather than the caller, chooses the stem direction. (VexFlow 5.2.0)
+    public func isAutoStem() -> Bool { autoStemEnabled }
+
+    /// Set direction; automatic layout passes `autoStem: true` to retain the automatic policy.
     @discardableResult
-    public func setStemDirection(_ direction: StemDirection = .up) -> Self {
+    public func setStemDirection(_ direction: StemDirection = .up, autoStem: Bool = false) -> Self {
         stemDirection = direction
+        autoStemEnabled = autoStem
 
         // Reset and reformat everything. Build the flag before getStemExtension().
         reset()

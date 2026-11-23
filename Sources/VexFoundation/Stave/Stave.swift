@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stave.ts` (VexFlow 5.1.0).
+// Port of `src/stave.ts` (VexFlow 5.2.0).
 
 import Foundation
 
@@ -47,6 +47,8 @@ public struct StaveLineConfig {
 
 /// Configuration options for a Stave.
 public struct StaveOptions {
+    /// Musical state when a repeated clef glyph is intentionally omitted. (VexFlow 5.2.0)
+    public var clef: ClefName?
     public var bottomTextPosition: Int
     public var lineConfig: [StaveLineConfig]
     public var spaceBelowStaffLn: Int
@@ -73,8 +75,10 @@ public struct StaveOptions {
         rightBar: Bool = true,
         spacingBetweenLinesPx: Double? = nil,
         topTextPosition: Int = 1,
-        numLines: Int = 5
+        numLines: Int = 5,
+        clef: ClefName? = nil
     ) {
+        self.clef = clef
         self.bottomTextPosition = bottomTextPosition
         self.lineConfig = lineConfig
         self.spaceBelowStaffLn = spaceBelowStaffLn
@@ -167,7 +171,7 @@ open class Stave: VexElement {
         self.formatted = false
         self.modifiers = [] // stave modifiers (clef, key, time, barlines, coda, segno, etc.)
         self.measure = 0
-        self.clefName = .treble
+        self.clefName = self.options.clef ?? .treble
         self.endClefName = nil
 
         resetLines()
@@ -539,6 +543,13 @@ open class Stave: VexElement {
             modifier.setPosition(position)
         }
 
+        if let clef = modifier as? Clef {
+            if clef.getPosition() == .begin {
+                clefName = clef.getType()
+            } else if clef.getPosition() == .end {
+                endClefName = clef.getType()
+            }
+        }
         modifier.setStave(self)
         formatted = false
         modifiers.append(modifier)

@@ -693,4 +693,36 @@ extension UpstreamSVGParityTests {
             try factory.draw()
         }
     }
+
+    // VexFlow 5.2.0: automatic beam direction must agree with every stem, even across the middle line.
+    @Test("Beam.Auto_stemmed_tuplets_across_middle_line")
+    func beamAutoStemmedTupletsAcrossMiddleLineMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Beam", test: "Auto_stemmed_tuplets_across_middle_line", width: 720, height: 650
+        ) { factory, _ in
+            let score = factory.EasyScore()
+            var groups: [[StemmableNote]] = []
+            let phrases = ["C4/8, D4, E4, F4, G4, A4, B4", "A5/8, G5, F5, E5, D5, C5, A4"]
+            for proportional in [false, true] {
+                for phrase in phrases {
+                    let notes = score.notes(phrase)
+                    score.tuplet(notes, options: TupletOptions(numNotes: 7, notesOccupied: 4, ratioed: true))
+                    score.beam(notes)
+                    let system = factory.System(options: SystemOptions(
+                        x: 25,
+                        width: 660,
+                        y: 30 + Double(groups.count) * 155,
+                        details: SystemFormatterOptions(
+                            spacing: proportional ? ProportionalSpacing(pixelsPerQuarter: 200) : nil
+                        )
+                    ))
+                    system.addStave(SystemStave(voices: [score.voice(notes, time: .meter(2, 4))])).addClef(.treble)
+                    groups.append(notes)
+                }
+            }
+            try factory.draw(retain: true)
+            // Redrawing exercises notehead rebuilding and beam post-format caches as well.
+            try factory.draw(retain: true)
+        }
+    }
 }

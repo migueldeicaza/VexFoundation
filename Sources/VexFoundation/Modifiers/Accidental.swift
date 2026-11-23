@@ -3,7 +3,7 @@
 // @author Mohit Cheppudira
 // @author Greg Ristow (modifications)
 //
-// Port of `src/accidental.ts` (VexFlow 5.0.0).
+// Port of `src/accidental.ts` (VexFlow 5.2.0).
 
 import Foundation
 
@@ -115,6 +115,9 @@ public final class Accidental: Modifier {
     /// `Tables.accidentalCodes` table, or a SMuFL code point).
     public let type: String
     public private(set) var cautionary: Bool = false
+
+    /// Identify explicit cautionary signs without inspecting protected engraving state. (VexFlow 5.2.0)
+    public func isCautionary() -> Bool { cautionary }
     public private(set) var initError: AccidentalError?
 
     /// True if `type` is a key of the accidental table or a single SMuFL code point.

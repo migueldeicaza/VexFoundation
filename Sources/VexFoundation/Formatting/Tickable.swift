@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/tickable.ts` (VexFlow 5.1.0).
+// Port of `src/tickable.ts` (VexFlow 5.2.0).
 
 import Foundation
 
@@ -214,6 +214,14 @@ open class Tickable: VexElement {
     @discardableResult
     open func setVoice(_ voice: Voice) -> Self {
         self.voice = voice
+        return self
+    }
+
+    /// Release a temporary voice assignment during managed construction rollback. (VexFlow 5.2.0)
+    @discardableResult
+    public func clearVoice() -> Self {
+        voice = nil
+        preFormatted = false
         return self
     }
 

@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/keysignote.ts` (VexFlow 5.0.0).
+// Port of `src/keysignote.ts` (VexFlow 5.2.0).
 
 import Foundation
 
@@ -18,14 +18,14 @@ public final class KeySigNote: Note {
 
     // MARK: - Init
 
-    public init(keySpec: String, cancelKeySpec: String? = nil, alterKeySpec: [String]? = nil) {
+    public init(keySpec: String, cancelKeySpec: String? = nil, alterKeySpec: [String]? = nil, clef: ClefName? = nil) {
         super.init(NoteStruct(duration: .twoFiftySixth))
 
         keySignature = KeySignature(
             keySpec: keySpec,
             cancelKeySpec: cancelKeySpec,
             alterKeySpec: alterKeySpec
-        )
+        ).setClef(clef)
 
         // Note properties
         ignoreTicks = true
