@@ -320,7 +320,8 @@ public final class Annotation: Modifier {
             if hasStem && stemDirection == Stem.UP {
                 // If the stem is above the stave already, go with default line width vs. actual
                 // since the lines between don't really matter.
-                spacing = stemExt.topY < stave.getTopLineTopY() ? Tables.STAVE_LINE_DISTANCE : spacing
+                // VexFlow 5.6.0: tab articulations stack in actual string spaces, including above an up-stem.
+                if !(note is TabNote) && stemExt.topY < stave.getTopLineTopY() { spacing = Tables.STAVE_LINE_DISTANCE }
                 y = min(y, stemExt.topY - spacing * (textLine + 1))
             }
         case .centerStem:

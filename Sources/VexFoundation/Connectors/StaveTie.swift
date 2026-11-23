@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stavetie.ts` (VexFlow 5.4.0).
+// Port of `src/stavetie.ts` (VexFlow 5.6.0).
 //
 // This class implements varies types of ties between contiguous notes. The
 // ties include: regular ties, hammer ons, pull offs, and slides.
@@ -380,12 +380,14 @@ open class StaveTie: VexElement {
     /// `firstX` and `lastX` are specified in pixels.
     public func renderTieText(firstX: Double, lastX: Double) throws {
         let ctx = try checkContext()
-        var centerX = (firstX + lastX) / 2
-        centerX -= ctx.measureText(text).width / 2
         let stave = notes.firstNote?.checkStave() ?? notes.lastNote?.checkStave()
         if let stave {
+            // VexFlow 5.6.0: measure the text in the tie font and restore the context font afterwards.
+            ctx.save()
             ctx.setFont(fontInfo)
+            let centerX = (firstX + lastX - ctx.measureText(text).width) / 2
             ctx.fillText(text, centerX + renderOptions.textShiftX, stave.getYForTopText() - 1)
+            ctx.restore()
         }
     }
 

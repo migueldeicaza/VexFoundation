@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/continuouslayout.ts` (VexFlow 5.4.0).
+// Port of `src/continuouslayout.ts` (VexFlow 5.6.0).
 // Row-dependent notation for a responsive EasyScore composition. Source measures and notes keep their identity.
 
 import Foundation
@@ -157,6 +157,34 @@ private func invalid(_ message: String) -> VexError {
     VexError("BadContinuousScore", message)
 }
 
+/// Resolve each end independently because chord positions can be reordered between attacks. (VexFlow 5.6.0)
+private func resolveTabTie(_ span: ContinuousSpan, _ first: TabNote, _ last: TabNote) throws -> ContinuousSpan {
+    let start = first.getPositions()
+    let end = last.getPositions()
+    for head in [span.fromHead, span.toHead] {
+        if let head, head < 0 { throw invalid("Invalid tab tie position index.") }
+    }
+    func at(_ positions: [TabNotePosition], _ i: Int?) -> TabNotePosition? {
+        guard let i, i >= 0, i < positions.count else { return nil }
+        return positions[i]
+    }
+    let selected = span.fromHead == nil && span.toHead != nil ? at(end, span.toHead) : at(start, span.fromHead ?? 0)
+    guard let string = span.string ?? selected?.str, string >= 1, string <= first.checkStave().getNumLines() else {
+        throw invalid("A tab tie needs a string on its staff.")
+    }
+    let fromHead = span.fromHead ?? start.firstIndex { $0.str == string } ?? -1
+    let toHead = span.toHead ?? end.firstIndex { $0.str == string } ?? -1
+    guard let from = at(start, fromHead), let to = at(end, toHead), from.str == string, to.str == string,
+          from.fret == to.fret
+    else { throw invalid("Tab tie endpoints must play the same string and fret.") }
+    var resolved = span
+    resolved.fromHead = fromHead
+    resolved.toHead = toHead
+    resolved.string = string
+    resolved.side = span.side ?? .above
+    return resolved
+}
+
 private struct Marks {
     var start: [StaveModifier]
     var end: [StaveModifier]
@@ -209,6 +237,8 @@ public final class ContinuousLayout {
     private var splitChords: [(id: String, measure: Int, upper: StaveNote, lower: StaveNote)] = []
     private var spelledSpans = Set<Int>()
     private let options: ContinuousOptions
+    /// A leading tab fret needs room for the incoming tie after the repeated clef. (VexFlow 5.6.0)
+    private var tabTiePadding: [ObjectIdentifier: Double] = [:]
     private var arrivals: [Int: [Arrival]] = [:]
     /// The composition arrays (final when the layout is created). The layout does not keep the composition,
     /// which owns the sheet that owns this layout.
@@ -328,7 +358,9 @@ public final class ContinuousLayout {
                     if next.clef != .tab && next.key != current.key {
                         end.append(KeySignature(keySpec: next.key, cancelKeySpec: current.key))
                     }
-                    if next.time != current.time { end.append(TimeSignature(timeSpec: next.time)) }
+                    if next.showTimeSignature && next.time != current.time {
+                        end.append(TimeSignature(timeSpec: next.time))
+                    }
                 }
                 end.forEach { $0.setPosition(.end) }
                 return Marks(start: start, end: end)
@@ -386,6 +418,10 @@ public final class ContinuousLayout {
             guard !span.id.isEmpty, !seen.contains(span.id), let first = locate(span.from), let last = locate(span.to),
                   first.measure <= last.measure
             else { throw invalid("Expected a unique span ID and ordered composition anchors.") }
+            var spec = span
+            if span.string != nil && !(span.kind == .tie && first.note is TabNote) {
+                throw invalid("A string selector requires a tab tie.")
+            }
             if span.kind == .palmMute {
                 guard let a = first.note as? TabNote, let b = last.note as? TabNote, first.staff == last.staff else {
                     throw invalid("A palm mute needs two TAB anchors on the same staff.")
@@ -397,6 +433,18 @@ public final class ContinuousLayout {
                 }
                 for note in [a, b] where !note.getPositions().contains(where: { strings.contains($0.str) }) {
                     throw invalid("Each palm-mute anchor must play a targeted string.")
+                }
+            } else if let a = first.note as? TabNote, let b = last.note as? TabNote {
+                // VexFlow 5.6.0: tab ties and endings.
+                if first.staff != last.staff || (span.kind != .tie && span.kind != .volta) {
+                    throw invalid("Tab ties and endings need anchors on the same tab staff.")
+                }
+                if span.kind == .tie {
+                    spec = try resolveTabTie(span, a, b)
+                    if first.measure != last.measure && onset(b).numerator == 0 {
+                        let stave = b.checkStave()
+                        tabTiePadding[ObjectIdentifier(stave)] = stave.space(1.5)
+                    }
                 }
             } else {
                 guard first.note is StaveNote, last.note is StaveNote else {
@@ -410,7 +458,15 @@ public final class ContinuousLayout {
             if first.measure == last.measure && onset(first.note).greaterThan(onset(last.note)) {
                 throw invalid("Reversed span.")
             }
-            if span.kind == .tie && first.measure != last.measure {
+            if let syllableId = span.syllableId,
+               syllableId.isEmpty || span.kind != .lyric || first.staff != last.staff || span.text != nil
+                || span.labelFontSize != nil {
+                throw invalid(
+                    "An anchored lyric extender needs a syllable ID and two notes on the same staff. "
+                        + "Its annotation supplies the text and font."
+                )
+            }
+            if span.kind == .tie && first.note is StaveNote && first.measure != last.measure {
                 let fi = span.fromHead ?? 0, li = span.toHead ?? 0
                 if first.note.getKeys()[fi].lowercased() != last.note.getKeys()[li].lowercased() {
                     throw invalid("Tied heads must have the same written pitch.")
@@ -424,7 +480,7 @@ public final class ContinuousLayout {
                 }
             }
             seen.insert(span.id)
-            spans.append(ResolvedSpan(spec: span, first: first, last: last, label: spanLabel(span)))
+            spans.append(ResolvedSpan(spec: spec, first: first, last: last, label: spanLabel(spec)))
         }
     }
 
@@ -444,7 +500,8 @@ public final class ContinuousLayout {
         if decorated { return false }
         return score.notes[i].flatMap { $0.flatMap { $0 } }.allSatisfy { n in
             guard let n = n as? StaveNote else { return false }
-            return n.isRest() && n.getModifiers().isEmpty && n.getBeam() == nil && n.getTupletStack().isEmpty
+            return n.isRest() && n.restLine == nil && n.getModifiers().isEmpty && n.getBeam() == nil
+                && n.getTupletStack().isEmpty
         }
     }
 
@@ -463,7 +520,10 @@ public final class ContinuousLayout {
         let staves = score.staves[i]
         return staves.enumerated().map { j, s in
             let marks = self.marks[i][j]
-            s.setBoundaryModifiers((start ? marks.start : []) + (end ? marks.end : []))
+            s.setBoundaryModifiers(
+                (start ? marks.start : []) + (end ? marks.end : []),
+                notePadding: start ? tabTiePadding[ObjectIdentifier(s)] ?? 0 : 0
+            )
             let bar = s.getModifiers(position: .end, category: Barline.category).first as? Barline
             return max(s.getX() + s.getWidth() - s.getNoteEndX(), -(bar?.getLayoutMetrics()?.xMin ?? 0))
         }.max() ?? -.infinity
@@ -540,7 +600,7 @@ public final class ContinuousLayout {
         for i in first...last {
             for n in score.notes[i].flatMap({ $0.flatMap { $0 } }) {
                 guard let n = n as? Note else { continue }
-                if let sn = n as? StaveNote, sn.isRest(), sn.getModifiers().isEmpty { continue }
+                if let sn = n as? StaveNote, sn.isRest(), sn.restLine == nil, sn.getModifiers().isEmpty { continue }
                 let stave = n.checkStave()
                 if let index = score.staves[i].firstIndex(where: { $0 === stave }) { used.insert(index) }
             }
@@ -573,6 +633,14 @@ public final class ContinuousLayout {
     /// Lay out the rows. Called by `Sheet.format()`.
     @discardableResult
     public func format(_ options: SheetOptions) throws -> [ContinuousRow] {
+        // VexFlow 5.6.0: a verse can be attached after composition. Resolve its current mark before every reflow.
+        for k in spans.indices {
+            guard let id = spans[k].spec.syllableId, !id.isEmpty else { continue }
+            let matches = spans[k].first.note.getModifiers().compactMap { $0 as? Annotation }
+                .filter { $0.getAttribute("id") == id }
+            if matches.count != 1 { throw invalid("Expected one lyric annotation on the source note: " + id) }
+            spans[k].syllable = matches[0]
+        }
         hidden.removeAll()
         diagnostics.removeAll()
         fragments.removeAll()
@@ -704,12 +772,21 @@ public final class ContinuousLayout {
             x += width + options.measureGap
             positions.append(PlacedMeasure(u: u, sys: sys, endPadding: endPadding))
         }
-        let ink = measureStaffInk(positions, visible)
+        var ink = measureStaffInk(positions, visible)
         var laneOf: [Int] = []
         // Prefer the nearest free lane. Non-overlapping spans can reuse it.
         var laneEnds: [String: [Int]] = [:]
         for s in spans {
             if s.spec.kind == .tie || s.spec.kind == .slur {
+                laneOf.append(0)
+                continue
+            }
+            if let syllable = s.syllable {
+                // A continuation row may have no sung words of its own. Include the extender in that staff's envelope.
+                let stave = score.staves[first][s.first.staff]
+                let relativeY = lyricBaseline(syllable, stave) - stave.getY()
+                ink[s.first.staff].top = min(ink[s.first.staff].top, relativeY)
+                ink[s.first.staff].bottom = max(ink[s.first.staff].bottom, relativeY + 2)
                 laneOf.append(0)
                 continue
             }
@@ -777,6 +854,14 @@ public final class ContinuousLayout {
         return row
     }
 
+    /// Carry the source syllable's distance from its top staff line to each continuation. (VexFlow 5.6.0)
+    private func lyricBaseline(_ word: Annotation, _ stave: Stave) -> Double {
+        let source = word.checkAttachedNote().checkStave()
+        let y = (try? word.computeY().y) ?? source.getYForLine(0)
+        let spaces = (y + word.getYShift() - source.getYForLine(0)) / source.space(1)
+        return stave.getYForLine(0) + stave.space(spaces)
+    }
+
     /// Keep continuation hooks and labels on the correct end when a span crosses a row.
     private func addFragment(_ s: ResolvedSpan, _ units: [Unit], _ row: ContinuousRow, _ baseline: Double) {
         let first = units[0].first
@@ -791,15 +876,35 @@ public final class ContinuousLayout {
         var x1 = starts ? s.first.note.getAbsoluteX() : startStaff.getNoteStartX() + 2
         var x2 = ends ? s.last.note.getAbsoluteX() + s.last.note.getGlyphWidth() : endStaff.getNoteEndX() - 3
         var y1 = baseline, y2 = baseline
+        if let syllable = s.syllable {
+            y1 = lyricBaseline(syllable, startStaff)
+            y2 = y1
+            if starts, let x = try? syllable.computeX().x, let y = try? syllable.computeY().y {
+                let ink = syllable.getTextInk(x, y)
+                x1 = ink.x + ink.w + space * 0.35
+            }
+            if ends, let last = s.last.note as? StaveNote {
+                x2 = last.getNoteHeadBeginX() + last.getGlyphWidth()
+            }
+        }
         if kind == .tie || kind == .slur {
             if starts { x1 = s.first.note.getTieRightX() }
             if ends { x2 = s.last.note.getTieLeftX() }
-            y1 = (starts
-                ? s.first.note.getYs()[s.spec.fromHead ?? 0]
-                : continuationPitch(s.first, startStaff, s.spec.fromHead ?? 0)) + sign * space * (starts ? 0.5 : 1.1)
-            y2 = (ends
-                ? s.last.note.getYs()[s.spec.toHead ?? 0]
-                : continuationPitch(s.last, endStaff, s.spec.toHead ?? 0)) + sign * space * (ends ? 0.5 : 1.1)
+            if let string = s.spec.string {
+                // Follow the same physical string at both row edges, with clearance for the fret numbers.
+                if !starts { x1 -= tabTiePadding[ObjectIdentifier(startStaff)] ?? 0 }
+                let line = Double(string - 1)
+                let clearance = sign * space * 0.3
+                y1 = (starts ? s.first.note.checkStave() : startStaff).getYForLine(line) + clearance
+                y2 = (ends ? s.last.note.checkStave() : endStaff).getYForLine(line) + clearance
+            } else {
+                y1 = (starts
+                    ? s.first.note.getYs()[s.spec.fromHead ?? 0]
+                    : continuationPitch(s.first, startStaff, s.spec.fromHead ?? 0)) + sign * space * (starts ? 0.5 : 1.1)
+                y2 = (ends
+                    ? s.last.note.getYs()[s.spec.toHead ?? 0]
+                    : continuationPitch(s.last, endStaff, s.spec.toHead ?? 0)) + sign * space * (ends ? 0.5 : 1.1)
+            }
         }
         if kind == .volta {
             x1 = starts ? score.staves[s.first.measure][s.first.staff].getX() + 1 : startStaff.getX() + 1
@@ -824,9 +929,9 @@ public final class ContinuousLayout {
             y1: y1,
             y2: y2,
             progress: (0, 1),
-            strings: kind == .palmMute ? s.spec.strings : nil,
-            from: kind == .palmMute && starts ? s.spec.from : nil,
-            to: kind == .palmMute && ends ? s.spec.to : nil,
+            strings: s.spec.string.map { [$0] } ?? (kind == .palmMute ? s.spec.strings : nil),
+            from: (kind == .palmMute || s.spec.string != nil) && starts ? s.spec.from : nil,
+            to: (kind == .palmMute || s.spec.string != nil) && ends ? s.spec.to : nil,
             rise: nil,
             above: above,
             space: space

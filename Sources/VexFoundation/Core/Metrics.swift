@@ -31,8 +31,10 @@ public final class MetricsStore {
         TextMeasurer.clearCache()
         lock.lock(); defer { lock.unlock() }
         if let key {
-            cacheFont.removeValue(forKey: key)
-            cacheStyle.removeValue(forKey: key)
+            // VexFlow 5.6.0: nested roles such as Annotation.lyric inherit values from the parent category.
+            let matches: (String) -> Bool = { $0 == key || $0.hasPrefix(key + ".") }
+            for category in cacheFont.keys where matches(category) { cacheFont.removeValue(forKey: category) }
+            for category in cacheStyle.keys where matches(category) { cacheStyle.removeValue(forKey: category) }
         } else {
             cacheFont.removeAll()
             cacheStyle.removeAll()
@@ -200,7 +202,12 @@ public enum Metrics {
             "accidentalSpacing": 3.0,
         ] as [String: Any],
 
-        "Annotation": ["isText": true, "fontSize": 10.0] as [String: Any],
+        "Annotation": [
+            "isText": true,
+            "fontSize": 10.0,
+            "guitarStroke": ["fontSize": 11.0] as [String: Any],
+            "lyric": ["fontSize": 12.0] as [String: Any],
+        ] as [String: Any],
 
         "Bend": [
             "isText": true,
@@ -210,12 +217,14 @@ public enum Metrics {
 
         "ChordSymbol": [
             "isText": true,
-            "fontSize": 12.0,
+            "fontSize": 14.0,
             "spacing": 0.05,
             "subscriptOffset": 0.2,
             "superscriptOffset": -0.4,
             "superSubRatio": 0.6,
         ],
+
+        "FretDiagram": ["isText": true, "fontSize": 9.0] as [String: Any],
 
         "FretHandFinger": ["isText": true, "fontSize": 9.0, "fontWeight": "bold"] as [String: Any],
 
@@ -291,16 +300,24 @@ public enum Metrics {
         ] as [String: Any],
 
         "Stroke": [
-            "text": ["isText": true, "fontSize": 10.0, "fontStyle": "italic", "fontWeight": "bold"] as [String: Any],
+            "text": ["isText": true, "fontSize": 11.0, "fontStyle": "italic", "fontWeight": "bold"] as [String: Any],
         ],
 
-        "TabNote": ["text": ["isText": true, "fontSize": 9.0] as [String: Any]],
+        "TabNote": ["text": ["isText": true, "fontSize": 11.0] as [String: Any]],
 
         "TabSlide": ["isText": true, "fontSize": 10.0, "fontStyle": "italic", "fontWeight": "bold"] as [String: Any],
 
         "TabStave": ["isText": true, "strokeStyle": "#999999", "fontSize": 8.0] as [String: Any],
 
-        "TabTie": ["isText": true, "fontSize": 10.0] as [String: Any],
+        "TabTie": [
+            "isText": true,
+            "fontSize": 10.0,
+            "techniqueLetter": [
+                "fontFamily": "Arial, Helvetica, sans-serif",
+                "fontSize": 11.0,
+                "fontWeight": "bold",
+            ] as [String: Any],
+        ] as [String: Any],
 
         "TextBracket": ["isText": true, "fontSize": 15.0, "fontStyle": "italic"] as [String: Any],
 

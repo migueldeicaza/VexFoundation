@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/svgcontext.ts` (VexFlow 5.1.0). Instead of a DOM, the context keeps
+// Port of `src/svgcontext.ts` (VexFlow 5.6.0). Instead of a DOM, the context keeps
 // a small element tree and serializes it with `getSVG()`. The serialization
 // follows the browser `XMLSerializer` output of upstream, so SVG files can be
 // compared with the upstream reference images.
@@ -173,6 +173,8 @@ private let attributesToIgnore: [String: Set<String>] = [
 /// `RenderContext` that builds an SVG document.
 public final class SVGRenderContext: RenderContext {
     private struct SavedState {
+        /// Font shorthand returned by `getFont()` at the matching `save()`. (VexFlow 5.6.0)
+        var font: String
         var state: SVGAttributes
         var attributes: SVGAttributes
     }
@@ -613,7 +615,7 @@ public final class SVGRenderContext: RenderContext {
 
     @discardableResult
     public func save() -> Self {
-        stateStack.append(SavedState(state: state, attributes: attributes))
+        stateStack.append(SavedState(font: fontCSSString, state: state, attributes: attributes))
         return self
     }
 
@@ -622,6 +624,7 @@ public final class SVGRenderContext: RenderContext {
         if let saved = stateStack.popLast() {
             state = saved.state
             attributes = saved.attributes
+            fontCSSString = saved.font
         }
         return self
     }

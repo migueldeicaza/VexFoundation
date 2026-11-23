@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/tabnote.ts` (VexFlow 5.4.0).
+// Port of `src/tabnote.ts` (VexFlow 5.6.0).
 //
 // Notes for tablature notation. A tab note has one or more fret positions
 // and can be drawn with or without a stem.
@@ -405,6 +405,9 @@ open class TabNote: StemmableNote {
             fretElement.append(el)
             width = max(el.getWidth(), width)
         }
+        // VexFlow 5.6.0: the tick lies at the middle of a fret. Reserve its two halves on the corresponding sides.
+        setLeftDisplacedHeadPx(width / 2)
+        setRightDisplacedHeadPx(width / 2)
     }
 
     // MARK: - Stave
@@ -465,17 +468,15 @@ open class TabNote: StemmableNote {
             throw TabNoteError.invalidModifierIndex(index)
         }
 
-        var x: Double = 0
+        // VexFlow 5.6.0: frets straddle the tick. Keep side modifiers outside the widest member of the chord.
+        var x = getAbsoluteX()
         if position == .left {
-            x = -1 * 2 // FIXME: modifier padding, move to font file
+            x = getTieLeftX()
         } else if position == .right {
-            x = width + 2 // FIXME: modifier padding, move to font file
-        } else if position == .below || position == .above {
-            let noteGlyphWidth = width
-            x = noteGlyphWidth / 2
+            x = getTieRightX()
         }
 
-        return (x: getAbsoluteX() + x, y: ys[index])
+        return (x: x, y: ys[index])
     }
 
     // MARK: - Rest Line

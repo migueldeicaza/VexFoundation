@@ -518,6 +518,8 @@ open class Note: Tickable {
     public private(set) var initError: NoteError?
     /// Source identities survive native drawing, Canvas inspection and print export. (VexFlow 5.4.0)
     public let notation: [NotationIdentity]
+    /// Augmentation dots in the written duration, independent of tick overrides or modifiers. (VexFlow 5.6.0)
+    public let writtenDots: Int
 
     // MARK: - Source compatibility
 
@@ -564,6 +566,7 @@ open class Note: Tickable {
         // Set note properties from parameters.
         self.keys = noteStruct.keys
         self.duration = parsed.duration.rawValue
+        self.writtenDots = parsed.dots
         self.durationToken = noteStruct.durationToken ?? parsed.duration.rawValue
         self.noteType = parsed.type.rawValue
         self.noteValue = parsed.duration

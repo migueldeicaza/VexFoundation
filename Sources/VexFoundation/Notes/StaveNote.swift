@@ -1,11 +1,24 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stavenote.ts` (VexFlow 5.4.0).
+// Port of `src/stavenote.ts` (VexFlow 5.6.0).
 // This file implements notes for standard notation. A note has one or more
 // `NoteHead`s, an optional stem, and an optional flag.
 
 import Foundation
+
+/// Bravura's SMuFL stemUpSE and stemDownNW anchors, in staff spaces from the glyph origin. (VexFlow 5.6.0)
+private let bravuraSlashAnchors: [String: (up: EngravingAnchor, down: EngravingAnchor)] = [
+    Glyphs.noteheadSlashVerticalEnds: (EngravingAnchor(x: 1.46, y: 0.656), EngravingAnchor(x: 0, y: -0.664)),
+    Glyphs.noteheadSlashWhiteHalf: (EngravingAnchor(x: 3.12, y: 1), EngravingAnchor(x: 0, y: -1)),
+]
+
+/// Upstream `/^\s*(?:Bravura|"Bravura"|'Bravura')\s*(?:,|$)/i`: Bravura is the first family of the list.
+private func isBravuraFirst(_ family: String) -> Bool {
+    let first = family.split(separator: ",", maxSplits: 1, omittingEmptySubsequences: false).first ?? ""
+    let name = first.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    return name == "bravura" || name == "\"bravura\"" || name == "'bravura'"
+}
 
 // MARK: - StaveNote Struct
 
@@ -31,6 +44,8 @@ public struct StaveNoteStruct {
     public var durationToken: String?
     /// Source identities of instruments and playing instructions. (VexFlow 5.4.0)
     public var notation: [NotationIdentity] = []
+    /// Fixed rest position in key-line coordinates. On a five-line stave, 1 is the bottom line. (VexFlow 5.6.0)
+    public var restLine: Double?
     /// The key strings as the caller wrote them, when the keys were parsed from strings.
     /// `StaffKeySpec` maps the "x/" shorthand to octave 4; upstream keeps the key without
     /// an octave (NaN line). `toNoteStruct()` uses the raw key for such keys.
@@ -302,6 +317,7 @@ public enum StaveNoteError: Error, LocalizedError, Equatable, Sendable {
     case invalidModifierIndex(Int)
     case noYValues
     case unformattedNoteForBoundingBox
+    case badRestPosition
 
     public var errorDescription: String? {
         switch self {
@@ -321,6 +337,8 @@ public enum StaveNoteError: Error, LocalizedError, Equatable, Sendable {
             return "No Y-Values calculated for this note."
         case .unformattedNoteForBoundingBox:
             return "Can't call getBoundingBox on an unformatted note."
+        case .badRestPosition:
+            return "Rest positioning requires a rest and a finite line."
         }
     }
 }
@@ -448,9 +466,28 @@ open class StaveNote: StemmableNote {
             ))
         }
 
-        let visible = notesList.filter { $0.note.renderOptions.draw != false }
+        var visible = notesList.filter { $0.note.renderOptions.draw != false }
         if visible.count < 2 { return true }
-        if visible.count > 3 {
+        let positioned = visible.contains { $0.note.restLine != nil }
+        if positioned && visible.count <= 3 {
+            // VexFlow 5.6.0: move only automatic rests. Visit obstacles in travel order so each shift
+            // clears earlier ones.
+            for r in visible.indices where visible[r].isrest && visible[r].note.restLine == nil {
+                let direction = visible[r].note.getStemDirection().signDouble
+                // Stable sort, as the JavaScript `Array.prototype.sort`.
+                let peers = visible.indices.filter { $0 != r }.sorted { a, b in
+                    let order = direction * (visible[a].minLine - visible[b].minLine)
+                    return order != 0 ? order < 0 : a < b
+                }
+                for p in peers {
+                    let peer = visible[p]
+                    if visible[r].minLine <= peer.maxLine && peer.minLine <= visible[r].maxLine {
+                        shiftRestVertical(&visible[r], peer, direction)
+                    }
+                }
+            }
+        }
+        if visible.count > 3 || positioned {
             // Keep overlapping stem/head envelopes in separate columns. Pitch order makes
             // placement independent of voice insertion for voices at distinct pitches.
             var columns: [(bottom: Double, width: Double, members: [StaveNoteFormatSettings])] = []
@@ -691,6 +728,10 @@ open class StaveNote: StemmableNote {
     /// VexFlowPatch: optional padding to the right (e.g. for large lyrics), default 0.
     public var paddingRight: Double = 0
 
+    /// Preserve the previous line so releasing an explicit position restores automatic placement.
+    /// (VexFlow 5.6.0)
+    private var lineBeforeRestPin: Double?
+
     private func setInitErrorIfNeeded(_ error: StaveNoteError) {
         if staveInitError == nil {
             staveInitError = error
@@ -735,6 +776,10 @@ open class StaveNote: StemmableNote {
             autoStem()
         } else {
             setStemDirection(noteStruct.stemDirection ?? .up)
+        }
+        if let restLine = noteStruct.restLine {
+            // Upstream throws `BadArguments` from the constructor.
+            do { try setRestLine(restLine) } catch { setInitErrorIfNeeded(.badRestPosition) }
         }
         // Standard notation attaches strokes and fingers only, which cannot fail. (VexFlow 5.4.0)
         if !notation.isEmpty { try? attachGuitarGestures(self) }
@@ -1088,14 +1133,26 @@ open class StaveNote: StemmableNote {
         super.hasFlag() && !isRest()
     }
 
+    /// Use explicit font metadata first, then the bundled anchors for Bravura rhythm slashes. (VexFlow 5.6.0)
+    private func stemAnchor(_ head: NoteHead, _ direction: EngravingStemSide) -> EngravingAnchor? {
+        let family = head.fontInfo.family
+        if let engraving, engraving.musicFont == family,
+           let anchor = engraving.stemAnchor(head.text, direction: direction) {
+            return anchor
+        }
+        if let slash = bravuraSlashAnchors[head.text], isBravuraFirst(family) {
+            return direction == .up ? slash.up : slash.down
+        }
+        return nil
+    }
+
     override public func getStemX() -> Double {
         if noteType == "r" {
             return getCenterGlyphX()
         }
         let up = stemDirection == Stem.UP
-        if let engraving, let head = noteHeads.first(where: { !$0.isDisplaced() }),
-           engraving.musicFont == head.fontInfo.family,
-           let anchor = engraving.stemAnchor(head.text, direction: up ? .up : .down) {
+        if let head = noteHeads.first(where: { !$0.isDisplaced() }),
+           let anchor = stemAnchor(head, up ? .up : .down) {
             return getNoteHeadBeginX() + head.getXShift() + (anchor.x * head.fontSizeInPixels) / 4
                 + ((up ? -1 : 1) * Stem.WIDTH) / 2
         }
@@ -1327,6 +1384,28 @@ open class StaveNote: StemmableNote {
 
     // MARK: - Key Line
 
+    /// The explicit key line, or nil when rest placement is automatic. (VexFlow 5.6.0)
+    public var restLine: Double? {
+        lineBeforeRestPin == nil ? nil : getKeyLine(0)
+    }
+
+    /// Pin this rest to a line. Passing nil releases it for automatic placement. (VexFlow 5.6.0)
+    @discardableResult
+    public func setRestLine(_ line: Double?) throws -> Self {
+        if !isRest() || (line.map { !$0.isFinite } ?? false) {
+            throw VexError("BadArguments", "Rest positioning requires a rest and a finite line.")
+        }
+        if let line {
+            if lineBeforeRestPin == nil { lineBeforeRestPin = getKeyLine(0) }
+            return setKeyLine(0, line: line)
+        }
+        if let previous = lineBeforeRestPin {
+            lineBeforeRestPin = nil
+            setKeyLine(0, line: previous)
+        }
+        return self
+    }
+
     @discardableResult
     public func setKeyLine(_ index: Int, line: Double) -> Self {
         _ = try? setKeyLineThrowing(index, line: line)
@@ -1419,10 +1498,7 @@ open class StaveNote: StemmableNote {
         var yBottom = -Double.infinity
         for nh in noteHeads {
             let anchor = Tables.noteHeadStemYOffsets[nh.text].map { up ? $0.up : $0.down } ?? 0
-            let fontAnchor = engraving.flatMap { engraving in
-                engraving.musicFont == nh.fontInfo.family
-                    ? engraving.stemAnchor(nh.text, direction: up ? .up : .down) : nil
-            }
+            let fontAnchor = stemAnchor(nh, up ? .up : .down)
             // SMuFL specifies four staff spaces per em. Follow the glyph scale for grace notes too.
             let y = nh.getY() - (fontAnchor.map { ($0.y * nh.fontSizeInPixels) / 4 }
                 ?? anchor * Tables.STAVE_LINE_DISTANCE)

@@ -1,7 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/clefnote.ts` (VexFlow 5.2.0).
+// Port of `src/clefnote.ts` (VexFlow 5.6.1).
+// Inline clef changes participate in note spacing using the attached stave's glyph.
 
 import Foundation
 
@@ -30,7 +31,17 @@ public final class ClefNote: Note {
     @discardableResult
     public func setType(_ type: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil) -> Self {
         clef = Clef(type: type, size: size, annotation: annotation)
+        if let stave { clef.setStave(stave) }
         setWidth(clef.getWidth())
+        return self
+    }
+
+    /// Resolve tablature glyphs before the formatter reserves their width. (VexFlow 5.6.1)
+    @discardableResult
+    override public func setStave(_ stave: Stave) -> Self {
+        super.setStave(stave)
+        clef.setStave(stave)
+        if clef.getType() == .tab { setWidth(clef.getWidth()) }
         return self
     }
 
@@ -47,19 +58,18 @@ public final class ClefNote: Note {
 
     /// Render the clef note.
     override public func draw() throws {
-        let stave = checkStave()
         let ctx = try checkContext()
 
         setRendered()
         clef.setX(getAbsoluteX())
-        clef.setY(stave.getYForLine(clef.line))
+        clef.setY(try clef.getGlyphY())
         clef.renderText(ctx, xPos: 0, yPos: 0)
     }
 
     override public func getBoundingBox() -> BoundingBox? {
         guard var box = clef.getBoundingBox() else { return nil }
-        if let stave = getStave() {
-            box.y = stave.getYForLine(clef.line) + clef.getYShift() - clef.getTextMetrics().actualBoundingBoxAscent
+        if getStave() != nil, let glyphY = try? clef.getGlyphY() {
+            box.y = glyphY + clef.getYShift() - clef.getTextMetrics().actualBoundingBoxAscent
         }
         return box
     }

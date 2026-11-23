@@ -208,6 +208,9 @@ func svgTransform(_ node: SVGNode) -> CGAffineTransform? {
 /// SVG text boxes include an entire music font's ascent. Use glyph ink to keep cues close to their notes.
 /// Port of `inkBox()`: glyph ink for text, geometric bounds for paths and rectangles, and the union for groups.
 func svgInkBox(_ node: SVGNode) throws -> BoundingBox? {
+    // VexFlow 5.5.0: invisible pointer targets can extend well beyond a modifier's ink. They must not move notes
+    // to another system.
+    if node.getAttribute("opacity") == "0" { return nil }
     var box: BoundingBox
     switch node.name {
     case "g", "svg":

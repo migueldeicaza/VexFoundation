@@ -2,7 +2,8 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author: Larry Kuhns 2011
 //
-// Port of `src/stavesection.ts` (VexFlow 5.0.0).
+// Port of `src/stavesection.ts` (VexFlow 5.6.0).
+// Draw rehearsal lettering and its optional frame from the same positioned text.
 
 import Foundation
 
@@ -53,25 +54,32 @@ public final class StaveSection: StaveModifier {
 
     // MARK: - Draw
 
+    /// Report the same ink and padding before drawing as after a stave has moved. (VexFlow 5.6.0)
+    override public func getBoundingBox() -> BoundingBox? {
+        if let stave {
+            x = stave.getX() + stave.getModifierXShift(getPosition().rawValue) + padding
+            y = stave.getYForTopText(1.5) - padding
+        }
+        let ink = getTextInk(x, y)
+        if !drawRect { return ink }
+        return BoundingBox(
+            x: ink.x - padding,
+            y: ink.y - padding,
+            w: ink.w + 2 * padding,
+            h: ink.h + 2 * padding
+        )
+    }
+
     override public func draw() throws {
-        let stave = try checkStaveThrowing()
-        let ctx = try stave.checkContext()
+        let ctx = try checkStaveThrowing().checkContext()
+        let bounds = getBoundingBox() ?? BoundingBox(x: x, y: y, w: 0, h: 0)
         setRendered()
-
-        x = stave.getX() + stave.getModifierXShift(getPosition().rawValue)
-        let headroom = -1 * textMetrics.actualBoundingBoxDescent
-        let width = self.width + 2 * padding // add left & right padding
-        let height = self.height + 2 * padding // add top & bottom padding
-
-        //  Seems to be a good default y
-        let y = stave.getYForTopText(1.5) + yShift
-        let x = self.x + xShift
         if drawRect {
             ctx.beginPath()
-            ctx.rect(x, y - height + headroom, width, height)
+            ctx.rect(bounds.x, bounds.y, bounds.w, bounds.h)
             ctx.stroke()
         }
-        renderText(ctx, xPos: xShift + padding, yPos: y - padding)
+        renderText(ctx, xPos: 0, yPos: 0)
     }
 }
 

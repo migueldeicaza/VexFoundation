@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/guitarmodifiers.ts` (VexFlow 5.4.0).
+// Port of `src/guitarmodifiers.ts` (VexFlow 5.6.0).
 // Engrave structured guitar actions using native note modifiers on either backend.
 
 import Foundation
@@ -20,6 +20,7 @@ public func attachGuitarGestures(_ note: Note) throws {
             note.addModifier(Stroke(type: printedStroke(stroke), allVoices: false), index: 0)
             note.addModifier(
                 Annotation(stroke.finger.rawValue + (stroke.golpe == true ? " + golpe" : ""))
+                    .setFont(Metrics.getFontInfo("Annotation.guitarStroke"))
                     .setVerticalJustification(.top),
                 index: 0
             )

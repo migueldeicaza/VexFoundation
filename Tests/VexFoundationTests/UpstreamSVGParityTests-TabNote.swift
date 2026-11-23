@@ -2,6 +2,34 @@ import Testing
 @testable import VexFoundation
 
 extension UpstreamSVGParityTests {
+    /// Check the ink and string masks from a six-string chord at the normal tab stave spacing. (VexFlow 5.6.0)
+    @Test("TabNote.Fret_size_and_string_clearance")
+    func tabNoteFretSizeAndStringClearanceMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "TabNote",
+            test: "Fret_size_and_string_clearance",
+            width: 280,
+            height: 140,
+            referenceFontsOverride: ["Bravura"]
+        ) { _, context in
+            let stave = TabStave(x: 10, y: 10, width: 260).addTabGlyph()
+            _ = stave.setContext(context)
+            try stave.drawWithStyle()
+            let positions = [0, 12, 10, 15, 13, 11].enumerated().map { i, fret in
+                TabNotePosition(str: i + 1, fret: fret)
+            }
+            let chord = TabNote(TabNoteStruct(positions: positions, duration: .quarter))
+            let small = TabNote(TabNoteStruct(positions: positions, duration: .quarter)).setFontSize(9.0)
+            try Formatter.FormatAndDraw(ctx: context, stave: stave, notes: [chord, small])
+            #expect(chord.getWidth() > small.getWidth())
+            for note in [chord, small] {
+                #expect(note.getModifierStartXY(position: .above, index: 0).x == note.getStemX())
+            }
+            #expect(chord.fretElement.allSatisfy { $0.fontSizeInPoints == 11 })
+            #expect(small.fretElement.allSatisfy { $0.fontSizeInPoints == 9 })
+        }
+    }
+
     @Test("TabNote.TabNote_Draw")
     func tabNoteDrawMatchesUpstream() throws {
         try runCategorySVGParityCase(

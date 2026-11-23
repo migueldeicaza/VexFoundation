@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/publicationview.ts` (VexFlow 5.4.0).
+// Port of `src/publicationview.ts` (VexFlow 5.6.0).
 // Project declarative EasyScore music into an independent printed score or part.
 
 import Foundation
@@ -208,17 +208,21 @@ private func homeStaff(_ staff: EasyScoreStaveSpec, _ selected: Set<String>) -> 
 /// Carry written clef, key and meter into a one-measure inset, including preceding inline changes.
 /// (VexFlow 5.4.0)
 func insetStaff(_ staff: EasyScoreStaveSpec, _ measure: Int) -> EasyScoreStaveSpec {
-    var state = EasyScoreStaffState(clef: staff.clef, key: staff.key, time: staff.time)
+    var state = EasyScoreStaffState(
+        clef: staff.clef, key: staff.key, time: staff.time, showTimeSignature: staff.showTimeSignature
+    )
     for m in staff.measures.prefix(measure - 1) {
         state.clef = m.clef ?? state.clef
         state.key = m.key ?? state.key
         state.time = m.time ?? state.time
+        state.showTimeSignature = m.showTimeSignature ?? state.showTimeSignature
         for v in m.voices.prefix(1) {
             for item in v.notes {
                 if case .change(let change) = item {
                     state.clef = change.clef ?? state.clef
                     state.key = change.key ?? state.key
                     state.time = change.time ?? state.time
+                    state.showTimeSignature = change.showTimeSignature ?? state.showTimeSignature
                 }
             }
         }
@@ -227,6 +231,7 @@ func insetStaff(_ staff: EasyScoreStaveSpec, _ measure: Int) -> EasyScoreStaveSp
     inset.clef = state.clef
     inset.key = state.key
     inset.time = state.time
+    inset.showTimeSignature = state.showTimeSignature
     inset.name = nil
     inset.shortName = nil
     inset.measures = [staff.measures[measure - 1]]

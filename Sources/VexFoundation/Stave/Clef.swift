@@ -2,7 +2,8 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // Co-author: Benjamin W. Bohl
 //
-// Port of `src/clef.ts` (VexFlow 5.4.0).
+// Port of `src/clef.ts` (VexFlow 5.6.1).
+// Select, position, and measure native clef glyphs against their attached stave.
 
 import Foundation
 
@@ -125,6 +126,7 @@ public final class Clef: StaveModifier {
         text = code
         fontInfo.size = "\(formatJSNumber(floor(Clef.getPoint(self.size))))pt"
 
+        if let stave, type == .tab { setStave(stave) }
         return self
     }
 
@@ -144,14 +146,54 @@ public final class Clef: StaveModifier {
     /// Set associated stave.
     @discardableResult
     override public func setStave(_ stave: Stave) -> Self {
-        self.stave = stave
+        super.setStave(stave)
+        guard type == .tab else { return self }
+
+        // VexFlow 5.6.1: select the TAB glyph for the string count and fit it between the outer strings.
+        let strings = stave.getNumLines()
+        code = strings == 4 ? Glyphs.fourStringTabClef : Glyphs.sixStringTabClef
+        text = code
+        let spaces = max(0, strings - 1)
+        line = Double(spaces) / 2
+        setFontSize(floor(Clef.getPoint(size)))
+        // A single string has a center but no vertical span to fit.
+        if spaces == 0 { return self }
+
+        // Measure the selected music face before fitting its ink between the outer strings.
+        let reference = Clef.getPoint(.default)
+        fontInfo.size = "\(formatJSNumber(reference))pt"
+        let metrics = measureText()
+        let inkHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
+        if inkHeight > 0 {
+            let lineWidth = stave.getStyle()?.lineWidth ?? 1
+            let span = stave.space(Double(spaces))
+            // Keep a stroke width plus 1/24 of the full span clear at each end.
+            let clearance = lineWidth + span / 24
+            let height = max(1, span - lineWidth - 2 * clearance)
+            let targetHeight = (height * Clef.getPoint(size)) / reference
+            let points = (reference * targetHeight) / inkHeight
+            setFontSize(points)
+            // Font hinting can round ink outwards at the fitted size. Allow one pixel for that rounding.
+            let fitted = getTextMetrics()
+            let fittedHeight = fitted.actualBoundingBoxAscent + fitted.actualBoundingBoxDescent
+            if fittedHeight > targetHeight + 0.5 {
+                setFontSize((points * max(1, targetHeight - 1)) / fittedHeight)
+            }
+        }
         return self
+    }
+
+    /// Baseline shared by drawing and hit testing. TAB fonts can have asymmetric ink. (VexFlow 5.6.1)
+    public func getGlyphY() throws -> Double {
+        let stave = try checkStaveThrowing()
+        if type != .tab { return stave.getYForLine(line) }
+        let metrics = textMetrics
+        return stave.getYForDrawnLine(line) + (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2
     }
 
     /// Positioned glyph ink, including an octave annotation if present. (VexFlow 5.4.0)
     public func getInkBounds() throws -> BoundingBox {
-        let stave = try checkStaveThrowing()
-        return getTextInk(getX(), stave.getYForLine(line))
+        getTextInk(getX(), try getGlyphY())
     }
 
     // MARK: - Draw
@@ -164,7 +206,7 @@ public final class Clef: StaveModifier {
 
         _ = ctx.openGroup(groupClass("clef"), getAttribute("id"))
 
-        y = stave.getYForLine(line)
+        y = try getGlyphY()
         renderText(ctx, xPos: 0, yPos: 0)
         drawPointerRect()
         ctx.closeGroup()

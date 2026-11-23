@@ -227,8 +227,8 @@ Commits: `git -C ../vexflow log --oneline 5.4.0..5.5.0`. Release notes: `changel
 
 | upstream file | +/- | Swift file |
 |---|---|---|
-| `src/continuousspan.ts` | +5/-1 | ? |
-| `src/publication.ts` | +12/-6 | ? |
+| `src/continuousspan.ts` | +5/-1 | Layout/ContinuousSpan.swift |
+| `src/publication.ts` | +12/-6 | Publication/Publication.swift, Publication/SVGInk.swift |
 
 ## 5.6.0 (from 5.5.0)
 
@@ -237,25 +237,25 @@ Commits: `git -C ../vexflow log --oneline 5.5.0..5.6.0`. Release notes: `changel
 | upstream file | +/- | Swift file |
 |---|---|---|
 | `src/annotation.ts` | +2/-1 | Modifiers/Annotation.swift |
-| `src/continuouslayout.ts` | +119/-16 | ? |
-| `src/continuousspan.ts` | +12/-3 | ? |
-| `src/easyscore/composition.ts` | +106/-21 | ? |
+| `src/continuouslayout.ts` | +119/-16 | Layout/ContinuousLayout.swift |
+| `src/continuousspan.ts` | +12/-3 | Layout/ContinuousSpan.swift |
+| `src/easyscore/composition.ts` | +106/-21 | API/EasyScore/Composition.swift |
 | `src/factory.ts` | +7/-8 | API/Factory.swift |
 | `src/formatter.ts` | +1/-1 | Formatting/Formatter.swift |
-| `src/fretdiagram.ts` | +10/-2 | ? |
+| `src/fretdiagram.ts` | +10/-2 | Instruments/FretDiagram.swift |
 | `src/gracenotegroup.ts` | +5/-3 | Modifiers/GraceNoteGroup.swift |
-| `src/guitarmodifiers.ts` | +4/-3 | ? |
+| `src/guitarmodifiers.ts` | +4/-3 | Instruments/GuitarModifiers.swift |
 | `src/metrics.ts` | +25/-5 | Core/Metrics.swift |
 | `src/note.ts` | +3/-0 | Notes/Note.swift |
 | `src/notehead.ts` | +21/-11 | Notes/NoteHead.swift |
-| `src/phraselayout.ts` | +11/-5 | ? |
-| `src/publicationview.ts` | +2/-1 | ? |
+| `src/phraselayout.ts` | +11/-5 | Layout/PhraseLayout.swift |
+| `src/publicationview.ts` | +2/-1 | Publication/PublicationView.swift |
 | `src/stave.ts` | +7/-3 | Stave/Stave.swift |
 | `src/stavenote.ts` | +65/-15 | Notes/StaveNote.swift |
 | `src/stavesection.ts` | +22/-13 | Stave/StaveSection.swift |
 | `src/stavetie.ts` | +3/-2 | Connectors/StaveTie.swift |
 | `src/strokes.ts` | +2/-1 | Modifiers/Stroke.swift |
-| `src/svgcontext.ts` | +13/-3 | ? |
+| `src/svgcontext.ts` | +13/-3 | Rendering/SVGRenderContext.swift |
 | `src/tabnote.ts` | +8/-7 | Tablature/TabNote.swift |
 | `src/tabtie.ts` | +4/-2 | Tablature/TabTie.swift |
 | `src/typeguard.ts` | +1/-0 | Core/TypeGuard.swift |

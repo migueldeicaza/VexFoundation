@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Larry Kuhns
 //
-// Port of `src/strokes.ts` (VexFlow 5.4.0). The `Stroke` class renders chord
+// Port of `src/strokes.ts` (VexFlow 5.6.0). The `Stroke` class renders chord
 // strokes that can be arpeggiated, brushed, rasgueado, etc.
 
 import Foundation
@@ -121,7 +121,8 @@ public final class Stroke: Modifier {
         var yPositions = note.getYs()
         var topY = start.y
         var botY = start.y
-        let x = start.x - 5
+        // VexFlow 5.6.0: leave a visible gap between a tab fret's string mask and the tip of a broad arrow.
+        let x = start.x - 5 - (note is TabNote ? Metrics.getDouble("NoteHead.minPadding") : 0)
         let lineSpace = try note.checkStaveThrowing().getSpacingBetweenLines()
 
         let notes = try checkModifierContextThrowing().getMembers(note.getCategory())

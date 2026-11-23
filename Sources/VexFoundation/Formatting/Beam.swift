@@ -405,7 +405,9 @@ public final class Beam: VexElement {
                         breakOnStemChange = currentDirection != prevDirection
                     }
 
-                    let isUnbeamableDuration = (jsParseInt(note.getDuration()).map { $0 < 8 }) ?? false
+                    // Upstream parses the duration as written (`parseInt(note.getDuration(), 10) < 8`):
+                    // a letter token such as "q" or "h" is NaN, so it does not break the group.
+                    let isUnbeamableDuration = (jsParseInt(note.durationToken).map { $0 < 8 }) ?? false
 
                     // Determine if the group should be broken at this note
                     let shouldBreak =

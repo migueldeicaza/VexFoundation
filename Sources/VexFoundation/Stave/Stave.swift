@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stave.ts` (VexFlow 5.4.0).
+// Port of `src/stave.ts` (VexFlow 5.6.1).
 
 import Foundation
 
@@ -170,6 +170,8 @@ open class Stave: VexElement {
     public var measure: Int = 0
     public var modifiers: [StaveModifier] = []
     private var boundaryModifiers: [StaveModifier] = []
+    /// Space after the row-start signs for a continuation arriving at the first note. (VexFlow 5.6.0)
+    private var boundaryNotePadding: Double = 0
     public var defaultLedgerLineStyle: ElementStyle
 
     // MARK: - Init
@@ -276,6 +278,9 @@ open class Stave: VexElement {
     public func setNumLines(_ n: Int) -> Self {
         options.numLines = n
         resetLines()
+        // VexFlow 5.6.1: a TAB clef selects and fits its glyph to the string count.
+        for modifier in getModifiers(category: Clef.category) { modifier.setStave(self) }
+        formatted = false
         return self
     }
 
@@ -527,7 +532,7 @@ open class Stave: VexElement {
         getYForLine(Double(options.numLines))
     }
 
-    /// Returns the y for the *center* of a staff line.
+    /// Logical line coordinate used by score layout.
     public func getYForLine(_ line: Double) -> Double {
         let spacing = options.spacingBetweenLinesPx
         let headroom = Double(options.spaceAboveStaffLn)
@@ -535,6 +540,13 @@ open class Stave: VexElement {
         let y = self.y + line * spacing + headroom * spacing
 
         return y
+    }
+
+    /// Center of a drawn line, including the stroke alignment. Fractional lines interpolate between strings.
+    /// (VexFlow 5.6.1)
+    public func getYForDrawnLine(_ line: Double) -> Double {
+        let lineWidth = getStyle()?.lineWidth ?? 1
+        return getYForLine(line) + (lineWidth.truncatingRemainder(dividingBy: 2) == 0 ? 0 : 0.5)
     }
 
     /// The reverse of `getYForLine`.
@@ -663,8 +675,9 @@ open class Stave: VexElement {
         return endClefName
     }
 
-    /// Replace only the derived row-start and courtesy signs on a responsive sheet. (VexFlow 5.4.0)
-    public func setBoundaryModifiers(_ modifiers: [StaveModifier]) {
+    /// Replace the derived row-start and courtesy signs and their note clearance. (VexFlow 5.6.0)
+    public func setBoundaryModifiers(_ modifiers: [StaveModifier], notePadding: Double = 0) {
+        boundaryNotePadding = notePadding
         boundaryModifiers = modifiers
         for mark in modifiers {
             _ = mark.setStave(self)
@@ -861,11 +874,12 @@ open class Stave: VexElement {
             if padding + width == 0 { offset -= 1 }
         }
 
+        let noteStartX = x + boundaryNotePadding
         if parity {
-            startX = x
-        } else if x > startX {
+            startX = noteStartX
+        } else if noteStartX > startX {
             // VexFlowPatch: don't overwrite startX if it's already bigger (alignment)
-            startX = x
+            startX = noteStartX
         }
         x = self.x + self.width
 
@@ -929,19 +943,14 @@ open class Stave: VexElement {
         let numLines = options.numLines
         let width = self.width
         let x = self.x
-        var y: Double
-
-        let lineWidth = getStyle()?.lineWidth ?? 1
-        let lineWidthCorrection = lineWidth.truncatingRemainder(dividingBy: 2) == 0 ? 0 : 0.5
 
         // Render lines
         for line in 0..<numLines {
-            y = getYForLine(Double(line))
-
             if options.lineConfig[line].visible {
+                let y = getYForDrawnLine(Double(line))
                 ctx.beginPath()
-                ctx.moveTo(x, y + lineWidthCorrection)
-                ctx.lineTo(x + width, y + lineWidthCorrection)
+                ctx.moveTo(x, y)
+                ctx.lineTo(x + width, y)
                 ctx.stroke()
             }
         }
@@ -960,7 +969,7 @@ open class Stave: VexElement {
         if measure > 0 {
             ctx.setFont(fontInfo)
             let textWidth = ctx.measureText("\(measure)").width
-            y = getYForTopText(0) + 3
+            let y = getYForTopText(0) + 3
             ctx.fillText("\(measure)", self.x - textWidth / 2, y)
         }
     }

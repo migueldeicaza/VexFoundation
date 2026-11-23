@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/publication.ts` (VexFlow 5.4.0).
+// Port of `src/publication.ts` (VexFlow 5.5.0).
 // Print-ready SVG pages over independent EasyScore views. Public dimensions are millimeters.
 //
 // Swift: upstream draws into a hidden DOM host and reads `getBBox()`, canvas `measureText()` and computed
@@ -40,7 +40,12 @@ public struct PublicationMargins: Sendable, Equatable {
 
 /// Paper, staff height (four spaces), margins, and inter-system gaps are measured in millimeters.
 /// The view fields (`staves`, breaks, turns, regions) are those of `PublicationView`. (VexFlow 5.4.0)
-public struct PublicationOptions: Sendable, Equatable {
+///
+/// `noteHooks` holds closures. `==` compares the other fields and the number of hooks, and the type is
+/// `@unchecked Sendable`: a publication renders synchronously on the caller's thread.
+public struct PublicationOptions: @unchecked Sendable, Equatable {
+    /// Apply the source's EasyScore note decorations to every independently built part and cue. (VexFlow 5.5.0)
+    public var noteHooks: [CommitHook]
     public var staves: [String]?
     public var systemBreaks: [Int]
     public var pageBreaks: [Int]
@@ -64,8 +69,10 @@ public struct PublicationOptions: Sendable, Equatable {
         forbiddenTurns: [Int] = [], regions: [PublicationRegion] = [], paper: PublicationPaper = .a4,
         staffSize: Double? = nil, margins: PublicationMargins = PublicationMargins(), title: String? = nil,
         subtitle: String? = nil, header: String? = nil, footer: String? = nil, pageNumbers: Bool = true,
-        systemGap: Double? = nil, maxExtraGap: Double? = nil, justifyLast: Bool = false
+        systemGap: Double? = nil, maxExtraGap: Double? = nil, justifyLast: Bool = false,
+        noteHooks: [CommitHook] = []
     ) {
+        self.noteHooks = noteHooks
         self.staves = staves
         self.systemBreaks = systemBreaks
         self.pageBreaks = pageBreaks
@@ -83,6 +90,15 @@ public struct PublicationOptions: Sendable, Equatable {
         self.systemGap = systemGap
         self.maxExtraGap = maxExtraGap
         self.justifyLast = justifyLast
+    }
+
+    public static func == (a: PublicationOptions, b: PublicationOptions) -> Bool {
+        a.noteHooks.count == b.noteHooks.count && a.staves == b.staves && a.systemBreaks == b.systemBreaks
+            && a.pageBreaks == b.pageBreaks && a.preferredTurns == b.preferredTurns
+            && a.forbiddenTurns == b.forbiddenTurns && a.regions == b.regions && a.paper == b.paper
+            && a.staffSize == b.staffSize && a.margins == b.margins && a.title == b.title && a.subtitle == b.subtitle
+            && a.header == b.header && a.footer == b.footer && a.pageNumbers == b.pageNumbers
+            && a.systemGap == b.systemGap && a.maxExtraGap == b.maxExtraGap && a.justifyLast == b.justifyLast
     }
 
     /// The view fields.
@@ -292,11 +308,13 @@ private struct Composed {
 }
 
 /// Compose a view on its own SVG context.
-private func compose(_ spec: EasyScoreCompositionSpec) throws -> Composed {
+private func compose(_ spec: EasyScoreCompositionSpec, _ hooks: [CommitHook] = []) throws -> Composed {
     let ctx = SVGRenderContext(width: 1, height: 1)
     let factory = Factory(options: FactoryOptions(width: 1, height: 1))
     _ = factory.setContext(ctx)
-    let score = try factory.EasyScore().compose(spec)
+    let easyScore = factory.EasyScore()
+    for hook in hooks { easyScore.addCommitHook(hook) }
+    let score = try easyScore.compose(spec)
     return Composed(ctx: ctx, factory: factory, score: score)
 }
 
@@ -458,7 +476,7 @@ private func addInsets(
             graceAccidentals: spec.graceAccidentals,
             continuous: ContinuousOptions()
         )
-        let inset = try compose(insetSpec)
+        let inset = try compose(insetSpec, o.noteHooks)
         try inset.factory.draw()
         row.references.append(Reference(
             kind: r.kind, staff: r.staff, measure: r.measure, label: r.label,
@@ -664,7 +682,7 @@ public final class Publication {
         let needsReference = options.staves != nil
             && (!source.spans.isEmpty || !(source.continuous?.spans.isEmpty ?? true)
                 || !(source.continuous?.splitChords.isEmpty ?? true))
-        let ref = needsReference ? try compose(source).score : nil
+        let ref = needsReference ? try compose(source, options.noteHooks).score : nil
         // A one-unit inset keeps edge strokes inside the requested margin.
         let width = size.musicWidth / size.scale - 2
         var omitted: [PublicationDiagnostic] = []
@@ -672,7 +690,7 @@ public final class Publication {
             omitted.append(PublicationDiagnostic(code: .excludedAnchor, measures: measures, detail: id))
         }
         diagnostics += omitted
-        let composed = try compose(spec)
+        let composed = try compose(spec, options.noteHooks)
         try composed.factory.draw()
         guard let layout = composed.score.sheet.getContinuousLayout() else {
             throw invalidPage("Expected a continuous layout.")

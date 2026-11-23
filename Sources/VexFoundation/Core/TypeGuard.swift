@@ -24,6 +24,7 @@ public enum VexCategory: String, CaseIterable, Sendable {
     case element = "Element"
     case flag = "Flag"
     case fraction = "Fraction"
+    case fretDiagram = "FretDiagram"
     case fretHandFinger = "FretHandFinger"
     case ghostNote = "GhostNote"
     case glyph = "Glyph"

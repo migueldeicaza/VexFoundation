@@ -2,6 +2,31 @@ import Testing
 @testable import VexFoundation
 
 extension UpstreamSVGParityTests {
+    /// Both sides of a wide host must leave visible space around the smaller fret. (VexFlow 5.6.0)
+    @Test("Grace_Tab_Notes.Grace_frets_beside_a_two_digit_host")
+    func graceTabNotesBesideTwoDigitHostMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Grace_Tab_Notes",
+            test: "Grace_frets_beside_a_two_digit_host",
+            width: 350,
+            height: 140,
+            referenceFontsOverride: ["Bravura"]
+        ) { _, context in
+            let stave = try makeUpstreamGraceTabStave(context: context)
+            let positions = [TabNotePosition(str: 2, fret: 12)]
+            let host = TabNote(TabNoteStruct(positions: positions, duration: .whole))
+            let before = GraceTabNote(TabNoteStruct(positions: [TabNotePosition(str: 2, fret: 2)], duration: .eighth))
+            let after = GraceTabNote(TabNoteStruct(positions: positions, duration: .eighth))
+            _ = host.addModifier(GraceNoteGroup(graceNotes: [before]), index: 0)
+            _ = host.addModifier(GraceNoteGroup(graceNotes: [after]).setPosition(.right), index: 0)
+            try Formatter.FormatAndDraw(ctx: context, stave: stave, notes: [host])
+            let hostHalfWidth = TabNote.tabToElement("12").getWidth() / 2
+            // The before-grace edge meets the host edge exactly; allow for floating-point rounding.
+            #expect(before.getAbsoluteX() + before.getWidth() / 2 + 2 <= host.getAbsoluteX() - hostHalfWidth + 1e-9)
+            #expect(after.getAbsoluteX() - after.getWidth() / 2 - 2 >= host.getAbsoluteX() + hostHalfWidth - 1e-9)
+        }
+    }
+
     @Test("Grace_Tab_Notes.Grace_Tab_Note_Simple")
     func graceTabNotesSimpleMatchesUpstream() throws {
         try runCategorySVGParityCase(

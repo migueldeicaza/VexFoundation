@@ -1,8 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/timesignature.ts` (VexFlow 5.4.0).
-// Implements time signature glyphs for staves.
+// Port of `src/timesignature.ts` (VexFlow 5.6.1).
+// Position and draw numeric and symbolic time signatures on notation and tablature staves.
 
 import Foundation
 
@@ -206,18 +206,19 @@ public final class TimeSignature: StaveModifier {
     public func drawAt(_ ctx: RenderContext, _ stave: Stave, _ x: Double) {
         setRendered()
 
+        let (top, bottom) = baselines(stave)
         if isNumeric {
             // render top text
             var startX = x + topStartX
-            topRenderY = topBaseline(stave)
+            topRenderY = top
             topText.renderText(ctx, xPos: startX, yPos: topRenderY)
 
             // render bottom text
             startX = x + botStartX
-            botRenderY = stave.getYForLine(bottomLine + lineShift)
+            botRenderY = bottom
             botText.renderText(ctx, xPos: startX, yPos: botRenderY)
         } else {
-            renderText(ctx, xPos: x - self.x, yPos: stave.getYForLine(line))
+            renderText(ctx, xPos: x - self.x, yPos: top)
         }
     }
 
@@ -228,31 +229,53 @@ public final class TimeSignature: StaveModifier {
             : (stave.getYForLine(topLine) + stave.getYForLine(bottomLine)) / 2
     }
 
-    /// Positioned ink before drawing, including additive meters and cut time. (VexFlow 5.4.0)
+    /// Center the visible meter between tab strings, preserving row spacing and explicit line placements.
+    /// (VexFlow 5.6.1)
+    private func baselines(_ stave: Stave) -> (top: Double, bottom: Double) {
+        let top = isNumeric ? topBaseline(stave) : stave.getYForLine(line)
+        let bottom = stave.getYForLine(bottomLine + lineShift)
+        let defaultLines = isNumeric ? topLine == 1 && bottomLine == 3 : line == 2
+        if !defaultLines || !(stave is TabStave) { return (top, bottom) }
+
+        let upper = isNumeric ? topText.textMetrics : textMetrics
+        var inkTop = top - upper.actualBoundingBoxAscent
+        var inkBottom = top + upper.actualBoundingBoxDescent
+        if isNumeric && !botText.getText().isEmpty {
+            let lower = botText.textMetrics
+            inkTop = min(inkTop, bottom - lower.actualBoundingBoxAscent)
+            inkBottom = max(inkBottom, bottom + lower.actualBoundingBoxDescent)
+        }
+        let offset = stave.getYForDrawnLine(Double(stave.getNumLines() - 1) / 2) - (inkTop + inkBottom) / 2
+        return (top + offset, bottom + offset)
+    }
+
+    /// Positioned ink before drawing, including additive meters and cut time. (VexFlow 5.6.1)
     public func getInkBounds() throws -> BoundingBox {
         let stave = try checkStaveThrowing()
-        if !isNumeric { return getTextInk(x, stave.getYForLine(line)) }
-        let top = topText.getTextInk(x + topStartX, topBaseline(stave))
+        let (top, bottom) = baselines(stave)
+        if !isNumeric { return getTextInk(x, top) }
+        let ink = topText.getTextInk(x + topStartX, top)
         return !botText.getText().isEmpty
-            ? top.merged(with: botText.getTextInk(x + botStartX, stave.getYForLine(bottomLine + lineShift)))
-            : top
+            ? ink.merged(with: botText.getTextInk(x + botStartX, bottom))
+            : ink
     }
 
     /// Combined bounding box of the time signature. Call it after `drawAt()`, which
     /// sets the vertical positions of a numeric signature. (VexFlow 5.1.0)
     override public func getBoundingBox() -> BoundingBox? {
         if isNumeric {
-            guard var topBoundingBox = topText.getBoundingBox(),
-                  var botBoundingBox = botText.getBoundingBox() else { return nil }
+            guard var topBoundingBox = topText.getBoundingBox() else { return nil }
             // Move the boxes to the positions of the text rendered by drawAt().
             topBoundingBox.move(x + topStartX, topRenderY)
+            if botText.getText().isEmpty { return topBoundingBox }
+            guard var botBoundingBox = botText.getBoundingBox() else { return nil }
             botBoundingBox.move(x + botStartX, botRenderY)
             topBoundingBox.mergeWith(botBoundingBox)
             return topBoundingBox
         }
         // Simple text (like "C" or "C|"): the element bounding box.
         guard var textBoundingBox = super.getBoundingBox(), let stave = getStave() else { return nil }
-        textBoundingBox.move(0, stave.getYForLine(line))
+        textBoundingBox.move(0, baselines(stave).top)
         return textBoundingBox
     }
 }

@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/easyscore/composition.ts` (VexFlow 5.4.0).
+// Port of `src/easyscore/composition.ts` (VexFlow 5.6.0).
 // Structured construction delegates timing and layout to native Voice, System, and Sheet objects.
 
 import Foundation
@@ -11,11 +11,16 @@ public struct EasyScoreStaffState: Equatable {
     public var clef: ClefName?
     public var key: String?
     public var time: TimeSignatureSpec?
+    /// Hide or reveal the meter sign while preserving the meter used for timing and beaming. (VexFlow 5.6.0)
+    public var showTimeSignature: Bool?
 
-    public init(clef: ClefName? = nil, key: String? = nil, time: TimeSignatureSpec? = nil) {
+    public init(
+        clef: ClefName? = nil, key: String? = nil, time: TimeSignatureSpec? = nil, showTimeSignature: Bool? = nil
+    ) {
         self.clef = clef
         self.key = key
         self.time = time
+        self.showTimeSignature = showTimeSignature
     }
 }
 
@@ -24,9 +29,39 @@ struct EasyScoreResolvedStaffState: Equatable {
     var clef: ClefName
     var key: String
     var time: TimeSignatureSpec
+    var showTimeSignature: Bool = true
 
     func merging(_ change: EasyScoreStaffState) -> EasyScoreResolvedStaffState {
-        EasyScoreResolvedStaffState(clef: change.clef ?? clef, key: change.key ?? key, time: change.time ?? time)
+        EasyScoreResolvedStaffState(
+            clef: change.clef ?? clef, key: change.key ?? key, time: change.time ?? time,
+            showTimeSignature: change.showTimeSignature ?? showTimeSignature
+        )
+    }
+}
+
+/// A written mark anchored by note ID on its owning staff and measure. (VexFlow 5.6.0)
+public struct EasyScoreLeadMark: Equatable, Sendable {
+    public var note: String
+    public var text: String
+
+    public init(note: String, text: String) {
+        self.note = note
+        self.text = text
+    }
+}
+
+/// A lyric connector stays within its verse and measure. (VexFlow 5.6.0)
+public struct EasyScoreLyricMark: Equatable, Sendable {
+    public var note: String
+    public var text: String
+    public var hyphenAfter: Bool
+    public var extendTo: String?
+
+    public init(note: String, text: String, hyphenAfter: Bool = false, extendTo: String? = nil) {
+        self.note = note
+        self.text = text
+        self.hyphenAfter = hyphenAfter
+        self.extendTo = extendTo
     }
 }
 
@@ -152,11 +187,25 @@ public struct EasyScoreMeasureSpec {
     public var time: TimeSignatureSpec?
     public var voices: [EasyScoreVoiceSpec]
     public var span: VoiceTime?
+    /// Hide or reveal the meter sign from this measure on. (VexFlow 5.6.0)
+    public var showTimeSignature: Bool?
+    /// The barline drawn at this measure's right edge. (VexFlow 5.6.0)
+    public var endBarline: BarlineType?
+    /// Literal chord names sharing a lane above their notes. (VexFlow 5.6.0)
+    public var chords: [EasyScoreLeadMark]
+    /// Each ordered list of syllables forms a separate lyric lane. (VexFlow 5.6.0)
+    public var verses: [[EasyScoreLyricMark]]
 
     public init(
         clef: ClefName? = nil, key: String? = nil, time: TimeSignatureSpec? = nil,
-        span: VoiceTime? = nil, voices: [EasyScoreVoiceSpec], instrument: EasyScoreInstrumentName? = nil
+        span: VoiceTime? = nil, voices: [EasyScoreVoiceSpec], instrument: EasyScoreInstrumentName? = nil,
+        showTimeSignature: Bool? = nil, endBarline: BarlineType? = nil, chords: [EasyScoreLeadMark] = [],
+        verses: [[EasyScoreLyricMark]] = []
     ) {
+        self.showTimeSignature = showTimeSignature
+        self.endBarline = endBarline
+        self.chords = chords
+        self.verses = verses
         self.instrument = instrument
         self.clef = clef
         self.key = key
@@ -181,6 +230,8 @@ public struct EasyScoreStaveSpec {
     public var clef: ClefName?
     public var key: String?
     public var time: TimeSignatureSpec?
+    /// Hide or reveal the meter sign while preserving the meter used for timing. (VexFlow 5.6.0)
+    public var showTimeSignature: Bool?
     public var options: StaveOptions?
     public var spaceAbove: Double?
     public var spaceBelow: Double?
@@ -189,8 +240,10 @@ public struct EasyScoreStaveSpec {
     public init(
         id: String, kind: EasyScoreStaveKind = .stave, clef: ClefName? = nil, key: String? = nil,
         time: TimeSignatureSpec? = nil, options: StaveOptions? = nil, spaceAbove: Double? = nil,
-        spaceBelow: Double? = nil, measures: [EasyScoreMeasureSpec], name: String? = nil, shortName: String? = nil
+        spaceBelow: Double? = nil, measures: [EasyScoreMeasureSpec], name: String? = nil, shortName: String? = nil,
+        showTimeSignature: Bool? = nil
     ) {
+        self.showTimeSignature = showTimeSignature
         self.id = id
         self.name = name
         self.shortName = shortName
@@ -374,17 +427,23 @@ private func buildVoice(
                     if change.key != nil {
                         notes.append(try score.make.keySigNote(key: state.key, cancelKey: previous.key, clef: state.clef))
                     }
-                    if change.time != nil { notes.append(try score.make.timeSigNote(time: state.time)) }
+                    if state.showTimeSignature && (change.time != nil || !previous.showTimeSignature) {
+                        notes.append(try score.make.timeSigNote(time: state.time))
+                    }
                 }
                 score.set(clef: state.clef, time: state.time)
             case .note(let noteStruct, let id, let stave, let grace):
                 let note = try score.make.note(noteStruct)
+                // VexFlow 5.6.0: each pitched head gets its own dots.
+                for _ in 0..<note.writtenDots { Dot.buildAndAttach([note], all: true) }
                 if let grace { try score.attach(note, try buildGraceGroup(score, grace), index: 0) }
                 if let id { try note.setAttributeThrowing("id", id) }
                 if let stave, !stave.isEmpty { assignments.append((note, stave)) }
                 notes.append(note)
             case .tab(let tabStruct, let id, let stave, let drawStem):
                 let note = try score.make.tabNote(tabStruct, drawStem: drawStem)
+                // VexFlow 5.6.0: rhythmic tab shares one set of dots at the stem.
+                if drawStem { for _ in 0..<note.writtenDots { Dot.buildAndAttach([note], all: false) } }
                 if let id { try note.setAttributeThrowing("id", id) }
                 if let stave, !stave.isEmpty { assignments.append((note, stave)) }
                 notes.append(note)
@@ -424,9 +483,68 @@ private func addSignatures(
     if state.clef != .tab && (previous == nil || previous?.key != state.key) {
         try score.attachToStave(stave, try score.make.keySignature(state.key, cancelKeySpec: previous?.key))
     }
-    if previous == nil || previous?.time != state.time {
+    if state.showTimeSignature && (!(previous?.showTimeSignature ?? false) || previous?.time != state.time) {
         try score.attachToStave(stave, try score.make.timeSignature(state.time))
     }
+}
+
+/// Rebuild the same native chord and lyric lanes for screen systems and independent publication views.
+/// (VexFlow 5.6.0)
+private func addLeadMarks(
+    _ score: EasyScore, _ system: System, _ measure: EasyScoreMeasureSpec, _ voices: [[Tickable]]
+) throws {
+    if measure.chords.isEmpty && measure.verses.isEmpty { return }
+    let members = Set(voices.joined().map { ObjectIdentifier($0) })
+    func anchor(_ id: String) throws -> Note {
+        let note = try score.getNote(id)
+        if !members.contains(ObjectIdentifier(note)) {
+            throw invalid("Lead mark anchor \(id) belongs to another staff or measure.")
+        }
+        return note
+    }
+    var chordLanes: [(stave: Stave, marks: [Annotation])] = []
+    for chord in measure.chords {
+        let note = try anchor(chord.note)
+        if chord.text.isEmpty { throw invalid("A chord label needs text.") }
+        let mark = try score.make.annotation(text: chord.text, vJustify: .top, font: Metrics.getFontInfo("ChordSymbol"))
+        _ = try score.attach(note, mark)
+        if let note = note as? StaveNote {
+            let stave = note.checkStave()
+            if let i = chordLanes.firstIndex(where: { $0.stave === stave }) {
+                chordLanes[i].marks.append(mark)
+            } else {
+                chordLanes.append((stave, [mark]))
+            }
+        }
+    }
+    for lane in chordLanes {
+        try system.getPhraseLayout().addLane(lane.stave, lane.marks, options: PhraseLaneOptions(side: .above))
+    }
+
+    func lyricAnchor(_ id: String) throws -> StaveNote {
+        guard let note = try anchor(id) as? StaveNote else { throw invalid("A lyric needs a pitched staff note.") }
+        return note
+    }
+    for verse in measure.verses {
+        if verse.isEmpty { throw invalid("A verse needs at least one syllable.") }
+        let syllables = try verse.map { mark in
+            PhraseSyllable(
+                note: try lyricAnchor(mark.note), text: mark.text, hyphenAfter: mark.hyphenAfter,
+                extendTo: try mark.extendTo.map { try lyricAnchor($0) }
+            )
+        }
+        try system.getPhraseLayout().addVerse(syllables[0].note.checkStave(), syllables)
+    }
+}
+
+/// Carry the previous written state through omitted measure fields. (VexFlow 5.6.0)
+private func measureState(
+    _ measure: EasyScoreMeasureSpec, _ previous: EasyScoreResolvedStaffState
+) -> EasyScoreResolvedStaffState {
+    EasyScoreResolvedStaffState(
+        clef: measure.clef ?? previous.clef, key: measure.key ?? previous.key, time: measure.time ?? previous.time,
+        showTimeSignature: measure.showTimeSignature ?? previous.showTimeSignature
+    )
 }
 
 /// Resolve owned notes only after the entire composition is constructed.
@@ -488,9 +606,7 @@ private func buildStaffMeasure(
     var assignments: [(note: Note, stave: String)] = []
     let measure = staff.measures[index]
     if measure.voices.isEmpty { throw invalid("Every stave measure needs at least one voice.") }
-    let state = EasyScoreResolvedStaffState(
-        clef: measure.clef ?? previous.clef, key: measure.key ?? previous.key, time: measure.time ?? previous.time
-    )
+    let state = measureState(measure, previous)
     let span = try measure.span ?? VoiceTime(timeSignature: state.time)
     let ticks = try ticksFor(span)
     let built = try measure.voices.enumerated().map { voiceIndex, voice in
@@ -498,7 +614,10 @@ private func buildStaffMeasure(
     }
     let changes = stateChanges(built[0])
     func signature(_ items: [(at: Fraction, state: EasyScoreResolvedStaffState)]) -> [String] {
-        items.map { "\($0.at.clone().simplify().description)|\($0.state.clef.rawValue)|\($0.state.key)|\($0.state.time.rawValue)" }
+        items.map {
+            "\($0.at.clone().simplify().description)|\($0.state.clef.rawValue)|\($0.state.key)|"
+                + "\($0.state.time.rawValue)|\($0.state.showTimeSignature)"
+        }
     }
     for voice in built {
         if signature(stateChanges(voice)) != signature(changes) {
@@ -537,6 +656,11 @@ private func buildStaffMeasure(
         var options = staff.options ?? StaveOptions()
         options.clef = state.clef
         stave = try score.make.stave(options: options)
+    }
+    if let endBarline = measure.endBarline {
+        // Upstream also rejects values outside `BarlineType`; the Swift enum makes them unrepresentable.
+        if endBarline == .repeatBegin { throw invalid("Invalid end barline.") }
+        stave.setEndBarType(endBarline)
     }
     try addSignatures(score, stave, state, index > 0 && spec.signatures != .everyMeasure ? previous : nil)
 
@@ -579,7 +703,7 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
             "Apply rhythm and accidental policies before adopting native inputs, or use typed note descriptions."
         )
     }
-    let priorStaves = nativeInputs.map { $0.getStave() }
+    let priorNative = nativeInputs.map { (stave: $0.getStave(), modifiers: $0.getModifiers().count) }
     // Avoid assigning the same note to more than one voice, even when references are supplied directly.
     var seen = Set<ObjectIdentifier>()
     do {
@@ -596,7 +720,8 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
                 EasyScoreResolvedStaffState(
                     clef: stave.clef ?? (stave.kind == .tab ? .tab : .treble),
                     key: stave.key ?? "C",
-                    time: stave.time ?? .default
+                    time: stave.time ?? .default,
+                    showTimeSignature: stave.showTimeSignature ?? true
                 )
             }
             var noteMeasures: [ObjectIdentifier: Int] = [:]
@@ -606,10 +731,7 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
             var ends: [[EasyScoreResolvedStaffState]] = []
             var placed: Set<ObjectIdentifier>? = spec.continuous != nil ? [] : nil
             for index in 0..<count {
-                starts.append(spec.staves.enumerated().map { j, staff in
-                    let m = staff.measures[index], p = states[j]
-                    return EasyScoreResolvedStaffState(clef: m.clef ?? p.clef, key: m.key ?? p.key, time: m.time ?? p.time)
-                })
+                starts.append(spec.staves.enumerated().map { j, staff in measureState(staff.measures[index], states[j]) })
                 let system = result.sheet.addSystem(spec.system)
                 result.systems.append(system)
                 var parts: [StaffMeasure] = []
@@ -647,6 +769,9 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
                         )
                     }
                 }
+                for (j, staff) in spec.staves.enumerated() {
+                    try addLeadMarks(score, system, staff.measures[index], parts[j].notes)
+                }
                 ends.append(states)
                 result.staves.append(staves)
                 result.voices.append(voices)
@@ -662,7 +787,10 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
         // Restore caller-owned note assignments. Rhythm/accidental mutation of native inputs is rejected above.
         for (index, note) in nativeInputs.enumerated() where seen.contains(ObjectIdentifier(note)) {
             note.clearVoice()
-            if let stave = priorStaves[index] { _ = note.setStave(stave) } else { note.clearStave() }
+            let prior = priorNative[index]
+            // VexFlow 5.6.0: drop the modifiers that the failed composition attached (for example dots).
+            if note.modifiers.count > prior.modifiers { note.modifiers.removeSubrange(prior.modifiers...) }
+            if let stave = prior.stave { _ = note.setStave(stave) } else { note.clearStave() }
         }
         throw error
     }

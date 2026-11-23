@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/fretdiagram.ts` (VexFlow 5.4.0).
+// Port of `src/fretdiagram.ts` (VexFlow 5.6.0).
 // A standalone chord frame. Strings run from the lowest (left) to the highest (right).
 
 import Foundation
@@ -48,6 +48,9 @@ public struct FretDiagramSpec: Equatable, Sendable {
 }
 
 public final class FretDiagram: VexElement {
+    /// The registry and font metrics both use the diagram category.
+    override public class var category: String { "FretDiagram" }
+
     private let frets: [FretDiagramString]
     private let first: Int
     private let rows: Int
@@ -101,8 +104,10 @@ public final class FretDiagram: VexElement {
             "Chord frame, low to high: " + frets.map(\.description).joined(separator: ", ")
                 + (barre.map { ", barre at fret \($0.fret)" } ?? "")
         )
-        ctx.setFont("sans-serif", 9, nil, nil)
-        if first > 1 { ctx.fillText(String(first), getX() + 2, top + 9) }
+        if first > 1 {
+            ctx.setFont(fontInfo)
+            ctx.fillText(String(first), getX() + 2, top + 9)
+        }
         for row in 0...rows {
             ctx.setLineWidth(row == 0 && first == 1 ? 2.5 : 1)
             line(left, top + Double(row) * 11, right, top + Double(row) * 11)

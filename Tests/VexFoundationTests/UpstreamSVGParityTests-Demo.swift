@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import VexFoundation
 
-// Ports of upstream `tests/demo_repertoire_tests.ts` and `tests/demos/*.ts` (VexFlow 5.3.0).
+// Ports of upstream `tests/demo_repertoire_tests.ts` and `tests/demos/*.ts` (VexFlow 5.6.1).
 // Upstream registers each demo as the QUnit module `Demo - <title>` with the test name `<title>`.
 // Upstream uses `EasyScore({ throwOnError: true })`. These ports use the throwing Swift methods
 // (`notesThrowing`, `voiceThrowing`) so that an error stops the case.
@@ -10,7 +10,7 @@ extension UpstreamSVGParityTests {
 
     // MARK: - When the Saints Go Marching In (tests/demos/saints.ts)
 
-    /// Upstream runs this demo only with the Petaluma font stack.
+    /// Upstream runs this demo only with the "Petaluma with Academico" font stack (VexFlow 5.6.0).
     @Test("Demo___When_the_Saints_Go_Marching_In.When_the_Saints_Go_Marching_In")
     func demoSaintsMatchesUpstream() throws {
         try runCategorySVGParityCase(
@@ -18,9 +18,16 @@ extension UpstreamSVGParityTests {
             test: "When_the_Saints_Go_Marching_In",
             width: 900,
             height: 540,
-            referenceFontsOverride: ["Petaluma"]
+            referenceFontsOverride: ["Petaluma_with_Academico"]
         ) { factory, _ in
             let score = factory.EasyScore(options: EasyScoreOptions(throwOnError: true))
+            let lyricFont = Metrics.getFontInfo("Annotation.lyric")
+            // Use the same baseline throughout each row, below the pickup's low C.
+            func word(_ text: String, _ rowY: Double) throws -> Annotation {
+                try factory.Annotation(text: text, vJustify: .bottom, font: lyricFont)
+                    .setTextBaseline(rowY + 116)
+                    .setConnectorPadding(2)
+            }
             let bars: [(String, String, String)] = [
                 ("G4/w", "saints", "C:6/9"),
                 ("B4/q/r, C4/q, E4, F4", "|go|march-|ing", "Am:7"),
@@ -43,32 +50,33 @@ extension UpstreamSVGParityTests {
             let pickup = try score.notesThrowing("C4/q, E4, F4")
             let pickupLabels = ["Oh", "when", "the"]
             for (i, note) in pickup.enumerated() {
-                _ = note.addModifier(
-                    try factory.Annotation(text: pickupLabels[i], vJustify: .bottom).setTextBaseline(123)
-                )
+                _ = note.addModifier(try word(pickupLabels[i], 16))
             }
+            let pickupWidth = 210.0
             _ = factory
-                .System(options: SystemOptions(x: 10, width: 180, y: 16))
+                .System(options: SystemOptions(x: 10, width: pickupWidth, y: 16))
                 .addStave(SystemStave(voices: [try score.voiceThrowing(pickup.map { $0 as Note }, time: .meter(3, 4))]))
                 .addClef(.treble)
                 .addTimeSignature(.meter(4, 4))
 
+            // The first row shares space between the pickup, two single-word bars and two busier bars.
+            let openingWidths: [Double] = [120, 212, 122, 212]
+            var x = 10 + pickupWidth
             var sustained: StemmableNote?
             for (i, bar) in bars.enumerated() {
                 let (music, words, harmony) = bar
                 let row = i / 4
                 let column = i % 4
                 let y = Double(16 + row * 130)
-                let width = Double(row == 0 ? 174 : 219)
+                if column == 0 && row > 0 { x = 10 }
+                let width = row == 0 ? openingWidths[column] : 219
                 let notes = try score.notesThrowing(music)
                 // Carry the sustained D and the final tonic across the barline without repeating a syllable.
                 if i == 5 || i == 14 { sustained = notes[0] }
                 if (i == 6 || i == 15), let sustained { _ = try score.make.tie(from: sustained, to: notes[0]) }
                 for (n, text) in words.split(separator: "|", omittingEmptySubsequences: false).enumerated()
                 where !text.isEmpty {
-                    _ = notes[n].addModifier(
-                        try factory.Annotation(text: String(text), vJustify: .bottom).setTextBaseline(y + 107)
-                    )
+                    _ = notes[n].addModifier(try word(String(text), y))
                 }
                 // Split the chord into root and extension so Petaluma supplies proper accidental glyphs.
                 if !harmony.isEmpty {
@@ -80,10 +88,11 @@ extension UpstreamSVGParityTests {
                     _ = notes[0].addModifier(chord)
                 }
                 let stave = factory
-                    .System(options: SystemOptions(x: (row == 0 ? 190 : 10) + Double(column) * width, width: width, y: y))
+                    .System(options: SystemOptions(x: x, width: width, y: y))
                     .addStave(SystemStave(voices: [
                         try score.voiceThrowing(notes.map { $0 as Note }, time: i == 15 ? .meter(1, 4) : .meter(4, 4)),
                     ]))
+                x += width
                 if column == 0 && row > 0 { _ = stave.addClef(.treble) }
                 if i == bars.count - 1 { _ = stave.setEndBarType(.end) }
             }
@@ -108,9 +117,6 @@ extension UpstreamSVGParityTests {
                 "B4": (2, 0), "C5": (2, 1), "D5": (2, 3), "E5": (1, 0), "F5": (1, 1),
             ]
             let score = factory.EasyScore(options: EasyScoreOptions(throwOnError: true))
-            // Upright sans-serif chord names sit above the melody, including the slash bass in Dm/F.
-            let chordFontFamily = "Arial, Helvetica, sans-serif"
-            let chordFontSize = 12.0
             let bars: [(String, String)] = [
                 ("", "A4/q"),
                 ("Am", "A3+E4+A4+C5/h D5/q"),
@@ -140,7 +146,7 @@ extension UpstreamSVGParityTests {
                 let notes = try score.notesThrowing(music.joined(separator: ", "))
                 if !chordName.isEmpty {
                     _ = notes[0].addModifier(
-                        try score.make.chordSymbol(fontFamily: chordFontFamily, fontSize: chordFontSize).addText(chordName)
+                        try score.make.chordSymbol().addText(chordName)
                     )
                 }
                 let tab: [TabNote] = try events.map { event in
@@ -274,9 +280,6 @@ extension UpstreamSVGParityTests {
         ) { factory, _ in
             let score = factory.EasyScore(options: EasyScoreOptions(throwOnError: true))
             _ = score.set(time: .meter(6, 8))
-            // Use the same upright lettering for a change on either beat of the bar.
-            let chordFontFamily = "Arial, Helvetica, sans-serif"
-            let chordFontSize = 12.0
             // Each bar is [firstBeat, secondBeat, chord, nextChord]. An empty string means no chord.
             let strains: [[(String, String, String, String)]] = [
                 [
@@ -323,13 +326,12 @@ extension UpstreamSVGParityTests {
                     }
                     if !chord.isEmpty {
                         _ = beats[0][0].addModifier(
-                            try score.make.chordSymbol(fontFamily: chordFontFamily, fontSize: chordFontSize).addText(chord)
+                            try score.make.chordSymbol().addText(chord)
                         )
                     }
                     if !nextChord.isEmpty {
                         _ = beats[1][0].addModifier(
-                            try score.make.chordSymbol(fontFamily: chordFontFamily, fontSize: chordFontSize)
-                                .addText(nextChord)
+                            try score.make.chordSymbol().addText(nextChord)
                         )
                     }
                     if i == 0 || i == 4 {
@@ -486,9 +488,7 @@ extension UpstreamSVGParityTests {
                 if i == 0 { _ = try stave.addTimeSignature(.meter(4, 4)).setTempo(parsingDuration: "q", bpm: 96, y: -8) }
                 if i == 3 { _ = stave.setEndBarType(.end) }
                 func legato(_ start: Int, _ label: String) throws {
-                    _ = try score.make
-                        .tabTie(TieNotes(firstNote: notes[start], lastNote: notes[start + 1]), text: label)
-                        .setFont(family: "Arial, Helvetica, sans-serif", size: "9pt", weight: "bold")
+                    _ = try score.make.tabTie(TieNotes(firstNote: notes[start], lastNote: notes[start + 1]), text: label)
                 }
                 if i == 0 {
                     _ = try score.beamThrowing(Array(notes[1..<3]))

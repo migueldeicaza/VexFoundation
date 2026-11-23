@@ -296,8 +296,9 @@ struct Upstream51Tests {
     @Test func graceTabNoteFretsUseGraceScale() throws {
         let tab = TabNote(TabNoteStruct(positions: [TabNotePosition(str: 1, fret: "9")], duration: .quarter))
         let grace = GraceTabNote(TabNoteStruct(positions: [TabNotePosition(str: 1, fret: "9")], duration: .eighth))
-        #expect(tab.fretElement[0].fontSizeInPoints == 9)
-        #expect(abs(grace.fretElement[0].fontSizeInPoints - 6) < 1e-9)
+        // VexFlow 5.6.0: tab frets are 11 pt (grace frets 2/3 of that).
+        #expect(tab.fretElement[0].fontSizeInPoints == 11)
+        #expect(abs(grace.fretElement[0].fontSizeInPoints - 22.0 / 3) < 1e-9)
         _ = tab.setFontSize(12.0)
         #expect(tab.fretElement[0].fontSizeInPoints == 12)
     }

@@ -1,7 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/tabstave.ts` (VexFlow 5.0.0).
+// Port of `src/tabstave.ts` (VexFlow 5.6.1).
+// Tablature stave geometry and the default six-string layout.
 
 import Foundation
 
@@ -32,8 +33,9 @@ public final class TabStave: Stave {
 
     // MARK: - Glyph Position
 
+    /// The glyph anchor is halfway between the outer strings. (VexFlow 5.6.1)
     override public func getYForGlyphs() -> Double {
-        getYForLine(2.5)
+        getYForLine(Double(getNumLines() - 1) / 2)
     }
 
     // MARK: - Deprecated

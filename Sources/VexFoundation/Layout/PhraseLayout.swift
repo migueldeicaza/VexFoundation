@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/phraselayout.ts` (VexFlow 5.4.0).
+// Port of `src/phraselayout.ts` (VexFlow 5.6.0).
 // Place attachments and lyrics within one formatted system. All solver coordinates are renderer pixels.
 
 import Foundation
@@ -244,6 +244,7 @@ public final class PhraseLayout {
         for (i, s) in syllables.enumerated() {
             let hyphenated = s.hyphenAfter || (i > 0 && syllables[i - 1].hyphenAfter)
             marks.append(try Annotation(s.text)
+                .setFont(Metrics.getFontInfo("Annotation.lyric"))
                 .setVerticalJustification(options.side == .above ? .top : .bottom)
                 .setConnectorPadding(hyphenated ? stave.space(0.4) : 0))
         }
@@ -257,7 +258,7 @@ public final class PhraseLayout {
     public func resetPlacement() {
         for lane in lanes { for mark in lane.marks { setMarkBaseline(mark, nil) } }
         for route in routes { route.setLayoutRise(0) }
-        for line in restLines where line.note.getKeyLine(0) == line.after {
+        for line in restLines where line.note.restLine == nil && line.note.getKeyLine(0) == line.after {
             line.note.setKeyLine(0, line: line.before)
         }
         restLines.removeAll()
@@ -377,7 +378,10 @@ public final class PhraseLayout {
             }
         }
         for (owner, stave) in fixed where !tuplets.contains(where: { $0 === owner }) { measure(owner, stave) }
-        for n in rests { placeRest(n) }
+        // VexFlow 5.6.0: record authored rest positions first so automatic rests can clear them in either voice
+        // order.
+        for n in rests where n.restLine != nil { placeRest(n) }
+        for n in rests where n.restLine == nil { placeRest(n) }
         for m in marks { placeAttachment(m) }
         for t in tuplets {
             if let first = t.getNotes().first { measure(t, first.checkStave()) }
@@ -401,7 +405,8 @@ public final class PhraseLayout {
         let original = engrave(note, options)
         if !original.diagnostics.isEmpty { report(.unsupportedGeometry, note) }
         var parts: [Bounds] = original.parts
-        if !hits(parts, stave, gap).isEmpty && !isPinned(note) {
+        let pinned = note.restLine != nil || isPinned(note)
+        if !hits(parts, stave, gap).isEmpty && !pinned {
             // Try whole staff spaces, nearest first, on both sides of the authored rest.
             let sign = note.getStemDirection().signDouble
             for step in [1.0, -1, 2, -2, 3, -3, 4, -4] {
@@ -418,7 +423,7 @@ public final class PhraseLayout {
         }
         let remaining = hits(parts, stave, gap)
         if let first = remaining.first {
-            report(isPinned(note) ? .pinnedCollision : .unresolvedCollision, note, first.owner)
+            report(pinned ? .pinnedCollision : .unresolvedCollision, note, first.owner)
         }
         addParts(note, stave, parts)
     }

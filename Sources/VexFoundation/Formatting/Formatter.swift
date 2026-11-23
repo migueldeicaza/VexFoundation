@@ -370,7 +370,7 @@ public final class Formatter {
 
             // If activated rests not on default can be rendered as specified.
             let line = curr.getLineForRest()
-            if line != 3 {
+            if curr.restLine != nil || line != 3 {
                 continue
             }
 

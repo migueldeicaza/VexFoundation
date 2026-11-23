@@ -1,7 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/notehead.ts` (VexFlow 5.3.0).
+// Port of `src/notehead.ts` (VexFlow 5.6.0).
+// Notehead geometry and selection of rest glyphs for the attached stave.
 
 import Foundation
 
@@ -233,15 +234,10 @@ public final class NoteHead: Note {
         // regular note, a rest, or another custom code.
         glyphProps = Note.getGlyphProps(duration, noteType)
 
-        // Swap out the glyph with ledger lines.
-        if line > 5 || line < 0, let ledgerCode = NoteHead.ledger[glyphProps.codeHead] {
-            glyphProps.codeHead = ledgerCode
-        }
-        text = glyphProps.codeHead
-        if let customGlyphCode = noteHeadStruct.customGlyphCode {
-            customGlyph = true
-            text = customGlyphCode
-        }
+        let customGlyphCode = noteHeadStruct.customGlyphCode.flatMap { $0.isEmpty ? nil : $0 }
+        text = customGlyphCode ?? glyphProps.codeHead
+        customGlyph = customGlyphCode != nil
+        updateRestGlyph()
 
         // VexFlowPatch: store the custom notehead x offsets and the y-shift values
         stemUpXOffset = noteHeadStruct.stemUpXOffset
@@ -250,6 +246,16 @@ public final class NoteHead: Note {
         stemDownYShift = noteHeadStruct.stemDownYShift
 
         setStyle(noteHeadStruct.style ?? ElementStyle())
+    }
+
+    /// Select the supporting ledger at the actual note position, preserving custom head glyphs. (VexFlow 5.6.0)
+    private func updateRestGlyph() {
+        let plain = glyphProps.codeHead
+        guard let ledger = NoteHead.ledger[plain], text == plain || text == ledger else { return }
+        // getYForNote anchors key line 5 at the top on staves of every size.
+        let bottomLine = Double(6 - (stave?.getNumLines() ?? 5))
+        let glyph = line > 5 || line < bottomLine ? ledger : plain
+        if text != glyph { setText(glyph) }
     }
 
     // MARK: - Width
@@ -271,6 +277,8 @@ public final class NoteHead: Note {
     @discardableResult
     public func setLine(_ line: Double) -> Self {
         self.line = line
+        if let stave { return setStave(stave) }
+        updateRestGlyph()
         return self
     }
 
@@ -298,6 +306,7 @@ public final class NoteHead: Note {
         let line = getLine()
 
         self.stave = stave
+        updateRestGlyph()
         setY(stave.getYForNote(line))
         setContext(stave.getContext())
         return self

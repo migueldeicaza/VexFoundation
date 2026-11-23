@@ -407,7 +407,9 @@ extension UpstreamSVGParityTests {
 
     @Test("ChordSymbol.Wide_Chord_Symbols")
     func chordSymbolWideMatchesUpstream() throws {
-        try runCategorySVGParityCase(module: "ChordSymbol", test: "Wide_Chord_Symbols", width: 300 * 1.5, height: 680) { factory, context in
+        // VexFlow 5.6.0: a left-justified extension can extend beyond the last barline. Keep its ink on the page.
+        let pageWidth = 370.0
+        try runCategorySVGParityCase(module: "ChordSymbol", test: "Wide_Chord_Symbols", width: pageWidth * 1.5, height: 680) { factory, context in
             _ = context.scale(1.5, 1.5)
 
             func drawRow(_ chord1: ChordSymbol, _ chord2: ChordSymbol, y: Double) throws {

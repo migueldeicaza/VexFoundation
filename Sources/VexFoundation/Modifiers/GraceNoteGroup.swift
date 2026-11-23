@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/gracenotegroup.ts` (VexFlow 5.3.0). `GraceNoteGroup` is used
+// Port of `src/gracenotegroup.ts` (VexFlow 5.6.0). `GraceNoteGroup` is used
 // to format and render grace notes.
 
 import Foundation
@@ -152,13 +152,15 @@ public final class GraceNoteGroup: Modifier {
         _ = try note.checkStaveThrowing()
         preFormat()
         alignSubNotesWithNote(getGraceNotes(), note, position: position)
-        if afterWidth != 0 {
+        // VexFlow 5.6.0: tab fret numbers extend left of their tick. A before-grace must clear that edge as well.
+        let fretOverhang = note is TabNote ? note.getLeftDisplacedHeadPx() : 0
+        if afterWidth != 0 || fretOverhang != 0 {
             for grace in graceNotes {
                 let tick = grace.getTickContext()
                 tick.setXOffset(
                     position == .right
                         ? note.getTickContext().getX() + afterOffset
-                        : tick.getXOffset() + afterWidth
+                        : tick.getXOffset() + afterWidth - fretOverhang
                 )
             }
         }

@@ -108,15 +108,19 @@ extension UpstreamSVGParityTests {
                 .addClef(.treble)
                 .addKeySignature("G")
                 .addTimeSignature(.meter(3, 4))
-            _ = try system1Top.setTempo(parsingDuration: "h", bpm: 66, dots: 1, name: "Allegretto", y: -30)
+            _ = try system1Top.setTempo(parsingDuration: "q", bpm: 132, name: "Allegretto", y: -30)
             _ = system
-                .addStave(SystemStave(voices: [score.voice(asNotes(score.notes("(G3 B3 D4)/h, A3/q", options: ["clef": "bass"])))]))
+                .addStave(SystemStave(voices: [score.voice(asNotes(score.notes(
+                    #"(G3 B3 D4)/h[id="ped1"], A3/q[id="lift1"]"#, options: ["clef": "bass"]
+                )))]))
                 .addClef(.bass)
                 .addKeySignature("G")
                 .addTimeSignature(.meter(3, 4))
             _ = system.addConnector(type: .brace)
             _ = system.addConnector(type: .singleRight)
             _ = system.addConnector(type: .singleLeft)
+            // Release the pedal as the bass moves off G.
+            _ = factory.PedalMarking(notes: [try staveNote(byID: "ped1"), try staveNote(byID: "lift1")])
             try addFingering(id: "m1a", number: "5")
 
             system = appendSystem(150)
@@ -131,8 +135,9 @@ extension UpstreamSVGParityTests {
             system = appendSystem(150)
             _ = system.addStave(SystemStave(voices: [score.voice(combine([
                 score.notes(#"E5/q[id="m3a"]"#),
-                score.beam(score.notes("C5/8, D5, E5, F5", options: ["stem": "down"])),
+                score.beam(score.notes(#"C5/8[id="m3cut"], D5, E5, F5"#, options: ["stem": "down"])),
             ]))]))
+            _ = try staveNote(byID: "m3cut").addModifier(factory.Ornament("mordent"))
             try addFingering(id: "m3a", number: "3", position: .above)
             _ = system.addStave(SystemStave(voices: [score.voice(asNotes(score.notes("C4/h.", options: ["clef": "bass"])))]))
             _ = system.addConnector(type: .singleRight)
@@ -144,7 +149,7 @@ extension UpstreamSVGParityTests {
             try addArticulation(id: "m4a", position: .above)
             try addArticulation(id: "m4b", position: .below)
             try addArticulation(id: "m4c", position: .below)
-            try addCurve(fromID: "m3a", toID: "m4a", cps: [(0, 20), (0, 20)])
+            try addCurve(fromID: "m3a", toID: "m4a", cps: [(0, 39), (0, 39)])
 
             system = appendSystem(150)
             _ = system.addStave(SystemStave(voices: [score.voice(combine([
@@ -176,10 +181,19 @@ extension UpstreamSVGParityTests {
 
             system = appendSystem(220)
             _ = system
-                .addStave(SystemStave(voices: [score.voice(combine([
-                    score.notes(#"F4/q[id="m7a"]"#),
-                    score.beam(score.notes(#"G4/8[id="m7b"], A4, B4, G4"#, options: ["stem": "up"])),
-                ]))]))
+                .addStave(SystemStave(voices: [
+                    score.voice([
+                        factory.TextDynamics(TextNoteStruct(
+                            duration: NoteDurationSpec(uncheckedValue: .half, dots: 1),
+                            text: "mf",
+                            line: 10
+                        )),
+                    ]),
+                    score.voice(combine([
+                        score.notes(#"F4/q[id="m7a"]"#),
+                        score.beam(score.notes(#"G4/8[id="m7b"], A4, B4, G4"#, options: ["stem": "up"])),
+                    ])),
+                ]))
                 .addClef(.treble)
                 .addKeySignature("G")
             _ = system
@@ -189,17 +203,13 @@ extension UpstreamSVGParityTests {
             _ = system.addConnector(type: .brace)
             _ = system.addConnector(type: .singleRight)
             _ = system.addConnector(type: .singleLeft)
+            _ = try staveNote(byID: "m7a").addModifier(factory.Articulation(type: "a-", position: .above))
             try addFingering(id: "m7a", number: "2", position: .below)
             try addFingering(id: "m7b", number: "1")
             try addFingering(id: "m7c", number: "3", position: .above)
 
             system = appendSystem(180)
-            let grace = factory.GraceNote(try GraceNoteStruct(
-                parsingKeys: ["d/3"],
-                duration: "4",
-                slash: false,
-                clef: .bass
-            ))
+            let grace = factory.GraceNote(try GraceNoteStruct(parsingKeys: ["b/4"], duration: "8", slash: true))
             _ = system.addStave(SystemStave(voices: [score.voice(asNotes(score.notes(#"A4/h.[id="m8c"]"#)))]))
             _ = score.set(defaults: EasyScoreDefaults(clef: .bass, time: .meter(3, 4)))
             _ = system.addStave(SystemStave(voices: [score.voice(combine([
@@ -208,7 +218,7 @@ extension UpstreamSVGParityTests {
             ]))]))
             _ = system.addConnector(type: .singleRight)
             try addFingering(id: "m8b", number: "1", position: .above)
-            _ = try staveNote(byID: "m8c").addModifier(factory.GraceNoteGroup(notes: [grace]), index: 0)
+            _ = try staveNote(byID: "m8c").addModifier(factory.GraceNoteGroup(notes: [grace], slur: true), index: 0)
             try addCurve(
                 fromID: "m7a",
                 toID: "m8c",
@@ -217,14 +227,22 @@ extension UpstreamSVGParityTests {
                 position: .nearTop,
                 positionEnd: .nearTop
             )
-            _ = factory.StaveTie(notes: TieNotes(firstNote: grace, lastNote: try staveNote(byID: "m8c")))
 
             system = appendSystem(180)
             _ = score.set(defaults: EasyScoreDefaults(clef: .treble, time: .meter(3, 4)))
-            _ = system.addStave(SystemStave(voices: [score.voice(combine([
-                score.notes(#"D5/q[id="m9a"]"#),
-                score.beam(score.notes("G4/8, A4, B4, C5", options: ["stem": "up"])),
-            ]))]))
+            _ = system.addStave(SystemStave(voices: [
+                score.voice([
+                    factory.TextDynamics(TextNoteStruct(
+                        duration: NoteDurationSpec(uncheckedValue: .half, dots: 1),
+                        text: "pp",
+                        line: 9
+                    )),
+                ]),
+                score.voice(combine([
+                    score.notes(#"D5/q[id="m9a"]"#),
+                    score.beam(score.notes("G4/8, A4, B4, C5", options: ["stem": "up"])),
+                ])),
+            ]))
             _ = system.addStave(SystemStave(voices: [score.voice(asNotes(score.notes("B3/h, A3/q", options: ["clef": "bass"])))]))
             _ = system.addConnector(type: .singleRight)
             try addFingering(id: "m9a", number: "5")
@@ -242,8 +260,9 @@ extension UpstreamSVGParityTests {
             system = appendSystem(150)
             _ = system.addStave(SystemStave(voices: [score.voice(combine([
                 score.notes(#"E5/q[id="m11a"]"#),
-                score.beam(score.notes("C5/8, D5, E5, F5", options: ["stem": "down"])),
+                score.beam(score.notes(#"C5/8[id="m11cut"], D5, E5, F5"#, options: ["stem": "down"])),
             ]))]))
+            _ = try staveNote(byID: "m11cut").addModifier(factory.Ornament("mordent"))
             try addFingering(id: "m11a", number: "3", position: .above)
             _ = system.addStave(SystemStave(voices: [score.voice(asNotes(score.notes("C4/h.", options: ["clef": "bass"])))]))
             _ = system.addConnector(type: .singleRight)
@@ -261,7 +280,7 @@ extension UpstreamSVGParityTests {
             try addArticulation(id: "m12c", position: .below)
             try addFingering(id: "m12d", number: "2", position: .above)
             try addFingering(id: "m12e", number: "4", position: .above)
-            try addCurve(fromID: "m11a", toID: "m12a", cps: [(0, 20), (0, 20)])
+            try addCurve(fromID: "m11a", toID: "m12a", cps: [(0, 39), (0, 39)])
 
             x = 20
             y += 230
@@ -290,7 +309,7 @@ extension UpstreamSVGParityTests {
             _ = score.set(defaults: EasyScoreDefaults(clef: .treble, time: .meter(3, 4)))
             _ = system.addStave(SystemStave(voices: [score.voice(combine([
                 score.notes("B4/q"),
-                score.beam(score.notes("C5/8, b4, a4, g4", options: ["stem": "up"])),
+                score.beam(score.notes(#"C5/8, b4, a4, g4[id="m14end"]"#, options: ["stem": "up"])),
             ]))]))
             _ = system.addStave(SystemStave(voices: [score.voice(asNotes(score.notes(#"g3/h[id="m14a"], b3/q[id="m14b"]"#, options: ["clef": "bass"])))]))
             _ = system.addConnector(type: .singleRight)
@@ -314,7 +333,7 @@ extension UpstreamSVGParityTests {
                 .addStave(SystemStave(voices: [score.voice(asNotes(score.notes(#"g4/h.[id="m16a"]"#)))]))
                 .setEndBarType(.repeatEnd)
             _ = system
-                .addStave(SystemStave(voices: [score.voice(asNotes(score.notes(#"g3/h[id="m16b"], g2/q"#, options: ["clef": "bass"])))]))
+                .addStave(SystemStave(voices: [score.voice(asNotes(score.notes(#"g3/h[id="m16b"], g2/q[id="lift16"]"#, options: ["clef": "bass"])))]))
                 .setEndBarType(.repeatEnd)
             _ = system.addConnector(type: .boldDoubleRight)
             try addFingering(id: "m16a", number: "1")
@@ -361,6 +380,11 @@ extension UpstreamSVGParityTests {
             _ = system.addConnector(type: .singleRight)
             try addFingering(id: "m18a", number: "4", position: .above)
             try addCurve(fromID: "m17a", toID: "m18b", cps: [(0, 20), (0, 30)])
+
+            // Shape the two descents differently and clear the pedal before the repeat.
+            _ = factory.StaveHairpin(from: try staveNote(byID: "m5a"), to: try staveNote(byID: "m6a"), type: .crescendo)
+            _ = factory.StaveHairpin(from: try staveNote(byID: "m13a"), to: try staveNote(byID: "m14end"), type: .decrescendo)
+            _ = factory.PedalMarking(notes: [try staveNote(byID: "m16b"), try staveNote(byID: "lift16")])
 
             try factory.draw()
         }

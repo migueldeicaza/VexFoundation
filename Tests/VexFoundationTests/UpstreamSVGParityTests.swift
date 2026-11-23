@@ -1874,6 +1874,9 @@ struct UpstreamSVGParityTests {
             Flow.setFonts("Gonville", "Academico")
         case "Petaluma":
             Flow.setFonts("Petaluma", "Petaluma Script")
+        case "Petaluma_with_Academico":
+            // VexFlow 5.6.0 `FONT_STACKS['Petaluma with Academico']`.
+            Flow.setFonts("Petaluma", "Academico")
         case "Leland":
             Flow.setFonts("Leland", "Edwin")
         default:

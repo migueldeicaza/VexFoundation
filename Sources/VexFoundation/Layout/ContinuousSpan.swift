@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/continuousspan.ts` (VexFlow 5.4.0).
+// Port of `src/continuousspan.ts` (VexFlow 5.6.0).
 // Logical event anchors and renderer-independent drawing of continuous-score span fragments.
 
 import Foundation
@@ -31,22 +31,33 @@ public enum ContinuousSpanSide: String, Sendable {
 /// A relationship between two composition notes, named by their IDs. (VexFlow 5.4.0)
 public struct ContinuousSpan: Sendable, Equatable {
     public var kind: ContinuousSpanKind
+    /// One-based string of a tab tie. Defaults to the string of the selected chord position. (VexFlow 5.6.0)
+    public var string: Int?
     /// Required for `palmMute`. String numbers are one-based.
     public var strings: [Int]?
     public var id: String
     public var from: String
     public var to: String
-    /// Optional chord-head indices for each end of a tie or slur.
+    /// Optional zero-based chord-head indices. On a tab tie these index the positions arrays.
     public var fromHead: Int?
     public var toHead: Int?
     public var side: ContinuousSpanSide?
     /// Syllable, ending number, tuplet ratio or octave label, according to kind.
     public var text: String?
+    /// Optional type size for this label, in points. Measured before system breaks are chosen. (VexFlow 5.5.0)
+    public var labelFontSize: Double?
+    /// For a lyric extender, take the baseline and ink edge from this Annotation on the source note.
+    /// (VexFlow 5.6.0)
+    public var syllableId: String?
 
     public init(
         id: String, kind: ContinuousSpanKind, from: String, to: String, fromHead: Int? = nil, toHead: Int? = nil,
-        side: ContinuousSpanSide? = nil, text: String? = nil, strings: [Int]? = nil
+        side: ContinuousSpanSide? = nil, text: String? = nil, strings: [Int]? = nil, string: Int? = nil,
+        labelFontSize: Double? = nil, syllableId: String? = nil
     ) {
+        self.string = string
+        self.labelFontSize = labelFontSize
+        self.syllableId = syllableId
         self.id = id
         self.kind = kind
         self.from = from
@@ -72,6 +83,8 @@ public struct ResolvedSpan {
     public var first: SpanAnchor
     public var last: SpanAnchor
     public var label: VexElement?
+    /// The source lyric annotation of an anchored extender. (VexFlow 5.6.0)
+    public var syllable: Annotation?
 }
 
 /// The part of a span that a fragment draws. (VexFlow 5.4.0)
@@ -94,7 +107,7 @@ public struct SpanFragment: Sendable, Equatable {
     public var y2: Double
     /// Fraction of the drawn span used to interpolate the aperture across a system break.
     public var progress: (Double, Double)
-    /// String numbers covered by a palm-mute fragment.
+    /// String numbers covered by a tab tie or palm-mute fragment.
     public var strings: [Int]?
     /// Authored TAB endpoints appear on the fragments containing them.
     public var from: String?
@@ -118,7 +131,12 @@ public func spanLabel(_ spec: ContinuousSpan) -> VexElement? {
         ?? (spec.kind == .palmMute ? "P.M. " + (spec.strings ?? []).map(String.init).joined(separator: ",") : nil)
         ?? defaults[spec.kind]
     guard let text, !text.isEmpty else { return nil }
-    return VexElement(category: spec.kind == .trill ? "Ornament" : "Annotation").setText(text)
+    var category = "Annotation"
+    if spec.kind == .trill { category = "Ornament" }
+    if spec.kind == .lyric || spec.kind == .hyphen { category = "Annotation.lyric" }
+    let label = VexElement(category: category).setText(text)
+    if let size = spec.labelFontSize { label.setFontSize(size) }
+    return label
 }
 
 /// Slurs, voltas, ottavas, trills and tuplets go above unless the span names a side. (VexFlow 5.4.0)

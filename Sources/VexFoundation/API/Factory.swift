@@ -521,18 +521,15 @@ public final class Factory {
         let chordSymbol = inRuntimeContext { VexFoundation.ChordSymbol() }
         _ = chordSymbol.setHorizontal(hJustify)
         _ = chordSymbol.setVertical(vJustify)
-        // There is a default font based on the engraving font. Set the font
-        // only if it is specified, else use the default.
-        if let fontFamily, let fontSize {
-            let size = "\(formatJSNumber(fontSize))pt"
-            if let fontWeight {
-                chordSymbol.setFont(family: fontFamily, size: size, weight: fontWeight)
-            } else {
-                chordSymbol.setFont(family: fontFamily, size: size, weight: "")
-            }
-        } else if let fontSize {
-            chordSymbol.setFontSize(fontSize)
-        }
+        // VexFlow 5.6.0: override individual properties so a custom family can still follow the score's
+        // chord size.
+        let current = chordSymbol.fontInfo
+        chordSymbol.setFont(
+            family: fontFamily ?? current.family,
+            size: fontSize.map { "\(formatJSNumber($0))pt" } ?? current.size,
+            weight: fontWeight ?? current.weight,
+            style: current.style
+        )
         if let ctx = context { _ = chordSymbol.setContext(ctx) }
         return own(chordSymbol)
     }

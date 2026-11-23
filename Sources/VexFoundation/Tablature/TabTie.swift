@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/tabtie.ts` (VexFlow 5.0.0).
+// Port of `src/tabtie.ts` (VexFlow 5.6.0).
 
 import Foundation
 
@@ -30,6 +30,12 @@ open class TabTie: StaveTie {
     ///   - text: The tie text, for example "H" or "P".
     public override init(notes: TieNotes, text: String? = nil) {
         super.init(notes: notes, text: text)
+        // VexFlow 5.6.0: a one-letter tab technique has a distinct face from a written direction or a slide
+        // abbreviation.
+        if let text, text.count == 1, let c = text.unicodeScalars.first, c.isASCII,
+           CharacterSet.letters.contains(c) {
+            setFont(Metrics.getFontInfo("TabTie.techniqueLetter"))
+        }
         renderOptions.cp1 = 9
         renderOptions.cp2 = 11
         renderOptions.yShift = 3
