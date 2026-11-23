@@ -168,10 +168,23 @@ public enum TextMeasurer {
             return TextLayout(runs: [], metrics: m)
         }
 
+        // Implicit last fallback: bundled Bravura, so SMuFL glyphs that the
+        // chosen music font lacks still render (browsers would use an
+        // arbitrary system font here). See docs/local-deviations.md.
+        var searchFonts = fonts
+        if let bravura = FontRegistry.shared.font(
+            family: "Bravura",
+            sizePx: VexFont.convertSizeToPixelValue(fontInfo.size),
+            bold: false,
+            italic: false
+        ) {
+            searchFonts.append(bravura)
+        }
+
         // Segment text by the first family that covers each character.
         var segments: [(fontIndex: Int?, text: String)] = []
         for ch in text {
-            let idx = fontIndex(for: ch, in: fonts)
+            let idx = fontIndex(for: ch, in: searchFonts)
             if let last = segments.last, last.fontIndex == idx {
                 segments[segments.count - 1].text.append(ch)
             } else {
@@ -185,7 +198,31 @@ public enum TextMeasurer {
         var minY = CGFloat.infinity, maxY = -CGFloat.infinity
 
         for segment in segments {
-            let font = segment.fontIndex.map { fonts[$0] } ?? primary
+            guard let fontIndex = segment.fontIndex else {
+                // No font in the stack has these characters. Browsers then draw
+                // the `.notdef` glyph of the first font (they do not fall back to
+                // other web fonts), so do the same instead of using LastResort.
+                var notdef: [CGGlyph] = [0]
+                var advance = CGSize.zero
+                CTFontGetAdvancesForGlyphs(primary, .default, &notdef, &advance, 1)
+                var rect = CGRect.zero
+                CTFontGetBoundingRectsForGlyphs(primary, .default, &notdef, &rect, 1)
+                var glyphs: [CGGlyph] = []
+                var positions: [CGPoint] = []
+                for _ in segment.text {
+                    if !rect.isEmpty && !rect.isNull {
+                        let r = rect.offsetBy(dx: penX, dy: 0)
+                        minX = min(minX, r.minX); maxX = max(maxX, r.maxX)
+                        minY = min(minY, r.minY); maxY = max(maxY, r.maxY)
+                    }
+                    glyphs.append(0)
+                    positions.append(CGPoint(x: penX, y: 0))
+                    penX += advance.width
+                }
+                runs.append(TextGlyphRun(font: primary, glyphs: glyphs, positions: positions))
+                continue
+            }
+            let font = searchFonts[fontIndex]
             let attributes: [CFString: Any] = [kCTFontAttributeName: font]
             guard let attributed = CFAttributedStringCreate(nil, segment.text as CFString, attributes as CFDictionary) else { continue }
             let line = CTLineCreateWithAttributedString(attributed)

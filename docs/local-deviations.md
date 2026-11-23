@@ -43,3 +43,7 @@ When `VexRuntimeContext.upstreamParityMode` is `true`, the items marked **(gated
 - [ ] `VexRuntimeContext` and `VexRuntime.withContext` instead of module globals.
 - [ ] Render back ends: `SVGRenderContext` (string serializer), `SwiftUICanvasContext`, `VexCanvas`.
 - [ ] `Compatibility/` layer: `Flow`, `Vex`, `Version`.
+
+## Rendering deviations introduced by the VexFlow 5 port
+
+- [x] Missing SMuFL glyphs: when no font in the CSS family list has a glyph, `TextMeasurer` uses bundled Bravura, then the `.notdef` glyph of the first font. Browsers use an arbitrary system font instead, so upstream reference SVGs for Gonville and Petaluma cases with missing glyphs depend on the machine that made them. Such cases are listed as environment-dependent in the parity harness.
