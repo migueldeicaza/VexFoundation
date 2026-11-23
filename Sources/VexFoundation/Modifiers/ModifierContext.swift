@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/modifiercontext.ts` (VexFlow 5.1.0).
+// Port of `src/modifiercontext.ts` (VexFlow 5.3.0).
 //
 // This class implements various types of members to notes (e.g. bends,
 // fingering positions etc.). The ModifierContext works with tickables
@@ -112,6 +112,15 @@ public final class ModifierContext {
 
     public func getState() -> ModifierContextState { state }
 
+    // Lines occupied by the outermost annotations. Tuplets can measure this text directly. (VexFlow 5.3.0)
+    private var measuredTopLines: Double = 0
+    private var measuredBottomLines: Double = 0
+
+    /// Keep the line allowance for other marks when using actual annotation ink bounds. (VexFlow 5.3.0)
+    public func getUnmeasuredTextLines(_ above: Bool) -> Double {
+        above ? state.topTextLine - measuredTopLines : state.textLine - measuredBottomLines
+    }
+
     public func getMetrics() -> ModifierContextMetrics {
         (try? getMetricsThrowing()) ?? ModifierContextMetrics(
             width: state.leftShift + state.rightShift + spacing,
@@ -185,7 +194,11 @@ public final class ModifierContext {
         }
         Annotation.format(annotations.filter { !isOutsideNote($0) }, state: &state)
         let rightShiftBeforeAnnotations = state.rightShift
+        let topBefore = state.topTextLine
+        let bottomBefore = state.textLine
         Annotation.format(annotations.filter(isOutsideNote), state: &state)
+        let topAfter = state.topTextLine
+        let bottomAfter = state.textLine
         let rightShiftWithAnnotations = state.rightShift
         // Keep annotation vertical placement in its original stage. Its horizontal
         // text box must not push nearby modifiers away from the notehead.
@@ -201,6 +214,10 @@ public final class ModifierContext {
         Vibrato.format(
             getMembers("Vibrato") as? [Vibrato] ?? [], state: &state, context: self
         )
+
+        // If a later mark stacked above the annotations, retain its full reserved height.
+        measuredTopLines = state.topTextLine == topAfter ? topAfter - topBefore : 0
+        measuredBottomLines = state.textLine == bottomAfter ? bottomAfter - bottomBefore : 0
 
         // Reserve enough note spacing for both the lyric and nearby modifiers.
         annotationRightShift = max(0, rightShiftWithAnnotations - state.rightShift)

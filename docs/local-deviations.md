@@ -44,6 +44,7 @@ When `VexRuntimeContext.upstreamParityMode` is `true`, the items marked **(gated
 - [ ] Render back ends: `SVGRenderContext` (string serializer), `SwiftUICanvasContext`, `VexCanvas`.
 - [ ] `Compatibility/` layer: `Flow`, `Vex`, `Version`.
 - [ ] EasyScore 5.2.0: string builder options, `Character` source offsets, typed composition specs, non-throwing variants that record `lastError` (see `docs/port-notes/5.2.0.md`).
+- [ ] Engraving 5.3.0: bundled SMuFL metadata subsets for Bravura, Petaluma and Leland (`Resources/smufl`, `EngravingProfile.bundledMetadata(for:)`, `EngravingProfile.bundled(...)`); upstream takes the metadata from the caller only. Typed `MeasuredSpacing` and `TupletOptions.displayRatio`; a negative `NoteHeadStruct.displacementColumn` is clamped to 0; `Beam` skips the multi-voice clearance for notes without a tick context (see `docs/port-notes/5.3.0.md`).
 
 ## Rendering deviations introduced by the VexFlow 5 port
 

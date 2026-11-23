@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Cyril Silverman
 //
-// Port of `src/keysignature.ts` (VexFlow 5.2.0).
+// Port of `src/keysignature.ts` (VexFlow 5.3.0).
 //
 // This file implements key signatures. A key signature sits on a stave
 // and indicates the notes with implicit accidentals.
@@ -48,7 +48,7 @@ public final class KeySignature: StaveModifier {
     func convertToGlyph(_ acc: KeySignatureAccidental, _ nextAcc: KeySignatureAccidental?, _ stave: Stave) {
         let code = Tables.accidentalCodes(acc.type)
         let glyph = VexElement(category: KeySignature.category)
-        glyph.setText(code)
+        glyph.setFont(fontInfo).setText(code)
 
         // Determine spacing between current accidental and the next accidental
         var extraWidth: Double = 1

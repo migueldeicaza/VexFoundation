@@ -148,13 +148,13 @@ Commits: `git -C ../vexflow log --oneline 5.2.0..5.3.0`. Release notes: `changel
 | `src/easyscore/composition.ts` | +56/-2 | API/EasyScore/Composition.swift |
 | `src/easyscore/policies.ts` | +33/-4 | API/EasyScore/Policies.swift |
 | `src/element.ts` | +11/-0 | Core/Element.swift |
-| `src/engravinggeometry.ts` | +170/-0 | NEW |
-| `src/engravingprofile.ts` | +66/-0 | NEW |
+| `src/engravinggeometry.ts` | +170/-0 | NEW: Engraving/EngravingGeometry.swift |
+| `src/engravingprofile.ts` | +66/-0 | NEW: Engraving/EngravingProfile.swift |
 | `src/factory.ts` | +19/-8 | API/Factory.swift |
 | `src/formatter.ts` | +10/-4 | Formatting/Formatter.swift |
 | `src/gracenote.ts` | +48/-42 | Modifiers/GraceNote.swift |
 | `src/gracenotegroup.ts` | +65/-73 | Modifiers/GraceNoteGroup.swift |
-| `src/index.ts` | +2/-0 | ? |
+| `src/index.ts` | +2/-0 | (module exports) |
 | `src/keysignature.ts` | +1/-1 | Stave/KeySignature.swift |
 | `src/modifiercontext.ts` | +17/-0 | Modifiers/ModifierContext.swift |
 | `src/notehead.ts` | +13/-6 | Notes/NoteHead.swift |
@@ -185,7 +185,7 @@ Commits: `git -C ../vexflow log --oneline 5.3.0..5.4.0`. Release notes: `changel
 | `src/curve.ts` | +33/-2 | Connectors/Curve.swift |
 | `src/easyscore/composition.ts` | +20/-2 | API/EasyScore/Composition.swift |
 | `src/easyscore/policies.ts` | +7/-3 | API/EasyScore/Policies.swift |
-| `src/engravinggeometry.ts` | +10/-1 | ? |
+| `src/engravinggeometry.ts` | +10/-1 | Engraving/EngravingGeometry.swift |
 | `src/factory.ts` | +13/-4 | API/Factory.swift |
 | `src/font.ts` | +12/-1 | ? |
 | `src/fretdiagram.ts` | +98/-0 | NEW |

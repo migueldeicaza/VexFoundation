@@ -1,7 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/gracenote.ts` (VexFlow 5.0.0).
+// Port of `src/gracenote.ts` (VexFlow 5.3.0).
+// Grace-note glyphs and the optional acciaccatura slash.
 
 import Foundation
 
@@ -29,6 +30,10 @@ public struct GraceNoteStruct {
     public var dots: Int?
     public var type: NoteType?
     public var octaveShift: Int?
+    /// Override the music glyph family (upstream `StaveNoteStruct.musicFont`). (VexFlow 5.3.0)
+    public var musicFont: String?
+    /// Score-local engraving profile (upstream `StaveNoteStruct.engraving`). (VexFlow 5.3.0)
+    public var engraving: EngravingProfile?
 
     public init(
         keys: NonEmptyArray<StaffKeySpec>,
@@ -204,7 +209,9 @@ public struct GraceNoteStruct {
             autoStem: autoStem,
             strokePx: GraceNote.GRACE_LEDGER_LINE_OFFSET,
             octaveShift: octaveShift,
-            clef: clef
+            clef: clef,
+            musicFont: musicFont,
+            engraving: engraving
         )
     }
 }
@@ -266,11 +273,9 @@ public class GraceNote: StaveNote {
 
     // MARK: - Draw
 
-    override public func draw() throws {
-        try super.draw()
-        setRendered()
-        guard slash, stem != nil else { return }
-
+    /// Absolute endpoints of the grace slash used by both measurement and drawing. (VexFlow 5.3.0)
+    public func getSlash() throws -> (x1: Double, y1: Double, x2: Double, y2: Double)? {
+        guard slash, stem != nil else { return nil }
         let scale = getFontScale()
 
         let slashBBox: (x1: Double, y1: Double, x2: Double, y2: Double)
@@ -312,6 +317,14 @@ public class GraceNote: StaveNote {
                 )
             }
         }
+
+        return slashBBox
+    }
+
+    override public func draw() throws {
+        try super.draw()
+        guard let slashBBox = try getSlash() else { return }
+        let scale = getFontScale()
 
         // FIXME: avoid staff lines, ledger lines or others.
 

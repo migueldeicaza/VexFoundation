@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/easyscore/policies.ts` (VexFlow 5.2.0).
+// Port of `src/easyscore/policies.ts` (VexFlow 5.3.0).
 // Opt-in accidental generation preserves written pitches and explicit native decorations.
 
 import Foundation
@@ -12,6 +12,25 @@ struct EasyScoreKeyChange {
     var key: String
 }
 
+/// Grace attacks in different voices align at the host end of a before-group
+/// and at the beginning of an after-group. They never advance the voice clock. (VexFlow 5.3.0)
+private func orderedAttacks(_ hosts: [StaveNote], _ includeGrace: Bool) -> [[StaveNote]] {
+    var attacks: [Int: [StaveNote]] = [0: hosts.filter { !$0.isRest() }]
+    if includeGrace {
+        for host in hosts {
+            for case let group as GraceNoteGroup in host.getModifiers() {
+                let notes = group.getGraceNotes()
+                for (i, note) in notes.enumerated() {
+                    guard let note = note as? StaveNote, !note.isRest() else { continue }
+                    let offset = group.getPosition() == .right ? i + 1 : i - notes.count
+                    attacks[offset, default: []].append(note)
+                }
+            }
+        }
+    }
+    return attacks.keys.sorted().compactMap { attacks[$0] }
+}
+
 /// Each onset is evaluated against one prior state, so voice ordering cannot change accidental output.
 func applyCompositionAccidentals(
     _ score: EasyScore,
@@ -19,7 +38,8 @@ func applyCompositionAccidentals(
     _ key: String,
     _ changes: [EasyScoreKeyChange],
     _ generated: Set<ObjectIdentifier>,
-    _ stave: Stave
+    _ stave: Stave,
+    _ includeGrace: Bool = false
 ) throws {
     let music = Music()
     var scale = try music.createScaleMap(key)
@@ -33,21 +53,15 @@ func applyCompositionAccidentals(
             let id = at.clone().simplify().description
             var group = positions[id] ?? (at.clone(), [])
             if positions[id] == nil { positionOrder.append(id) }
-            if let staveNote = note as? StaveNote, !staveNote.isRest(), staveNote.getStave() === stave {
+            if let staveNote = note as? StaveNote, staveNote.getStave() === stave {
                 group.notes.append(staveNote)
             }
             positions[id] = group
             at.add(note.getTicks())
         }
     }
-    var changeIndex = 0
-    let sorted = positionOrder.compactMap { positions[$0] }.sorted { $0.at.lessThan($1.at) }
-    for group in sorted {
-        while changeIndex < changes.count && !changes[changeIndex].at.greaterThan(group.at) {
-            scale = try music.createScaleMap(changes[changeIndex].key)
-            changeIndex += 1
-            state.removeAll()
-        }
+    /// Resolve each pitch against the same prior state before committing the whole attack.
+    func applyAttack(_ notes: [StaveNote]) throws {
         func parts(_ written: String) throws -> (root: String, accidental: String, id: String) {
             let pieces = written.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
             let noteParts = try music.getNoteParts(pieces.first ?? "")
@@ -55,7 +69,7 @@ func applyCompositionAccidentals(
             return (noteParts.root, noteParts.accidental ?? "n", "\(noteParts.root)/\(octave)")
         }
         var simultaneous: [String: Set<String>] = [:]
-        for note in group.notes {
+        for note in notes {
             for written in note.getKeys() {
                 let p = try parts(written)
                 simultaneous[p.id, default: []].insert(p.accidental)
@@ -63,7 +77,7 @@ func applyCompositionAccidentals(
         }
         var updateOrder: [String] = []
         var updates: [String: Set<String>] = [:]
-        for note in group.notes {
+        for note in notes {
             for (index, written) in note.getKeys().enumerated() {
                 let p = try parts(written)
                 let pitch = p.root + p.accidental
@@ -91,5 +105,16 @@ func applyCompositionAccidentals(
             guard let values = updates[id] else { continue }
             state[id] = values.count == 1 ? values.first : "ambiguous"
         }
+    }
+
+    var changeIndex = 0
+    let sorted = positionOrder.compactMap { positions[$0] }.sorted { $0.at.lessThan($1.at) }
+    for group in sorted {
+        while changeIndex < changes.count && !changes[changeIndex].at.greaterThan(group.at) {
+            scale = try music.createScaleMap(changes[changeIndex].key)
+            changeIndex += 1
+            state.removeAll()
+        }
+        for notes in orderedAttacks(group.notes, includeGrace) { try applyAttack(notes) }
     }
 }

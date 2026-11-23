@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/tuplet.ts` (VexFlow 5.2.0).
+// Port of `src/tuplet.ts` (VexFlow 5.3.0).
 //
 // Create a new tuplet from the specified notes. The notes must
 // be part of the same voice. If they are of different rhythmic
@@ -43,6 +43,8 @@ public struct TupletOptions {
     public var notesOccupied: Int?
     public var bracketed: Bool?
     public var ratioed: Bool?
+    /// Engraved numerator and denominator, independent of the duration multiplier. (VexFlow 5.3.0)
+    public var displayRatio: (numerator: Int, denominator: Int)?
     public var location: TupletLocation?
     public var yOffset: Double?
     public var textYOffset: Double?
@@ -57,8 +59,10 @@ public struct TupletOptions {
         location: TupletLocation? = nil,
         yOffset: Double? = nil,
         textYOffset: Double? = nil,
-        suffix: String? = nil
+        suffix: String? = nil,
+        displayRatio: (numerator: Int, denominator: Int)? = nil
     ) {
+        self.displayRatio = displayRatio
         self.numNotes = numNotes
         self.notesOccupied = notesOccupied
         self.bracketed = bracketed
@@ -88,6 +92,8 @@ public final class Tuplet: VexElement {
     public var notesOccupied: Int
     public var bracketed: Bool
     public var ratioed: Bool
+    /// Engraved numerator and denominator, independent of the duration multiplier. (VexFlow 5.3.0)
+    public private(set) var displayRatio: (numerator: Int, denominator: Int)?
     public var location: TupletLocation
     public var yOffset: Double
     public var textYOffset: Double
@@ -109,7 +115,8 @@ public final class Tuplet: VexElement {
             location: location,
             yOffset: yOffset,
             textYOffset: textYOffset,
-            suffix: suffix
+            suffix: suffix,
+            displayRatio: displayRatio
         )
     }
 
@@ -133,6 +140,10 @@ public final class Tuplet: VexElement {
         self.yOffset = options.yOffset ?? Metrics.getDouble("Tuplet.yOffset")
         self.textYOffset = options.textYOffset ?? Metrics.getDouble("Tuplet.textYOffset")
         self.suffix = options.suffix ?? ""
+        if let ratio = options.displayRatio, ratio.numerator <= 0 || ratio.denominator <= 0 {
+            throw VexError("BadArguments", "Tuplet display ratio requires two positive integers.")
+        }
+        self.displayRatio = options.displayRatio
         self.textElement = VexElement(category: "Tuplet")
         self.suffixElement = VexElement(category: "Tuplet.suffix")
 
@@ -172,6 +183,7 @@ public final class Tuplet: VexElement {
     @discardableResult
     public func setRatioed(_ ratioed: Bool) -> Self {
         self.ratioed = ratioed
+        resolveGlyphs()
         return self
     }
 
@@ -209,13 +221,13 @@ public final class Tuplet: VexElement {
     public func resolveGlyphs() {
         var numerator = ""
         var denominator = ""
-        var n = numNotes
+        var n = displayRatio?.numerator ?? numNotes
         while n >= 1 {
             numerator = Self.tupletDigit(n % 10) + numerator
             n = n / 10
         }
         if ratioed {
-            n = notesOccupied
+            n = displayRatio?.denominator ?? notesOccupied
             while n >= 1 {
                 denominator = Self.tupletDigit(n % 10) + denominator
                 n = n / 10
@@ -271,7 +283,7 @@ public final class Tuplet: VexElement {
             for note in notes {
                 var modLines: Double = 0
                 if let mc = note.getModifierContext() {
-                    modLines = max(modLines, mc.getState().topTextLine)
+                    modLines = mc.getUnmeasuredTextLines(true)
                 }
                 let modY = note.getYForTopText(modLines) - 2 * Tables.STAVE_LINE_DISTANCE
                 if note.hasStem() || note.isRest() {
@@ -289,7 +301,7 @@ public final class Tuplet: VexElement {
             // check modifiers below note to see if they will collide with tuplet beam
             for nn in notes {
                 if let mc = nn.getModifierContext() {
-                    lineCheck = max(lineCheck, mc.getState().textLine + 1)
+                    lineCheck = max(lineCheck, mc.getUnmeasuredTextLines(false) + 1)
                 }
             }
             yPosition = firstNote.checkStave().getYForLine(lineCheck) + 2 * Tables.STAVE_LINE_DISTANCE
@@ -306,30 +318,58 @@ public final class Tuplet: VexElement {
             }
         }
 
+        // Annotation text lines reserve a whole font size. Measure the actual outer ink
+        // edge on each side, leaving room for the bracket hook and a little white space.
+        let above = location == .top
+        let side: AnnotationVerticalJustify = above ? .top : .bottom
+        let hook = bracketed ? Metrics.getDouble("Tuplet.bracket.legLength") : textElement.getHeight() / 2
+        let padding = hook + firstNote.checkStave().getSpacingBetweenLines() / 4
+        for note in notes {
+            for mark in note.getModifiers() {
+                if mark.getPosition() != (above ? .above : .below) { continue }
+                var box: BoundingBox?
+                if let articulation = mark as? Articulation {
+                    box = try? articulation.getInkBounds()
+                } else if let ornament = mark as? Ornament {
+                    box = ornament.getBoundingBox()
+                }
+                if let box {
+                    yPosition = above ? min(yPosition, box.y - padding) : max(yPosition, box.y + box.h + padding)
+                }
+            }
+            let annotations = note.getModifierContext()?.getMembers(Annotation.category) ?? []
+            for case let mark as Annotation in annotations {
+                if mark.getVerticalJustification() != side
+                    || mark.getNote().getStave() !== note.getStave() {
+                    continue
+                }
+                guard let computed = try? mark.computeY() else { continue }
+                let baseline = computed.y + mark.getYShift()
+                let ink = mark.getTextMetrics()
+                yPosition = above
+                    ? min(yPosition, baseline - ink.actualBoundingBoxAscent - padding)
+                    : max(yPosition, baseline + ink.actualBoundingBoxDescent + padding)
+            }
+        }
+
         return yPosition + nestedTupletYOffset + yOffset
     }
 
     // MARK: - Draw
 
-    override public func draw() throws {
-        let location = self.location
-        let bracketed = self.bracketed
-        let textYOffset = self.textYOffset
-
+    /// Position the bracket and label from the current layout, including retained reflow. (VexFlow 5.3.0)
+    private func positionElements() -> (
+        xPos: Double, yPos: Double, bodyWidth: Double, totalTextWidth: Double,
+        bracketPadding: Double, bracketThickness: Double, bracketLegLength: Double
+    ) {
         let bracketPadding = Metrics.getDouble("Tuplet.bracket.padding")
         let bracketThickness = Metrics.getDouble("Tuplet.bracket.lineWidth")
         let bracketLegLength = Metrics.getDouble("Tuplet.bracket.legLength")
         let extraSpacing = Metrics.getDouble("Tuplet.suffix.extraSpacing")
         let suffixOffsetY = Metrics.getDouble("Tuplet.suffix.suffixOffsetY")
 
-        let ctx = try checkContext()
         var xPos: Double = 0
         var yPos: Double = 0
-
-        // Local change (1af03ba): apply the element style in draw().
-        ctx.save()
-        defer { ctx.restore() }
-        applyStyle(context: ctx)
 
         // determine x value of left bound of tuplet
         let firstNote = notes[0]
@@ -358,9 +398,8 @@ public final class Tuplet: VexElement {
         // calculate width taken by all text elements
         let ratioWidth = textElement.getWidth()
         var totalTextWidth = ratioWidth
-        var noteWidth: Double = 0
         if !suffix.isEmpty {
-            noteWidth = suffixElement.getWidth()
+            let noteWidth = suffixElement.getWidth()
             totalTextWidth = ratioWidth + extraSpacing + noteWidth
         }
 
@@ -370,6 +409,28 @@ public final class Tuplet: VexElement {
 
         // Common vertical coordinate for text rendering (the text element height is the reference).
         let commonTextY = yPos + textElement.getHeight() / 2 + (location == .top ? -1 : 1) * textYOffset
+
+        textElement.setX(notationStartX).setY(commonTextY)
+        if !suffix.isEmpty {
+            suffixElement.setX(notationStartX + ratioWidth + extraSpacing).setY(commonTextY + suffixOffsetY)
+        }
+        return (xPos, yPos, bodyWidth, totalTextWidth, bracketPadding, bracketThickness, bracketLegLength)
+    }
+
+    override public func draw() throws {
+        let location = self.location
+        let bracketed = self.bracketed
+        let p = positionElements()
+        let xPos = p.xPos, yPos = p.yPos, bodyWidth = p.bodyWidth, totalTextWidth = p.totalTextWidth
+        let bracketPadding = p.bracketPadding, bracketThickness = p.bracketThickness
+        let bracketLegLength = p.bracketLegLength
+
+        let ctx = try checkContext()
+
+        // Local change (1af03ba): apply the element style in draw().
+        ctx.save()
+        defer { ctx.restore() }
+        applyStyle(context: ctx)
 
         // start grouping
         _ = ctx.openGroup(groupClass("tuplet"), getAttribute("id"))
@@ -392,24 +453,10 @@ public final class Tuplet: VexElement {
             }
         }
 
-        // draw ratio text (x:y)
-        var currentX = notationStartX
-        textElement.setX(currentX)
-        textElement.setY(commonTextY)
         // VexFlowPatch: conditionally render tuplet numbers
         if renderTupletNumber {
             textElement.renderText(ctx, xPos: 0, yPos: 0)
-        }
-        currentX += ratioWidth + extraSpacing
-
-        // draw the suffix glyph if wanted
-        if !suffix.isEmpty {
-            suffixElement.setX(currentX)
-            suffixElement.setY(commonTextY + suffixOffsetY)
-            if renderTupletNumber {
-                suffixElement.renderText(ctx, xPos: 0, yPos: 0)
-            }
-            currentX += noteWidth
+            if !suffix.isEmpty { suffixElement.renderText(ctx, xPos: 0, yPos: 0) }
         }
 
         drawPointerRect()
@@ -418,8 +465,9 @@ public final class Tuplet: VexElement {
     }
 
     /// Bounding box of the ratio text, the suffix and (when bracketed) the bracket.
-    /// Call it after `draw()`, which sets the positions. (VexFlow 5.1.0)
+    /// Positions the elements from the current layout first. (VexFlow 5.3.0)
     override public func getBoundingBox() -> BoundingBox? {
+        _ = positionElements()
         guard let ratioBounding = textElement.getBoundingBox() else { return nil }
         var mergedText = ratioBounding
         if !suffix.isEmpty, let suffixBounding = suffixElement.getBoundingBox() {

@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/curve.ts` (VexFlow 5.1.0).
+// Port of `src/curve.ts` (VexFlow 5.3.0).
 // This class implements curves (for slurs).
 
 import Foundation
@@ -20,6 +20,9 @@ public enum CurveError: Error, LocalizedError, Equatable, Sendable {
 // MARK: - Curve Position
 
 public enum CurvePosition: Int, Sendable {
+    /// Upstream `'auto'` (VexFlow 5.3.0 default): the notehead, or the stem tip on the
+    /// stem side of a curve with an explicit opening direction.
+    case auto = 0
     case nearHead = 1
     case nearTop = 2
 }
@@ -49,8 +52,8 @@ public struct CurveOptions {
         thickness: Double = 2,
         xShift: Double = 0,
         yShift: Double = 10,
-        position: CurvePosition = .nearHead,
-        positionEnd: CurvePosition = .nearHead,
+        position: CurvePosition = .auto,
+        positionEnd: CurvePosition = .auto,
         invert: Bool = false,
         openingDirection: CurveOpeningDirection = .auto
     ) {
@@ -75,6 +78,7 @@ public final class Curve: VexElement {
     public static let positionString: [String: CurvePosition] = [
         "nearHead": .nearHead,
         "nearTop": .nearTop,
+        "auto": .auto,
     ]
 
     // MARK: - Properties
@@ -283,69 +287,37 @@ public final class Curve: VexElement {
         guard from != nil || to != nil else {
             throw CurveError.requiresStartOrEndNote
         }
-        let firstNote = from
-        let lastNote = to
-        var firstX: Double = 0
-        var lastX: Double = 0
-        var firstY: Double = 0
-        var lastY: Double = 0
-        var stemDirection: Double = 0
-
-        var useTopY = false
-        var endUseTopY = false
-
-        let position = renderOptions.position
-        let positionEnd = renderOptions.positionEnd
-
-        if position == .nearTop {
-            useTopY = true
-            endUseTopY = true
+        guard let start = from ?? to, let end = to ?? from else {
+            throw CurveError.requiresStartOrEndNote
         }
+        let openingDirection = renderOptions.openingDirection
+        var direction = end.getStemDirection().signDouble
+        if openingDirection == .up { direction = 1 }
+        if openingDirection == .down { direction = -1 }
+        if renderOptions.invert { direction *= -1 }
 
-        if positionEnd == .nearHead {
-            endUseTopY = false
-        } else if positionEnd == .nearTop {
-            endUseTopY = true
-        }
-
-        if let firstNote {
-            firstX = firstNote.getTieRightX()
-            stemDirection = firstNote.getStemDirection().signDouble
-            let extents = firstNote.getStemExtents()
-            firstY = useTopY ? extents.topY : extents.baseY
-        } else if let lastNote {
-            let stave = lastNote.checkStave()
-            firstX = stave.getTieStartX()
-            let extents = lastNote.getStemExtents()
-            firstY = useTopY ? extents.topY : extents.baseY
-        }
-
-        if let lastNote {
-            lastX = lastNote.getTieLeftX()
-            stemDirection = lastNote.getStemDirection().signDouble
-            let extents = lastNote.getStemExtents()
-            lastY = endUseTopY ? extents.topY : extents.baseY
-        } else if let firstNote {
-            let stave = firstNote.checkStave()
-            lastX = stave.getTieEndX()
-            let extents = firstNote.getStemExtents()
-            lastY = endUseTopY ? extents.topY : extents.baseY
-        }
-
-        if renderOptions.openingDirection == .up {
-            stemDirection = 1
-        }
-        if renderOptions.openingDirection == .down {
-            stemDirection = -1
+        // An opening-up slur sits below the staff. On its stem side, attach beyond the stem
+        // tip (and beam). Keep authored head/tip anchors and automatic-opening defaults.
+        func endpointY(_ note: Note, _ position: CurvePosition) -> Double {
+            let extents = note.getStemExtents()
+            let onStemSide = direction == -note.getStemDirection().signDouble
+            let useTip = position == .nearTop || (position == .auto && openingDirection != .auto && onStemSide)
+            return useTip ? extents.topY : extents.baseY
         }
 
         return RenderParams(
-            firstX: firstX,
-            firstY: firstY,
-            lastX: lastX,
-            lastY: lastY,
-            direction: stemDirection * (renderOptions.invert ? -1 : 1)
+            firstX: from.map { $0.getTieRightX() } ?? end.checkStave().getTieStartX(),
+            firstY: endpointY(start, renderOptions.position),
+            lastX: to.map { $0.getTieLeftX() } ?? start.checkStave().getTieEndX(),
+            lastY: endpointY(end, renderOptions.positionEnd),
+            direction: direction
         )
+    }
+
+    /// Endpoints on the rendered curve after authored shifts. (VexFlow 5.3.0)
+    public func getAnchors() throws -> (start: (x: Double, y: Double), end: (x: Double, y: Double)) {
+        let points = getBezierPoints(try getRenderParams())
+        return (start: points.first, end: points.last)
     }
 }
 

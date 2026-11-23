@@ -145,8 +145,9 @@ struct StaveTieCurveTupletTests {
         #expect(curve.renderOptions.thickness == 2)
         #expect(curve.renderOptions.xShift == 0)
         #expect(curve.renderOptions.yShift == 10)
-        #expect(curve.renderOptions.position == .nearHead)
-        #expect(curve.renderOptions.positionEnd == .nearHead)
+        // VexFlow 5.3.0: the default position is 'auto'.
+        #expect(curve.renderOptions.position == .auto)
+        #expect(curve.renderOptions.positionEnd == .auto)
         #expect(curve.renderOptions.invert == false)
         #expect(curve.renderOptions.cps.count == 2)
     }

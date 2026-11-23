@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Cyril Silverman
 //
-// Port of `src/ornament.ts` (VexFlow 5.1.0). The 4.x delayed-draw fixes
+// Port of `src/ornament.ts` (VexFlow 5.3.0). The 4.x delayed-draw fixes
 // (b184399c, 7856e88a, 7ca08666) are part of 5.0.0.
 
 import Foundation
@@ -79,6 +79,8 @@ public final class Ornament: Modifier {
     private var accidentalUpper: VexElement?
     private var accidentalLower: VexElement?
     private var delayXShift: Double?
+    /// Side spacing is recomputed per format and is independent of authored shifts. (VexFlow 5.3.0)
+    private var sideOffset: Double = 0
 
     // MARK: - Static Format
 
@@ -94,11 +96,12 @@ public final class Ornament: Modifier {
         for ornament in ornaments {
             let increment: Double = 2
 
+            ornament.sideOffset = 0
             if ornament.position == .right {
-                ornament.xShift += rightShift + 2
+                ornament.sideOffset = rightShift + 2
                 rightShift += ornament.width + Ornament.minPadding
             } else if ornament.position == .left {
-                ornament.xShift -= leftShift + ornament.width + 2
+                ornament.sideOffset = -(leftShift + ornament.width + 2)
                 leftShift += ornament.width + Ornament.minPadding
             } else if ornament.position == .above {
                 width = max(ornament.getWidth(), width)
@@ -206,19 +209,15 @@ public final class Ornament: Modifier {
 
     // MARK: - Draw
 
-    /// Render ornament in position next to note.
-    override public func draw() throws {
-        let ctx = try checkContext()
+    /// Recompute delayed and auxiliary positions against the current tick contexts. (VexFlow 5.3.0)
+    private func positionElements() throws -> [(element: VexElement, x: Double, y: Double)] {
         let note = try checkAttachedNoteThrowing()
-        setRendered()
-
         let stave = try note.checkStaveThrowing()
-
-        _ = ctx.openGroup(groupClass("ornament"), getAttribute("id"))
+        var parts: [(element: VexElement, x: Double, y: Double)] = []
 
         // Get initial coordinates for the modifier position
         let start = note.getModifierStartXY(position: position, index: index ?? 0)
-        var glyphX = start.x
+        var glyphX = start.x + sideOffset
 
         let staffSpace = stave.getSpacingBetweenLines()
         let initialOffset = getInitialOffset(note, position)
@@ -252,37 +251,52 @@ public final class Ornament: Modifier {
                 } else {
                     delayXShift += (stave.getX() + stave.getWidth() - glyphX) * 0.5
                 }
-                self.delayXShift = delayXShift
             }
             glyphX += delayXShift
         }
 
         if let accidentalLower {
-            accidentalLower.renderText(
-                ctx,
-                xPos: glyphX + xShift - accidentalLower.getWidth() * 0.5,
-                yPos: glyphY + yShift - accidentalLower.getTextMetrics().actualBoundingBoxDescent
-            )
+            parts.append((
+                element: accidentalLower,
+                x: glyphX + xShift - accidentalLower.getWidth() / 2,
+                y: glyphY + yShift - accidentalLower.getTextMetrics().actualBoundingBoxDescent
+            ))
             glyphY -= accidentalLower.getHeight() + renderOptions.accidentalLowerPadding
         }
 
-        // ornament requires yShift
-        if Ornament.ornamentYShift.contains(type) {
-            yShift += getHeight()
-        }
-
-        x = glyphX - (position == .above || position == .below ? width * 0.5 : 0)
-        y = glyphY
-
-        renderText(ctx, xPos: 0, yPos: 0)
-
+        let offset = Ornament.ornamentYShift.contains(type) ? getHeight() : 0
+        x = glyphX - (position == .above || position == .below ? width / 2 : 0)
+        y = glyphY + offset
+        parts.append((element: self, x: 0, y: 0))
         if let accidentalUpper {
-            glyphY -= getHeight() + renderOptions.accidentalUpperPadding
-            accidentalUpper.renderText(
-                ctx,
-                xPos: glyphX + xShift - accidentalUpper.getWidth() * 0.5,
-                yPos: glyphY + yShift - accidentalUpper.getTextMetrics().actualBoundingBoxDescent
-            )
+            parts.append((
+                element: accidentalUpper,
+                x: glyphX + xShift - accidentalUpper.getWidth() / 2,
+                y: y + yShift - getHeight() - renderOptions.accidentalUpperPadding
+                    - accidentalUpper.getTextMetrics().actualBoundingBoxDescent
+            ))
+        }
+        return parts
+    }
+
+    /// Include both auxiliary signs in the measured ornament. (VexFlow 5.3.0)
+    override public func getBoundingBox() -> BoundingBox? {
+        guard let parts = try? positionElements() else { return nil }
+        var result: BoundingBox?
+        for part in parts {
+            let box = part.element.getTextInk(part.x + part.element.getX(), part.y + part.element.getY())
+            if result == nil { result = box } else { _ = result?.mergeWith(box) }
+        }
+        return result
+    }
+
+    /// Render ornament in position next to note.
+    override public func draw() throws {
+        let ctx = try checkContext()
+        setRendered()
+        _ = ctx.openGroup(groupClass("ornament"), getAttribute("id"))
+        for part in try positionElements() {
+            part.element.renderText(ctx, xPos: part.x, yPos: part.y)
         }
         drawPointerRect()
         ctx.closeGroup()

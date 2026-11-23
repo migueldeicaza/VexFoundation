@@ -1,11 +1,13 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of the static API of `src/vexflow.ts` (VexFlow 5.2.0). Upstream 5
+// Port of the static API of `src/vexflow.ts` (VexFlow 5.3.0). Upstream 5
 // merged `flow.ts` and `vex.ts` into the `VexFlow` class. In Swift, the
 // classes are module types (use `VexFoundation.StaveNote` and so on), so this
 // facade holds only the static functions and constants. (5.2.0 adds
-// `VexFlow.EasyScoreError`; in Swift it is the module type `EasyScoreError`.)
+// `VexFlow.EasyScoreError`; in Swift it is the module type `EasyScoreError`.
+// 5.3.0 adds `VexFlow.EngravingProfile`, the module type `EngravingProfile`,
+// and `VexFlow.measureEngraving`.)
 //
 // Global state (fonts, metrics) lives in the active `VexRuntimeContext`.
 
@@ -61,6 +63,13 @@ public enum Flow {
 
     /// Upstream `VexFlow.BUILD`.
     public static var BUILD: VexBuildInfo { VexVersion.build }
+
+    /// Pre-draw geometry of formatted notation (VexFlow 5.3.0 `VexFlow.measureEngraving`).
+    public static func measureEngraving(
+        _ element: VexElement, options: GeometryOptions = GeometryOptions()
+    ) throws -> EngravingGeometry {
+        try VexFoundation.measureEngraving(element, options: options)
+    }
 
     // MARK: Runtime Context
 

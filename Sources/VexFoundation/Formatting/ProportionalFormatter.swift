@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/proportionalformatter.ts` (VexFlow 5.2.0).
+// Port of `src/proportionalformatter.ts` (VexFlow 5.3.0).
 // Strict musical-time placement, with measured bounds and separate zero-time prefixes.
 
 import Foundation
@@ -18,6 +18,20 @@ public struct ProportionalSpacing: Sendable, Equatable {
     /// Upstream `{ mode: 'proportional', pixelsPerQuarter }`.
     public static func proportional(pixelsPerQuarter: Double? = nil) -> ProportionalSpacing {
         ProportionalSpacing(pixelsPerQuarter: pixelsPerQuarter)
+    }
+}
+
+/// Formatter spacing modes (upstream `MeasuredSpacing`). (VexFlow 5.3.0)
+public enum MeasuredSpacing: Sendable, Equatable {
+    /// Strict musical-time spacing (upstream `{ mode: 'proportional' }`).
+    case proportional(ProportionalSpacing)
+    /// Optical spacing reserves measured ink first and distributes spare width by
+    /// square-root duration (upstream `{ mode: 'optical' }`).
+    case optical
+
+    /// Upstream `{ mode: 'proportional', pixelsPerQuarter }`.
+    public static func proportional(pixelsPerQuarter: Double? = nil) -> MeasuredSpacing {
+        .proportional(ProportionalSpacing(pixelsPerQuarter: pixelsPerQuarter))
     }
 }
 
@@ -150,6 +164,7 @@ final class ProportionalFormatter {
             for prefix in anchor.prefixes.compactMap({ $0 }) { array.append(contentsOf: prefix.contexts) }
             array.append(anchor.context)
         }
+        TickContext.linkTimeline(anchors.map { $0.context })
         for context in array { context.tContexts = array }
         contexts = AlignmentContexts(
             list: anchors.map { $0.tick }, map: map, array: array, resolutionMultiplier: resolutionMultiplier
@@ -162,7 +177,7 @@ final class ProportionalFormatter {
     }
 
     /// Measure each stave independently so unrelated onsets on other staves do not compete.
-    private func measure() {
+    private func measure(proportional: Bool = true) {
         let padding = Self.PADDING
         origin = padding
         tail = padding
@@ -206,6 +221,7 @@ final class ProportionalFormatter {
                 if quarters(anchor) == duration { tail = max(tail, extent.right + padding) }
             }
         }
+        if !proportional { return }
         // All pairs also cover a wide earlier object extending past an intervening narrow one.
         var previous: [ObjectIdentifier?: [(time: Double, extent: Extent)]] = [:]
         for anchor in anchors {
@@ -253,19 +269,96 @@ final class ProportionalFormatter {
         return (scale, neededWidth)
     }
 
+    /// Placement data shared by proportional and optical spacing.
+    private struct Layout {
+        var width: Double
+        var center: Double
+        var positions: [Double]
+    }
+
+    /// Find the earliest legal anchor at each onset. A wide mark still occupies
+    /// its stave while other staves advance. Extra width can only enlarge gaps.
+    private func opticalLayout(_ width: Double) throws -> Layout {
+        if !width.isFinite || width < 0 {
+            throw VexError("BadArgument", "Width must be finite and nonnegative.")
+        }
+        measure(proportional: false)
+        let padding = Self.PADDING
+        var rightEdgeKeys: [ObjectIdentifier?] = []
+        var rightEdges: [ObjectIdentifier?: Double] = [:]
+        var positions: [Double] = []
+        var weights: [Double] = []
+        var priorX: Double = 0
+        var time: Double = 0
+        var weight: Double = 0
+        for anchor in anchors {
+            let onset = quarters(anchor)
+            var x = priorX + padding
+            for key in anchor.extentKeys {
+                guard let extent = anchor.extents[key] else { continue }
+                x = max(x, (rightEdges[key] ?? 0) + padding + extent.left)
+            }
+            for key in anchor.extentKeys {
+                guard let extent = anchor.extents[key] else { continue }
+                if rightEdges[key] == nil { rightEdgeKeys.append(key) }
+                rightEdges[key] = x + extent.right
+            }
+            weight += (onset - time).squareRoot()
+            weights.append(weight)
+            positions.append(x)
+            priorX = x
+            time = onset
+        }
+        weight += (duration - time).squareRoot()
+        var minimum = max(centeredWidth + 2 * padding, priorX + padding)
+        for key in rightEdgeKeys { minimum = max(minimum, (rightEdges[key] ?? 0) + padding) }
+        if width > 0 && width + Self.EPSILON < minimum {
+            throw VexError(
+                "InsufficientOpticalSpace",
+                "Optical spacing requires at least \(Self.required(minimum)) px width; received "
+                    + String(format: "%.2f", width) + " px."
+            )
+        }
+        let available = width != 0 ? width : minimum
+        return Layout(
+            width: available,
+            center: available / 2,
+            positions: positions.enumerated().map { i, x in
+                x + (weight != 0 ? weights[i] / weight : 0) * (available - minimum)
+            }
+        )
+    }
+
+    /// Convert a single exact time scale into the same placement data as optical spacing.
+    private func proportionalLayout(_ spacing: ProportionalSpacing, _ width: Double) throws -> Layout {
+        let dimensions = try dimensions(spacing, width)
+        return Layout(
+            width: dimensions.width,
+            center: origin + (duration * dimensions.scale) / 2,
+            positions: anchors.map { origin + quarters($0) * dimensions.scale }
+        )
+    }
+
     /// Minimum total width for autoWidth, honoring a supplied exact scale.
-    func minimumWidth(_ spacing: ProportionalSpacing) throws -> Double {
-        try dimensions(spacing, 0).width
+    func minimumWidth(_ spacing: MeasuredSpacing) throws -> Double {
+        switch spacing {
+        case .optical: return try opticalLayout(0).width
+        case .proportional(let spacing): return try dimensions(spacing, 0).width
+        }
     }
 
     /// Place anchors and prefixes, retaining the established centering exception for measure rests.
-    func format(_ spacing: ProportionalSpacing, _ width: Double) throws -> Double {
-        let dimensions = try dimensions(spacing, width)
-        for anchor in anchors {
-            let x = origin + quarters(anchor) * dimensions.scale
+    func format(_ spacing: MeasuredSpacing, _ width: Double) throws -> Double {
+        let layout: Layout
+        switch spacing {
+        case .optical: layout = try opticalLayout(width)
+        case .proportional(let spacing): layout = try proportionalLayout(spacing, width)
+        }
+        for (i, anchor) in anchors.enumerated() {
+            let x = layout.positions[i]
             _ = anchor.context.setX(x)
             for note in anchor.context.getCenterAlignedTickables() {
-                _ = note.setCenterXShift(origin + (duration * dimensions.scale) / 2 - x)
+                _ = note.setCenterXShift(layout.center - x)
             }
             for prefix in anchor.prefixes.compactMap({ $0 }) {
                 // Right-align each sequence just before the rhythmic note's left modifiers.
@@ -282,6 +375,6 @@ final class ProportionalFormatter {
                 }
             }
         }
-        return dimensions.width
+        return layout.width
     }
 }

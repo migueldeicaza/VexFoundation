@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/timesignature.ts` (VexFlow 5.1.0).
+// Port of `src/timesignature.ts` (VexFlow 5.3.0).
 // Implements time signature glyphs for staves.
 
 import Foundation
@@ -128,6 +128,17 @@ public final class TimeSignature: StaveModifier {
     }
 
     // MARK: - Methods
+
+    /// Apply one family to common-time glyphs and both numeric rows, then remeasure. (VexFlow 5.3.0)
+    @discardableResult
+    public func setMusicFont(_ family: String) -> Self {
+        for element in [self, topText, botText] as [VexElement] {
+            var font = element.fontInfo
+            font.family = family
+            element.setFont(font)
+        }
+        return setTimeSig(timeSpec)
+    }
 
     /// Set a new time signature specification without changing customPadding, etc.
     ///

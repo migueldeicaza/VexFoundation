@@ -59,7 +59,7 @@ public struct StaveOptions {
     public var spacingBetweenLinesPx: Double {
         didSet { spacingBetweenLinesPxWasSpecified = true }
     }
-    public var topTextPosition: Int
+    public var topTextPosition: Double
     public var numLines: Int
     /// True when `spacingBetweenLinesPx` was given (commit 252b9a7). `TabStave` uses
     /// this to emulate the JavaScript `{ spacingBetweenLinesPx: 13, ...options }` merge.
@@ -74,7 +74,7 @@ public struct StaveOptions {
         leftBar: Bool = true,
         rightBar: Bool = true,
         spacingBetweenLinesPx: Double? = nil,
-        topTextPosition: Int = 1,
+        topTextPosition: Double = 1,
         numLines: Int = 5,
         clef: ClefName? = nil
     ) {
@@ -516,7 +516,7 @@ open class Stave: VexElement {
     }
 
     public func getYForTopText(_ line: Double = 0) -> Double {
-        getYForLine(-line - Double(options.topTextPosition))
+        getYForLine(-line - options.topTextPosition)
     }
 
     public func getYForBottomText(_ line: Double = 0) -> Double {

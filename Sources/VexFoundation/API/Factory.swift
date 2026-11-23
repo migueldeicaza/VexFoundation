@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Mohit Cheppudira
 //
-// Port of `src/factory.ts` (VexFlow 5.2.0).
+// Port of `src/factory.ts` (VexFlow 5.3.0).
 //
 // Local changes (see docs/local-deviations.md):
 // - Every object is created inside the factory runtime context.
@@ -20,11 +20,15 @@ public struct FactoryOptions {
     public var staveSpace: Double = 10
     public var width: Double = 500
     public var height: Double = 200
+    /// Optional per-score pitched notation and beam policy. (VexFlow 5.3.0)
+    public var engraving: EngravingProfile?
 
-    public init(staveSpace: Double = 10, width: Double = 500, height: Double = 200) {
+    public init(staveSpace: Double = 10, width: Double = 500, height: Double = 200,
+                engraving: EngravingProfile? = nil) {
         self.staveSpace = staveSpace
         self.width = width
         self.height = height
+        self.engraving = engraving
     }
 }
 
@@ -314,6 +318,8 @@ public final class Factory {
 
     @discardableResult
     public func StaveNote(_ noteStruct: StaveNoteStruct) -> VexFoundation.StaveNote {
+        var noteStruct = noteStruct
+        if noteStruct.engraving == nil { noteStruct.engraving = options.engraving }
         let note = inRuntimeContext { VexFoundation.StaveNote(noteStruct) }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
@@ -443,6 +449,8 @@ public final class Factory {
 
     @discardableResult
     public func GraceNote(_ noteStruct: GraceNoteStruct) -> VexFoundation.GraceNote {
+        var noteStruct = noteStruct
+        if noteStruct.engraving == nil { noteStruct.engraving = options.engraving }
         let note = inRuntimeContext { VexFoundation.GraceNote(noteStruct) }
         if let stave = currentStave { _ = note.setStave(stave) }
         if let ctx = context { _ = note.setContext(ctx) }
@@ -464,7 +472,7 @@ public final class Factory {
 
     @discardableResult
     public func Accidental(type: AccidentalType) -> VexFoundation.Accidental {
-        let accid = inRuntimeContext { VexFoundation.Accidental(type) }
+        let accid = musicGlyph(inRuntimeContext { VexFoundation.Accidental(type) })
         if let ctx = context { _ = accid.setContext(ctx) }
         return own(accid)
     }
@@ -472,7 +480,7 @@ public final class Factory {
     /// String convenience API that throws on invalid accidental input.
     @discardableResult
     public func Accidental(parsing type: String) throws -> VexFoundation.Accidental {
-        let accid = try inRuntimeContext { try VexFoundation.Accidental(parsing: type) }
+        let accid = musicGlyph(try inRuntimeContext { try VexFoundation.Accidental(parsing: type) })
         if let ctx = context { _ = accid.setContext(ctx) }
         return own(accid)
     }
@@ -482,6 +490,7 @@ public final class Factory {
     public func Accidental(parsingOrNil type: String) -> VexFoundation.Accidental? {
         let accid = inRuntimeContext { VexFoundation.Accidental(parsingOrNil: type) }
         guard let accid else { return nil }
+        musicGlyph(accid)
         if let ctx = context { _ = accid.setContext(ctx) }
         return own(accid)
     }
@@ -534,7 +543,7 @@ public final class Factory {
         position: ModifierPosition? = nil,
         betweenLines: Bool? = nil
     ) -> VexFoundation.Articulation {
-        let articulation = inRuntimeContext { VexFoundation.Articulation(type) }
+        let articulation = musicGlyph(inRuntimeContext { VexFoundation.Articulation(type) })
         if let position { _ = articulation.setPosition(position) }
         if let betweenLines { _ = articulation.setBetweenLines(betweenLines) }
         if let ctx = context { _ = articulation.setContext(ctx) }
@@ -864,12 +873,25 @@ public final class Factory {
         adoptNew(inRuntimeContext { VexFoundation.Bend(phrase) }, role: .modifier)
     }
 
+    /// Apply a score's music family to glyph elements while retaining their individual sizes. (VexFlow 5.3.0)
+    @discardableResult
+    private func musicGlyph<T: VexElement>(_ element: T) -> T {
+        if let engraving = options.engraving {
+            var font = element.fontInfo
+            font.family = engraving.musicFont
+            element.setFont(font)
+        }
+        return element
+    }
+
     /// Construct a native Clef with an explicit drawing role.
     @discardableResult
     public func Clef(
         _ type: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil
     ) -> VexFoundation.Clef {
-        adoptNew(inRuntimeContext { VexFoundation.Clef(type: type, size: size, annotation: annotation) }, role: .staveModifier)
+        adoptNew(musicGlyph(inRuntimeContext {
+            VexFoundation.Clef(type: type, size: size, annotation: annotation)
+        }), role: .staveModifier)
     }
 
     /// Construct a native KeySignature with an explicit drawing role.
@@ -877,9 +899,9 @@ public final class Factory {
     public func KeySignature(
         _ keySpec: String, cancelKeySpec: String? = nil, alterKeySpec: [String]? = nil
     ) -> VexFoundation.KeySignature {
-        adoptNew(inRuntimeContext {
+        adoptNew(musicGlyph(inRuntimeContext {
             VexFoundation.KeySignature(keySpec: keySpec, cancelKeySpec: cancelKeySpec, alterKeySpec: alterKeySpec)
-        }, role: .staveModifier)
+        }), role: .staveModifier)
     }
 
     /// Construct a native TimeSignature with an explicit drawing role.
@@ -887,9 +909,13 @@ public final class Factory {
     public func TimeSignature(
         _ timeSpec: TimeSignatureSpec = .default, customPadding: Double = 15
     ) -> VexFoundation.TimeSignature {
-        adoptNew(inRuntimeContext {
+        let signature = inRuntimeContext {
             VexFoundation.TimeSignature(timeSpec: timeSpec, customPadding: customPadding)
-        }, role: .staveModifier)
+        }
+        if let engraving = options.engraving {
+            inRuntimeContext { signature.setMusicFont(engraving.musicFont) }
+        }
+        return adoptNew(signature, role: .staveModifier)
     }
 
     /// Construct a native Barline with an explicit drawing role.

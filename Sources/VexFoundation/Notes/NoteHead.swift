@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/notehead.ts` (VexFlow 5.1.0).
+// Port of `src/notehead.ts` (VexFlow 5.3.0).
 
 import Foundation
 
@@ -24,6 +24,9 @@ public struct NoteHeadStruct {
     public var customGlyphCode: String?
     public var stemDirection: StemDirection
     public var displaced: Bool
+    /// Column counted outward from the normal stem-side head (upstream 5.3.0
+    /// `displacementColumn`). `nil` uses `displaced ? 1 : 0`.
+    public var displacementColumn: Int?
     public var noteType: NoteType?
     public var x: Double
     public var y: Double
@@ -43,6 +46,7 @@ public struct NoteHeadStruct {
         customGlyphCode: String? = nil,
         stemDirection: StemDirection = .up,
         displaced: Bool = false,
+        displacementColumn: Int? = nil,
         noteType: NoteType? = nil,
         x: Double = 0,
         y: Double = 0,
@@ -61,6 +65,7 @@ public struct NoteHeadStruct {
         self.customGlyphCode = customGlyphCode
         self.stemDirection = stemDirection
         self.displaced = displaced
+        self.displacementColumn = displacementColumn
         self.noteType = noteType
         self.x = x
         self.y = y
@@ -182,6 +187,8 @@ public final class NoteHead: Note {
 
     public var customGlyph: Bool = false
     public var displaced: Bool
+    /// Column counted outward from the normal stem-side head.
+    public private(set) var displacementColumn: Int
     public var stemDirection: StemDirection
     public var line: Double
     public var index: Int?
@@ -199,7 +206,11 @@ public final class NoteHead: Note {
 
     public init(noteHeadStruct: NoteHeadStruct) {
         self.index = noteHeadStruct.index
-        self.displaced = noteHeadStruct.displaced
+        // Upstream throws `BadArguments` for a negative column. This initializer
+        // does not throw, so a negative column is clamped to 0 (column of the stem side).
+        let column = noteHeadStruct.displacementColumn ?? (noteHeadStruct.displaced ? 1 : 0)
+        self.displacementColumn = max(0, column)
+        self.displaced = self.displacementColumn != 0
         self.stemDirection = noteHeadStruct.stemDirection
         // Upstream: `this.line = noteStruct.line || 0` (a NaN line becomes 0).
         self.line = noteHeadStruct.line.isNaN ? 0 : noteHeadStruct.line
@@ -271,11 +282,12 @@ public final class NoteHead: Note {
         // it is formatted: use its x value relative to its tick context.
         let x = !preFormatted ? self.x : super.getAbsoluteX()
 
-        // For a more natural displaced notehead, adjust the displacement by
-        // half the stem width to keep a slight overlap with the stem.
-        let displacementStemAdjustment = Stem.WIDTH / 2
+        return x + getDisplacementX()
+    }
 
-        return x + (displaced ? (width - displacementStemAdjustment) * stemDirection.signDouble : 0)
+    /// Offset shared by drawing, head geometry and ledger lines.
+    public func getDisplacementX() -> Double {
+        Double(displacementColumn) * (width - Stem.WIDTH / 2) * stemDirection.signDouble
     }
 
     // MARK: - Stave

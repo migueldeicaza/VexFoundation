@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stavetie.ts` (VexFlow 5.1.0).
+// Port of `src/stavetie.ts` (VexFlow 5.3.0).
 //
 // This class implements varies types of ties between contiguous notes. The
 // ties include: regular ties, hammer ons, pull offs, and slides.
@@ -224,19 +224,30 @@ open class StaveTie: VexElement {
 
     // MARK: - Render Tie
 
-    /// `firstX` and `lastX` are specified in pixels.
-    open func renderTie(
+    /// One filled tie ribbon. (VexFlow 5.3.0)
+    struct TieCurve {
+        var x1: Double
+        var x2: Double
+        var firstY: Double
+        var lastY: Double
+        var cpX: Double
+        var topControlPointY: Double
+        var bottomControlPointY: Double
+    }
+
+    /// `firstX` and `lastX` are specified in pixels. Upstream yields the curves
+    /// lazily; the Swift version validates all indexes before any drawing.
+    func tieCurves(
         direction: TieDirection,
         firstX: Double,
         lastX: Double,
         firstYs: [Double],
         lastYs: [Double]
-    ) throws {
+    ) throws -> [TieCurve] {
         if firstYs.isEmpty || lastYs.isEmpty {
             throw StaveTieError.noYValues
         }
 
-        let ctx = try checkContext()
         var cp1 = renderOptions.cp1
         var cp2 = renderOptions.cp2
 
@@ -253,13 +264,12 @@ open class StaveTie: VexElement {
 
         let firstIndexes = notes.firstIndexes
         let lastIndexes = notes.lastIndexes
-        _ = ctx.openGroup(groupClass("stavetie"), getAttribute("id"))
+        var curves: [TieCurve] = []
         for i in 0..<firstIndexes.count {
             let cpX = (lastX + lastXShift + (firstX + firstXShift)) / 2
             guard i < lastIndexes.count,
                   firstIndexes[i] >= 0, firstIndexes[i] < firstYs.count,
                   lastIndexes[i] >= 0, lastIndexes[i] < lastYs.count else {
-                ctx.closeGroup()
                 throw StaveTieError.badIndices
             }
             // firstY and lastY are specified in pixels.
@@ -267,17 +277,63 @@ open class StaveTie: VexElement {
             let lastY = lastYs[lastIndexes[i]] + yShift
 
             if firstY.isNaN || lastY.isNaN {
-                ctx.closeGroup()
                 throw StaveTieError.badIndices
             }
 
             let topControlPointY = (firstY + lastY) / 2 + cp1 * dir
             let bottomControlPointY = (firstY + lastY) / 2 + cp2 * dir
 
+            curves.append(TieCurve(
+                x1: firstX + firstXShift,
+                x2: lastX + lastXShift,
+                firstY: firstY,
+                lastY: lastY,
+                cpX: cpX,
+                topControlPointY: topControlPointY,
+                bottomControlPointY: bottomControlPointY
+            ))
+        }
+        return curves
+    }
+
+    /// Conservative convex hull of filled ribbons, excluding optional tie text. (VexFlow 5.3.0)
+    public func getRibbonBounds() throws -> BoundingBox {
+        synchronizeIndexes()
+        let curves = try tieCurves(
+            direction: getDirection(),
+            firstX: getFirstX(),
+            lastX: getLastX(),
+            firstYs: getFirstYs(),
+            lastYs: getLastYs()
+        )
+        var box: BoundingBox?
+        for curve in curves {
+            let top = min(curve.firstY, curve.lastY, curve.topControlPointY, curve.bottomControlPointY)
+            let bottom = max(curve.firstY, curve.lastY, curve.topControlPointY, curve.bottomControlPointY)
+            let part = BoundingBox(x: min(curve.x1, curve.x2), y: top, w: abs(curve.x2 - curve.x1), h: bottom - top)
+            if box == nil { box = part } else { _ = box?.mergeWith(part) }
+        }
+        return box ?? BoundingBox(x: getFirstX(), y: getFirstYs().first ?? 0, w: 0, h: 0)
+    }
+
+    /// `firstX` and `lastX` are specified in pixels.
+    open func renderTie(
+        direction: TieDirection,
+        firstX: Double,
+        lastX: Double,
+        firstYs: [Double],
+        lastYs: [Double]
+    ) throws {
+        let curves = try tieCurves(
+            direction: direction, firstX: firstX, lastX: lastX, firstYs: firstYs, lastYs: lastYs
+        )
+        let ctx = try checkContext()
+        _ = ctx.openGroup(groupClass("stavetie"), getAttribute("id"))
+        for curve in curves {
             ctx.beginPath()
-            ctx.moveTo(firstX + firstXShift, firstY)
-            ctx.quadraticCurveTo(cpX, topControlPointY, lastX + lastXShift, lastY)
-            ctx.quadraticCurveTo(cpX, bottomControlPointY, firstX + firstXShift, firstY)
+            ctx.moveTo(curve.x1, curve.firstY)
+            ctx.quadraticCurveTo(curve.cpX, curve.topControlPointY, curve.x2, curve.lastY)
+            ctx.quadraticCurveTo(curve.cpX, curve.bottomControlPointY, curve.x1, curve.firstY)
             ctx.closePath()
             ctx.fill()
         }

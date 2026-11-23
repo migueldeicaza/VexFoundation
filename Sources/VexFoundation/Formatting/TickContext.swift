@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/tickcontext.ts` (VexFlow 5.0.0).
+// Port of `src/tickcontext.ts` (VexFlow 5.3.0).
 // A formatter for abstract tickable objects, such as notes, chords,
 // tabs, etc.
 
@@ -74,6 +74,29 @@ public final class TickContext {
     public var minTicks: Fraction?
     public var minTickable: Tickable?
     public var tContexts: [TickContext] = []
+    /// Next attack in musical order (VexFlow 5.3.0). Weak, so the timeline does not retain itself.
+    private weak var nextAttack: TickContext?
+
+    /// Link musical order independently of the legacy per-voice insertion order. (VexFlow 5.3.0)
+    public static func linkTimeline(_ contexts: [TickContext]) {
+        for (i, context) in contexts.enumerated() {
+            context.nextAttack = i + 1 < contexts.count ? contexts[i + 1] : nil
+        }
+    }
+
+    /// Visit only the attacks inside this beam, including interleaved voices. (VexFlow 5.3.0)
+    public func through(_ last: TickContext) -> [TickContext] {
+        if tickID > last.tickID { return [] }
+        var result: [TickContext] = [self]
+        if self === last { return result }
+        var context = nextAttack
+        while let current = context, current.tickID <= last.tickID {
+            result.append(current)
+            if current === last { return result }
+            context = current.nextAttack
+        }
+        return result
+    }
 
     public var preFormatted: Bool = false
     public var postFormatted: Bool = false

@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/dot.ts` (VexFlow 5.2.0).
+// Port of `src/dot.ts` (VexFlow 5.3.0).
 // This class implements dot modifiers for notes.
 
 import Foundation
@@ -125,7 +125,7 @@ public final class Dot: Modifier {
 
             // Convert halfShiftY to a multiplier for dots.draw().
             if note.isRest() {
-                dot.dotShiftY += -halfShiftY
+                dot.dotShiftY = dot.restShiftY - halfShiftY
             } else {
                 dot.dotShiftY = -halfShiftY
             }
@@ -164,18 +164,21 @@ public final class Dot: Modifier {
         return self
     }
 
+    /// The authored rest shift; formatting adds to it without accumulating. (VexFlow 5.3.0)
+    private var restShiftY: Double = 0
+
     @discardableResult
     public func setDotShiftY(_ y: Double) -> Self {
+        restShiftY = y
         dotShiftY = y
         return self
     }
 
     // MARK: - Draw
 
-    override public func draw() throws {
-        let ctx = try checkContext()
+    /// Place the glyph using the same coordinates for measurement and drawing. (VexFlow 5.3.0)
+    private func positionGlyph() {
         let note = checkAttachedNote()
-        setRendered()
 
         let stave = note.checkStave()
         let lineSpace = stave.getSpacingBetweenLines()
@@ -189,7 +192,18 @@ public final class Dot: Modifier {
 
         x = start.x
         y = start.y + dotShiftY * lineSpace
+    }
 
+    /// Visible glyph after formatting, including cautionary or authored shifts. (VexFlow 5.3.0)
+    public func getInkBounds() -> BoundingBox {
+        positionGlyph()
+        return getTextInk(x, y)
+    }
+
+    override public func draw() throws {
+        let ctx = try checkContext()
+        positionGlyph()
+        setRendered()
         renderText(ctx, xPos: 0, yPos: 0)
     }
 }

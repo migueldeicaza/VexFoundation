@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stavenote.ts` (VexFlow 5.2.0).
+// Port of `src/stavenote.ts` (VexFlow 5.3.0).
 // This file implements notes for standard notation. A note has one or more
 // `NoteHead`s, an optional stem, and an optional flag.
 
@@ -23,6 +23,10 @@ public struct StaveNoteStruct {
     public var strokePx: Double?
     public var octaveShift: Int?
     public var clef: ClefName?
+    /// Override the music glyph family for this note, its heads and its flag. (VexFlow 5.3.0)
+    public var musicFont: String?
+    /// Score-local engraving profile (SMuFL stem anchors). (VexFlow 5.3.0)
+    public var engraving: EngravingProfile?
     /// The duration token as the caller wrote it (see `NoteStruct.durationToken`).
     public var durationToken: String?
     /// The key strings as the caller wrote them, when the keys were parsed from strings.
@@ -42,8 +46,12 @@ public struct StaveNoteStruct {
         autoStem: Bool? = nil,
         strokePx: Double? = nil,
         octaveShift: Int? = nil,
-        clef: ClefName? = nil
+        clef: ClefName? = nil,
+        musicFont: String? = nil,
+        engraving: EngravingProfile? = nil
     ) {
+        self.musicFont = musicFont
+        self.engraving = engraving
         self.keys = keys
         self.duration = duration
         self.line = line
@@ -437,48 +445,44 @@ open class StaveNote: StemmableNote {
             ))
         }
 
-        var voices = 0
-        var noteU: StaveNoteFormatSettings
-        var noteM: StaveNoteFormatSettings?
-        var noteL: StaveNoteFormatSettings
-        var draw = [false, false, false]
-
-        for i in 0..<min(notesList.count, 3) {
-            // If .draw is true or undefined, set draw[i] = true.
-            draw[i] = notesList[i].note.renderOptions.draw != false
-        }
-
-        if draw[0] && draw[1] && draw[2] {
-            // Three visible notes
-            voices = 3
-            noteU = notesList[0]
-            noteM = notesList[1]
-            noteL = notesList[2]
-        } else if draw[0] && draw[1] {
-            // Two visible notes, 0 & 1
-            voices = 2
-            noteU = notesList[0]
-            noteL = notesList[1]
-        } else if draw[0] && draw[2] {
-            // Two visible notes, 0 & 2
-            voices = 2
-            noteU = notesList[0]
-            noteL = notesList[2]
-        } else if draw[1] && draw[2] {
-            // Two visible notes, 1 & 2
-            voices = 2
-            noteU = notesList[1]
-            noteL = notesList[2]
-        } else {
-            // No shift required for less than 2 visible notes
+        let visible = notesList.filter { $0.note.renderOptions.draw != false }
+        if visible.count < 2 { return true }
+        if visible.count > 3 {
+            // Keep overlapping stem/head envelopes in separate columns. Pitch order makes
+            // placement independent of voice insertion for voices at distinct pitches.
+            var columns: [(bottom: Double, width: Double, members: [StaveNoteFormatSettings])] = []
+            // Stable sort, as the JavaScript `Array.prototype.sort`.
+            let sorted = visible.enumerated().sorted { lhs, rhs in
+                let a = lhs.element, b = rhs.element
+                if a.maxLine != b.maxLine { return a.maxLine > b.maxLine }
+                if a.line != b.line { return a.line > b.line }
+                return lhs.offset < rhs.offset
+            }.map(\.element)
+            for item in sorted {
+                var index = columns.firstIndex { item.maxLine + 0.5 < $0.bottom }
+                if index == nil {
+                    columns.append((bottom: item.minLine, width: 0, members: []))
+                    index = columns.count - 1
+                }
+                guard let i = index else { continue }
+                columns[i].bottom = item.minLine
+                columns[i].width = max(columns[i].width, item.voiceShift)
+                columns[i].members.append(item)
+            }
+            var x: Double = 0
+            for (i, column) in columns.enumerated() {
+                for item in column.members { item.note.setXShift(x) }
+                if i != columns.count - 1 { x += column.width + 2 }
+            }
+            state.rightShift += x
             return true
         }
-
-        // For two voice backward compatibility, ensure upper voice is stems up.
-        // For three voices, the voices must be in order (upper, middle, lower).
+        let voices = visible.count
+        var noteU = visible[0]
+        var noteL = visible[voices - 1]
+        let noteM: StaveNoteFormatSettings? = voices == 3 ? visible[1] : nil
         if voices == 2 && noteU.stemDirection == .down && noteL.stemDirection == .up {
-            noteU = notesList[1]
-            noteL = notesList[0]
+            swap(&noteU, &noteL)
         }
 
         let voiceXShift = max(noteU.voiceShift, noteL.voiceShift)
@@ -667,6 +671,10 @@ open class StaveNote: StemmableNote {
     public var displaced: Bool = false
     public var dotShiftY: Double = 0
     public var useDefaultHeadX: Bool = false
+    /// Number of head columns beyond the first two (unisons with three spellings). (VexFlow 5.3.0)
+    private var extraHeadColumns: Int = 0
+    /// Score-local engraving profile. (VexFlow 5.3.0)
+    public let engraving: EngravingProfile?
     public var ledgerLineStyle = ElementStyle()
 
     /// The noteheads, in key order.
@@ -691,8 +699,14 @@ open class StaveNote: StemmableNote {
     public init(_ noteStruct: StaveNoteStruct) {
         self.clef = noteStruct.clef ?? .treble
         self.octaveShift = noteStruct.octaveShift ?? 0
+        self.engraving = noteStruct.engraving
 
         super.init(noteStruct.toNoteStruct())
+        if let musicFont = noteStruct.musicFont ?? engraving?.musicFont {
+            var font = fontInfo
+            font.family = musicFont
+            setFont(font)
+        }
 
         ledgerLineStyle = ElementStyle()
 
@@ -702,8 +716,6 @@ open class StaveNote: StemmableNote {
         // if true, displace note to right
         displaced = false
         dotShiftY = 0
-        // for displaced ledger lines
-        useDefaultHeadX = false
 
         // Drawing
         noteHeads = []
@@ -792,8 +804,8 @@ open class StaveNote: StemmableNote {
         let count = sortedKeyProps.count
         var heads = [NoteHead?](repeating: nil, count: count)
 
-        var lastLine: Double?
-        var displaced = false
+        var lastLineInColumn: [Double] = []
+        extraHeadColumns = 0
 
         // Draw notes from bottom to top.
         // For down-stem notes, draw from top to bottom.
@@ -816,19 +828,17 @@ open class StaveNote: StemmableNote {
             let noteProps = sortedKeyProps[i].keyProps
             let line = noteProps.line
 
-            // Keep track of the last line with a notehead, so that consecutive
-            // heads are correctly displaced.
-            if let last = lastLine {
-                let lineDiff = abs(last - line)
-                if lineDiff == 0 || lineDiff == 0.5 {
-                    displaced = !displaced
-                } else {
-                    displaced = false
-                    useDefaultHeadX = true
-                }
+            // Use the nearest free column. Seconds alternate sides as usual, while
+            // three spellings on one staff line each retain their own visible head.
+            var column = lastLineInColumn.firstIndex { abs($0 - line) >= 1 } ?? -1
+            if i != start && abs(sortedKeyProps[i - step].keyProps.line - line) >= 1 { useDefaultHeadX = true }
+            if column < 0 { column = lastLineInColumn.count }
+            if column < lastLineInColumn.count {
+                lastLineInColumn[column] = line
+            } else {
+                lastLineInColumn.append(line)
             }
-            lastLine = line
-
+            extraHeadColumns = max(extraHeadColumns, column)
             let notehead = NoteHead(noteHeadStruct: NoteHeadStruct(
                 duration: noteValue,
                 line: noteProps.line,
@@ -840,7 +850,7 @@ open class StaveNote: StemmableNote {
                 stemDownYShift: noteProps.stemDownYShift,
                 customGlyphCode: noteProps.code,
                 stemDirection: stemDirection,
-                displaced: displaced,
+                displacementColumn: column,
                 noteType: noteTypeValue
             ))
 
@@ -897,7 +907,6 @@ open class StaveNote: StemmableNote {
         keyProps = []
         sortedKeyProps = []
 
-        var lastLine: Double?
         for i in 0..<keys.count {
             let key = keys[i]
 
@@ -923,22 +932,6 @@ open class StaveNote: StemmableNote {
                 }
             }
 
-            // Calculate displacement of this note
-            let line = props.line
-            if let prevLine = lastLine {
-                // < 1 means == 0.5 (second) or 0.0 (unison)
-                if abs(prevLine - line) < 1 {
-                    displaced = true
-                    props.displaced = true
-
-                    // Mark the previous note as displaced too, for modifier placement.
-                    if keyProps.count > 0 {
-                        keyProps[i - 1].displaced = true
-                    }
-                }
-            }
-
-            lastLine = line
             keyProps.append(props)
         }
 
@@ -951,6 +944,17 @@ open class StaveNote: StemmableNote {
             sortedKeyProps.append((keyProps: kp, index: index))
         }
         sortedKeyProps.sort { $0.keyProps.line < $1.keyProps.line }
+        for i in 1..<max(1, sortedKeyProps.count) {
+            let lower = sortedKeyProps[i - 1]
+            let upper = sortedKeyProps[i]
+            if upper.keyProps.line - lower.keyProps.line < 1 {
+                displaced = true
+                sortedKeyProps[i - 1].keyProps.displaced = true
+                sortedKeyProps[i].keyProps.displaced = true
+                keyProps[lower.index].displaced = true
+                keyProps[upper.index].displaced = true
+            }
+        }
     }
 
     private func fallbackKeyProps() -> KeyProps {
@@ -960,6 +964,29 @@ open class StaveNote: StemmableNote {
             return props
         }
         return KeyProps(key: "B", octave: 4, line: 3, intValue: 59, code: Glyphs.noteheadBlack, displaced: false)
+    }
+
+    // MARK: - Engraving geometry (VexFlow 5.3.0)
+
+    /// Absolute ink of each head after formatting, independent of previous draws.
+    public func getHeadInk() -> [BoundingBox] {
+        noteHeads.map { head in
+            head.getTextInk(getNoteHeadBeginX() + head.getDisplacementX(), head.getY())
+        }
+    }
+
+    /// Absolute flag ink; beamed notes and rests have no flag.
+    public func getFlagInk() -> BoundingBox? {
+        if !shouldDrawFlag() { return nil }
+        let position = getFlagPosition()
+        return flag.getTextInk(position.x, position.y)
+    }
+
+    /// Resolve the rendered stem before its parent writes the drawing coordinates.
+    public func getStemSegment() -> (x: Double, baseY: Double, tipY: Double)? {
+        guard let stem, stem.isVisible(), hasStem() || beam != nil else { return nil }
+        let adjustment: Double? = shouldDrawFlag() ? Metrics.getDouble("Stem.heightAdjustmentForFlag", -3) : nil
+        return stem.getSegment(x: getStemX(), adjustment: adjustment)
     }
 
     // MARK: - Bounding Box
@@ -975,9 +1002,7 @@ open class StaveNote: StemmableNote {
     public func getBoundingBox(includeModifiers: Bool) -> BoundingBox? {
         var boundingBox = BoundingBox(x: getAbsoluteX(), y: ys.first ?? 0, w: 0, h: 0)
         for notehead in noteHeads {
-            let displacement = notehead.isDisplaced()
-                ? (notehead.getWidth() - Stem.WIDTH / 2) * getStemDirection().signDouble
-                : 0
+            let displacement = notehead.getDisplacementX()
             if var box = notehead.getBoundingBox() {
                 box.x = getNoteHeadBeginX() + displacement + notehead.getXShift()
                 _ = boundingBox.mergeWith(box)
@@ -1061,6 +1086,13 @@ open class StaveNote: StemmableNote {
     override public func getStemX() -> Double {
         if noteType == "r" {
             return getCenterGlyphX()
+        }
+        let up = stemDirection == Stem.UP
+        if let engraving, let head = noteHeads.first(where: { !$0.isDisplaced() }),
+           engraving.musicFont == head.fontInfo.family,
+           let anchor = engraving.stemAnchor(head.text, direction: up ? .up : .down) {
+            return getNoteHeadBeginX() + head.getXShift() + (anchor.x * head.fontSizeInPixels) / 4
+                + ((up ? -1 : 1) * Stem.WIDTH) / 2
         }
         // Adjust the origin of the stem: left-aligned with the notehead if
         // stemmed down, right-aligned if stemmed up.
@@ -1326,16 +1358,19 @@ open class StaveNote: StemmableNote {
     /// The width of the note if it is displaced. Used for `Voice` formatting.
     public func getVoiceShiftWidth() -> Double {
         // TODO: may need to accommodate for dot here.
-        getGlyphWidth() * (displaced ? 2 : 1)
+        getGlyphWidth() * (displaced ? 1 + Double(max(1, extraHeadColumns)) : 1)
     }
 
     /// Calculate and set the extra pixels to the left or right if the note is displaced.
     public func calcNoteDisplacements() {
-        setLeftDisplacedHeadPx(displaced && stemDirection == Stem.DOWN ? getGlyphWidth() : 0)
+        let extra = getVoiceShiftWidth() - getGlyphWidth()
+        setLeftDisplacedHeadPx(stemDirection == Stem.DOWN ? extra : 0)
 
         // For upstems with flags, the extra space is unnecessary, since it's
         // taken up by the flag.
-        setRightDisplacedHeadPx(!hasFlag() && displaced && stemDirection == Stem.UP ? getGlyphWidth() : 0)
+        setRightDisplacedHeadPx(
+            stemDirection == Stem.UP ? max(0, extra - (hasFlag() ? getGlyphWidth() : 0)) : 0
+        )
     }
 
     // MARK: - PreFormat
@@ -1379,7 +1414,13 @@ open class StaveNote: StemmableNote {
         var yBottom = -Double.infinity
         for nh in noteHeads {
             let anchor = Tables.noteHeadStemYOffsets[nh.text].map { up ? $0.up : $0.down } ?? 0
-            let y = nh.getY() - anchor * Tables.STAVE_LINE_DISTANCE
+            let fontAnchor = engraving.flatMap { engraving in
+                engraving.musicFont == nh.fontInfo.family
+                    ? engraving.stemAnchor(nh.text, direction: up ? .up : .down) : nil
+            }
+            // SMuFL specifies four staff spaces per em. Follow the glyph scale for grace notes too.
+            let y = nh.getY() - (fontAnchor.map { ($0.y * nh.fontSizeInPixels) / 4 }
+                ?? anchor * Tables.STAVE_LINE_DISTANCE)
             yTop = min(y, yTop)
             yBottom = max(y, yBottom)
         }
@@ -1390,7 +1431,8 @@ open class StaveNote: StemmableNote {
         return (yTop, yBottom)
     }
 
-    public func getNoteHeadBounds() -> StaveNoteHeadBounds {
+    /// With `layoutX`, the `x` values come from layout coordinates instead of the last draw. (VexFlow 5.3.0)
+    public func getNoteHeadBounds(layoutX: Bool = false) -> StaveNoteHeadBounds {
         // Top and bottom Y values for stem.
         var yTop = Double.infinity
         var yBottom = -Double.infinity
@@ -1412,11 +1454,12 @@ open class StaveNote: StemmableNote {
             yBottom = max(y, yBottom)
 
             if displacedX == nil && notehead.isDisplaced() {
-                displacedX = notehead.getAbsoluteX()
+                displacedX = layoutX
+                    ? getNoteHeadBeginX() + notehead.getDisplacementX() : notehead.getAbsoluteX()
             }
 
             if nonDisplacedX == nil && !notehead.isDisplaced() {
-                nonDisplacedX = notehead.getAbsoluteX()
+                nonDisplacedX = layoutX ? getNoteHeadBeginX() : notehead.getAbsoluteX()
             }
 
             highestLine = max(line, highestLine)
@@ -1458,45 +1501,42 @@ open class StaveNote: StemmableNote {
 
     // MARK: - Draw Ledger Lines
 
-    /// Draw the ledger lines between the stave and the highest/lowest keys.
-    public func drawLedgerLines() throws {
+    /// Shared ledger segments after formatting, in renderer pixels. (VexFlow 5.3.0)
+    public func getLedgerLines() -> [(x: Double, y: Double, width: Double)] {
+        var lines: [(x: Double, y: Double, width: Double)] = []
         let stave = checkStave()
         let strokePx = renderOptions.strokePx
-        let ctx = try checkContext()
-        let width = getGlyphWidth() + strokePx * 2
-        let doubleWidth = 2 * (getGlyphWidth() + strokePx) - Stem.WIDTH / 2
-
-        if isRest() { return }
-
-        let bounds = getNoteHeadBounds()
-        let highestLine = bounds.highestLine
-        let lowestLine = bounds.lowestLine
-        let highestDisplacedLine = bounds.highestDisplacedLine
-        let highestNonDisplacedLine = bounds.highestNonDisplacedLine
-        let lowestDisplacedLine = bounds.lowestDisplacedLine
-        let lowestNonDisplacedLine = bounds.lowestNonDisplacedLine
-        let displacedX = bounds.displacedX
-        let nonDisplacedX = bounds.nonDisplacedX
-
-        // Early out if there are no ledger lines to draw.
-        if highestLine < 6 && lowestLine > 0 { return }
-
-        let minX = min(displacedX ?? 0, nonDisplacedX ?? 0)
-
-        func drawLedgerLine(_ y: Double, _ normal: Bool, _ displaced: Bool) {
-            let x: Double
-            if displaced && normal { x = minX - strokePx }
-            else if normal { x = (nonDisplacedX ?? 0) - strokePx }
-            else { x = (displacedX ?? 0) - strokePx }
-            let ledgerWidth = normal && displaced ? doubleWidth : width
-
-            ctx.beginPath()
-            ctx.moveTo(x, y)
-            ctx.lineTo(x + ledgerWidth, y)
-            ctx.stroke()
+        if isRest() { return lines }
+        let bounds = getNoteHeadBounds(layoutX: true)
+        func addLedger(_ line: Double, _ heads: [NoteHead]) {
+            if heads.isEmpty { return }
+            let left = heads.map { $0.getDisplacementX() }.min() ?? 0
+            let right = heads.map { $0.getDisplacementX() + $0.getWidth() }.max() ?? 0
+            lines.append((
+                x: getNoteHeadBeginX() + left - strokePx,
+                y: stave.getYForNote(line),
+                width: right - left + 2 * strokePx
+            ))
         }
+        var line: Double = 6
+        while line <= bounds.highestLine {
+            addLedger(line, noteHeads.filter { $0.getLine() >= line })
+            line += 1
+        }
+        line = 0
+        while line >= bounds.lowestLine {
+            addLedger(line, noteHeads.filter { $0.getLine() <= line })
+            line -= 1
+        }
+        return lines
+    }
 
-        let style = mergeStyles(stave.getDefaultLedgerLineStyle(), getLedgerLineStyle())
+    /// Draw the ledger lines between the stave and the highest/lowest keys.
+    public func drawLedgerLines() throws {
+        let lines = getLedgerLines()
+        if lines.isEmpty { return }
+        let ctx = try checkContext()
+        let style = mergeStyles(checkStave().getDefaultLedgerLineStyle(), getLedgerLineStyle())
         ctx.save()
         applyStyle(context: ctx, style: style)
         // VexFlowPatch: wrap the ledger lines in an SVG group (gated for upstream parity).
@@ -1504,25 +1544,12 @@ open class StaveNote: StemmableNote {
         if groupLedgers {
             _ = ctx.openGroup("ledgers", (getAttribute("id") ?? "") + "ledgers")
         }
-
-        // Draw ledger lines below the staff:
-        var line: Double = 6
-        while line <= highestLine {
-            let normal = nonDisplacedX != nil && line <= highestNonDisplacedLine
-            let displaced = highestDisplacedLine.map { line <= $0 } ?? false
-            drawLedgerLine(stave.getYForNote(line), normal, displaced)
-            line += 1
+        for segment in lines {
+            ctx.beginPath()
+            ctx.moveTo(segment.x, segment.y)
+            ctx.lineTo(segment.x + segment.width, segment.y)
+            ctx.stroke()
         }
-
-        // Draw ledger lines above the staff:
-        line = 0
-        while line >= lowestLine {
-            let normal = nonDisplacedX != nil && line >= lowestNonDisplacedLine
-            let displaced = lowestDisplacedLine.map { line >= $0 } ?? false
-            drawLedgerLine(stave.getYForNote(line), normal, displaced)
-            line -= 1
-        }
-
         // VexFlowPatch: close the ledger lines SVG group.
         if groupLedgers { ctx.closeGroup() }
         ctx.restore()

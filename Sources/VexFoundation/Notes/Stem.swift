@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stem.ts` (VexFlow 5.1.0).
+// Port of `src/stem.ts` (VexFlow 5.3.0).
 // The `Stem` object is generally handled by its parent `StemmableNote`.
 
 import Foundation
@@ -152,9 +152,16 @@ public final class Stem: VexElement {
         return unsignedHeight * stemDirection.signDouble
     }
 
-    /// Upstream throws `NotImplemented`. A stem has no bounding box.
+    /// Bounds of the stroked segment. A hidden stem contributes no area.
     override public func getBoundingBox() -> BoundingBox? {
-        nil
+        let segment = getSegment()
+        if hide { return BoundingBox(x: segment.x, y: segment.baseY, w: 0, h: 0) }
+        return BoundingBox(
+            x: segment.x - Stem.WIDTH / 2,
+            y: min(segment.baseY, segment.tipY),
+            w: Stem.WIDTH,
+            h: abs(segment.baseY - segment.tipY)
+        )
     }
 
     /// The y coordinates from the base of the stem to the top of the extension.
@@ -168,6 +175,9 @@ public final class Stem: VexElement {
 
         return (topY: stemTipY, baseY: outerMostNoteheadY)
     }
+
+    /// Whether this segment contributes ink.
+    public func isVisible() -> Bool { !hide }
 
     @discardableResult
     public func setVisibility(_ isVisible: Bool) -> Self {
@@ -192,12 +202,9 @@ public final class Stem: VexElement {
 
     // MARK: - Draw
 
-    /// Render the stem.
-    override public func draw() throws {
-        setRendered()
-        if hide { return }
-        let ctx = try checkContext()
-
+    /// Endpoints of the visible segment, including stemlets and flag shortening.
+    public func getSegment(x: Double? = nil, adjustment: Double? = nil) -> (x: Double, baseY: Double, tipY: Double) {
+        let adjustment = adjustment ?? renderHeightAdjustment
         let stemX: Double
         let stemY: Double
         let yBaseOffset: Double
@@ -218,12 +225,26 @@ public final class Stem: VexElement {
         // The offset from the stem base that gives the stemlet height.
         let stemletYOffset = isStemlet ? stemHeight - stemletHeight * stemDirection.signDouble : 0
 
+        return (
+            x: x ?? stemX,
+            baseY: stemY - stemletYOffset + yBaseOffset,
+            tipY: stemY - stemHeight - adjustment * stemDirection.signDouble
+        )
+    }
+
+    /// Render the stem.
+    override public func draw() throws {
+        setRendered()
+        if hide { return }
+        let ctx = try checkContext()
+        let segment = getSegment()
+
         // Draw the stem
         _ = ctx.openGroup(groupClass("stem"), getAttribute("id"))
         ctx.beginPath()
         ctx.setLineWidth(Stem.WIDTH)
-        ctx.moveTo(stemX, stemY - stemletYOffset + yBaseOffset)
-        ctx.lineTo(stemX, stemY - stemHeight - renderHeightAdjustment * stemDirection.signDouble)
+        ctx.moveTo(segment.x, segment.baseY)
+        ctx.lineTo(segment.x, segment.tipY)
         ctx.stroke()
         ctx.closeGroup()
     }

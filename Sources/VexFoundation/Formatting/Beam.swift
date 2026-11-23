@@ -1,7 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/beam.ts` (VexFlow 5.2.0).
+// Port of `src/beam.ts` (VexFlow 5.3.0).
+// Beam grouping, slope fitting and stem geometry for rhythmic notation.
 
 import Foundation
 
@@ -47,9 +48,19 @@ public struct BeamRenderOptions {
     public var flatBeams: Bool = false
     public var secondaryBreakTicks: Double?
     public var showStemlets: Bool = false
-    public var beamWidth: Double = 5
+    /// Beam thickness in pixels. With an engraving profile, the default follows the
+    /// profile thickness and the stave spacing; an explicit value still wins. (VexFlow 5.3.0)
+    public var beamWidth: Double {
+        get { explicitBeamWidth ?? beamWidthProvider?() ?? 5 }
+        set { explicitBeamWidth = newValue }
+    }
+    private var explicitBeamWidth: Double?
+    /// Upstream defines a getter on `renderOptions.beamWidth` for an engraving profile.
+    var beamWidthProvider: (() -> Double)?
     public var maxSlope: Double = 0.25
     public var minSlope: Double = -0.25
+    /// Keep automatic slope in the endpoint contour and align level in-staff beams to a half-space. (VexFlow 5.3.0)
+    public var contourSlope: Bool = false
     public var slopeIterations: Int = 20
     public var slopeCost: Double = 100
     public var stemletExtension: Double = 7
@@ -163,6 +174,10 @@ public final class Beam: VexElement {
     // MARK: - Properties
 
     public var renderOptions = BeamRenderOptions()
+
+    /// Derived extensions must be removed before formatting the next width. (VexFlow 5.3.0)
+    private var fittedStems: [(stem: Stem, before: Double, after: Double)] = []
+    private var flatOffset: (before: Double?, after: Double?)?
 
     public var notes: [StemmableNote]
     public var postFormatted: Bool = false
@@ -575,6 +590,12 @@ public final class Beam: VexElement {
         _beamCount = getBeamCount()
         breakOnIndexes = []
         renderOptions = BeamRenderOptions()
+        if let first = notes[0] as? StaveNote, let profile = first.engraving {
+            // A beam can be constructed before its stave. Native pixel overrides still win.
+            renderOptions.beamWidthProvider = { [weak first] in
+                profile.beamThickness * (first?.getStave()?.getSpacingBetweenLines() ?? Tables.STAVE_LINE_DISTANCE)
+            }
+        }
     }
 
     // MARK: - Accessors
@@ -639,9 +660,15 @@ public final class Beam: VexElement {
         var bestSlope: Double = 0
         var yShift: Double = 0
 
+        // Explicit slope bounds take precedence when they exclude the horizontal candidate.
+        let followContour = renderOptions.contourSlope && minSlope <= 0 && maxSlope >= 0
         // iterate through slope values to find best weighted fit
         var slope = minSlope
         while slope <= maxSlope {
+            if followContour && abs(slope) > 1e-8 && slope * initialSlope <= 0 {
+                slope += increment
+                continue
+            }
             var totalStemExtension: Double = 0
             var yShiftTemp: Double = 0
 
@@ -684,8 +711,102 @@ public final class Beam: VexElement {
             slope += increment
         }
 
+        if renderOptions.contourSlope && abs(bestSlope) < 1e-8 {
+            // Snap the outer edge away from the heads so minimum stem lengths survive.
+            let stave = firstNote.checkStave()
+            let top = stave.getYForLine(0)
+            let edge = firstNote.getStemExtents().topY + yShift
+            let step = stave.getSpacingBetweenLines() / 2
+            if edge >= top && edge <= stave.getYForLine(Double(stave.getNumLines() - 1)) {
+                let slots = (edge - top) / step
+                let snapped = _stemDirection == Stem.UP ? slots.rounded(.down) : slots.rounded(.up)
+                yShift += top + snapped * step - edge
+            }
+        }
         self.slope = bestSlope
         self.yShift = yShift
+    }
+
+    /// Shorten stems together when a beam cuts through an outer voice at or between attacks. (VexFlow 5.3.0)
+    private func clearOtherVoiceHeads() {
+        let first = notes[0]
+        guard let stave = first.getStave() else { return }
+        let direction = _stemDirection
+        if notes.contains(where: { $0.getStave() !== stave || $0.getStemDirection() != direction }) { return }
+        // Upstream throws for an unformatted note (`checkTickContext`); the Swift
+        // `postFormat()` does not throw, so the clearance pass is skipped instead.
+        guard let firstContext = try? first.checkTickContextThrowing(),
+              let lastContext = try? notes[notes.count - 1].checkTickContextThrowing() else { return }
+        var contexts: [TickContext] = []
+        if !firstContext.tContexts.isEmpty {
+            contexts = firstContext.through(lastContext)
+        } else {
+            for note in notes {
+                guard let context = try? note.checkTickContextThrowing() else { return }
+                contexts.append(context)
+            }
+        }
+        let peers = contexts
+            .flatMap { $0.getTickables() }
+            .compactMap { $0 as? StaveNote }
+            .filter { $0.getBeam() !== self && $0.getStave() === stave && !$0.isRest() }
+        if peers.isEmpty { return }
+        let firstX = first.getStemX()
+        let space = stave.getSpacingBetweenLines()
+        let gap = space * ((first as? StaveNote)?.engraving?.clearance ?? 0.25)
+        let width = renderOptions.beamWidth
+        let origin = first.getStemExtents().topY + yShift
+        let sign = direction.signDouble
+        // In this axis, increasing coordinates point from heads toward stem tips.
+        func tip(_ x: Double) -> Double { (origin + (x - firstX) * slope) * -sign }
+        var required: Double = 0
+        var available = Double.infinity
+        for note in notes {
+            let depth = width * (1 + 1.5 * Double(note.getGlyphProps().beamCount - 1))
+            let inner = tip(note.getStemX()) - depth
+            // Keep the innermost beam clear of the chord's own heads.
+            guard let staveNote = note as? StaveNote else { return }
+            for head in staveNote.noteHeads {
+                guard let bounds = head.getBoundingBox() else { continue }
+                let edge = direction == Stem.UP ? bounds.getY() : bounds.getY() + bounds.getH()
+                available = min(available, inner - edge * -sign - gap)
+            }
+        }
+
+        // Test each actual strip. A short secondary beam occupies only part of the span.
+        guard let strips = try? getStrips(origin) else { return }
+        for peer in peers {
+            for box in peer.getHeadInk() {
+                var outer = -Double.infinity
+                var inner = Double.infinity
+                for strip in strips {
+                    let left = max(min(strip.x1, strip.x2), box.x)
+                    let right = min(max(strip.x1, strip.x2), box.x + box.w)
+                    if right <= left { continue }
+                    let offset = (strip.y1 - origin - (strip.x1 - firstX) * slope) * -sign
+                    outer = max(outer, max(tip(left), tip(right)) + offset)
+                    inner = min(inner, min(tip(left), tip(right)) + offset - width)
+                }
+                if outer == -Double.infinity { continue }
+                let a = box.y * -sign
+                let b = (box.y + box.h) * -sign
+                let near = min(a, b)
+                let far = max(a, b)
+                if far <= inner {
+                    available = min(available, inner - far - gap)
+                } else if near <= outer && far >= inner {
+                    required = max(required, outer - near + gap)
+                }
+            }
+        }
+        if required <= 0 { return }
+        if required <= available {
+            yShift += sign * required
+        } else if required - available < 2 * gap {
+            // The ink fits but both preferred margins do not. Divide the remaining white
+            // space equally. If even the ink will not fit, keep the original beam slope and height.
+            yShift += sign * ((required + available) / 2)
+        }
     }
 
     /// Calculate a slope and y-shift for flat beams.
@@ -794,7 +915,9 @@ public final class Beam: VexElement {
                 crossStemExtension = (1 + Double(noteBeamCount - 1) * 1.5) * renderOptions.beamWidth
             }
 
-            stem.setExtension(preBeamExtension + beamExtension + crossStemExtension)
+            let after = preBeamExtension + beamExtension + crossStemExtension
+            fittedStems.append((stem: stem, before: preBeamExtension, after: after))
+            stem.setExtension(after)
             stem.adjustHeightForBeam()
 
             if note.isRest() && showStemlets {
@@ -976,40 +1099,78 @@ public final class Beam: VexElement {
         }
     }
 
+    /// One filled strip: two sloping edges separated by a signed thickness. (VexFlow 5.3.0)
+    struct Strip {
+        var x1: Double
+        var x2: Double
+        var y1: Double
+        var y2: Double
+        var thickness: Double
+    }
+
+    /// Each filled strip has two sloping edges separated by a signed thickness.
+    func getStrips(_ beamYStart: Double? = nil) throws -> [Strip] {
+        var beamY = beamYStart ?? getBeamYToDraw()
+        let firstX = notes[0].getStemX()
+        let thickness = renderOptions.beamWidth * _stemDirection.signDouble
+        var strips: [Strip] = []
+        for duration in ["4", "8", "16", "32", "64", "128", "256", "512", "1024"] {
+            for line in getBeamLines(duration) {
+                guard let end = line.end else { throw BeamError.noLastBeamX }
+                strips.append(Strip(
+                    x1: line.start,
+                    x2: end + 1,
+                    y1: getSlopeY(line.start, firstX, beamY, slope),
+                    y2: getSlopeY(end, firstX, beamY, slope),
+                    thickness: thickness
+                ))
+            }
+            beamY += thickness * 1.5
+        }
+        return strips
+    }
+
+    /// Bounds of the beam strips alone. The note geometry owns the stem segments. (VexFlow 5.3.0)
+    override public func getBoundingBox() -> BoundingBox? {
+        postFormat()
+        var box: BoundingBox?
+        for strip in (try? getStrips()) ?? [] {
+            let rect = BoundingBox(
+                x: min(strip.x1, strip.x2),
+                y: min(strip.y1, strip.y2) + min(0, strip.thickness),
+                w: abs(strip.x2 - strip.x1),
+                h: abs(strip.y2 - strip.y1) + abs(strip.thickness)
+            )
+            if box == nil { box = rect } else { _ = box?.mergeWith(rect) }
+        }
+        return box ?? BoundingBox(x: notes[0].getStemX(), y: getBeamYToDraw(), w: 0, h: 0)
+    }
+
     /// Render the beam lines.
     func drawBeamLines(_ ctx: RenderContext) throws {
-        let validBeamDurations = ["4", "8", "16", "32", "64", "128", "256", "512", "1024"]
-
-        let firstNote = notes[0]
-        var beamY = getBeamYToDraw()
-        let firstStemX = firstNote.getStemX()
-        let beamThickness = renderOptions.beamWidth * _stemDirection.signDouble
-
-        // Draw the beams.
-        for duration in validBeamDurations {
-            let beamLines = getBeamLines(duration)
-
-            for beamLine in beamLines {
-                let startBeamX = beamLine.start
-
-                let startBeamY = getSlopeY(startBeamX, firstStemX, beamY, slope)
-                if let lastBeamX = beamLine.end, lastBeamX != 0, !lastBeamX.isNaN {
-                    let lastBeamY = getSlopeY(lastBeamX, firstStemX, beamY, slope)
-
-                    ctx.beginPath()
-                    ctx.moveTo(startBeamX, startBeamY)
-                    ctx.lineTo(startBeamX, startBeamY + beamThickness)
-                    ctx.lineTo(lastBeamX + 1, lastBeamY + beamThickness)
-                    ctx.lineTo(lastBeamX + 1, lastBeamY)
-                    ctx.closePath()
-                    ctx.fill()
-                } else {
-                    throw BeamError.noLastBeamX
-                }
-            }
-
-            beamY += beamThickness * 1.5
+        for strip in try getStrips() {
+            ctx.beginPath()
+            ctx.moveTo(strip.x1, strip.y1)
+            ctx.lineTo(strip.x1, strip.y1 + strip.thickness)
+            ctx.lineTo(strip.x2, strip.y2 + strip.thickness)
+            ctx.lineTo(strip.x2, strip.y2)
+            ctx.closePath()
+            ctx.fill()
         }
+    }
+
+    /// Release only the adjustments from the last fit. Preserve intervening native edits. (VexFlow 5.3.0)
+    public func resetLayout() {
+        if !postFormatted { return }
+        for fitted in fittedStems where fitted.stem.getExtension() == fitted.after {
+            fitted.stem.setExtension(fitted.before)
+        }
+        if let flatOffset, renderOptions.flatBeamOffset == flatOffset.after {
+            renderOptions.flatBeamOffset = flatOffset.before
+        }
+        fittedStems.removeAll()
+        flatOffset = nil
+        postFormatted = false
     }
 
     /// Pre-format the beam.
@@ -1035,9 +1196,12 @@ public final class Beam: VexElement {
 
         // Calculate a smart slope if we're not forcing the beams to be flat.
         if isTabNote(notes[0]) || renderOptions.flatBeams {
+            let before = renderOptions.flatBeamOffset
             calculateFlatSlope()
+            flatOffset = (before: before, after: renderOptions.flatBeamOffset)
         } else {
             calculateSlope()
+            clearOtherVoiceHeads()
         }
         applyStemExtensions()
 

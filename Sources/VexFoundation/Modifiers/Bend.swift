@@ -1,7 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/bend.ts` (VexFlow 5.0.0).
+// Port of `src/bend.ts` (VexFlow 5.3.0).
+// Tablature bend phrases, including nested bends on the strings of a chord.
 
 import Foundation
 
@@ -65,23 +66,44 @@ public final class Bend: Modifier {
     ) -> Bool {
         if bends.isEmpty { return false }
 
-        var lastWidth: Double = 0
-        // Format Bends
+        // Keep each chord together even when modifiers from simultaneous voices interleave.
+        // Insertion-ordered, as the upstream `Map`.
+        var chords: [(note: Note, bends: [Bend])] = []
         for bend in bends {
             let note = bend.checkAttachedNote()
-
-            if let tabNote = note as? TabNote {
-                let stringPos = Double(tabNote.leastString()) - 1
-                if state.topTextLine < stringPos {
-                    state.topTextLine = stringPos
-                }
+            if let index = chords.firstIndex(where: { $0.note === note }) {
+                chords[index].bends.append(bend)
+            } else {
+                chords.append((note: note, bends: [bend]))
             }
-            _ = bend.setXShift(lastWidth)
-            lastWidth = bend.getWidth()
-            _ = bend.setTextLine(state.topTextLine)
+            if let tabNote = note as? TabNote {
+                state.topTextLine = max(state.topTextLine, Double(tabNote.leastString()) - 1)
+            }
         }
 
-        state.rightShift += lastWidth
+        var width: Double = 0
+        for (note, chord) in chords {
+            var chord = chord
+            if let tabNote = note as? TabNote {
+                let positions = tabNote.getPositions()
+                func string(_ bend: Bend) -> Int {
+                    let i = bend.checkIndex()
+                    return i >= 0 && i < positions.count ? positions[i].str : 0
+                }
+                // The upper string takes the inside curve. A lower string must pass to its right.
+                // Stable, as the JavaScript `Array.prototype.sort`.
+                chord = chord.enumerated().sorted { lhs, rhs in
+                    let a = string(lhs.element), b = string(rhs.element)
+                    return a != b ? a < b : lhs.offset < rhs.offset
+                }.map(\.element)
+            }
+            for bend in chord {
+                _ = bend.setXShift(width)
+                width = bend.getWidth()
+                _ = bend.setTextLine(state.topTextLine)
+            }
+        }
+        state.rightShift += width
         state.topTextLine += 1
         return true
     }
@@ -265,9 +287,7 @@ public final class Bend: Modifier {
         }
 
         for i in 0..<phrase.count {
-            if phrase[i].drawWidth == nil { phrase[i].drawWidth = 0 }
-            if i == 0 { phrase[i].drawWidth = (phrase[i].drawWidth ?? 0) + xShift }
-            let bendDrawWidth = phrase[i].drawWidth ?? 0
+            let bendDrawWidth = (phrase[i].drawWidth ?? 0) + (i == 0 ? xShift : 0)
 
             lastDrawnWidth = bendDrawWidth + lastBendDrawWidth - (i == 1 ? xShift : 0)
             if phrase[i].type == Bend.UP {

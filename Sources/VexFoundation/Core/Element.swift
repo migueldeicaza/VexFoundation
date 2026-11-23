@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Mohit Cheppudira
 //
-// Port of `src/element.ts` (VexFlow 5.2.0).
+// Port of `src/element.ts` (VexFlow 5.3.0).
 
 import Foundation
 
@@ -359,6 +359,17 @@ open class VexElement {
 
     // MARK: - Bounding box
 
+    /// Visible text in renderer pixels at a supplied glyph origin. Positive y points down. (VexFlow 5.3.0)
+    public func getTextInk(_ x: Double, _ y: Double) -> BoundingBox {
+        let m = textMetrics
+        return BoundingBox(
+            x: x + xShift - m.actualBoundingBoxLeft,
+            y: y + yShift - m.actualBoundingBoxAscent,
+            w: m.actualBoundingBoxLeft + m.actualBoundingBoxRight,
+            h: m.actualBoundingBoxAscent + m.actualBoundingBoxDescent
+        )
+    }
+
     /// The bounding box of the element text.
     open func getBoundingBox() -> BoundingBox? {
         BoundingBox(
@@ -623,14 +634,14 @@ open class VexElement {
     public func setOriginX(_ x: Double) {
         guard let bbox = getBoundingBox(), bbox.w != 0 else { return }
         // The bounding box includes x, which is not part of the origin.
-        let originX = abs((bbox.x - x - xShift) / bbox.w)
+        let originX = abs((bbox.x - self.x - xShift) / bbox.w)
         let shift = (x - originX) * bbox.w
         xShift = -shift
     }
 
     public func setOriginY(_ y: Double) {
         guard let bbox = getBoundingBox(), bbox.h != 0 else { return }
-        let originY = abs((bbox.y - y - yShift) / bbox.h)
+        let originY = abs((bbox.y - self.y - yShift) / bbox.h)
         let shift = (y - originY) * bbox.h
         yShift = -shift
     }

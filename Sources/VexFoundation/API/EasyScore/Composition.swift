@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/easyscore/composition.ts` (VexFlow 5.2.0).
+// Port of `src/easyscore/composition.ts` (VexFlow 5.3.0).
 // Structured construction delegates timing and layout to native Voice, System, and Sheet objects.
 
 import Foundation
@@ -30,12 +30,58 @@ struct EasyScoreResolvedStaffState: Equatable {
     }
 }
 
+/// Explicit signs survive key-aware generation, including cautionaries and microtones. (VexFlow 5.3.0)
+public struct EasyScoreGraceAccidental {
+    public var index: Int
+    public var type: String
+    public var cautionary: Bool
+
+    public init(index: Int, type: String, cautionary: Bool = false) {
+        self.index = index
+        self.type = type
+        self.cautionary = cautionary
+    }
+}
+
+/// One grace pitch: the native grace note fields plus explicit accidentals. (VexFlow 5.3.0)
+public struct EasyScoreGracePitchSpec {
+    public var note: GraceNoteStruct
+    public var accidentals: [EasyScoreGraceAccidental]
+
+    public init(_ note: GraceNoteStruct, accidentals: [EasyScoreGraceAccidental] = []) {
+        self.note = note
+        self.accidentals = accidentals
+    }
+}
+
+/// Grace notes before or after the host note. (VexFlow 5.3.0)
+public enum EasyScoreGraceSide: String, Sendable {
+    case before
+    case after
+}
+
+/// The host's complete grace group. (VexFlow 5.3.0)
+public struct EasyScoreGraceGroupSpec {
+    public var side: EasyScoreGraceSide
+    public var notes: [EasyScoreGracePitchSpec]
+    public var slur: Bool
+    public var beam: Bool
+
+    public init(side: EasyScoreGraceSide, notes: [EasyScoreGracePitchSpec], slur: Bool = false, beam: Bool = false) {
+        self.side = side
+        self.notes = notes
+        self.slur = slur
+        self.beam = beam
+    }
+}
+
 /// Voice content. Typed wrappers add IDs and cross-staff assignment without changing native note fields.
 public enum EasyScoreContent {
     /// EasyScore notation, for example `"C4/q, D4"`.
     case notation(String)
-    /// A typed staff note, with an optional score ID and cross-staff target (stave spec ID).
-    case note(StaveNoteStruct, id: String? = nil, stave: String? = nil)
+    /// A typed staff note, with an optional score ID, cross-staff target (stave spec ID)
+    /// and grace group (VexFlow 5.3.0).
+    case note(StaveNoteStruct, id: String? = nil, stave: String? = nil, grace: EasyScoreGraceGroupSpec? = nil)
     /// A typed tab note.
     case tab(TabNoteStruct, id: String? = nil, stave: String? = nil, drawStem: Bool = false)
     /// An owned native tickable that is not in a voice.
@@ -152,6 +198,12 @@ public enum EasyScoreAccidentalPolicy: Sendable {
     case keyAware
 }
 
+/// Include written grace pitches in key-aware state at their host onset. (VexFlow 5.3.0)
+public enum EasyScoreGraceAccidentalPolicy: Sendable {
+    case explicit
+    case ordered
+}
+
 public enum EasyScoreSignaturePolicy: Sendable {
     case changes
     case everyMeasure
@@ -169,6 +221,8 @@ public struct EasyScoreCompositionSpec {
     /// Options for each measure System. The sheet sets `factory`, `width`, `autoWidth` and `noJustification`.
     public var system: SystemOptions
     public var accidentals: EasyScoreAccidentalPolicy
+    /// Include written grace pitches in key-aware state at their host onset. (VexFlow 5.3.0)
+    public var graceAccidentals: EasyScoreGraceAccidentalPolicy?
     public var signatures: EasyScoreSignaturePolicy
     public var spans: [EasyScoreSpanSpec]
     public var crossMeasureSpans: EasyScoreCrossMeasureSpanPolicy
@@ -176,8 +230,10 @@ public struct EasyScoreCompositionSpec {
     public init(
         staves: [EasyScoreStaveSpec], sheet: SheetOptions = SheetOptions(), system: SystemOptions = SystemOptions(),
         accidentals: EasyScoreAccidentalPolicy = .literal, signatures: EasyScoreSignaturePolicy = .changes,
-        spans: [EasyScoreSpanSpec] = [], crossMeasureSpans: EasyScoreCrossMeasureSpanPolicy = .reject
+        spans: [EasyScoreSpanSpec] = [], crossMeasureSpans: EasyScoreCrossMeasureSpanPolicy = .reject,
+        graceAccidentals: EasyScoreGraceAccidentalPolicy? = nil
     ) {
+        self.graceAccidentals = graceAccidentals
         self.staves = staves
         self.sheet = sheet
         self.system = system
@@ -234,6 +290,24 @@ private func invalid(_ message: String) -> VexError {
     VexError("BadComposition", message)
 }
 
+/// Construct and validate the host's complete grace group inside the composition transaction. (VexFlow 5.3.0)
+private func buildGraceGroup(_ score: EasyScore, _ spec: EasyScoreGraceGroupSpec) throws -> GraceNoteGroup {
+    if spec.notes.isEmpty { throw invalid("Expected a nonempty before or after grace group.") }
+    let children: [StemmableNote] = try spec.notes.map { pitch in
+        let child = try score.make.graceNote(pitch.note)
+        for accidental in pitch.accidentals {
+            let mark = try score.make.accidental(type: accidental.type)
+            if accidental.cautionary { mark.setAsCautionary() }
+            try score.attach(child, mark, index: accidental.index)
+        }
+        return child
+    }
+    let group = try score.make.graceNoteGroup(notes: children, slur: spec.slur)
+    group.setPosition(spec.side == .after ? .right : .left)
+    if spec.beam { group.beamNotes() }
+    return group
+}
+
 /// Return exact native ticks for a declared meter, including a pickup span.
 private func ticksFor(_ time: VoiceTime) throws -> Fraction {
     try Voice(validating: time).getTotalTicks().clone()
@@ -280,8 +354,9 @@ private func buildVoice(
                     if change.time != nil { notes.append(try score.make.timeSigNote(time: state.time)) }
                 }
                 score.set(clef: state.clef, time: state.time)
-            case .note(let noteStruct, let id, let stave):
+            case .note(let noteStruct, let id, let stave, let grace):
                 let note = try score.make.note(noteStruct)
+                if let grace { try score.attach(note, try buildGraceGroup(score, grace), index: 0) }
                 if let id { try note.setAttributeThrowing("id", id) }
                 if let stave, !stave.isEmpty { assignments.append((note, stave)) }
                 notes.append(note)
@@ -458,6 +533,9 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
     if spec.staves.contains(where: { $0.measures.count != count }) {
         throw invalid("All staves need the same number of measures.")
     }
+    if spec.graceAccidentals == .ordered && spec.accidentals != .keyAware {
+        throw invalid("Ordered grace accidentals require key-aware accidentals.")
+    }
     var nativeInputs: [Note] = []
     for stave in spec.staves {
         for measure in stave.measures {
@@ -531,7 +609,8 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
                     let generated = parts.reduce(into: Set<ObjectIdentifier>()) { $0.formUnion($1.generated) }
                     for (staffIndex, part) in parts.enumerated() {
                         try applyCompositionAccidentals(
-                            score, voices.flatMap { $0 }, part.key, part.changes, generated, staves[staffIndex]
+                            score, voices.flatMap { $0 }, part.key, part.changes, generated, staves[staffIndex],
+                            spec.graceAccidentals == .ordered
                         )
                     }
                 }

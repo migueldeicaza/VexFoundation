@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/gracenotegroup.ts` (VexFlow 5.1.0). `GraceNoteGroup` is used
+// Port of `src/gracenotegroup.ts` (VexFlow 5.3.0). `GraceNoteGroup` is used
 // to format and render grace notes.
 
 import Foundation
@@ -41,64 +41,36 @@ public final class GraceNoteGroup: Modifier {
 
     // MARK: - Static Format
 
-    /// Arranges groups inside a `ModifierContext`.
+    /// Right-side material at the same onset must not move a before-grace cluster to the left. (VexFlow 5.3.0)
+    private var afterWidth: Double = 0
+    private var afterOffset: Double = 0
+
+    /// Opposing groups reserve their own side. Voices with simultaneous before-graces align at the host.
     @discardableResult
     public static func format(
-        _ gracenoteGroups: [GraceNoteGroup],
+        _ groups: [GraceNoteGroup],
         state: inout ModifierContextState
     ) -> Bool {
-        let groupSpacingStave: Double = 4
-        let groupSpacingTab: Double = 0
-
-        if gracenoteGroups.isEmpty { return false }
-
-        var groupList: [(shift: Double, gracenoteGroup: GraceNoteGroup, spacing: Double)] = []
-        var prevNote: Note?
-        var shift: Double = 0
-
-        for gracenoteGroup in gracenoteGroups {
-            let note = gracenoteGroup.getNote()
-            let isStavenote = note is StaveNote
-            let spacing = isStavenote ? groupSpacingStave : groupSpacingTab
-
-            if isStavenote && note !== prevNote {
-                // Iterate through all notes to get the displaced pixels
-                for _ in 0..<note.keys.count {
-                    shift = max(note.getLeftDisplacedHeadPx(), shift)
-                }
-                prevNote = note
-            }
-
-            groupList.append((shift: shift, gracenoteGroup: gracenoteGroup, spacing: spacing))
+        if groups.isEmpty { return false }
+        let entries = groups.map { group -> (group: GraceNoteGroup, note: Note, width: Double, after: Bool) in
+            group.preFormat()
+            let note = group.getNote()
+            let width = group.getWidth() + (note is StaveNote ? 4 : 0)
+            return (group, note, width, group.position == .right)
         }
-
-        // If first note left shift in case it is displaced
-        var groupShift = groupList[0].shift
-        var formatWidth: Double
-        var right = false
-        var left = false
-        for item in groupList {
-            let gracenoteGroup = item.gracenoteGroup
-            if gracenoteGroup.position == .right {
-                right = true
-            } else {
-                left = true
-            }
-            gracenoteGroup.preFormat()
-            formatWidth = gracenoteGroup.getWidth() + item.spacing
-            groupShift = max(formatWidth, groupShift)
-        }
-
-        for item in groupList {
-            let gracenoteGroup = item.gracenoteGroup
-            formatWidth = gracenoteGroup.getWidth() + item.spacing
-            gracenoteGroup.setSpacingFromNextModifier(
-                groupShift - min(formatWidth, groupShift) + StaveNote.minNoteheadPadding
+        let afterWidth = entries.filter { $0.after }.map { $0.width }.reduce(0, max)
+        let beforeWidth = entries.filter { !$0.after }
+            .map { max($0.width, $0.note.getLeftDisplacedHeadPx()) }.reduce(0, max)
+        for entry in entries {
+            entry.group.afterWidth = afterWidth
+            entry.group.afterOffset = entry.note.getGlyphWidth() + entry.note.getRightDisplacedHeadPx()
+                + state.rightShift + StaveNote.minNoteheadPadding
+            entry.group.setSpacingFromNextModifier(
+                (entry.after ? 0 : beforeWidth - entry.width) + StaveNote.minNoteheadPadding
             )
         }
-
-        if right { state.rightShift += groupShift }
-        if left { state.leftShift += groupShift }
+        state.leftShift += beforeWidth
+        state.rightShift += afterWidth
         return true
     }
 
@@ -180,6 +152,16 @@ public final class GraceNoteGroup: Modifier {
         _ = try note.checkStaveThrowing()
         preFormat()
         alignSubNotesWithNote(getGraceNotes(), note, position: position)
+        if afterWidth != 0 {
+            for grace in graceNotes {
+                let tick = grace.getTickContext()
+                tick.setXOffset(
+                    position == .right
+                        ? note.getTickContext().getX() + afterOffset
+                        : tick.getXOffset() + afterWidth
+                )
+            }
+        }
         beams.forEach { $0.postFormat() }
     }
 
@@ -195,37 +177,43 @@ public final class GraceNoteGroup: Modifier {
         return boundingBox
     }
 
+    /// Positioned components, including the optional slur, shared with geometry consumers. (VexFlow 5.3.0)
+    public func getLayoutElements() throws -> [VexElement] {
+        let note = try checkAttachedNoteThrowing()
+        try positionGraceNotes()
+        if showSlur && !graceNotes.isEmpty {
+            // Keep one slur for the current pair of endpoints. A native caller may reattach this group.
+            let isStavenote = note is StaveNote
+            let after = position == .right
+            let end = after ? graceNotes[graceNotes.count - 1] : graceNotes[0]
+            if slur?.getNotes().firstNote !== note || slur?.getNotes().lastNote !== end {
+                let tieNotes = TieNotes(firstNote: note, lastNote: end, firstIndexes: [0], lastIndexes: [0])
+                slur = isStavenote ? StaveTie(notes: tieNotes) : TabTie(notes: tieNotes)
+            }
+            if let slur {
+                // A normal tie starts beyond all right modifiers, including this group.
+                // Opposing slurs start at opposite edges of the same host head.
+                if afterWidth != 0, let host = note as? StaveNote {
+                    let hostEdge = host.getNoteHeadBeginX() + (after ? host.getGlyphWidth() : 0)
+                    slur.renderOptions.firstXShift = hostEdge - host.getTieRightX()
+                } else {
+                    slur.renderOptions.firstXShift = 0
+                }
+                slur.renderOptions.cp2 = 12
+                slur.renderOptions.yShift = (isStavenote ? 7 : 5) + renderOptions.slurYShift
+            }
+        }
+        var elements: [VexElement] = graceNotes
+        elements.append(contentsOf: beams as [VexElement])
+        if let slur { elements.append(slur) }
+        return elements
+    }
+
     override public func draw() throws {
         let ctx = try checkContext()
-        let note = try checkAttachedNoteThrowing()
         setRendered()
-
-        try positionGraceNotes()
-
-        // Draw grace notes.
-        for graceNote in graceNotes {
-            try graceNote.setContext(ctx).drawWithStyle()
-        }
-        // Draw beams.
-        for beam in beams {
-            try beam.setContext(ctx).drawWithStyle()
-        }
-
-        if showSlur {
-            // Create and draw slur.
-            let isStavenote = note is StaveNote
-            let tieNotes = TieNotes(
-                firstNote: note,
-                lastNote: graceNotes.first,
-                firstIndexes: [0],
-                lastIndexes: [0]
-            )
-            let slur: StaveTie = isStavenote ? StaveTie(notes: tieNotes) : TabTie(notes: tieNotes)
-            self.slur = slur
-
-            slur.renderOptions.cp2 = 12
-            slur.renderOptions.yShift = (isStavenote ? 7 : 5) + renderOptions.slurYShift
-            try slur.setContext(ctx).drawWithStyle()
+        for element in try getLayoutElements() {
+            try element.setContext(ctx).drawWithStyle()
         }
     }
 }

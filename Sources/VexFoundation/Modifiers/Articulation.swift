@@ -2,7 +2,8 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Larry Kuhns.
 //
-// Port of `src/articulation.ts` (VexFlow 5.2.0).
+// Port of `src/articulation.ts` (VexFlow 5.3.0).
+// Articulation placement, measurement and rendering.
 
 import Foundation
 
@@ -220,9 +221,13 @@ public final class Articulation: Modifier {
 
     // MARK: - Reset
 
+    /// Explicit `setBetweenLines` value that survives `reset()`. (VexFlow 5.3.0)
+    private var betweenLinesOverride: Bool?
+
     override public func reset() {
         // Use type as glyph code, if not defined as articulation code
         articulation = Self.lookup(type) ?? ArticulationStruct(code: type, betweenLines: false)
+        if let betweenLinesOverride { articulation.betweenLines = betweenLinesOverride }
         let positional = position == .above ? articulation.aboveCode : articulation.belowCode
         let code = nonEmpty(positional) ?? nonEmpty(articulation.code) ?? Glyphs.null
         text = code
@@ -238,6 +243,7 @@ public final class Articulation: Modifier {
     /// Set if articulation should be rendered between lines.
     @discardableResult
     public func setBetweenLines(_ betweenLines: Bool = true) -> Self {
+        betweenLinesOverride = betweenLines
         articulation.betweenLines = betweenLines
         return self
     }
@@ -394,11 +400,10 @@ public final class Articulation: Modifier {
 
     // MARK: - Draw
 
-    /// Render articulation in position next to note.
-    override public func draw() throws {
-        let ctx = try checkContext()
+    /// Resolve the glyph origin after its owner and modifier context have been formatted. (VexFlow 5.3.0)
+    private func getPlacement() throws -> (x: Double, y: Double, centered: Bool) {
         let note = try checkAttachedNoteThrowing()
-        setRendered()
+        var centered = false
 
         let index = try checkIndexThrowing()
         let position = self.position
@@ -456,7 +461,7 @@ public final class Articulation: Modifier {
             let articLine = distanceFromNote + noteLine
             let snappedLine = snapLineToStaff(canSitBetweenLines, articLine, position, offsetDirection)
 
-            if isWithinLines(snappedLine, position) { setOrigin(0.5, 0.5) }
+            centered = isWithinLines(snappedLine, position)
 
             y += abs(snappedLine - articLine) * staffSpace * offsetDirection
         }
@@ -466,8 +471,28 @@ public final class Articulation: Modifier {
             y += userYShift
         }
 
-        self.x = x
-        self.y = y
+        return (x, y, centered)
+    }
+
+    /// Get visible glyph ink without mutating its alignment or drawing coordinates. (VexFlow 5.3.0)
+    public func getInkBounds() throws -> BoundingBox {
+        let placement = try getPlacement()
+        var box = getTextInk(placement.x, placement.y)
+        if placement.centered {
+            box.x += -width / 2 - xShift
+            box.y = placement.y - height / 2
+        }
+        return box
+    }
+
+    /// Render articulation in position next to note.
+    override public func draw() throws {
+        let ctx = try checkContext()
+        let placement = try getPlacement()
+        if placement.centered { setOrigin(0.5, 0.5) }
+        setRendered()
+        self.x = placement.x
+        self.y = placement.y
         renderText(ctx, xPos: 0, yPos: 0)
     }
 }

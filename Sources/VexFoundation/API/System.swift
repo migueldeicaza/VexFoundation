@@ -25,14 +25,20 @@ public enum SystemError: Error, LocalizedError, Equatable, Sendable {
 public struct SystemFormatterOptions {
     public var alpha: Double = 0.5
     public var softmaxFactor: Double = Tables.SOFTMAX_FACTOR
-    /// Strict proportional spacing (VexFlow 5.2.0 `FormatterOptions.spacing`). `nil` keeps engraving layout.
-    public var spacing: ProportionalSpacing?
+    /// Proportional or optical spacing (VexFlow 5.3.0 `FormatterOptions.spacing`). `nil` keeps engraving layout.
+    public var spacing: MeasuredSpacing?
 
     public init(alpha: Double = 0.5, softmaxFactor: Double = Tables.SOFTMAX_FACTOR,
-                spacing: ProportionalSpacing? = nil) {
+                spacing: MeasuredSpacing? = nil) {
         self.alpha = alpha
         self.softmaxFactor = softmaxFactor
         self.spacing = spacing
+    }
+
+    /// Source compatibility with the 5.2.0 port: strict proportional spacing.
+    public init(alpha: Double = 0.5, softmaxFactor: Double = Tables.SOFTMAX_FACTOR,
+                spacing: ProportionalSpacing) {
+        self.init(alpha: alpha, softmaxFactor: softmaxFactor, spacing: .proportional(spacing))
     }
 }
 

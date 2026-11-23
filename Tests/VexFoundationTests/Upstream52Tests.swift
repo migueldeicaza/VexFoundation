@@ -404,7 +404,7 @@ struct Upstream52BeamStemPolicyTests {
                     let system = factory.System(options: SystemOptions(
                         x: 25, width: 660, y: 30 + Double(groups.count) * 155,
                         details: SystemFormatterOptions(
-                            spacing: proportional ? ProportionalSpacing(pixelsPerQuarter: 200) : nil
+                            spacing: proportional ? .proportional(pixelsPerQuarter: 200) : nil
                         )
                     ))
                     system.addStave(SystemStave(voices: [score.voice(notes, time: .meter(2, 4))])).addClef(.treble)

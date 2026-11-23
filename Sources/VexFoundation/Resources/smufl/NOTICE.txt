@@ -1,0 +1,20 @@
+SMuFL font metadata (subset)
+
+These files contain the fontName, fontVersion, engravingDefaults and
+glyphsWithAnchors fields of the SMuFL metadata.json files that ship with
+the fonts:
+
+- bravura-metadata.json: Bravura 1.392, Copyright (c) 2019, Steinberg Media
+  Technologies GmbH. Source: @vexflow-fonts/bravura 1.0.2
+  (https://github.com/steinbergmedia/bravura/tree/master/redist).
+- petaluma-metadata.json: Petaluma 1.065, Copyright (c) 2018, Steinberg Media
+  Technologies GmbH. Source: @vexflow-fonts/petaluma 1.0.1
+  (https://github.com/steinbergmedia/petaluma/tree/master/redist).
+- leland-metadata.json: Leland 0.77, Copyright (c) 2022, MuseScore BVBA.
+  Source: @vexflow-fonts/leland 1.0.1 (https://github.com/MuseScoreFonts/Leland).
+
+The fonts and their metadata are licensed under the SIL Open Font License,
+Version 1.1. The license texts are in ../fonts/licenses
+(bravura-LICENSE.txt, petaluma-LICENSE.txt, leland-LICENSE.txt).
+
+Regenerate with tools/extract_smufl_metadata.py.

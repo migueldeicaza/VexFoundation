@@ -3,7 +3,7 @@
 // @author Mohit Cheppudira
 // @author Greg Ristow (modifications)
 //
-// Port of `src/accidental.ts` (VexFlow 5.2.0).
+// Port of `src/accidental.ts` (VexFlow 5.3.0).
 
 import Foundation
 
@@ -707,15 +707,26 @@ public final class Accidental: Modifier {
     // MARK: - Draw
 
     /// Render accidental onto canvas.
-    override public func draw() throws {
-        let ctx = try checkContext()
+    /// Place the glyph using the same coordinates for measurement and drawing. (VexFlow 5.3.0)
+    private func positionGlyph() throws {
         let note = try checkAttachedNoteThrowing()
-        setRendered()
 
         // Figure out the start `x` and `y` coordinates for note and index.
         let start = note.getModifierStartXY(position: position, index: index ?? 0)
         x = start.x - width
         y = start.y
+    }
+
+    /// Visible glyph after formatting, including cautionary or authored shifts. (VexFlow 5.3.0)
+    public func getInkBounds() throws -> BoundingBox {
+        try positionGlyph()
+        return getTextInk(x, y)
+    }
+
+    override public func draw() throws {
+        let ctx = try checkContext()
+        try positionGlyph()
+        setRendered()
         renderText(ctx, xPos: 0, yPos: 0)
     }
 }

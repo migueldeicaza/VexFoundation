@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/formatter.ts` (VexFlow 5.2.0).
+// Port of `src/formatter.ts` (VexFlow 5.3.0).
 // Engraving layout and opt-in placement on a strict musical-time grid.
 
 import Foundation
@@ -36,8 +36,8 @@ public enum FormatterError: Error, LocalizedError, Equatable, Sendable {
 
 /// Options for the Formatter layout engine.
 public struct FormatterOptions {
-    /// Omit (`nil`) to use the default engraving layout. (VexFlow 5.2.0)
-    public var spacing: ProportionalSpacing?
+    /// Omit (`nil`) to use the default engraving layout. (VexFlow 5.3.0: proportional or optical)
+    public var spacing: MeasuredSpacing?
     public var softmaxFactor: Double = Tables.SOFTMAX_FACTOR
     public var globalSoftmax: Bool = false
     public var maxIterations: Int = 5
@@ -45,11 +45,20 @@ public struct FormatterOptions {
     public init(softmaxFactor: Double = Tables.SOFTMAX_FACTOR,
                 globalSoftmax: Bool = false,
                 maxIterations: Int = 5,
-                spacing: ProportionalSpacing? = nil) {
+                spacing: MeasuredSpacing? = nil) {
         self.spacing = spacing
         self.softmaxFactor = softmaxFactor
         self.globalSoftmax = globalSoftmax
         self.maxIterations = maxIterations
+    }
+
+    /// Source compatibility with the 5.2.0 port: strict proportional spacing.
+    public init(softmaxFactor: Double = Tables.SOFTMAX_FACTOR,
+                globalSoftmax: Bool = false,
+                maxIterations: Int = 5,
+                spacing: ProportionalSpacing) {
+        self.init(softmaxFactor: softmaxFactor, globalSoftmax: globalSoftmax,
+                  maxIterations: maxIterations, spacing: .proportional(spacing))
     }
 }
 
@@ -655,6 +664,7 @@ public final class Formatter {
             array: contexts,
             resolutionMultiplier: resolutionMultiplier
         )
+        TickContext.linkTimeline(tickContexts.list.compactMap { tickToContextMap[$0] })
 
         for context in contexts {
             context.tContexts = contexts
@@ -1151,6 +1161,11 @@ public final class Formatter {
         let opts = options
 
         self.voices = voices
+        for voice in voices {
+            for tickable in voice.getTickables() {
+                if isNote(tickable) { (tickable as? Note)?.getBeam()?.resetLayout() }
+            }
+        }
         let softmaxFactor = formatterOptions.softmaxFactor
         if softmaxFactor != 0 && !softmaxFactor.isNaN {
             for v in self.voices {
