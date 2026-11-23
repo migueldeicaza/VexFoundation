@@ -34,6 +34,8 @@ public struct GraceNoteStruct {
     public var musicFont: String?
     /// Score-local engraving profile (upstream `StaveNoteStruct.engraving`). (VexFlow 5.3.0)
     public var engraving: EngravingProfile?
+    /// Source identities of instruments and playing instructions. (VexFlow 5.4.0)
+    public var notation: [NotationIdentity] = []
 
     public init(
         keys: NonEmptyArray<StaffKeySpec>,
@@ -200,7 +202,7 @@ public struct GraceNoteStruct {
     /// Convert to StaveNoteStruct. Upstream: `{ strokePx: GraceNote.LEDGER_LINE_OFFSET, ...noteStruct }`.
     /// The grace note scale comes from the `GraceNote.fontScale` metric.
     func toStaveNoteStruct() -> StaveNoteStruct {
-        StaveNoteStruct(
+        var result = StaveNoteStruct(
             keys: keys,
             duration: duration,
             dots: dots,
@@ -213,6 +215,8 @@ public struct GraceNoteStruct {
             musicFont: musicFont,
             engraving: engraving
         )
+        result.notation = notation
+        return result
     }
 }
 

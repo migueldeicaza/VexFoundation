@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // Co-author: Benjamin W. Bohl
 //
-// Port of `src/clef.ts` (VexFlow 5.2.0).
+// Port of `src/clef.ts` (VexFlow 5.4.0).
 
 import Foundation
 
@@ -146,6 +146,12 @@ public final class Clef: StaveModifier {
     override public func setStave(_ stave: Stave) -> Self {
         self.stave = stave
         return self
+    }
+
+    /// Positioned glyph ink, including an octave annotation if present. (VexFlow 5.4.0)
+    public func getInkBounds() throws -> BoundingBox {
+        let stave = try checkStaveThrowing()
+        return getTextInk(getX(), stave.getYForLine(line))
     }
 
     // MARK: - Draw

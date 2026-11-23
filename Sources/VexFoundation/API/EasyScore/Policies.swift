@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/easyscore/policies.ts` (VexFlow 5.3.0).
+// Port of `src/easyscore/policies.ts` (VexFlow 5.4.0).
 // Opt-in accidental generation preserves written pitches and explicit native decorations.
 
 import Foundation
@@ -39,7 +39,8 @@ func applyCompositionAccidentals(
     _ changes: [EasyScoreKeyChange],
     _ generated: Set<ObjectIdentifier>,
     _ stave: Stave,
-    _ includeGrace: Bool = false
+    _ includeGrace: Bool = false,
+    _ placed: ((Accidental) -> Void)? = nil
 ) throws {
     let music = Music()
     var scale = try music.createScaleMap(key)
@@ -92,7 +93,9 @@ func applyCompositionAccidentals(
                     note.modifiers.removeAll { $0 === mark }
                 }
                 if explicit.isEmpty && (previous != pitch || (simultaneous[p.id]?.count ?? 0) > 1) {
-                    try score.attach(note, try score.make.accidental(type: p.accidental), index: index)
+                    let mark = try score.make.accidental(type: p.accidental)
+                    try score.attach(note, mark, index: index)
+                    placed?(mark)
                 }
                 // Microtonal spellings have no native key-string representation. Force a fresh sign next time.
                 let value = explicit.contains { !Music.accidentals.contains($0.type) } ? "microtonal" : pitch

@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/sheet.ts` (VexFlow 5.2.0).
+// Port of `src/sheet.ts` (VexFlow 5.4.0 part 1; the continuous-layout hooks are TODO).
 // Optional continuous-sheet layout for existing Systems. No music data model or pagination.
 
 import Foundation
@@ -114,6 +114,7 @@ public final class Sheet {
     /// Measure and pack rows. Always recompute, so repeated resize is deterministic.
     @discardableResult
     public func format() throws -> Self {
+        // TODO(5.4.0 part 2): `if let continuous { rows = try continuous.format(options); return self }`.
         let widths = try measureSystems()
         rows = []
         var y = options.y
@@ -155,8 +156,10 @@ public final class Sheet {
 
     /// Include staff envelopes and note bounds in the ordinary vertical layout.
     private func verticalBounds(_ system: System) -> (top: Double, bottom: Double) {
-        var top: Double = 0
-        var bottom = system.getBoundingBox()?.h ?? 0
+        // The envelope includes the phrase layout bounds, which can lie above the system. (VexFlow 5.4.0)
+        let envelope = system.getBoundingBox() ?? BoundingBox(0, 0, 0, 0)
+        var top = min(0, envelope.y)
+        var bottom = envelope.y + envelope.h
         // Spanning marks and arbitrary annotations still need caller-supplied rowGap.
         for voice in system.getVoices() {
             for note in voice.getTickables() {

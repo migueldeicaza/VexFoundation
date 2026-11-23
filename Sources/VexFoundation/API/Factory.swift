@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Mohit Cheppudira
 //
-// Port of `src/factory.ts` (VexFlow 5.3.0).
+// Port of `src/factory.ts` (VexFlow 5.4.0 part 1; the continuous-layout hooks are TODO).
 //
 // Local changes (see docs/local-deviations.md):
 // - Every object is created inside the factory runtime context.
@@ -1086,6 +1086,8 @@ public final class Factory {
                 ctx.setDefaultStyle(defaults)
                 ctx.restore()
             }
+            // TODO(5.4.0 part 2): collect `sheet.getContinuousLayout()` of each sheet, skip the staves, voices,
+            // queued elements and systems in `layout.hidden`, then call `layout.draw(ctx)` after the systems.
             for stave in staves {
                 try stave.setContext(ctx).drawWithStyle()
             }

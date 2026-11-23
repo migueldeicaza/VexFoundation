@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Larry Kuhns 2011
 //
-// Port of `src/stavebarline.ts` (VexFlow 5.1.0).
+// Port of `src/stavebarline.ts` (VexFlow 5.4.0).
 
 import Foundation
 
@@ -177,8 +177,7 @@ public final class Barline: StaveModifier {
 
     private func drawVerticalBar(_ stave: Stave, _ x: Double, _ doubleBar: Bool, doubleHeavy: Bool) throws {
         let staveCtx = try stave.checkContext()
-        let topY = stave.getTopLineTopY()
-        let botY = stave.getBottomLineBottomY()
+        let (topY, botY) = try stave.getBarlineBounds()
         // VexFlowPatch: support double heavy barline with thicker strokes
         let widthBar = doubleHeavy ? 3.0 : 1.0
         let startXBar1 = doubleHeavy ? x - 5 : x - 3
@@ -190,8 +189,7 @@ public final class Barline: StaveModifier {
 
     public func drawVerticalEndBar(_ stave: Stave, _ x: Double) throws {
         let staveCtx = try stave.checkContext()
-        let topY = stave.getTopLineTopY()
-        let botY = stave.getBottomLineBottomY()
+        let (topY, botY) = try stave.getBarlineBounds()
         staveCtx.fillRect(x - 5, topY, 1, botY - topY)
         staveCtx.fillRect(x - 2, topY, 3, botY - topY)
     }
@@ -251,8 +249,7 @@ public final class Barline: StaveModifier {
     public func drawRepeatBar(_ stave: Stave, _ x: Double, _ begin: Bool) throws {
         let staveCtx = try stave.checkContext()
 
-        let topY = stave.getTopLineTopY()
-        let botY = stave.getBottomLineBottomY()
+        let (topY, botY) = try stave.getBarlineBounds()
         var xShift: Double = 3
 
         if !begin {
@@ -282,7 +279,8 @@ public final class Barline: StaveModifier {
         let dotX = x + xShift + dotRadius / 2
 
         // calculate the y offset based on number of stave lines
-        var yOffset = Double(stave.getNumLines() - 1) * stave.getSpacingBetweenLines()
+        let span = stave.options.barlineSpan
+        var yOffset = (span.map { $0.bottom - $0.top } ?? Double(stave.getNumLines() - 1)) * stave.getSpacingBetweenLines()
         yOffset = yOffset / 2 - stave.getSpacingBetweenLines() / 2
         var dotY = topY + yOffset + dotRadius / 2
 

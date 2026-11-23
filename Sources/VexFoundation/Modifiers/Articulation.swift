@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Larry Kuhns.
 //
-// Port of `src/articulation.ts` (VexFlow 5.3.0).
+// Port of `src/articulation.ts` (VexFlow 5.4.0).
 // Articulation placement, measurement and rendering.
 
 import Foundation
@@ -400,6 +400,12 @@ public final class Articulation: Modifier {
 
     // MARK: - Draw
 
+    private var layoutShiftY: Double = 0
+    /// Derived clearance from neighboring attacks, recomputed at each phrase layout. (VexFlow 5.4.0)
+    public func setLayoutShiftY(_ y: Double) {
+        layoutShiftY = y
+    }
+
     /// Resolve the glyph origin after its owner and modifier context have been formatted. (VexFlow 5.3.0)
     private func getPlacement() throws -> (x: Double, y: Double, centered: Bool) {
         let note = try checkAttachedNoteThrowing()
@@ -471,7 +477,7 @@ public final class Articulation: Modifier {
             y += userYShift
         }
 
-        return (x, y, centered)
+        return (x, y + layoutShiftY, centered)
     }
 
     /// Get visible glyph ink without mutating its alignment or drawing coordinates. (VexFlow 5.3.0)

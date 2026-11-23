@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Raffaele Viglianti, 2012 http://itisnotsound.wordpress.com/
 //
-// Port of `src/stavehairpin.ts` (VexFlow 5.0.0).
+// Port of `src/stavehairpin.ts` (VexFlow 5.4.0).
 // This class implements hairpins between notes.
 // Hairpins can be either crescendo or decrescendo.
 
@@ -190,33 +190,107 @@ public final class StaveHairpin: VexElement {
         return self
     }
 
+    // MARK: - Layout (VexFlow 5.4.0)
+
+    /// Both endpoints are required for a complete wedge on a single system.
+    public func getNotes() -> [Note?] {
+        [firstNote, lastNote]
+    }
+
+    private var layoutBaseline: Double?
+    private var layoutLeft: Double = 0
+    private var layoutRight: Double = 0
+
+    /// A phrase baseline passes through the middle of the wedge; trims clear adjacent dynamics.
+    public func setLayoutBaseline(_ y: Double?, _ left: Double = 0, _ right: Double = 0) {
+        layoutBaseline = y
+        layoutLeft = left
+        layoutRight = right
+    }
+
+    private struct Parameters {
+        var firstX: Double
+        var lastX: Double
+        var firstY: Double
+        var lastY: Double
+        var staffHeight: Double
+    }
+
+    private func parameters() throws -> Parameters {
+        guard let first = firstNote, let last = lastNote else {
+            throw StaveHairpinError.requiresBothNotesForDraw
+        }
+        let firstStave = try first.checkStaveThrowing()
+        let lastStave = try last.checkStaveThrowing()
+        return Parameters(
+            firstX: first.getModifierStartXY(position: position, index: 0).x,
+            lastX: last.getModifierStartXY(position: position, index: 0).x,
+            firstY: firstStave.getY() + firstStave.getHeight(),
+            lastY: lastStave.getY() + lastStave.getHeight(),
+            staffHeight: firstStave.getHeight()
+        )
+    }
+
+    /// Wedge edges: `top` and `height` of the opening, `left` and `right` of the tips.
+    public struct LayoutEdges: Equatable, Sendable {
+        public var top: Double
+        public var left: Double
+        public var right: Double
+        public var height: Double
+    }
+
+    private func edges(firstX: Double, lastX: Double, firstY: Double, staffHeight: Double) -> LayoutEdges {
+        let yShift = renderOptions.yShift
+        let height = renderOptions.height
+        let above = position == .above
+        let top: Double
+        if let layoutBaseline {
+            top = layoutBaseline - height / 2 + (above ? -yShift : yShift)
+        } else {
+            top = firstY + (above ? 10 - staffHeight - yShift : 20 + yShift)
+        }
+        return LayoutEdges(
+            top: top,
+            left: firstX + renderOptions.leftShiftPx + layoutLeft,
+            right: lastX + renderOptions.rightShiftPx - layoutRight,
+            height: height
+        )
+    }
+
+    /// Signed endpoint order is available to diagnose a wedge squeezed between two dynamics.
+    public func getLayoutEdges() throws -> LayoutEdges {
+        let p = try parameters()
+        return edges(firstX: p.firstX, lastX: p.lastX, firstY: p.firstY, staffHeight: p.staffHeight)
+    }
+
+    override public func getBoundingBox() -> BoundingBox? {
+        guard let e = try? getLayoutEdges() else { return nil }
+        let pad = (getStyle()?.lineWidth ?? 1) / 2
+        return BoundingBox(
+            min(e.left, e.right) - pad,
+            min(e.top, e.top + e.height) - pad,
+            abs(e.right - e.left) + 2 * pad,
+            abs(e.height) + 2 * pad
+        )
+    }
+
     // MARK: - Render
 
     public func renderHairpin(firstX: Double, lastX: Double, firstY: Double, lastY: Double,
                               staffHeight: Double) throws {
         let ctx = try checkContext()
-        var dis = renderOptions.yShift + 20
-        var yShift = firstY
-
-        if position == .above {
-            dis = -dis + 30
-            yShift = firstY - staffHeight
-        }
-
-        let leftShiftPx = renderOptions.leftShiftPx
-        let rightShiftPx = renderOptions.rightShiftPx
-
+        let e = edges(firstX: firstX, lastX: lastX, firstY: firstY, staffHeight: staffHeight)
         ctx.beginPath()
 
         switch hairpin {
         case .crescendo:
-            ctx.moveTo(lastX + rightShiftPx, yShift + dis)
-            ctx.lineTo(firstX + leftShiftPx, yShift + renderOptions.height / 2 + dis)
-            ctx.lineTo(lastX + rightShiftPx, yShift + renderOptions.height + dis)
+            ctx.moveTo(e.right, e.top)
+            ctx.lineTo(e.left, e.top + e.height / 2)
+            ctx.lineTo(e.right, e.top + e.height)
         case .decrescendo:
-            ctx.moveTo(firstX + leftShiftPx, yShift + dis)
-            ctx.lineTo(lastX + rightShiftPx, yShift + renderOptions.height / 2 + dis)
-            ctx.lineTo(firstX + leftShiftPx, yShift + renderOptions.height + dis)
+            ctx.moveTo(e.left, e.top)
+            ctx.lineTo(e.right, e.top + e.height / 2)
+            ctx.lineTo(e.left, e.top + e.height)
         }
 
         ctx.stroke()
@@ -228,23 +302,9 @@ public final class StaveHairpin: VexElement {
     override public func draw() throws {
         _ = try checkContext()
         setRendered()
-
-        guard let firstNote, let lastNote else {
-            throw StaveHairpinError.requiresBothNotesForDraw
-        }
-
-        let start = firstNote.getModifierStartXY(position: position, index: 0)
-        let end = lastNote.getModifierStartXY(position: position, index: 0)
-
-        let firstStave = try firstNote.checkStaveThrowing()
-        let lastStave = try lastNote.checkStaveThrowing()
-
+        let p = try parameters()
         try renderHairpin(
-            firstX: start.x,
-            lastX: end.x,
-            firstY: firstStave.getY() + firstStave.getHeight(),
-            lastY: lastStave.getY() + lastStave.getHeight(),
-            staffHeight: firstStave.getHeight()
+            firstX: p.firstX, lastX: p.lastX, firstY: p.firstY, lastY: p.lastY, staffHeight: p.staffHeight
         )
     }
 }

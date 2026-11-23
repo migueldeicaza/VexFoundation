@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/voice.ts` (VexFlow 5.1.0).
+// Port of `src/voice.ts` (VexFlow 5.4.0).
 
 import Foundation
 
@@ -383,6 +383,9 @@ public final class Voice: VexElement {
 
     // MARK: - Draw
 
+    /// Preserve per-event cross-staff assignments when drawing a continuous score. (VexFlow 5.4.0)
+    public var preserveStaveAssignments = false
+
     override public func draw() throws {
         try draw(context: nil, stave: nil)
     }
@@ -392,12 +395,14 @@ public final class Voice: VexElement {
     /// already set.
     public func draw(context: RenderContext?, stave: Stave? = nil) throws {
         let ctx = try context ?? checkContext()
-        let stave = stave ?? voiceStave
+        let override = stave ?? (preserveStaveAssignments ? nil : voiceStave)
         setRendered()
         for tickable in tickables {
             // Set the stave if provided.
-            if let stave {
-                tickable.setStave(stave)
+            if let override {
+                tickable.setStave(override)
+            } else if preserveStaveAssignments, tickable.getStave() == nil, let voiceStave {
+                tickable.setStave(voiceStave)
             }
             guard tickable.getStave() != nil else {
                 throw VoiceError.missingStave

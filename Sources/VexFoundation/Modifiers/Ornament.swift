@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Cyril Silverman
 //
-// Port of `src/ornament.ts` (VexFlow 5.3.0). The 4.x delayed-draw fixes
+// Port of `src/ornament.ts` (VexFlow 5.4.0). The 4.x delayed-draw fixes
 // (b184399c, 7856e88a, 7ca08666) are part of 5.0.0.
 
 import Foundation
@@ -209,6 +209,12 @@ public final class Ornament: Modifier {
 
     // MARK: - Draw
 
+    private var layoutShiftY: Double = 0
+    /// Move the whole ornament and its auxiliary signs together. (VexFlow 5.4.0)
+    public func setLayoutShiftY(_ y: Double) {
+        layoutShiftY = y
+    }
+
     /// Recompute delayed and auxiliary positions against the current tick contexts. (VexFlow 5.3.0)
     private func positionElements() throws -> [(element: VexElement, x: Double, y: Double)] {
         let note = try checkAttachedNoteThrowing()
@@ -232,6 +238,7 @@ public final class Ornament: Modifier {
             glyphY = try getBottomY(note, textLine) + (textLine + initialOffset + 1.5) * staffSpace
         }
 
+        glyphY += layoutShiftY
         // Adjust x position if ornament is delayed
         if delayed {
             var delayXShift: Double = 0

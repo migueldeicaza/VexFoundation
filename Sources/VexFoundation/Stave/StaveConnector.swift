@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/staveconnector.ts` (VexFlow 5.0.0).
+// Port of `src/staveconnector.ts` (VexFlow 5.4.0).
 
 import Foundation
 
@@ -199,6 +199,7 @@ public final class StaveConnector: VexElement {
             ctx.fill()
             ctx.stroke()
         case .bracket:
+            topX += xShift
             topY -= 6
             botY += 6
             attachmentHeight = botY - topY

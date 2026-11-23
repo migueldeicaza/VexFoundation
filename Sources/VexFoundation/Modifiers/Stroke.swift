@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Larry Kuhns
 //
-// Port of `src/strokes.ts` (VexFlow 5.1.0). The `Stroke` class renders chord
+// Port of `src/strokes.ts` (VexFlow 5.4.0). The `Stroke` class renders chord
 // strokes that can be arpeggiated, brushed, rasgueado, etc.
 
 import Foundation
@@ -136,6 +136,12 @@ public final class Stroke: Modifier {
                     }
                 }
             }
+        }
+
+        // An explicit terminal chord can lie on another stave and outside this modifier context. (VexFlow 5.4.0)
+        if let noteEnd {
+            topY = min(topY, noteEnd.getYs().min() ?? topY)
+            botY = max(botY, noteEnd.getYs().max() ?? botY)
         }
 
         var arrow = ""

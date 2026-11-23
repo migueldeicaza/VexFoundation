@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/system.ts` (VexFlow 5.1.0).
+// Port of `src/system.ts` (VexFlow 5.4.0).
 
 import Foundation
 
@@ -297,13 +297,25 @@ public final class System: VexElement {
 
     // MARK: - Format
 
-    /// Format the system: layout all staves and voices.
-    public func format() {
-        _ = try? formatThrowing()
+    private var phrase: PhraseLayout?
+
+    /// Opt in to local phrase placement on this system and register its verses and spans. (VexFlow 5.4.0)
+    public func getPhraseLayout() -> PhraseLayout {
+        if let phrase { return phrase }
+        let layout = PhraseLayout()
+        phrase = layout
+        return layout
     }
 
-    public func formatThrowing() throws {
+    /// Format the system: layout all staves and voices.
+    /// `row` places the staves at fixed offsets and reserves end padding (continuous layout). (VexFlow 5.4.0)
+    public func format(row: SystemRowLayout? = nil) {
+        _ = try? formatThrowing(row: row)
+    }
+
+    public func formatThrowing(row: SystemRowLayout? = nil) throws {
         try VexRuntime.withContext(runtimeContext) {
+            phrase?.resetPlacement()
             let alpha = options.details.alpha
             let fmtOptions = FormatterOptions(
                 softmaxFactor: options.details.softmaxFactor,
@@ -318,6 +330,7 @@ public final class System: VexElement {
 
             for (index, part) in partStaves.enumerated() {
                 y += part.space(partStaveInfos[index].spaceAbove)
+                if let offsets = row?.staffOffsets, index < offsets.count { y = options.y + offsets[index] }
                 part.setY(y)
                 y += part.space(partStaveInfos[index].spaceBelow)
                 y += part.space(options.spaceBetweenStaves)
@@ -347,7 +360,7 @@ public final class System: VexElement {
             var justifyWidth: Double
             if options.autoWidth && !partVoices.isEmpty {
                 justifyWidth = try formatter.preCalculateMinTotalWidthThrowing(partVoices)
-                options.width = justifyWidth + Stave.rightPadding + (startX - options.x)
+                options.width = justifyWidth + Stave.rightPadding + (startX - options.x) + (row?.endPadding ?? 0)
                 for part in partStaves {
                     part.setWidth(options.width)
                 }
@@ -360,6 +373,7 @@ public final class System: VexElement {
             }
 
             if !partVoices.isEmpty {
+                if !options.autoWidth { justifyWidth -= row?.endPadding ?? 0 }
                 _ = try formatter.formatThrowing(
                     partVoices,
                     justifyWidth: options.noJustification ? 0 : justifyWidth,
@@ -376,6 +390,7 @@ public final class System: VexElement {
             self.debugNoteMetricsYs = debugNoteMetricsYs
             self.lastY = y
             Stave.formatBegModifiers(partStaves)
+            phrase?.format(partStaves, partVoices)
         }
     }
 
@@ -383,7 +398,9 @@ public final class System: VexElement {
 
     /// Get the bounding box.
     override public func getBoundingBox() -> BoundingBox? {
-        BoundingBox(x: options.x, y: options.y, w: options.width, h: (lastY ?? 0) - options.y)
+        let box = BoundingBox(x: options.x, y: options.y, w: options.width, h: (lastY ?? 0) - options.y)
+        if let bounds = phrase?.bounds { return box.merged(with: bounds) }
+        return box
     }
 
     // MARK: - Draw
@@ -397,6 +414,7 @@ public final class System: VexElement {
             }
             setRendered()
 
+            phrase?.draw(ctx)
             if options.debugFormatter {
                 Formatter.plotDebugging(
                     ctx: ctx,
@@ -416,6 +434,20 @@ public final class System: VexElement {
                 }
             }
         }
+    }
+}
+
+// MARK: - Row Layout
+
+/// Fixed staff offsets from the system top and extra end padding for one row of a continuous score.
+/// (VexFlow 5.4.0)
+public struct SystemRowLayout: Sendable {
+    public var staffOffsets: [Double]?
+    public var endPadding: Double?
+
+    public init(staffOffsets: [Double]? = nil, endPadding: Double? = nil) {
+        self.staffOffsets = staffOffsets
+        self.endPadding = endPadding
     }
 }
 

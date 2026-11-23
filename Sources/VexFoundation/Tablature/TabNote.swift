@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/tabnote.ts` (VexFlow 5.1.0).
+// Port of `src/tabnote.ts` (VexFlow 5.4.0).
 //
 // Notes for tablature notation. A tab note has one or more fret positions
 // and can be drawn with or without a stem.
@@ -37,6 +37,8 @@ public struct TabNoteStruct {
     public var dots: Int?
     public var type: NoteType?
     public var stemDirection: StemDirection?
+    /// Source identities of instruments and playing instructions. (VexFlow 5.4.0)
+    public var notation: [NotationIdentity] = []
 
     public init(
         positions: [TabNotePosition],
@@ -192,9 +194,13 @@ public enum TabNoteError: Error, LocalizedError, Equatable, Sendable {
     case unformattedNoteForModifierStart
     case invalidModifierIndex(Int)
     case noYValues
+    /// Upstream throws `BadArguments` for an invalid timed bend or a bent string outside the chord.
+    case invalidNotation(String)
 
     public var errorDescription: String? {
         switch self {
+        case .invalidNotation(let message):
+            return message
         case .emptyPositions:
             return "TabNote requires at least one position."
         case .missingGlyph(let duration, let type):
@@ -250,12 +256,13 @@ open class TabNote: StemmableNote {
         // The fret positions in the note.
         self.positions = noteStruct.positions
 
-        let noteInput = NoteStruct(
+        var noteInput = NoteStruct(
             keys: [],
             duration: NoteDurationSpec(uncheckedValue: noteStruct.duration),
             dots: noteStruct.dots,
             type: noteStruct.type
         )
+        noteInput.notation = noteStruct.notation
 
         super.init(noteInput)
 
@@ -283,6 +290,15 @@ open class TabNote: StemmableNote {
 
         self.ghost = false
         updateWidth()
+        if case .invalidNotation(let message)? = initError {
+            setInitErrorIfNeeded(.invalidNotation(message))
+        } else if !notation.isEmpty {
+            do {
+                try attachGuitarGestures(self)
+            } catch {
+                setInitErrorIfNeeded(.invalidNotation((error as? VexError)?.message ?? "\(error)"))
+            }
+        }
     }
 
     public convenience init(validating noteStruct: TabNoteStruct, drawStem: Bool = false) throws {
@@ -623,7 +639,10 @@ open class TabNote: StemmableNote {
         setRendered()
         let renderStem = beam == nil && renderOptions.drawStem
 
-        _ = ctx.openGroup(groupClass("tabnote"), getAttribute("id"))
+        let group = ctx.openGroup(groupClass("tabnote"), getAttribute("id"))
+        if !notation.isEmpty {
+            (group as? SVGNode)?.setAttribute("aria-label", notation.map(\.label).joined(separator: ", "))
+        }
         try drawPositions()
         try drawStemThrough()
 

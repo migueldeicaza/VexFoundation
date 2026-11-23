@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/timesignature.ts` (VexFlow 5.3.0).
+// Port of `src/timesignature.ts` (VexFlow 5.4.0).
 // Implements time signature glyphs for staves.
 
 import Foundation
@@ -209,11 +209,7 @@ public final class TimeSignature: StaveModifier {
         if isNumeric {
             // render top text
             var startX = x + topStartX
-            if !botText.getText().isEmpty {
-                topRenderY = stave.getYForLine(topLine - lineShift)
-            } else {
-                topRenderY = (stave.getYForLine(topLine) + stave.getYForLine(bottomLine)) / 2
-            }
+            topRenderY = topBaseline(stave)
             topText.renderText(ctx, xPos: startX, yPos: topRenderY)
 
             // render bottom text
@@ -223,6 +219,23 @@ public final class TimeSignature: StaveModifier {
         } else {
             renderText(ctx, xPos: x - self.x, yPos: stave.getYForLine(line))
         }
+    }
+
+    /// Compute the top row baseline for fractional and single-row numeric meters. (VexFlow 5.4.0)
+    private func topBaseline(_ stave: Stave) -> Double {
+        !botText.getText().isEmpty
+            ? stave.getYForLine(topLine - lineShift)
+            : (stave.getYForLine(topLine) + stave.getYForLine(bottomLine)) / 2
+    }
+
+    /// Positioned ink before drawing, including additive meters and cut time. (VexFlow 5.4.0)
+    public func getInkBounds() throws -> BoundingBox {
+        let stave = try checkStaveThrowing()
+        if !isNumeric { return getTextInk(x, stave.getYForLine(line)) }
+        let top = topText.getTextInk(x + topStartX, topBaseline(stave))
+        return !botText.getText().isEmpty
+            ? top.merged(with: botText.getTextInk(x + botStartX, stave.getYForLine(bottomLine + lineShift)))
+            : top
     }
 
     /// Combined bounding box of the time signature. Call it after `drawAt()`, which

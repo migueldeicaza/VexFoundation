@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Cyril Silverman
 //
-// Port of `src/textbracket.ts` (VexFlow 5.1.0).
+// Port of `src/textbracket.ts` (VexFlow 5.4.0).
 //
 // This file implements `TextBrackets` which extend between two notes.
 // The octave transposition markings (8va, 8vb, 15va, 15vb) can be created
@@ -213,11 +213,26 @@ public final class TextBracket: VexElement {
     // MARK: - Draw
 
     /// Draw the octave bracket on the rendering context.
-    override public func draw() throws {
-        let ctx = try checkContext()
-        setRendered()
+    private var layoutBaseline: Double?
 
-        let y: Double
+    /// Shared baseline for automatic ottava placement. (VexFlow 5.4.0)
+    public func setLayoutBaseline(_ y: Double?) {
+        layoutBaseline = y
+    }
+
+    private struct Geometry {
+        var start: (x: Double, y: Double)
+        var superX: Double
+        var superY: Double
+        var startX: Double
+        var endX: Double
+        var lineY: Double
+        var bracketHeight: Double
+        var superWidth: Double
+    }
+
+    private func geometry() -> Geometry {
+        var y: Double
         switch position {
         case .top:
             y = start.checkStave().getYForTopText(line)
@@ -225,15 +240,13 @@ public final class TextBracket: VexElement {
             y = start.checkStave().getYForBottomText(line + Tables.TEXT_HEIGHT_OFFSET_HACK)
         }
 
+        y = layoutBaseline ?? y
         // Get the preliminary start and stop coordinates for the bracket
         let start = (x: self.start.getAbsoluteX(), y: y)
         let stop = (x: self.stop.getAbsoluteX(), y: y)
 
         let posValue = Double(position.rawValue)
         let bracketHeight = renderOptions.bracketHeight * posValue
-
-        // Draw text
-        textElement.renderText(ctx, xPos: start.x, yPos: start.y)
 
         // Get the width and height for the octave number
         let mainWidth = textElement.getWidth()
@@ -242,9 +255,6 @@ public final class TextBracket: VexElement {
         // Calculate the y position for the super script
         let superY = start.y - mainHeight / 2.5
 
-        // To draw the superscript, we scale the font size by 1/1.4.
-        superscriptElement.renderText(ctx, xPos: start.x + mainWidth + 1, yPos: superY)
-
         // Determine width and height of the superscript
         let superWidth = superscriptElement.getWidth()
         let superHeight = superscriptElement.getHeight()
@@ -252,7 +262,7 @@ public final class TextBracket: VexElement {
         // Setup initial coordinates for the bracket line
         var startX = start.x
         var lineY = superY
-        var endX = stop.x + self.stop.getGlyphWidth()
+        let endX = stop.x + self.stop.getGlyphWidth()
 
         // Adjust x and y coordinates based on position
         switch position {
@@ -267,6 +277,37 @@ public final class TextBracket: VexElement {
                 startX += superWidth
             }
         }
+
+        return Geometry(
+            start: start, superX: start.x + mainWidth + 1, superY: superY, startX: startX, endX: endX,
+            lineY: lineY, bracketHeight: bracketHeight, superWidth: superWidth
+        )
+    }
+
+    /// Text, superscript, horizontal line and hook share the same placement as drawing. (VexFlow 5.4.0)
+    override public func getBoundingBox() -> BoundingBox? {
+        let g = geometry()
+        let pad = renderOptions.lineWidth / 2
+        let height = renderOptions.showBracket ? g.bracketHeight : 0
+        return textElement.getTextInk(g.start.x, g.start.y)
+            .merged(with: superscriptElement.getTextInk(g.superX, g.superY))
+            .merged(with: BoundingBox(
+                min(g.startX, g.endX) - pad,
+                min(g.lineY, g.lineY + height) - pad,
+                abs(g.endX - g.startX) + 2 * pad,
+                abs(height) + 2 * pad
+            ))
+    }
+
+    override public func draw() throws {
+        let ctx = try checkContext()
+        setRendered()
+        let g = geometry()
+        let (startX, lineY, bracketHeight, superWidth) = (g.startX, g.lineY, g.bracketHeight, g.superWidth)
+        var endX = g.endX
+        let posValue = Double(position.rawValue)
+        textElement.renderText(ctx, xPos: g.start.x, yPos: g.start.y)
+        superscriptElement.renderText(ctx, xPos: g.superX, yPos: g.superY)
 
         if renderOptions.dashed {
             // VexFlowPatch (gated): prevent bracket from going backwards, also preventing overlap with text

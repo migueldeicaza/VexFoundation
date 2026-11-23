@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/pedalmarking.ts` (VexFlow 5.1.0).
+// Port of `src/pedalmarking.ts` (VexFlow 5.4.0).
 
 import Foundation
 
@@ -229,11 +229,53 @@ public final class PedalMarking: VexElement {
         return (note.getStave()?.getX() ?? 0) + (note.getStave()?.getWidth() ?? 0)
     }
 
+    // MARK: - Layout (VexFlow 5.4.0)
+
+    /// Ordered press, change and release anchors. Repeated notes represent a pedal change.
+    public func getNotes() -> [StaveNote] {
+        notes
+    }
+
+    private var layoutBaseline: Double?
+
+    /// A single-stave phrase may supply the pedal baseline after arranging the surrounding lanes.
+    public func setLayoutBaseline(_ y: Double?) {
+        layoutBaseline = y
+    }
+
+    /// Enclose actual pedal text, changes, end hooks and bracket stroke.
+    override public func getBoundingBox() -> BoundingBox? {
+        let text = VexElement(category: "PedalMarking").setFont(fontInfo)
+        var box: BoundingBox?
+        func include(_ part: BoundingBox) {
+            if box == nil { box = part } else { _ = box?.mergeWith(part) }
+        }
+        for (i, note) in notes.enumerated() {
+            let down = i % 2 == 0
+            let x = note.getAbsoluteX()
+            let y = getYForStave(note.checkStave())
+            let repeated = i > 0 && note === notes[i - 1]
+            let end = (try? noteEndX(note)) ?? ((note.getStave()?.getX() ?? 0) + (note.getStave()?.getWidth() ?? 0))
+            if type == .text || (type == .mixed && down && !repeated) {
+                text.setText(down ? depressText : releaseText)
+                include(text.getTextInk(down ? x : end - text.getWidth(), y))
+            }
+            if type != .text {
+                let edge = down ? x + (repeated ? 5 : 0) : (i + 1 < notes.count && note === notes[i + 1] ? x : end - 5)
+                let pad = renderOptions.bracketLineWidth / 2
+                let h = renderOptions.bracketHeight
+                include(BoundingBox(edge - pad, y - h - pad, 2 * pad, h + 2 * pad))
+            }
+        }
+        return box ?? BoundingBox(0, 0, 0, 0)
+    }
+
     // MARK: - Baseline
 
     /// Compute a baseline below annotations in participating voices on this stave.
     /// (VexFlow 5.1.0)
     public func getYForStave(_ stave: Stave) -> Double {
+        if let layoutBaseline { return layoutBaseline }
         var y = stave.getYForBottomText(line + 3)
         let events = notes.filter { $0.getStave() === stave }
         guard !events.isEmpty else { return y }

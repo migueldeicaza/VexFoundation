@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/engravinggeometry.ts` (VexFlow 5.3.0).
+// Port of `src/engravinggeometry.ts` (VexFlow 5.4.0).
 // Pre-draw geometry of formatted VF5 notation. All coordinates are unscaled renderer pixels.
 
 import Foundation
@@ -165,7 +165,8 @@ public func measureEngraving(_ element: VexElement, options: GeometryOptions = G
             } else if kind == Dot.self, let dot = owner as? Dot {
                 _ = try dot.checkAttachedNote().checkStaveThrowing()
                 shape.parts.append(dot.getInkBounds())
-            } else if kind == Tuplet.self || kind == Ornament.self {
+            } else if kind == Tuplet.self || kind == Ornament.self || kind == PedalMarking.self
+                || kind == StaveHairpin.self || kind == TextBracket.self {
                 guard let box = owner.getBoundingBox() else { throw UnformattedElement() }
                 shape.parts.append(box)
             } else if kind == Beam.self, let beam = owner as? Beam {

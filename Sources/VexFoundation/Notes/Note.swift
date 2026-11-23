@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/note.ts` (VexFlow 5.2.0).
+// Port of `src/note.ts` (VexFlow 5.4.0).
 
 import Foundation
 
@@ -13,9 +13,13 @@ public enum NoteError: Error, LocalizedError, Equatable, Sendable {
     case unformattedNote
     case noStem
     case noBeam
+    /// A notation identity is invalid, for example a timed bend with decreasing phases. (VexFlow 5.4.0)
+    case invalidNotation(String)
 
     public var errorDescription: String? {
         switch self {
+        case .invalidNotation(let message):
+            return message
         case .invalidInitializationData(let duration):
             return "Invalid note initialization object: \(duration)"
         case .noStave:
@@ -152,10 +156,47 @@ public struct ParsedNote {
     public var ticks: Int
 }
 
+// MARK: - Notation Identity
+
+/// Stable score identities for instruments and playing instructions. Display positions can differ
+/// from pitches. (VexFlow 5.4.0)
+public struct NotationIdentity: Equatable, Sendable {
+    public enum Kind: String, Sendable, CaseIterable {
+        case unpitched, technique, harmony, tuning, tremolo, accidental
+    }
+
+    public var kind: Kind
+    public var id: String
+    public var label: String
+    /// Physical guitar actions survive reflow, navigation and publication metadata.
+    public var stroke: GuitarStroke?
+    public var bend: TimedStringBend?
+    /// Head or string position in the source chord, counted from zero.
+    public var index: Int?
+
+    public init(
+        kind: Kind,
+        id: String,
+        label: String,
+        stroke: GuitarStroke? = nil,
+        bend: TimedStringBend? = nil,
+        index: Int? = nil
+    ) {
+        self.kind = kind
+        self.id = id
+        self.label = label
+        self.stroke = stroke
+        self.bend = bend
+        self.index = index
+    }
+}
+
 // MARK: - Note Struct
 
 /// Input structure for creating a note.
 public struct NoteStruct {
+    /// Source identities of instruments and playing instructions. (VexFlow 5.4.0)
+    public var notation: [NotationIdentity] = []
     public var keys: [String]
     public var duration: NoteDurationSpec
     public var line: Double?
@@ -475,6 +516,8 @@ open class Note: Tickable {
     public var noteTypeValue: NoteType
     /// Set when the note struct did not parse (the note uses fallback values).
     public private(set) var initError: NoteError?
+    /// Source identities survive native drawing, Canvas inspection and print export. (VexFlow 5.4.0)
+    public let notation: [NotationIdentity]
 
     // MARK: - Source compatibility
 
@@ -506,6 +549,18 @@ open class Note: Tickable {
             parsedError = .invalidInitializationData(noteStruct.duration.rawValue)
         }
 
+        // Copy and validate the notation identities. Upstream throws for an invalid bend.
+        var notationError: NoteError?
+        self.notation = noteStruct.notation.map { entry in
+            guard let bend = entry.bend else { return entry }
+            do {
+                _ = try copyBend(bend)
+            } catch {
+                notationError = notationError ?? .invalidNotation((error as? VexError)?.message ?? "\(error)")
+            }
+            return entry
+        }
+
         // Set note properties from parameters.
         self.keys = noteStruct.keys
         self.duration = parsed.duration.rawValue
@@ -514,7 +569,7 @@ open class Note: Tickable {
         self.noteValue = parsed.duration
         self.noteTypeValue = parsed.type
         self.customTypes = parsed.customTypes
-        self.initError = parsedError
+        self.initError = parsedError ?? notationError
 
         // Get the glyph code for this note from the font.
         self.glyphProps = Note.getGlyphProps(parsed.duration.rawValue, parsed.type.rawValue)

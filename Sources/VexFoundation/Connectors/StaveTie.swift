@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stavetie.ts` (VexFlow 5.3.0).
+// Port of `src/stavetie.ts` (VexFlow 5.4.0).
 //
 // This class implements varies types of ties between contiguous notes. The
 // ties include: regular ties, hammer ons, pull offs, and slides.
@@ -280,8 +280,8 @@ open class StaveTie: VexElement {
                 throw StaveTieError.badIndices
             }
 
-            let topControlPointY = (firstY + lastY) / 2 + cp1 * dir
-            let bottomControlPointY = (firstY + lastY) / 2 + cp2 * dir
+            let topControlPointY = (firstY + lastY) / 2 + (cp1 + layoutRise) * dir
+            let bottomControlPointY = (firstY + lastY) / 2 + (cp2 + layoutRise) * dir
 
             curves.append(TieCurve(
                 x1: firstX + firstXShift,
@@ -294,6 +294,40 @@ open class StaveTie: VexElement {
             ))
         }
         return curves
+    }
+
+    private var layoutRise: Double = 0
+
+    /// Fit the tied head pairs together without changing their pitch or authored offsets. (VexFlow 5.4.0)
+    public func setLayoutRise(_ rise: Double) {
+        layoutRise = rise
+    }
+
+    /// True when the control offsets differ from the defaults. (VexFlow 5.4.0)
+    public func hasManualControls() -> Bool {
+        renderOptions.cp1 != 8 || renderOptions.cp2 != 12 || renderOptions.cp1Short != 2 || renderOptions.cp2Short != 8
+    }
+
+    /// Subdivided ink of the filled ribbons. (VexFlow 5.4.0)
+    public func getRouteParts() throws -> [BoundingBox] {
+        synchronizeIndexes()
+        let ribbons = try tieCurves(
+            direction: getDirection(),
+            firstX: getFirstX(),
+            lastX: getLastX(),
+            firstYs: getFirstYs(),
+            lastYs: getLastYs()
+        )
+        var parts: [BoundingBox] = []
+        for r in ribbons {
+            let start = RibbonPoint(x: r.x1, y: r.firstY)
+            let end = RibbonPoint(x: r.x2, y: r.lastY)
+            parts.append(contentsOf: ribbonParts(
+                [start, RibbonPoint(x: r.cpX, y: r.topControlPointY), end],
+                [start, RibbonPoint(x: r.cpX, y: r.bottomControlPointY), end]
+            ))
+        }
+        return parts
     }
 
     /// Conservative convex hull of filled ribbons, excluding optional tie text. (VexFlow 5.3.0)

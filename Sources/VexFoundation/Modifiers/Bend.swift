@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/bend.ts` (VexFlow 5.3.0).
+// Port of `src/bend.ts` (VexFlow 5.4.0).
 // Tablature bend phrases, including nested bends on the strings of a chord.
 
 import Foundation
@@ -55,6 +55,22 @@ public final class Bend: Modifier {
 
     public static let UP = 0
     public static let DOWN = 1
+    /// A vertical attack into an already raised pitch. (VexFlow 5.4.0)
+    public static let PREBEND = 2
+    /// Continue at the raised pitch before a release. (VexFlow 5.4.0)
+    public static let HOLD = 3
+
+    private var timing: TimedStringBend?
+
+    /// Construct a single rise with optional hold and release. Phase ends are fractions of the
+    /// host attack. (VexFlow 5.4.0)
+    public static func timed(_ spec: TimedStringBend) throws -> Bend {
+        let timing = try copyBend(spec)
+        let bend = Bend([BendPhrase(type: Bend.UP, text: bendAmount(timing))])
+        bend.timing = timing
+        bend.updateWidth()
+        return bend
+    }
 
     // MARK: - Static Format
 
@@ -198,6 +214,11 @@ public final class Bend: Modifier {
             return element.getWidth()
         }
 
+        if let timing {
+            _ = setWidth(xShift + max(48, measureText(bendAmount(timing)) + 18))
+            return self
+        }
+
         var totalWidth: Double = 0
         for i in 0..<phrase.count {
             if let w = phrase[i].width {
@@ -224,9 +245,16 @@ public final class Bend: Modifier {
     override public func draw() throws {
         let ctx = try checkContext()
         let note = try checkAttachedNoteThrowing()
+        let index = checkIndex()
+        if let timing {
+            let positions = (note as? TabNote)?.getPositions() ?? []
+            if index < 0 || index >= positions.count || positions[index].str != timing.string {
+                throw VexError("BadArguments", "Attach the timed bend to its authored TAB string.")
+            }
+        }
         setRendered()
 
-        var start = note.getModifierStartXY(position: .right, index: index ?? 0)
+        var start = note.getModifierStartXY(position: .right, index: index)
         start.x += 3
         start.y += 0.5
         let xShift = self.xShift
@@ -278,11 +306,34 @@ public final class Bend: Modifier {
             ctx.fillText(text, renderX, annotationY)
         }
 
+        if let timing {
+            let left = start.x + xShift
+            let extent = getWidth() - xShift
+            func phaseX(_ phase: GesturePhase) -> Double { left + (extent * Double(phase.0)) / Double(phase.1) }
+            let peak = phaseX(timing.rise)
+            renderBend(left, start.y, peak - left, bendHeight)
+            renderArrowHead(peak, bendHeight, 1)
+            renderText(peak, bendAmount(timing))
+            let held = timing.hold.map(phaseX) ?? peak
+            if timing.hold != nil {
+                ctx.beginPath()
+                ctx.moveTo(peak, bendHeight)
+                ctx.lineTo(held, bendHeight)
+                ctx.stroke()
+            }
+            if let release = timing.release {
+                let end = phaseX(release)
+                renderRelease(held, start.y, end - held, bendHeight)
+                renderArrowHead(end, start.y, -1)
+            }
+            return
+        }
+
         var lastBend: BendPhrase?
         var lastBendDrawWidth: Double = 0
         var lastDrawnWidth: Double = 0
         if !tap.isEmpty {
-            let tapStart = note.getModifierStartXY(position: .center, index: index ?? 0)
+            let tapStart = note.getModifierStartXY(position: .center, index: index)
             renderText(tapStart.x, tap)
         }
 
@@ -298,8 +349,19 @@ public final class Bend: Modifier {
                 renderBend(start.x, start.y, lastDrawnWidth, bendHeight)
             }
 
+            if phrase[i].type == Bend.PREBEND || phrase[i].type == Bend.HOLD {
+                let prebend = phrase[i].type == Bend.PREBEND
+                applyStyle(context: ctx, style: styleLine)
+                ctx.beginPath()
+                ctx.moveTo(start.x, prebend ? start.y : bendHeight)
+                if prebend { ctx.lineTo(start.x, bendHeight) }
+                ctx.lineTo(start.x + lastDrawnWidth, bendHeight)
+                ctx.stroke()
+                if prebend { renderArrowHead(start.x, bendHeight, +1) }
+            }
+
             if phrase[i].type == Bend.DOWN {
-                if let lb = lastBend, lb.type == Bend.UP {
+                if let lb = lastBend, [Bend.UP, Bend.PREBEND, Bend.HOLD].contains(lb.type) {
                     renderRelease(start.x, start.y, lastDrawnWidth, bendHeight)
                 }
 

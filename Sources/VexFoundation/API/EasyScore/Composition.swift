@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/easyscore/composition.ts` (VexFlow 5.3.0).
+// Port of `src/easyscore/composition.ts` (VexFlow 5.4.0 part 1; the continuous-layout hooks are TODO).
 // Structured construction delegates timing and layout to native Voice, System, and Sheet objects.
 
 import Foundation
@@ -133,7 +133,20 @@ public struct EasyScoreVoiceSpec {
 }
 
 /// `span` is the actual duration of a pickup; `time` remains its displayed meter.
+/// Instrument names shown at a measure where the instrument changes. (VexFlow 5.4.0)
+public struct EasyScoreInstrumentName: Equatable, Sendable {
+    public var name: String
+    public var shortName: String?
+
+    public init(name: String, shortName: String? = nil) {
+        self.name = name
+        self.shortName = shortName
+    }
+}
+
 public struct EasyScoreMeasureSpec {
+    /// Instrument change at this measure. Continuous layout prints it. (VexFlow 5.4.0)
+    public var instrument: EasyScoreInstrumentName?
     public var clef: ClefName?
     public var key: String?
     public var time: TimeSignatureSpec?
@@ -142,8 +155,9 @@ public struct EasyScoreMeasureSpec {
 
     public init(
         clef: ClefName? = nil, key: String? = nil, time: TimeSignatureSpec? = nil,
-        span: VoiceTime? = nil, voices: [EasyScoreVoiceSpec]
+        span: VoiceTime? = nil, voices: [EasyScoreVoiceSpec], instrument: EasyScoreInstrumentName? = nil
     ) {
+        self.instrument = instrument
         self.clef = clef
         self.key = key
         self.time = time
@@ -160,6 +174,9 @@ public enum EasyScoreStaveKind: Sendable {
 /// Staves have aligned measure arrays. Missing or uneven measures are errors.
 public struct EasyScoreStaveSpec {
     public var id: String
+    /// Instrument name and abbreviation. Continuous layout prints them at system starts. (VexFlow 5.4.0)
+    public var name: String?
+    public var shortName: String?
     public var kind: EasyScoreStaveKind
     public var clef: ClefName?
     public var key: String?
@@ -172,9 +189,11 @@ public struct EasyScoreStaveSpec {
     public init(
         id: String, kind: EasyScoreStaveKind = .stave, clef: ClefName? = nil, key: String? = nil,
         time: TimeSignatureSpec? = nil, options: StaveOptions? = nil, spaceAbove: Double? = nil,
-        spaceBelow: Double? = nil, measures: [EasyScoreMeasureSpec]
+        spaceBelow: Double? = nil, measures: [EasyScoreMeasureSpec], name: String? = nil, shortName: String? = nil
     ) {
         self.id = id
+        self.name = name
+        self.shortName = shortName
         self.kind = kind
         self.clef = clef
         self.key = key
@@ -562,6 +581,8 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
     do {
         return try score.build { score in
             let result = EasyScoreComposition(sheet: try score.sheet(spec.sheet), score: score)
+            // TODO(5.4.0 part 2): skip this diagnostic when `spec.continuous` is set
+            // (upstream `!spec.continuous && spec.signatures !== 'every-measure'`).
             if spec.signatures != .everyMeasure {
                 result.diagnostics.append(EasyScoreCompositionDiagnostic(
                     code: .signaturePolicy,
@@ -577,6 +598,9 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
                 )
             }
             var noteMeasures: [ObjectIdentifier: Int] = [:]
+            // TODO(5.4.0 part 2): with `spec.continuous`, record the staff states at the start (`starts`) and
+            // end (`ends`) of each measure and the generated accidentals (`placed`), then install
+            // `ContinuousLayout(result, spec, starts, ends, placed)` with `result.sheet.setContinuousLayout(_:)`.
             for index in 0..<count {
                 let system = result.sheet.addSystem(spec.system)
                 result.systems.append(system)

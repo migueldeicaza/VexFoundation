@@ -45,6 +45,7 @@ When `VexRuntimeContext.upstreamParityMode` is `true`, the items marked **(gated
 - [ ] `Compatibility/` layer: `Flow`, `Vex`, `Version`.
 - [ ] EasyScore 5.2.0: string builder options, `Character` source offsets, typed composition specs, non-throwing variants that record `lastError` (see `docs/port-notes/5.2.0.md`).
 - [ ] Engraving 5.3.0: bundled SMuFL metadata subsets for Bravura, Petaluma and Leland (`Resources/smufl`, `EngravingProfile.bundledMetadata(for:)`, `EngravingProfile.bundled(...)`); upstream takes the metadata from the caller only. Typed `MeasuredSpacing` and `TupletOptions.displayRatio`; a negative `NoteHeadStruct.displacementColumn` is clamped to 0; `Beam` skips the multi-voice clearance for notes without a tick context (see `docs/port-notes/5.3.0.md`).
+- [ ] Instruments and phrase layout 5.4.0: typed `GuitarStroke` (enums for finger, direction, arrows), `TimedStringBend` phases as `(Int, Int)` tuples, `FrettedPosition` (`.fret`/`.dead`), `FretDiagramString` (`.muted`/`.fret`), `PercussionInstrument.Head`/`.Stem` enums, `StaveBarlineSpan`, `SystemRowLayout`, `PhraseMark`/`PhraseRoute` protocols, `PhraseLayoutError` (upstream `RangeError`). An invalid timed bend in `notation` sets `Note.initError`/`TabNote.tabInitError` (`.invalidNotation`) instead of throwing from the constructor. `CurveOptions.authoredControls` records an explicit `cps` argument (see `docs/port-notes/5.4.0-part1.md`).
 
 ## Rendering deviations introduced by the VexFlow 5 port
 

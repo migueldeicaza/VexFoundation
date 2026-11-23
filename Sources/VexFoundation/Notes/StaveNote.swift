@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stavenote.ts` (VexFlow 5.3.0).
+// Port of `src/stavenote.ts` (VexFlow 5.4.0).
 // This file implements notes for standard notation. A note has one or more
 // `NoteHead`s, an optional stem, and an optional flag.
 
@@ -29,6 +29,8 @@ public struct StaveNoteStruct {
     public var engraving: EngravingProfile?
     /// The duration token as the caller wrote it (see `NoteStruct.durationToken`).
     public var durationToken: String?
+    /// Source identities of instruments and playing instructions. (VexFlow 5.4.0)
+    public var notation: [NotationIdentity] = []
     /// The key strings as the caller wrote them, when the keys were parsed from strings.
     /// `StaffKeySpec` maps the "x/" shorthand to octave 4; upstream keeps the key without
     /// an octave (NaN line). `toNoteStruct()` uses the raw key for such keys.
@@ -256,6 +258,7 @@ public struct StaveNoteStruct {
             type: type, alignCenter: alignCenter, durationOverride: durationOverride
         )
         noteStruct.durationToken = durationToken
+        noteStruct.notation = notation
         return noteStruct
     }
 }
@@ -733,6 +736,8 @@ open class StaveNote: StemmableNote {
         } else {
             setStemDirection(noteStruct.stemDirection ?? .up)
         }
+        // Standard notation attaches strokes and fingers only, which cannot fail. (VexFlow 5.4.0)
+        if !notation.isEmpty { try? attachGuitarGestures(self) }
     }
 
     public convenience init(validating noteStruct: StaveNoteStruct) throws {
@@ -1705,7 +1710,10 @@ open class StaveNote: StemmableNote {
         }
 
         // Apply the overall style -- may be contradicted by local settings:
-        _ = ctx.openGroup(groupClass("stavenote"), getAttribute("id"))
+        let group = ctx.openGroup(groupClass("stavenote"), getAttribute("id"))
+        if !notation.isEmpty {
+            (group as? SVGNode)?.setAttribute("aria-label", notation.map(\.label).joined(separator: ", "))
+        }
         try drawLedgerLines()
         if shouldRenderStem { try drawStem() }
         try drawNoteHeads()

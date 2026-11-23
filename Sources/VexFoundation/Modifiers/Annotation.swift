@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/annotation.ts` (VexFlow 5.1.0).
+// Port of `src/annotation.ts` (VexFlow 5.4.0).
 
 import Foundation
 
@@ -94,6 +94,31 @@ public final class Annotation: Modifier {
         verticalJustification
     }
 
+    /// A phrase lane places this mark outside local tuplets. (VexFlow 5.4.0)
+    public var phraseManaged = false
+    private var layoutBaseline: Double?
+    private var connectorPadding: Double = 0
+
+    /// Space reserved on both sides for a syllable connector during horizontal formatting. (VexFlow 5.4.0)
+    @discardableResult
+    public func setConnectorPadding(_ px: Double) throws -> Self {
+        if !px.isFinite || px < 0 {
+            throw VexError("BadArguments", "Expected nonnegative connector padding.")
+        }
+        connectorPadding = px
+        return self
+    }
+
+    /// An authored baseline always takes precedence over automatic phrase placement. (VexFlow 5.4.0)
+    public func getTextBaseline() -> Double? {
+        textBaseline
+    }
+
+    /// Derived baseline from a phrase layout. `nil` restores automatic placement. (VexFlow 5.4.0)
+    public func setLayoutBaseline(_ y: Double?) {
+        layoutBaseline = y
+    }
+
     /// Use an absolute text baseline. Pass `nil` to restore automatic placement.
     @discardableResult
     public func setTextBaseline(_ y: Double?) throws -> Self {
@@ -146,7 +171,7 @@ public final class Annotation: Modifier {
             let note = annotation.checkAttachedNote()
             let glyphWidth = note.getGlyphWidth()
             // Get the text width from the font metrics.
-            let textWidth = annotation.getWidth()
+            let textWidth = annotation.getWidth() + 2 * annotation.connectorPadding
             if annotation.horizontalJustification == .right {
                 maxLeftGlyphWidth = max(glyphWidth, maxLeftGlyphWidth)
                 leftWidth = max(leftWidth, textWidth) + minAnnotationPadding
@@ -259,7 +284,7 @@ public final class Annotation: Modifier {
     /// (VexFlow 5.1.0)
     public func computeY() throws -> (y: Double, textHeight: Double) {
         let textHeight = VexFont.convertSizeToPixelValue(fontInfo.size)
-        if let textBaseline { return (textBaseline, textHeight) }
+        if let baseline = textBaseline ?? layoutBaseline { return (baseline, textHeight) }
         let note = try checkAttachedNoteThrowing()
         let stemDirection = note.hasStem() ? note.getStemDirection() : Stem.UP
         var y: Double

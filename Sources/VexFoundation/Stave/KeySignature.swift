@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Cyril Silverman
 //
-// Port of `src/keysignature.ts` (VexFlow 5.3.0).
+// Port of `src/keysignature.ts` (VexFlow 5.4.0).
 //
 // This file implements key signatures. A key signature sits on a stave
 // and indicates the notes with implicit accidentals.
@@ -27,6 +27,9 @@ public final class KeySignature: StaveModifier {
     public var accList: [KeySignatureAccidental] = []
     public var keySpec: String?
     public var alterKeySpec: [String]?
+    /// Explicit positions are already in the target clef, from the top staff line down. (VexFlow 5.4.0)
+    private var ordered: [KeySignatureAccidental]?
+    private var formattedStaveY: Double?
 
     // MARK: - Init
 
@@ -67,6 +70,21 @@ public final class KeySignature: StaveModifier {
 
         // Expand size of key signature
         width += glyph.getWidth() + extraWidth
+    }
+
+    /// Use explicit accidentals and staff lines instead of a key spec. A line must be a whole
+    /// line or space. (VexFlow 5.4.0)
+    @discardableResult
+    public func setOrdered(_ entries: [KeySignatureAccidental]) throws -> Self {
+        for entry in entries {
+            let doubled = entry.line * 2
+            if entry.type.isEmpty || !doubled.isFinite || doubled.rounded() != doubled || abs(doubled) > 9_007_199_254_740_991 {
+                throw VexError("BadArguments", "Expected an accidental and a staff line or space.")
+            }
+        }
+        ordered = entries
+        formatted = false
+        return self
     }
 
     /// Cancel out a key signature provided in the `spec` parameter. This will
@@ -209,6 +227,7 @@ public final class KeySignature: StaveModifier {
     @discardableResult
     public func setKeySig(_ keySpec: String, cancelKeySpec: String? = nil, alterKeySpec: [String]? = nil) -> Self {
         formatted = false
+        ordered = nil
         self.keySpec = keySpec
         self.cancelKeySpec = cancelKeySpec
         self.alterKeySpec = alterKeySpec
@@ -246,8 +265,17 @@ public final class KeySignature: StaveModifier {
             setStave(stave)
         }
 
+        formattedStaveY = stave.getY()
         width = 0
         children = []
+        if let ordered {
+            for (i, entry) in ordered.enumerated() {
+                convertToGlyph(entry, i + 1 < ordered.count ? ordered[i + 1] : nil, stave)
+            }
+            calculateDimensions()
+            formatted = true
+            return
+        }
         // Upstream throws 'BadKeySignature' here; this method does not throw, so an
         // unknown key spec gives an empty key signature.
         accList = keySpec.flatMap { try? Tables.keySignature($0) } ?? []
@@ -286,6 +314,12 @@ public final class KeySignature: StaveModifier {
 
         calculateDimensions()
         formatted = true
+    }
+
+    /// Refresh the accidental origins after moving a staff and return each positioned glyph. (VexFlow 5.4.0)
+    public func getInkParts() -> [BoundingBox] {
+        if !formatted || formattedStaveY != getStave()?.getY() { format() }
+        return children.map { $0.getTextInk(x, 0) }
     }
 
     // MARK: - Draw

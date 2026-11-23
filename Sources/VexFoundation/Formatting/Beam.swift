@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/beam.ts` (VexFlow 5.3.0).
+// Port of `src/beam.ts` (VexFlow 5.4.0).
 // Beam grouping, slope fitting and stem geometry for rhythmic notation.
 
 import Foundation
@@ -1128,6 +1128,29 @@ public final class Beam: VexElement {
             beamY += thickness * 1.5
         }
         return strips
+    }
+
+    /// Conservative local obstacles for sloping strips. Stems remain owned by the notes. (VexFlow 5.4.0)
+    public func getStripBounds() -> [BoundingBox] {
+        postFormat()
+        var parts: [BoundingBox] = []
+        for strip in (try? getStrips()) ?? [] {
+            let (x1, x2, y1, y2, thickness) = (strip.x1, strip.x2, strip.y1, strip.y2, strip.thickness)
+            let count = min(64, max(1, Int((abs(y2 - y1) / 2).rounded(.up))))
+            for i in 0..<count {
+                let x = x1 + ((x2 - x1) * Double(i)) / Double(count)
+                let y = y1 + ((y2 - y1) * Double(i)) / Double(count)
+                let dx = (x2 - x1) / Double(count)
+                let dy = (y2 - y1) / Double(count)
+                parts.append(BoundingBox(
+                    x + min(0, dx),
+                    y + min(0, dy) + min(0, thickness),
+                    abs(dx),
+                    abs(dy) + abs(thickness)
+                ))
+            }
+        }
+        return parts
     }
 
     /// Bounds of the beam strips alone. The note geometry owns the stem segments. (VexFlow 5.3.0)

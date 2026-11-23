@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stave.ts` (VexFlow 5.2.0).
+// Port of `src/stave.ts` (VexFlow 5.4.0).
 
 import Foundation
 
@@ -46,9 +46,22 @@ public struct StaveLineConfig {
 }
 
 /// Configuration options for a Stave.
+/// Barline endpoints, in staff spaces down from the top line. (VexFlow 5.4.0)
+public struct StaveBarlineSpan: Equatable, Sendable {
+    public var top: Double
+    public var bottom: Double
+
+    public init(top: Double, bottom: Double) {
+        self.top = top
+        self.bottom = bottom
+    }
+}
+
 public struct StaveOptions {
     /// Musical state when a repeated clef glyph is intentionally omitted. (VexFlow 5.2.0)
     public var clef: ClefName?
+    /// Optional barline endpoints, in staff spaces down from the top line. (VexFlow 5.4.0)
+    public var barlineSpan: StaveBarlineSpan?
     public var bottomTextPosition: Int
     public var lineConfig: [StaveLineConfig]
     public var spaceBelowStaffLn: Int
@@ -76,9 +89,11 @@ public struct StaveOptions {
         spacingBetweenLinesPx: Double? = nil,
         topTextPosition: Double = 1,
         numLines: Int = 5,
-        clef: ClefName? = nil
+        clef: ClefName? = nil,
+        barlineSpan: StaveBarlineSpan? = nil
     ) {
         self.clef = clef
+        self.barlineSpan = barlineSpan
         self.bottomTextPosition = bottomTextPosition
         self.lineConfig = lineConfig
         self.spaceBelowStaffLn = spaceBelowStaffLn
@@ -154,6 +169,7 @@ open class Stave: VexElement {
     public var formatted: Bool = false
     public var measure: Int = 0
     public var modifiers: [StaveModifier] = []
+    private var boundaryModifiers: [StaveModifier] = []
     public var defaultLedgerLineStyle: ElementStyle
 
     // MARK: - Init
@@ -261,6 +277,15 @@ open class Stave: VexElement {
         options.numLines = n
         resetLines()
         return self
+    }
+
+    /// Written extent of barlines, including shortened bars on a one-line percussion stave. (VexFlow 5.4.0)
+    public func getBarlineBounds() throws -> (topY: Double, botY: Double) {
+        guard let span = options.barlineSpan else { return (getTopLineTopY(), getBottomLineBottomY()) }
+        if !span.top.isFinite || !span.bottom.isFinite || span.top >= span.bottom {
+            throw VexError("StaveConfigError", "Barline endpoints must increase from top to bottom.")
+        }
+        return (getYForLine(span.top), getYForLine(span.bottom) + (getStyle()?.lineWidth ?? 1))
     }
 
     public func getTopLineTopY() -> Double {
@@ -627,7 +652,19 @@ open class Stave: VexElement {
         return self
     }
 
-    public func getEndClef() -> ClefName? { endClefName }
+    public func getEndClef() -> ClefName? {
+        if let courtesy = boundaryModifiers.first(where: { $0 is Clef && $0.getPosition() == .end }) as? Clef {
+            return courtesy.getType()
+        }
+        return endClefName
+    }
+
+    /// Replace only the derived row-start and courtesy signs on a responsive sheet. (VexFlow 5.4.0)
+    public func setBoundaryModifiers(_ modifiers: [StaveModifier]) {
+        boundaryModifiers = modifiers
+        for mark in modifiers { _ = mark.setStave(self) }
+        formatted = false
+    }
 
     // MARK: - Key Signature
 
@@ -731,6 +768,7 @@ open class Stave: VexElement {
 
     /// Return the stave modifiers that match the provided position and category.
     public func getModifiers(position: StaveModifierPosition? = nil, category: String? = nil) -> [StaveModifier] {
+        let modifiers = boundaryModifiers.isEmpty ? self.modifiers : self.modifiers + boundaryModifiers
         if position == nil && category == nil {
             return modifiers
         } else if position == nil {
@@ -901,7 +939,7 @@ open class Stave: VexElement {
         ctx.closeGroup()
 
         // Draw the modifiers (bar lines, coda, segno, repeat brackets, etc.)
-        for modifier in modifiers {
+        for modifier in getModifiers() {
             modifier.setContext(ctx)
             modifier.setStave(self)
             try modifier.drawWithStyle()

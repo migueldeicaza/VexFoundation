@@ -1,13 +1,16 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of the static API of `src/vexflow.ts` (VexFlow 5.3.0). Upstream 5
+// Port of the static API of `src/vexflow.ts` (VexFlow 5.4.0). Upstream 5
 // merged `flow.ts` and `vex.ts` into the `VexFlow` class. In Swift, the
 // classes are module types (use `VexFoundation.StaveNote` and so on), so this
 // facade holds only the static functions and constants. (5.2.0 adds
 // `VexFlow.EasyScoreError`; in Swift it is the module type `EasyScoreError`.
 // 5.3.0 adds `VexFlow.EngravingProfile`, the module type `EngravingProfile`,
-// and `VexFlow.measureEngraving`.)
+// and `VexFlow.measureEngraving`. 5.4.0 adds `VexFlow.PhraseLayout`,
+// `FrettedInstrument`, `PercussionMap`, `FretDiagram`, `AlternatingTremolo`,
+// `WrittenAccidentalState` and `NotationSpelling`, all module types.
+// `ScoreNavigation` and `Publication` come with the second 5.4.0 pass.)
 //
 // Global state (fonts, metrics) lives in the active `VexRuntimeContext`.
 

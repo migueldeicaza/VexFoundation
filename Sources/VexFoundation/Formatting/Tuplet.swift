@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/tuplet.ts` (VexFlow 5.3.0).
+// Port of `src/tuplet.ts` (VexFlow 5.4.0).
 //
 // Create a new tuplet from the specified notes. The notes must
 // be part of the same voice. If they are of different rhythmic
@@ -339,7 +339,8 @@ public final class Tuplet: VexElement {
             }
             let annotations = note.getModifierContext()?.getMembers(Annotation.category) ?? []
             for case let mark as Annotation in annotations {
-                if mark.getVerticalJustification() != side
+                if mark.phraseManaged
+                    || mark.getVerticalJustification() != side
                     || mark.getNote().getStave() !== note.getStave() {
                     continue
                 }

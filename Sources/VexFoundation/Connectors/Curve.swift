@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/curve.ts` (VexFlow 5.3.0).
+// Port of `src/curve.ts` (VexFlow 5.4.0).
 // This class implements curves (for slurs).
 
 import Foundation
@@ -46,9 +46,11 @@ public struct CurveOptions {
     public var positionEnd: CurvePosition
     public var invert: Bool
     public var openingDirection: CurveOpeningDirection
+    /// True when the caller passed `cps` (upstream `options.cps !== undefined`). (VexFlow 5.4.0)
+    public var authoredControls: Bool
 
     public init(
-        cps: [(x: Double, y: Double)] = [(0, 10), (0, 10)],
+        cps: [(x: Double, y: Double)]? = nil,
         thickness: Double = 2,
         xShift: Double = 0,
         yShift: Double = 10,
@@ -57,7 +59,8 @@ public struct CurveOptions {
         invert: Bool = false,
         openingDirection: CurveOpeningDirection = .auto
     ) {
-        self.cps = cps
+        self.cps = cps ?? [(0, 10), (0, 10)]
+        self.authoredControls = cps != nil
         self.thickness = thickness
         self.xShift = xShift
         self.yShift = yShift
@@ -95,9 +98,40 @@ public final class Curve: VexElement {
     ///   - options: control points, shifts, positions
     public init(from: Note?, to: Note?, options: CurveOptions = CurveOptions()) {
         self.renderOptions = options
+        self.authoredControls = options.authoredControls
         self.from = from
         self.to = to
         super.init()
+    }
+
+    private var layoutRise: Double = 0
+    private let authoredControls: Bool
+
+    /// Automatic routing changes only the derived lift, preserving the authored control points. (VexFlow 5.4.0)
+    public func setLayoutRise(_ rise: Double) {
+        layoutRise = rise
+    }
+
+    /// True for authored or edited control points. (VexFlow 5.4.0)
+    public func hasManualControls() -> Bool {
+        authoredControls || renderOptions.cps.contains { $0.x != 0 || $0.y != 10 }
+    }
+
+    /// The attached notes. (VexFlow 5.4.0)
+    public func getNotes() -> (firstNote: Note?, lastNote: Note?) {
+        (from, to)
+    }
+
+    /// Subdivided ink of the actual rendered cubic. (VexFlow 5.4.0)
+    public func getRouteParts() throws -> [BoundingBox] {
+        let (first, last, cps, thicknessCps) = getBezierPoints(try getRenderParams())
+        let point: ((x: Double, y: Double)) -> RibbonPoint = { RibbonPoint(x: $0.x, y: $0.y) }
+        let outer = [point(first)] + cps.map(point) + [point(last)]
+        return ribbonParts(
+            outer,
+            hasLineDash ? outer : [point(first)] + thicknessCps.reversed().map(point) + [point(last)],
+            padding: (getStyle()?.lineWidth ?? 1) / 2
+        )
     }
 
     // MARK: - Notes
@@ -154,9 +188,9 @@ public final class Curve: VexElement {
 
         let cps = renderOptions.cps
         let cp0x = cps[0].x
-        let cp0y = cps[0].y
+        let cp0y = cps[0].y + layoutRise
         let cp1x = cps[1].x
-        let cp1y = cps[1].y
+        let cp1y = cps[1].y + layoutRise
 
         let controlPointSpacing = (lastX - firstX) / Double(cps.count + 2)
 
