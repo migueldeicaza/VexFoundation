@@ -931,3 +931,15 @@ extension UpstreamSVGParityTests {
         return note
     }
 }
+
+// VexFlow 5.9.0 cases. The drawing code is in `Upstream59Scenes`; the asserts are in `Upstream59NotationTests`.
+extension UpstreamSVGParityTests {
+    @Test("StaveNote.Movable_four_shape_major_scales")
+    func staveNoteMovableFourShapeMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "StaveNote", test: "Movable_four_shape_major_scales", width: 580, height: 260
+        ) { factory, _ in
+            _ = try Upstream59Scenes.fourShapeScales(factory)
+        }
+    }
+}

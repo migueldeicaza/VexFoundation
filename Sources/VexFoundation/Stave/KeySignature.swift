@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Cyril Silverman
 //
-// Port of `src/keysignature.ts` (VexFlow 5.4.0).
+// Port of `src/keysignature.ts` (VexFlow 5.9.0).
 //
 // This file implements key signatures. A key signature sits on a stave
 // and indicates the notes with implicit accidentals.
@@ -11,6 +11,102 @@ import Foundation
 
 /// An accidental of a key signature: the accidental type and the stave line.
 public typealias KeySignatureAccidental = (type: String, line: Double)
+
+/// A custom sign is anchored to a written pitch or to an explicit half-line measured from the top.
+/// (VexFlow 5.9.0)
+public struct OrderedKeySign: Sendable, Equatable {
+    public enum Placement: Sendable, Equatable {
+        /// A written pitch such as `g/4`, placed against the active clef during formatting.
+        case pitch(String)
+        /// A stave line from the top line down, already in the target clef. Must be a line or a space.
+        case line(Double)
+    }
+
+    public var type: String
+    public var placement: Placement
+
+    public init(type: String, placement: Placement) {
+        self.type = type
+        self.placement = placement
+    }
+
+    /// A sign at a written pitch (upstream `{ type, pitch }`).
+    public init(type: String, pitch: String) {
+        self.init(type: type, placement: .pitch(pitch))
+    }
+
+    /// A sign at an explicit stave line (upstream `{ type, line }`).
+    public init(type: String, line: Double) {
+        self.init(type: type, placement: .line(line))
+    }
+
+    public var pitch: String? {
+        if case .pitch(let pitch) = placement { return pitch }
+        return nil
+    }
+
+    public var line: Double? {
+        if case .line(let line) = placement { return line }
+        return nil
+    }
+}
+
+/// `true` for a written natural pitch with an integer octave, such as `g/4` or `c/-1`
+/// (upstream `/^[a-g]\/-?\d+$/i` and a safe-integer octave).
+func isWrittenNaturalPitch(_ pitch: String) -> Bool {
+    let parts = pitch.split(separator: "/", omittingEmptySubsequences: false)
+    guard parts.count == 2, parts[0].count == 1,
+          let letter = parts[0].lowercased().first, ("a"..."g").contains(letter) else { return false }
+    var octave = Substring(parts[1])
+    if octave.hasPrefix("-") { octave = octave.dropFirst() }
+    guard !octave.isEmpty, octave.allSatisfy({ $0.isASCII && $0.isNumber }) else { return false }
+    guard let value = Double(parts[1]), abs(value) <= 9_007_199_254_740_991 else { return false }
+    return true
+}
+
+/// Snapshot a definition before it becomes part of a reusable preset or a score.
+private func copyOrderedSigns(_ entries: [OrderedKeySign]) throws -> [OrderedKeySign] {
+    for entry in entries {
+        let placed: Bool
+        switch entry.placement {
+        case .pitch(let pitch):
+            placed = isWrittenNaturalPitch(pitch)
+        case .line(let line):
+            let doubled = line * 2
+            placed = doubled.isFinite && doubled.rounded() == doubled && abs(doubled) <= 9_007_199_254_740_991
+        }
+        if entry.type.isEmpty || !placed {
+            throw VexError("BadArguments", "Expected an accidental with a written pitch or a staff line or space.")
+        }
+    }
+    return entries
+}
+
+/// An edition's named written signatures. Each selection creates an independent stave modifier.
+/// (VexFlow 5.9.0)
+public final class KeySignaturePresets {
+    private var definitions: [String: [OrderedKeySign]] = [:]
+
+    public init() {}
+
+    /// Register or replace an edition's definition. Existing selections keep their own signs.
+    @discardableResult
+    public func register(_ name: String, _ entries: [OrderedKeySign]) throws -> Self {
+        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw VexError("BadKeySignature", "Expected a named key signature preset.")
+        }
+        definitions[name] = try copyOrderedSigns(entries)
+        return self
+    }
+
+    /// Select a signature by its exact name within this edition.
+    public func select(_ name: String) throws -> KeySignature {
+        guard let signs = definitions[name] else {
+            throw VexError("BadKeySignature", "Unknown key signature preset: '\(name)'.")
+        }
+        return try KeySignature(keySpec: "C").setOrdered(signs)
+    }
+}
 
 /// Renders key signatures (sharps/flats) on a stave.
 public final class KeySignature: StaveModifier {
@@ -27,9 +123,10 @@ public final class KeySignature: StaveModifier {
     public var accList: [KeySignatureAccidental] = []
     public var keySpec: String?
     public var alterKeySpec: [String]?
-    /// Explicit positions are already in the target clef, from the top staff line down. (VexFlow 5.4.0)
-    private var ordered: [KeySignatureAccidental]?
+    /// Custom signs in the author's order. (VexFlow 5.4.0; written pitches 5.9.0)
+    private var ordered: [OrderedKeySign]?
     private var formattedStaveY: Double?
+    private var formattedClef: ClefName?
 
     // MARK: - Init
 
@@ -76,13 +173,14 @@ public final class KeySignature: StaveModifier {
     /// line or space. (VexFlow 5.4.0)
     @discardableResult
     public func setOrdered(_ entries: [KeySignatureAccidental]) throws -> Self {
-        for entry in entries {
-            let doubled = entry.line * 2
-            if entry.type.isEmpty || !doubled.isFinite || doubled.rounded() != doubled || abs(doubled) > 9_007_199_254_740_991 {
-                throw VexError("BadArguments", "Expected an accidental and a staff line or space.")
-            }
-        }
-        ordered = entries
+        try setOrdered(entries.map { OrderedKeySign(type: $0.type, line: $0.line) })
+    }
+
+    /// Preserve the author's sign order. Resolve pitches against the active clef during formatting.
+    /// (VexFlow 5.9.0)
+    @discardableResult
+    public func setOrdered(_ entries: [OrderedKeySign]) throws -> Self {
+        ordered = try copyOrderedSigns(entries)
         formatted = false
         return self
     }
@@ -145,7 +243,7 @@ public final class KeySignature: StaveModifier {
 
     /// Get the `BoundingBox`.
     override public func getBoundingBox() -> BoundingBox? {
-        if !formatted { format() }
+        ensureFormatted()
         return super.getBoundingBox()
     }
 
@@ -205,13 +303,13 @@ public final class KeySignature: StaveModifier {
 
     /// Get the padding required for this modifier.
     override public func getPadding(_ index: Int) -> Double {
-        if !formatted { format() }
+        ensureFormatted()
         return children.isEmpty || (!paddingForced && index < 2) ? 0 : padding
     }
 
     /// Get the width of the modifier.
     override public func getWidth() -> Double {
-        if !formatted { format() }
+        ensureFormatted()
         return width
     }
 
@@ -265,12 +363,25 @@ public final class KeySignature: StaveModifier {
             setStave(stave)
         }
 
+        let clef = activeClef(stave)
+        formattedClef = clef
         formattedStaveY = stave.getY()
         width = 0
         children = []
         if let ordered {
-            for (i, entry) in ordered.enumerated() {
-                convertToGlyph(entry, i + 1 < ordered.count ? ordered[i + 1] : nil, stave)
+            let positioned: [KeySignatureAccidental] = ordered.map { entry in
+                switch entry.placement {
+                case .line(let line):
+                    return (type: entry.type, line: line)
+                case .pitch(let pitch):
+                    // Note lines count upward, with E4 on treble line one. Stave modifier lines count down
+                    // from zero. The pitch was validated, so the lookup cannot fail.
+                    let line = (try? Tables.keyProperties(pitch, clef: clef).line) ?? .nan
+                    return (type: entry.type, line: 5 - line)
+                }
+            }
+            for (i, entry) in positioned.enumerated() {
+                convertToGlyph(entry, i + 1 < positioned.count ? positioned[i + 1] : nil, stave)
             }
             calculateDimensions()
             formatted = true
@@ -289,7 +400,6 @@ public final class KeySignature: StaveModifier {
         }
 
         if !accList.isEmpty {
-            let clef = clefOverride ?? ((position == .end ? stave.getEndClef() : stave.getClef()) ?? stave.getClef())
             // Upstream converts `cancelAccList.accList` and the local `accList` in place.
             // The local `accList` is the list from before the naturals were prepended, so
             // the naturals get only the cancel conversion and the key accidentals get only
@@ -316,9 +426,23 @@ public final class KeySignature: StaveModifier {
         formatted = true
     }
 
+    /// End signatures follow an end clef when one is present. Inline signatures can override the stave.
+    private func activeClef(_ stave: Stave) -> ClefName {
+        clefOverride ?? ((position == .end ? stave.getEndClef() : nil) ?? stave.getClef())
+    }
+
+    /// Stave clef and origin can change while the same signature object stays attached. (VexFlow 5.9.0)
+    private func ensureFormatted() {
+        if !formatted {
+            format()
+        } else if let stave = getStave(), formattedClef != activeClef(stave) || formattedStaveY != stave.getY() {
+            format()
+        }
+    }
+
     /// Refresh the accidental origins after moving a staff and return each positioned glyph. (VexFlow 5.4.0)
     public func getInkParts() -> [BoundingBox] {
-        if !formatted || formattedStaveY != getStave()?.getY() { format() }
+        ensureFormatted()
         return children.map { $0.getTextInk(x, 0) }
     }
 
@@ -329,7 +453,7 @@ public final class KeySignature: StaveModifier {
         let stave = try checkStaveThrowing()
         let ctx = try stave.checkContext()
 
-        if !formatted { format() }
+        ensureFormatted()
         setRendered()
 
         _ = ctx.openGroup(groupClass("keysignature"), getAttribute("id"))

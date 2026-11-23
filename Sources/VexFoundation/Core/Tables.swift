@@ -278,9 +278,13 @@ public enum Tables {
     /// Clef vertical line shifts.
     /// Swift: `.tab` is accepted with shift 0 (upstream `clefs` has no `tab`).
     public static let clefLineShifts: [ClefName: Int] = [
+        // Default chant clefs mark C4 on the second line from the top and F3 on the third. (VexFlow 5.9.0)
+        .chantC: 4,
+        .chantF: 5,
         .treble: 0,
         .bass: 6,
         .tenor: 4,
+        .kievan: 3,
         .alto: 3,
         .soprano: 1,
         .percussion: 0,

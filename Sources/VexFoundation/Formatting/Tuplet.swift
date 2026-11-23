@@ -345,11 +345,9 @@ public final class Tuplet: VexElement {
                     continue
                 }
                 guard let computed = try? mark.computeY() else { continue }
-                let baseline = computed.y + mark.getYShift()
-                let ink = mark.getTextMetrics()
-                yPosition = above
-                    ? min(yPosition, baseline - ink.actualBoundingBoxAscent - padding)
-                    : max(yPosition, baseline + ink.actualBoundingBoxDescent + padding)
+                // VexFlow 5.9.0: subclasses such as FluteFingering report their own ink.
+                let ink = mark.getTextInk(0, computed.y)
+                yPosition = above ? min(yPosition, ink.y - padding) : max(yPosition, ink.y + ink.h + padding)
             }
         }
 

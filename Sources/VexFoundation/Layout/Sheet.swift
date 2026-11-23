@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/sheet.ts` (VexFlow 5.8.0).
+// Port of `src/sheet.ts` (VexFlow 5.9.0).
 // Optional continuous-sheet layout for existing Systems. No music data model or pagination.
 
 import Foundation
@@ -40,6 +40,23 @@ public struct SheetOptions: Sendable {
     }
 }
 
+/// A drum hand. (VexFlow 5.9.0)
+public enum StickingHand: String, Sendable {
+    case right = "R"
+    case left = "L"
+}
+
+/// A drum hand at a native attack. Rests and entries without a hand remain unmarked. (VexFlow 5.9.0)
+public struct StickingAssignment {
+    public var note: StaveNote
+    public var hand: StickingHand?
+
+    public init(note: StaveNote, hand: StickingHand? = nil) {
+        self.note = note
+        self.hand = hand
+    }
+}
+
 /// Layout result for one row. Oversized measures occupy their own row and remain readable.
 public struct SheetRow {
     public var systems: [System]
@@ -59,6 +76,8 @@ public final class Sheet {
     private var rows: [SheetRow] = []
     private var continuous: ContinuousLayout?
     private var alignedWidths: [Double]?
+    /// Note-owned marks, grouped by measure so a line can follow any set of row breaks. (VexFlow 5.9.0)
+    private var stickingLines: [[(system: System, marks: [Annotation])]] = []
 
     /// Fit a single reference system to the already formatted measures of a publication. Give one positive
     /// width for each measure. (VexFlow 5.8.0, upstream `@internal`)
@@ -76,6 +95,7 @@ public final class Sheet {
     @discardableResult
     public func setContinuousLayout(_ layout: ContinuousLayout) -> Self {
         continuous = layout
+        layout.sheet = self
         return self
     }
 
@@ -108,6 +128,76 @@ public final class Sheet {
         let system = factory.System(options: opts)
         systems.append(system)
         return system
+    }
+
+    /// Attach a percussion sticking line after the passage's voices have been added to the sheet.
+    /// Throws, before it attaches a mark, when a note is not on this sheet, repeats, or is on another staff.
+    /// (VexFlow 5.9.0)
+    @discardableResult
+    public func addStickingLine(_ assignments: [StickingAssignment]) throws -> [Annotation] {
+        var owners: [ObjectIdentifier: System] = [:]
+        for system in systems {
+            for voice in system.getVoices() {
+                for case let note as StaveNote in voice.getTickables() { owners[ObjectIdentifier(note)] = system }
+            }
+        }
+
+        // Validate the complete passage before attaching any marks to caller-owned notes.
+        var seen = Set<ObjectIdentifier>()
+        var staffIndex: Int?
+        for assignment in assignments {
+            let id = ObjectIdentifier(assignment.note)
+            guard let system = owners[id], !seen.contains(id) else {
+                throw VexError("RangeError", "Sticking assignments need distinct notes on this sheet.")
+            }
+            seen.insert(id)
+            let stave = assignment.note.getStave()
+            let index = stave.flatMap { st in system.getStaves().firstIndex(where: { $0 === st }) }
+            guard let index, staffIndex == nil || index == staffIndex else {
+                throw VexError("RangeError", "A sticking line follows one staff across measures.")
+            }
+            staffIndex = index
+        }
+
+        var line: [(system: System, marks: [Annotation])] = []
+        var marks: [Annotation] = []
+        for assignment in assignments {
+            guard !assignment.note.isRest(), let hand = assignment.hand else { continue }
+            let mark = factory.Annotation(text: hand.rawValue, vJustify: .bottom)
+            _ = assignment.note.addModifier(mark)
+            marks.append(mark)
+            guard let system = owners[ObjectIdentifier(assignment.note)] else { continue }
+            if let i = line.firstIndex(where: { $0.system === system }) {
+                line[i].marks.append(mark)
+            } else {
+                line.append((system, [mark]))
+            }
+        }
+        for (system, group) in line {
+            let stave = group[0].checkAttachedNote().checkStave()
+            try system.getPhraseLayout().addLane(stave, group, options: PhraseLaneOptions(side: .below))
+        }
+        if !line.isEmpty { stickingLines.append(line) }
+        return marks
+    }
+
+    /// Carry the lowest solved sticking baseline across the row before placing the next row.
+    /// (VexFlow 5.9.0, upstream `@internal`)
+    func alignSticking(systems rowSystems: [System], y rowY: Double, height: inout Double) {
+        for line in stickingLines {
+            let marks = rowSystems.flatMap { system in
+                line.first(where: { $0.system === system })?.marks ?? []
+            }.filter { mark in
+                !(continuous?.isHidden(mark.checkAttachedNote()) ?? false)
+            }
+            if marks.isEmpty { continue }
+            let baseline = marks.map { (try? $0.computeY().y) ?? -Double.infinity }.max() ?? 0
+            for mark in marks {
+                mark.setLayoutBaseline(baseline)
+                let ink = mark.getTextInk((try? mark.computeX().x) ?? 0, baseline)
+                height = max(height, ink.y + ink.h - rowY)
+            }
+        }
     }
 
     /// Update the available row width. Call `format()` or `Factory.draw()` to reflow.
@@ -257,7 +347,7 @@ public final class Sheet {
             try systems[index].formatThrowing(row: SystemRowLayout(endPadding: endPadding(index)))
         }
         let width = x - options.x - options.measureGap
-        return SheetRow(
+        var row = SheetRow(
             systems: rowSystems,
             x: options.x,
             y: y,
@@ -265,5 +355,7 @@ public final class Sheet {
             height: bottom - top,
             overflow: max(0, width - options.width)
         )
+        alignSticking(systems: row.systems, y: row.y, height: &row.height)
+        return row
     }
 }

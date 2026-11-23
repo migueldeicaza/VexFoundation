@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/version.ts` and `VexFlow.BUILD` from `src/vexflow.ts` (VexFlow 5.0.0).
+// Port of `src/version.ts` and `VexFlow.BUILD` from `src/vexflow.ts` (VexFlow 5.9.0).
 
 import Foundation
 
@@ -38,13 +38,13 @@ public struct VexBuildInfo: Sendable, Equatable {
 /// The values identify the upstream VexFlow release that this code ports.
 public enum VexVersion {
     /// The upstream VexFlow version that this code ports.
-    public static let version: String = "5.0.0"
+    public static let version: String = "5.9.0"
 
-    /// The upstream VexFlow commit of tag `5.0.0`.
-    public static let gitCommitID: String = "8879d095b29b14dad1f605e0b24b2f1acf1b1e78"
+    /// The upstream VexFlow commit of tag `5.9.0`.
+    public static let gitCommitID: String = "136e78e2ae8619bb275cc42d91fdd39b8767526f"
 
-    /// The date of the upstream VexFlow `5.0.0` commit.
-    public static let buildDate: String = "2025-03-05T18:06:41+01:00"
+    /// The date of the upstream VexFlow `5.9.0` commit.
+    public static let buildDate: String = "2026-11-21T20:30:15-05:00"
 
     /// The build name.
     public static let info: String = "vexfoundation"

@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // Co-author: Benjamin W. Bohl
 //
-// Port of `src/clef.ts` (VexFlow 5.8.0).
+// Port of `src/clef.ts` (VexFlow 5.9.0).
 // Select, position, and measure native clef glyphs against their attached stave.
 
 import Foundation
@@ -69,6 +69,9 @@ public final class Clef: StaveModifier {
     /// and a default stave line number.
     public static var types: [ClefName: ClefType] {
         [
+            .kievan: ClefType(code: Glyphs.kievanCClef, line: 2),
+            .chantC: ClefType(code: Glyphs.chantCclef, line: 1),
+            .chantF: ClefType(code: Glyphs.chantFclef, line: 2),
             .treble: ClefType(code: Glyphs.gClef, line: 3),
             .bass: ClefType(code: Glyphs.fClef, line: 1),
             .alto: ClefType(code: Glyphs.cClef, line: 2),

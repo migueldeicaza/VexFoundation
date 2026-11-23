@@ -282,6 +282,8 @@ public final class ContinuousLayout {
     private var splitChords: [(id: String, measure: Int, upper: StaveNote, lower: StaveNote)] = []
     private var spelledSpans = Set<Int>()
     private let options: ContinuousOptions
+    /// The sheet that installed this layout; it aligns sticking lines in each row. (VexFlow 5.9.0)
+    weak var sheet: Sheet?
     /// Keep incoming ties and beams clear of the repeated clef at a row start. (VexFlow 5.7.0)
     private var continuationPadding: [ObjectIdentifier: Double] = [:]
     private var arrivals: [Int: [Arrival]] = [:]
@@ -784,7 +786,8 @@ public final class ContinuousLayout {
             )
             var y = options.y
             for indices in groups {
-                let row = try layoutRow(indices.map { units[$0] }, options, y)
+                var row = try layoutRow(indices.map { units[$0] }, options, y)
+                sheet?.alignSticking(systems: row.systems, y: row.y, height: &row.height)
                 rows.append(row)
                 y += row.height + options.rowGap
             }

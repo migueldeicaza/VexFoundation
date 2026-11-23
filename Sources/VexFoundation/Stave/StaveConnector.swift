@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/staveconnector.ts` (VexFlow 5.4.0).
+// Port of `src/staveconnector.ts` (VexFlow 5.9.0).
 
 import Foundation
 
@@ -19,6 +19,8 @@ public enum ConnectorType: Int, Sendable {
     case boldDoubleRight = 6
     case thinDouble = 7
     case none = 8
+    /// Right-edge stroke between two adjacent staves. (VexFlow 5.9.0)
+    case mensurstrich = 9
 
     /// Same as `singleLeft`.
     public static let single: ConnectorType = .singleLeft
@@ -64,6 +66,7 @@ public final class StaveConnector: VexElement {
         "boldDoubleRight": .boldDoubleRight,
         "thinDouble": .thinDouble,
         "none": .none,
+        "mensurstrich": .mensurstrich,
     ]
 
     // MARK: - Properties
@@ -149,6 +152,7 @@ public final class StaveConnector: VexElement {
         var topX = topStave.getX()
 
         let isRightSidedConnector = type == .singleRight || type == .boldDoubleRight || type == .thinDouble
+            || type == .mensurstrich
 
         if isRightSidedConnector {
             topX = topStave.getX() + topStave.getWidth()
@@ -160,6 +164,12 @@ public final class StaveConnector: VexElement {
         case .singleLeft:
             width = 1
         case .singleRight:
+            width = 1
+        case .mensurstrich:
+            // Read both facing lines on each draw so retained connectors follow staff spacing.
+            topY = topStave.getYForDrawnLine(Double(topStave.getNumLines() - 1))
+            botY = bottomStave.getYForDrawnLine(0)
+            attachmentHeight = max(0, botY - topY)
             width = 1
         case .double:
             topX -= 5

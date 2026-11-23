@@ -404,3 +404,26 @@ extension UpstreamSVGParityTests {
         return (stave1, stave2)
     }
 }
+
+// VexFlow 5.9.0 cases. The drawing code is in `Upstream59Scenes`; the asserts are in `Upstream59NotationTests`.
+extension UpstreamSVGParityTests {
+    @Test("StaveConnector.Mensurstriche_in_a_three_measure_duet")
+    func staveConnectorMensurstricheDuetMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "StaveConnector", test: "Mensurstriche_in_a_three_measure_duet", width: 680, height: 230,
+            referenceFontsOverride: ["Bravura"]
+        ) { factory, context in
+            try Upstream59Scenes.drawMensurstriche(factory, context)
+        }
+    }
+
+    @Test("StaveConnector.Mensurstriche_in_a_three_staff_group")
+    func staveConnectorMensurstricheGroupMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "StaveConnector", test: "Mensurstriche_in_a_three_staff_group", width: 250, height: 300,
+            referenceFontsOverride: ["Bravura"]
+        ) { factory, _ in
+            _ = try Upstream59Scenes.mensurstricheGroup(factory)
+        }
+    }
+}

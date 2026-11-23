@@ -15,6 +15,23 @@ public struct GraceNoteGroupRenderOptions {
     }
 }
 
+// MARK: - Highland embellishments
+
+/// Named movements in the Highland light-music vocabulary. A named movement retains its identity
+/// even when the author supplies a variant. (VexFlow 5.9.0)
+public enum HighlandEmbellishment: String, CaseIterable, Sendable {
+    case grip
+    case taorluath
+
+    /// Default written pitches in treble notation, in score order.
+    public var pitches: [String] {
+        switch self {
+        case .grip: return ["g/4", "d/5", "g/4"]
+        case .taorluath: return ["g/4", "d/5", "g/4", "e/5"]
+        }
+    }
+}
+
 // MARK: - GraceNoteGroup
 
 /// GraceNoteGroup is used to format and render grace notes.
@@ -95,6 +112,27 @@ public final class GraceNoteGroup: Modifier {
         width = 0
 
         voice.addTickables(graceNotes)
+    }
+
+    // MARK: - Highland embellishments
+
+    private var highlandName: HighlandEmbellishment?
+
+    /// Make a beamed before-grace group. A variant supplies every written pitch in score order. (VexFlow 5.9.0)
+    public static func highland(_ name: HighlandEmbellishment, pitches: [String]? = nil) throws -> GraceNoteGroup {
+        let sequence = pitches ?? name.pitches
+        if sequence.isEmpty { throw VexError("RangeError", "Expected a nonempty grace sequence.") }
+        let notes: [StemmableNote] = try sequence.map { key in
+            GraceNote(try GraceNoteStruct(parsingKeys: [key], duration: "32", stemDirection: .up))
+        }
+        let group = GraceNoteGroup(graceNotes: notes).beamNotes()
+        group.highlandName = name
+        return group
+    }
+
+    /// Identify a named movement. An explicitly constructed grace group has no assigned name. (VexFlow 5.9.0)
+    public func getHighlandName() -> HighlandEmbellishment? {
+        highlandName
     }
 
     // MARK: - PreFormat

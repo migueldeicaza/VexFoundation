@@ -31,3 +31,16 @@ extension UpstreamSVGParityTests {
         }
     }
 }
+
+// VexFlow 5.9.0 cases. The drawing code is in `Upstream59Scenes`; the asserts are in `Upstream59NotationTests`.
+extension UpstreamSVGParityTests {
+    @Test("Clef.Chant_clefs_and_divisions")
+    func clefChantClefsAndDivisionsMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Clef", test: "Chant_clefs_and_divisions", width: 620, height: 280,
+            referenceFontsOverride: ["Bravura"]
+        ) { factory, context in
+            _ = try Upstream59Scenes.chantClefsAndDivisions(factory, context)
+        }
+    }
+}

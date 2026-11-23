@@ -185,7 +185,7 @@ public final class FrettedInstrument {
                 return displayKey + "/X"
             case .fret(let str, let fret):
                 if fret < 0 { throw VexError("BadArguments", "Invalid string or fret.") }
-                return try tuning.getNoteForFretThrowing(fret + capo, stringNum: str)
+                return try tuning.getNoteForFretThrowing(fret, stringNum: str, capo: capo)
             }
         }
         let notation = positions.enumerated().map { index, position -> NotationIdentity in

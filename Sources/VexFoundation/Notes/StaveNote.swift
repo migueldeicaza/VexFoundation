@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stavenote.ts` (VexFlow 5.7.0).
+// Port of `src/stavenote.ts` (VexFlow 5.9.0).
 // This file implements notes for standard notation. A note has one or more
 // `NoteHead`s, an optional stem, and an optional flag.
 
@@ -23,6 +23,31 @@ private func isBravuraFirst(_ family: String) -> Bool {
 // MARK: - StaveNote Struct
 
 /// Input structure for creating a StaveNote (extends NoteStruct).
+/// Staff spelling determines the degree. Repeated fa, sol and la share the same SMuFL families. (VexFlow 5.9.0)
+private let fourShapeDegreeLetters: [Character] = ["C", "D", "E", "F", "G", "A", "B"]
+private let fourShapeDegrees = ["fa", "sol", "la", "fa", "sol", "la", "mi"]
+
+/// Black, white and double-whole forms preserve the written duration of each pitch.
+private let fourShapeHeads: [String: [String]] = [
+    "faUp": [Glyphs.noteShapeTriangleLeftBlack, Glyphs.noteShapeTriangleLeftWhite,
+             Glyphs.noteShapeTriangleLeftDoubleWhole],
+    "faDown": [Glyphs.noteShapeTriangleRightBlack, Glyphs.noteShapeTriangleRightWhite,
+               Glyphs.noteShapeTriangleRightDoubleWhole],
+    "sol": [Glyphs.noteShapeRoundBlack, Glyphs.noteShapeRoundWhite, Glyphs.noteShapeRoundDoubleWhole],
+    "la": [Glyphs.noteShapeSquareBlack, Glyphs.noteShapeSquareWhite, Glyphs.noteShapeSquareDoubleWhole],
+    "mi": [Glyphs.noteShapeDiamondBlack, Glyphs.noteShapeDiamondWhite, Glyphs.noteShapeDiamondDoubleWhole],
+]
+
+/// Complete SMuFL signs carry both the white body and any descending stem. (VexFlow 5.9.0)
+private func whiteMensuralSign(_ duration: String) -> String? {
+    switch Tables.sanitizeDuration(duration) {
+    case "1/8": return Glyphs.mensuralWhiteMaxima
+    case "1/4": return Glyphs.mensuralWhiteLonga
+    case "1/2": return Glyphs.mensuralWhiteBrevis
+    default: return nil
+    }
+}
+
 public struct StaveNoteStruct {
     public var keys: NonEmptyArray<StaffKeySpec>
     public var duration: NoteDurationSpec
@@ -46,6 +71,8 @@ public struct StaveNoteStruct {
     public var notation: [NotationIdentity] = []
     /// Fixed rest position in key-line coordinates. On a five-line stave, 1 is the bottom line. (VexFlow 5.6.0)
     public var restLine: Double?
+    /// Print the complete white mensural sign for a pitched maxima, longa or brevis. (VexFlow 5.9.0)
+    public var whiteMensural: Bool?
     /// The key strings as the caller wrote them, when the keys were parsed from strings.
     /// `StaffKeySpec` maps the "x/" shorthand to octave 4; upstream keeps the key without
     /// an octave (NaN line). `toNoteStruct()` uses the raw key for such keys.
@@ -318,6 +345,8 @@ public enum StaveNoteError: Error, LocalizedError, Equatable, Sendable {
     case noYValues
     case unformattedNoteForBoundingBox
     case badRestPosition
+    /// A white mensural sign needs a pitched maxima, longa or brevis. (VexFlow 5.9.0)
+    case invalidWhiteMensural(String)
 
     public var errorDescription: String? {
         switch self {
@@ -339,6 +368,8 @@ public enum StaveNoteError: Error, LocalizedError, Equatable, Sendable {
             return "Can't call getBoundingBox on an unformatted note."
         case .badRestPosition:
             return "Rest positioning requires a rest and a finite line."
+        case .invalidWhiteMensural(let message):
+            return message
         }
     }
 }
@@ -731,6 +762,11 @@ open class StaveNote: StemmableNote {
     /// VexFlowPatch: optional padding to the right (e.g. for large lyrics), default 0.
     public var paddingRight: Double = 0
 
+    /// The historical sign takes precedence over modern heads when the note is rebuilt. (VexFlow 5.9.0)
+    private var mensuralSign: String?
+    /// Diatonic index (C = 0) of the movable four-shape tonic. (VexFlow 5.9.0)
+    private var fourShapeTonic: Int?
+
     /// Preserve the previous line so releasing an explicit position restores automatic placement.
     /// (VexFlow 5.6.0)
     private var lineBeforeRestPin: Double?
@@ -759,6 +795,21 @@ open class StaveNote: StemmableNote {
 
         // Pull note rendering properties.
         glyphProps = Note.getGlyphProps(duration, noteType)
+
+        if noteStruct.whiteMensural == true {
+            // Upstream throws a RangeError from the constructor.
+            if noteTypeValue != .note {
+                setInitErrorIfNeeded(.invalidWhiteMensural("Expected a pitched note for white mensural notation."))
+            } else if let sign = whiteMensuralSign(duration) {
+                mensuralSign = sign
+                glyphProps.codeHead = sign
+                glyphProps.stem = false
+            } else {
+                setInitErrorIfNeeded(
+                    .invalidWhiteMensural("Expected a maxima, longa or brevis for white mensural notation.")
+                )
+            }
+        }
 
         // if true, displace note to right
         displaced = false
@@ -901,7 +952,9 @@ open class StaveNote: StemmableNote {
                 stemUpXOffset: noteProps.stemUpXOffset,
                 stemUpYShift: noteProps.stemUpYShift,
                 stemDownYShift: noteProps.stemDownYShift,
-                customGlyphCode: noteProps.code,
+                customGlyphCode: mensuralSign
+                    ?? fourShapeHead(sortedKeyProps[i].index, stemDirection)
+                    ?? noteProps.code,
                 stemDirection: stemDirection,
                 displacementColumn: column,
                 noteType: noteTypeValue
@@ -919,6 +972,41 @@ open class StaveNote: StemmableNote {
         }
         noteHeads = heads.compactMap { $0 }
         return noteHeads
+    }
+
+    // MARK: - Four-shape heads
+
+    /// Apply the movable major four-shape convention to the passage before formatting. (VexFlow 5.9.0)
+    public static func applyFourShape(_ tonic: String, _ notes: [StaveNote]) throws {
+        let lower = tonic.lowercased()
+        guard let letter = lower.first, ("a"..."g").contains(letter),
+              ["", "bb", "##", "b", "#"].contains(String(lower.dropFirst())),
+              let tonicIndex = fourShapeDegreeLetters.firstIndex(of: Character(letter.uppercased()))
+        else {
+            throw VexError("BadArguments", "Expected a written major tonic such as C, D or Bb.")
+        }
+        for note in notes where note.noteTypeValue == .note {
+            note.fourShapeTonic = tonicIndex
+            note.preFormatted = false
+            note.reset()
+        }
+    }
+
+    /// Choose each owned head again on a stem reversal. Explicit per-pitch head overrides take precedence.
+    private func fourShapeHead(_ index: Int, _ direction: StemDirection) -> String? {
+        guard let tonic = fourShapeTonic, index < keys.count else { return nil }
+        let pitch = keys[index]
+        if pitch.split(separator: "/", omittingEmptySubsequences: false).count > 2 { return nil }
+        guard let first = pitch.first,
+              let letter = fourShapeDegreeLetters.firstIndex(of: Character(first.uppercased())) else { return nil }
+        let shape = fourShapeDegrees[(letter - tonic + 7) % 7]
+        let family = shape == "fa" ? (direction == Stem.UP ? "faUp" : "faDown") : shape
+        guard let heads = fourShapeHeads[family] else { return nil }
+        switch Tables.sanitizeDuration(duration) {
+        case "1/2": return heads[2]
+        case "1", "2": return heads[1]
+        default: return heads[0]
+        }
     }
 
     // MARK: - Auto Stem

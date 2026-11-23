@@ -21,11 +21,23 @@ public enum TimeSignatureSpecError: Error, LocalizedError, Equatable, Sendable {
 public enum TimeSignatureSymbol: String, CaseIterable, Sendable, Codable {
     case common = "C"
     case cutCommon = "C|"
+    /// Perfect time, imperfect prolation (a circle). (VexFlow 5.9.0)
+    case mensuralCircle = "mensural-circle"
+    /// Perfect time, perfect prolation (a circle with a dot). (VexFlow 5.9.0)
+    case mensuralCircleDot = "mensural-circle-dot"
+    /// Imperfect time, imperfect prolation (a semicircle). (VexFlow 5.9.0)
+    case mensuralSemicircle = "mensural-semicircle"
+    /// Imperfect time, perfect prolation (a semicircle with a dot). (VexFlow 5.9.0)
+    case mensuralSemicircleDot = "mensural-semicircle-dot"
 
     /// Parse a time signature symbol from user input (case-insensitive).
     public init?(parsing raw: String) {
-        let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        self.init(rawValue: normalized)
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let symbol = Self(rawValue: trimmed.uppercased()) ?? Self(rawValue: trimmed.lowercased()) {
+            self = symbol
+        } else {
+            return nil
+        }
     }
 }
 
@@ -143,6 +155,9 @@ public enum TimeSignatureSpec: Hashable, Sendable, Codable {
             return TimeSignatureMeter(validatingOrNil: 4, denominator: 4)
         case .symbol(.cutCommon):
             return TimeSignatureMeter(validatingOrNil: 2, denominator: 2)
+        case .symbol:
+            // Mensuration signs do not define a modern meter.
+            return nil
         case .numeric(let top, let bottom):
             guard
                 let numerator = Self.parseIntegerComponent(top),

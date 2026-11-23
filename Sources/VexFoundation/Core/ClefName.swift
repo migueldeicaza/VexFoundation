@@ -17,6 +17,12 @@ public enum ClefName: String, CaseIterable, Sendable, Codable {
     case subbass
     case french
     case tab
+    /// Kievan tse-fa-ut clef: C4 on the middle line. (VexFlow 5.9.0)
+    case kievan
+    /// Square-chant C clef. (VexFlow 5.9.0)
+    case chantC = "chant-c"
+    /// Square-chant F clef. (VexFlow 5.9.0)
+    case chantF = "chant-f"
 
     /// Parse a clef name from user input (case-insensitive).
     public init?(parsing raw: String) {

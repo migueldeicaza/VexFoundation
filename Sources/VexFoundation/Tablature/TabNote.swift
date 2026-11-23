@@ -227,6 +227,8 @@ open class TabNote: StemmableNote {
 
     /// Draw parentheses around the fret positions.
     public var ghost: Bool = false
+    /// Numeric frets interrupt the course line underneath their ink. (VexFlow 5.9.0)
+    public var clearFretLines: Bool = true
     /// One text element for each fret position.
     public internal(set) var fretElement: [VexElement] = []
     public var positions: [TabNotePosition]
@@ -390,18 +392,28 @@ open class TabNote: StemmableNote {
     }
 
     /// Calculate and store the width of the note, retaining explicit sizes across ghost changes.
+    /// Build and measure the label for one sounding position. (VexFlow 5.9.0)
+    open func createFretElement(_ position: TabNotePosition) -> VexElement {
+        let fret = ghost ? "(" + position.fret + ")" : position.fret
+        let el = TabNote.tabToElement(fret, useAlternativeXGlyph: useAlternativeXNoteheadGlyph)
+        let defaultSize = VexFont.convertSizeToPointValue(Metrics.getFontInfo("TabNote.text").size)
+        let size = fretFontSize.map { VexFont.convertSizeToPointValue($0) } ?? defaultSize * getFontScale()
+        el.setFontSize(VexFont.convertSizeToPointValue(el.fontInfo.size) * size / defaultSize)
+        let metrics = el.getTextMetrics()
+        el.setYShift((metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2)
+        return el
+    }
+
+    /// Convert a one-based string number to its zero-based stave line. (VexFlow 5.9.0)
+    open func getFretLine(_ position: TabNotePosition) -> Double {
+        Double(position.str - 1)
+    }
+
     public func updateWidth() {
         fretElement = []
         width = 0
-        for i in 0..<positions.count {
-            var fret = positions[i].fret
-            if ghost { fret = "(" + fret + ")" }
-            let el = TabNote.tabToElement(fret, useAlternativeXGlyph: useAlternativeXNoteheadGlyph)
-            let defaultSize = VexFont.convertSizeToPointValue(Metrics.getFontInfo("TabNote.text").size)
-            let size = fretFontSize.map { VexFont.convertSizeToPointValue($0) } ?? defaultSize * getFontScale()
-            el.setFontSize(VexFont.convertSizeToPointValue(el.fontInfo.size) * size / defaultSize)
-            let metrics = el.getTextMetrics()
-            el.setYShift((metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2)
+        for position in positions {
+            let el = createFretElement(position)
             fretElement.append(el)
             width = max(el.getWidth(), width)
         }
@@ -419,8 +431,7 @@ open class TabNote: StemmableNote {
         let ctx = stave.getContext()
         setContext(ctx)
 
-        // getYForLine uses a 0-based index. position.str is 1-based.
-        let ys = positions.map { stave.getYForLine(Double($0.str - 1)) }
+        let ys = positions.map { stave.getYForLine(getFretLine($0)) }
 
         setYs(ys)
 
@@ -630,7 +641,7 @@ open class TabNote: StemmableNote {
                 ctx.setLineWidth(0)
                 ctx.fillRect(tabX - 2, y - 3, el.getWidth() + 4, 6)
                 ctx.restore()
-            } else {
+            } else if clearFretLines {
                 ctx.clearRect(tabX - 2, y - 3, el.getWidth() + 4, 6)
             }
 

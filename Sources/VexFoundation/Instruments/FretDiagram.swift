@@ -1,8 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/fretdiagram.ts` (VexFlow 5.8.0).
-// A standalone chord frame. Strings run from the lowest (left) to the highest (right).
+// Port of `src/fretdiagram.ts` (VexFlow 5.9.0).
+// Vertical and horizontal chord frames with tuning-specific guitar voicings.
 
 import Foundation
 
@@ -20,6 +20,16 @@ public enum FretDiagramString: Equatable, Sendable, CustomStringConvertible {
     }
 }
 
+/// Grid spacing in renderer pixels, measured across the strings and along the neck.
+private let STRING_SPACING: Double = 9
+private let FRET_SPACING: Double = 11
+
+/// Chord frame orientation. In a horizontal frame the nut is at the left and the highest string is on top. (VexFlow 5.9.0)
+public enum FretDiagramOrientation: String, Equatable, Sendable {
+    case vertical
+    case horizontal
+}
+
 /// Frets are absolute; 0 = open, `.muted` = 'x'. A barre names one-based string numbers.
 public struct FretDiagramSpec: Equatable, Sendable {
     public struct Barre: Equatable, Sendable {
@@ -34,6 +44,8 @@ public struct FretDiagramSpec: Equatable, Sendable {
         }
     }
 
+    /// In a horizontal frame the nut is at the left and the highest string is on top. (VexFlow 5.9.0)
+    public var orientation: FretDiagramOrientation?
     public var frets: [FretDiagramString]
     /// Left-hand fingers 1-4, low string first. `nil` or an omitted entry leaves the dot plain. (VexFlow 5.8.0)
     public var fingerings: [Int?]?
@@ -42,9 +54,11 @@ public struct FretDiagramSpec: Equatable, Sendable {
     public var barre: Barre?
 
     public init(
+        orientation: FretDiagramOrientation? = nil,
         frets: [FretDiagramString], fingerings: [Int?]? = nil, firstFret: Int? = nil, rows: Int? = nil,
         barre: Barre? = nil
     ) {
+        self.orientation = orientation
         self.frets = frets
         self.fingerings = fingerings
         self.firstFret = firstFret
@@ -53,10 +67,42 @@ public struct FretDiagramSpec: Equatable, Sendable {
     }
 }
 
+/// Standard-tuned major chords in preference order. Slash basses have their own entries. (VexFlow 5.9.0)
+private let standardMajorVoicings: [(root: String, bass: String?, name: String, frame: FretDiagramSpec)] = [
+    ("C", nil, "open", FretDiagramSpec(frets: [.muted, .fret(3), .fret(2), .fret(0), .fret(1), .fret(0)])),
+    (
+        "C", nil, "third-position",
+        FretDiagramSpec(
+            frets: [.muted, .fret(3), .fret(5), .fret(5), .fret(5), .fret(3)], firstFret: 3,
+            barre: .init(fret: 3, from: 5, to: 1)
+        )
+    ),
+    ("C", "E", "open", FretDiagramSpec(frets: [.fret(0), .fret(3), .fret(2), .fret(0), .fret(1), .fret(0)])),
+    ("D", nil, "open", FretDiagramSpec(frets: [.muted, .muted, .fret(0), .fret(2), .fret(3), .fret(2)])),
+    ("G", nil, "open", FretDiagramSpec(frets: [.fret(3), .fret(2), .fret(0), .fret(0), .fret(0), .fret(3)])),
+]
+
 public final class FretDiagram: VexElement {
     /// The registry and font metrics both use the diagram category.
     override public class var category: String { "FretDiagram" }
 
+    /// Return a fresh frame for this harmony and tuning. Omitting the name selects the first registered shape.
+    /// Only standard guitar tuning (the preset name or its pitches) and major qualities have voicings. (VexFlow 5.9.0)
+    public static func lookupVoicing(_ harmony: ChordHarmony, tuning: String, name: String? = nil) throws -> FretDiagramSpec? {
+        let pitches = tuning
+            .split(separator: ",", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+            .joined(separator: ",")
+        if tuning != "standard" && pitches != Tuning.names["standard"] { return nil }
+        if !["", "maj", "major", "M"].contains(harmony.quality ?? "") { return nil }
+        let root = try NotationSpelling.chordText(ChordHarmony(root: harmony.root))
+        let bass = try harmony.bass.map { try NotationSpelling.chordText(ChordHarmony(root: $0)) }
+        return standardMajorVoicings.first(where: { v in
+            v.root == root && v.bass == bass && (name == nil || v.name == name)
+        })?.frame
+    }
+
+    private let orientation: FretDiagramOrientation
     private let frets: [FretDiagramString]
     private var fingerings: [Int?] = []
     private let first: Int
@@ -64,6 +110,7 @@ public final class FretDiagram: VexElement {
     private let barre: FretDiagramSpec.Barre?
 
     public init(_ spec: FretDiagramSpec) throws {
+        orientation = spec.orientation ?? .vertical
         frets = spec.frets
         first = spec.firstFret ?? 1
         rows = spec.rows ?? 4
@@ -84,6 +131,7 @@ public final class FretDiagram: VexElement {
             }
         }
         super.init()
+        if first > 1 { setText(String(first)) }
         try setFingerings(spec.fingerings ?? [])
     }
 
@@ -105,9 +153,27 @@ public final class FretDiagram: VexElement {
         i < fingerings.count ? fingerings[i] : nil
     }
 
-    /// The top-left position includes the open-string marks and starting fret label.
+    /// Grid coordinates run across strings (low to high) and along the neck (nut to bridge). (VexFlow 5.9.0)
+    private func gridPoint(_ across: Double, _ along: Double) -> (Double, Double) {
+        if orientation == .horizontal {
+            return (getX() + 14 + along, getY() + 6 + Double(frets.count - 1) * STRING_SPACING - across)
+        }
+        return (getX() + 22 + across, getY() + 14 + along)
+    }
+
+    /// The top-left position includes the open-string marks and the upright starting-fret label.
     override public func getBoundingBox() -> BoundingBox? {
-        BoundingBox(getX(), getY(), 28 + Double(frets.count - 1) * 9, 17 + Double(rows) * 11)
+        let across = Double(frets.count - 1) * STRING_SPACING
+        let along = Double(rows) * FRET_SPACING
+        if orientation == .vertical { return BoundingBox(getX(), getY(), 28 + across, 17 + along) }
+        var width = 16 + along
+        var height = 12 + across
+        if first > 1 {
+            let metrics = textMetrics
+            width = max(width, 15 + metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight)
+            height += metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent + 1
+        }
+        return BoundingBox(getX(), getY(), width, height)
     }
 
     /// Paint the digit over the dot and any barre that passes through it.
@@ -123,12 +189,12 @@ public final class FretDiagram: VexElement {
 
     override public func draw() throws {
         let ctx = try checkContext()
-        let left = getX() + 22
-        let top = getY() + 14
-        let right = left + Double(frets.count - 1) * 9
+        let across = Double(frets.count - 1) * STRING_SPACING
         let first = self.first
-        func fretY(_ fret: Int) -> Double { top + (Double(fret - first) + 0.5) * 11 }
-        func line(_ x1: Double, _ y1: Double, _ x2: Double, _ y2: Double) {
+        func fretCenter(_ fret: Int) -> Double { (Double(fret - first) + 0.5) * FRET_SPACING }
+        func line(_ across1: Double, _ along1: Double, _ across2: Double, _ along2: Double) {
+            let (x1, y1) = gridPoint(across1, along1)
+            let (x2, y2) = gridPoint(across2, along2)
             ctx.beginPath()
             ctx.moveTo(x1, y1)
             ctx.lineTo(x2, y2)
@@ -146,33 +212,45 @@ public final class FretDiagram: VexElement {
         )
         if first > 1 {
             ctx.setFont(fontInfo)
-            ctx.fillText(String(first), getX() + 2, top + 9)
+            if orientation == .horizontal {
+                // Leave room below the lowest string for its stopped dot or partial barre.
+                let (left, bottom) = gridPoint(0, 0)
+                let metrics = textMetrics
+                ctx.fillText(text, left + metrics.actualBoundingBoxLeft, bottom + 6 + metrics.actualBoundingBoxAscent)
+            } else {
+                ctx.fillText(text, getX() + 2, getY() + 23)
+            }
         }
         for row in 0...rows {
             ctx.setLineWidth(row == 0 && first == 1 ? 2.5 : 1)
-            line(left, top + Double(row) * 11, right, top + Double(row) * 11)
+            line(0, Double(row) * FRET_SPACING, across, Double(row) * FRET_SPACING)
         }
         for (i, fret) in frets.enumerated() {
-            let x = left + Double(i) * 9
-            line(x, top, x, top + Double(rows) * 11)
+            let string = Double(i) * STRING_SPACING
+            line(string, 0, string, Double(rows) * FRET_SPACING)
             switch fret {
             case .muted:
-                line(x - 2.5, top - 8, x + 2.5, top - 3)
-                line(x + 2.5, top - 8, x - 2.5, top - 3)
+                line(string - 2.5, -8, string + 2.5, -3)
+                line(string + 2.5, -8, string - 2.5, -3)
             case .fret(let n):
                 ctx.beginPath()
                 let radius: Double = finger(i) != nil ? 4 : 3
-                ctx.arc(x, n != 0 ? fretY(n) : top - 5.5, n != 0 ? radius : 2.5, 0, 2 * Double.pi, false)
+                let (x, y) = gridPoint(string, n != 0 ? fretCenter(n) : -5.5)
+                ctx.arc(x, y, n != 0 ? radius : 2.5, 0, 2 * Double.pi, false)
                 if n != 0 { ctx.fill() } else { ctx.stroke() }
             }
         }
         if let barre {
             ctx.setLineWidth(5)
-            line(right - Double(barre.from - 1) * 9, fretY(barre.fret), right - Double(barre.to - 1) * 9, fretY(barre.fret))
+            line(
+                across - Double(barre.from - 1) * STRING_SPACING, fretCenter(barre.fret),
+                across - Double(barre.to - 1) * STRING_SPACING, fretCenter(barre.fret)
+            )
         }
         for i in fingerings.indices {
             if let finger = finger(i), case .fret(let n) = frets[i] {
-                drawFinger(ctx, finger, left + Double(i) * 9, fretY(n))
+                let (x, y) = gridPoint(Double(i) * STRING_SPACING, fretCenter(n))
+                drawFinger(ctx, finger, x, y)
             }
         }
         ctx.closeGroup()

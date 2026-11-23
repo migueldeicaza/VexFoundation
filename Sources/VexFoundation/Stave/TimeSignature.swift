@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/timesignature.ts` (VexFlow 5.6.1).
+// Port of `src/timesignature.ts` (VexFlow 5.9.0).
 // Position and draw numeric and symbolic time signatures on notation and tablature staves.
 
 import Foundation
@@ -64,13 +64,20 @@ public final class TimeSignature: StaveModifier {
 
     // MARK: - Glyph Codes
 
+    /// Opening mensuration signs share the middle staff line and the ordinary meter spacing. (VexFlow 5.9.0)
+    static let symbolicMeters: [String: String] = [
+        "C": Glyphs.timeSigCommon,
+        "C|": Glyphs.timeSigCutCommon,
+        "mensural-circle": Glyphs.mensuralProlation2,
+        "mensural-circle-dot": Glyphs.mensuralProlation1,
+        "mensural-semicircle": Glyphs.mensuralProlation6,
+        "mensural-semicircle-dot": Glyphs.mensuralProlation5,
+    ]
+
     /// Return the glyph code for a time signature character (`C`, `C|`, `+`, `-`, `(`, `)` or a digit).
     public static func getTimeSigCode(_ key: String, smallSig: Bool = false) -> String {
+        if let symbol = symbolicMeters[key] { return symbol }
         switch key {
-        case "C":
-            return Glyphs.timeSigCommon
-        case "C|":
-            return Glyphs.timeSigCutCommon
         case "+":
             return smallSig ? Glyphs.timeSigPlusSmall : Glyphs.timeSigPlus
         case "-":

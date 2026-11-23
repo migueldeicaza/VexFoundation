@@ -905,6 +905,42 @@ public final class Factory {
         return (try? adopt(element, role: role)) ?? element
     }
 
+    /// Create a note-attached register mark using this score's music font. (VexFlow 5.9.0)
+    /// Throws when the middle rank is not zero through three.
+    @discardableResult
+    public func AccordionRegister(_ ranks: AccordionRanks) throws -> VexFoundation.AccordionRegister {
+        let register = try inRuntimeContext { try VexFoundation.AccordionRegister(ranks) }
+        if let ctx = context { _ = register.setContext(ctx) }
+        return own(musicGlyph(register))
+    }
+
+    /// Place a German lute attack on the current staffless stave. (VexFlow 5.9.0)
+    @discardableResult
+    public func GermanLuteNote(_ spec: GermanLuteNoteStruct) throws -> VexFoundation.GermanLuteNote {
+        let note = musicGlyph(try inRuntimeContext { try VexFoundation.GermanLuteNote(spec) })
+        if let ctx = context { _ = note.setContext(ctx) }
+        if let stave = currentStave { _ = note.setStave(stave) }
+        return try adopt(note, role: .note)
+    }
+
+    /// Engrave a written pitch with its Kievan half-note form. (VexFlow 5.9.0)
+    @discardableResult
+    public func KievanNote(_ spec: KievanNoteStruct) throws -> VexFoundation.KievanNote {
+        let note = musicGlyph(try inRuntimeContext { try VexFoundation.KievanNote(spec) })
+        if let ctx = context { _ = note.setContext(ctx) }
+        if let stave = currentStave { _ = note.setStave(stave) }
+        return try adopt(note, role: .note)
+    }
+
+    /// Queue French lute letters and open bass signs on the current tablature stave. (VexFlow 5.9.0)
+    @discardableResult
+    public func FrenchLuteNote(_ noteStruct: TabNoteStruct, drawStem: Bool = false) throws -> VexFoundation.FrenchLuteNote {
+        let note = try inRuntimeContext { try VexFoundation.FrenchLuteNote(validating: noteStruct, drawStem: drawStem) }
+        if let stave = currentStave { _ = note.setStave(stave) }
+        if let ctx = context { _ = note.setContext(ctx) }
+        return try adopt(note, role: .note)
+    }
+
     /// Queue independent figured-bass rows beneath their bass notes. (VexFlow 5.8.0)
     @discardableResult
     public func FiguredBass(_ spec: FiguredBassSpec) throws -> VexFoundation.FiguredBass {

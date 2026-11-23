@@ -203,3 +203,39 @@ extension UpstreamSVGParityTests {
         return (notes0, notes1)
     }
 }
+
+extension UpstreamSVGParityTests {
+    /// Mirrors upstream 5.9.0 `tests/pedalmarking_tests.ts` (`harpPedalChanges`).
+    /// The asserts are in Upstream59InstrumentsTests.
+    @Test("PedalMarking.Harp_pedal_changes_at_a_rest_and_entrance")
+    func pedalMarkingHarpPedalChangesMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "PedalMarking", test: "Harp_pedal_changes_at_a_rest_and_entrance", width: 420, height: 155
+        ) { f, context in
+            let initial = try HarpPedalSettings(Dictionary(uniqueKeysWithValues: HarpPedalName.allCases.map { ($0, .natural) }))
+            let pedals = HarpPedalChanges(initial)
+            let notes = [
+                f.StaveNote(try StaveNoteStruct(parsingKeys: ["c/4"], duration: "q")),
+                f.StaveNote(try StaveNoteStruct(parsingKeys: ["b/4"], duration: "qr")),
+                f.StaveNote(try StaveNoteStruct(parsingKeys: ["g/4"], duration: "q")),
+                f.StaveNote(try StaveNoteStruct(parsingKeys: ["f/4"], duration: "q")),
+            ]
+            pedals.apply(notes[1], [.f: .sharp, .b: .flat])
+            pedals.apply(notes[2], [:])
+            pedals.apply(notes[3], [.f: .natural])
+
+            let dynamic = f.TextDynamics(TextNoteStruct(duration: .quarter, text: "mf", line: 10))
+            let dynamics: [Tickable] = [
+                f.GhostNote(duration: .quarter), f.GhostNote(duration: .quarter), dynamic, f.GhostNote(duration: .quarter),
+            ]
+            let system = f.System(options: SystemOptions(x: 12, width: 400, y: 10))
+            _ = system.addStave(SystemStave(voices: [f.Voice().addTickables(notes), f.Voice().addTickables(dynamics)]))
+                .addClef(.treble)
+            for width in [400.0, 260] {
+                _ = system.setWidth(width)
+                context.clear()
+                try f.draw(retain: true)
+            }
+        }
+    }
+}

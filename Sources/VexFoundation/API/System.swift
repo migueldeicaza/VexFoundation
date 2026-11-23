@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/system.ts` (VexFlow 5.8.0).
+// Port of `src/system.ts` (VexFlow 5.9.0).
 
 import Foundation
 
@@ -164,6 +164,18 @@ public final class System: VexElement {
 
     // MARK: - Accessors
 
+    /// Replace the formatting options (upstream `setOptions`). The factory must be set; the runtime
+    /// context stays the one of this system. Throws `NoFactory` without a factory.
+    public func setOptions(_ options: SystemOptions) throws {
+        guard let factory = options.factory else {
+            throw VexError("NoFactory", "System.setOptions(options) requires a factory.")
+        }
+        var resolvedOptions = options
+        resolvedOptions.runtimeContext = runtimeContext
+        self.factory = factory
+        self.options = resolvedOptions
+    }
+
     /// Get origin x.
     override public func getX() -> Double { options.x }
 
@@ -242,6 +254,15 @@ public final class System: VexElement {
 
     @discardableResult
     public func addConnector(type: ConnectorType = .double) -> StaveConnector {
+        if type == .mensurstrich {
+            // Upstream throws for a group that does not have exactly two staves; see `addConnectorThrowing`.
+            if let conn = try? addConnectorThrowing(type: type) { return conn }
+            let conn = factory.StaveConnector(
+                topStave: partStaves[0], bottomStave: partStaves[partStaves.count - 1], type: .none
+            )
+            connector = conn
+            return conn
+        }
         let conn = factory.StaveConnector(
             topStave: partStaves[0],
             bottomStave: partStaves[partStaves.count - 1],
@@ -249,6 +270,36 @@ public final class System: VexElement {
         )
         connector = conn
         return conn
+    }
+
+    /// Add a connector. A Mensurstrich requires exactly two staves; use `addMensurstriche()` for a
+    /// group. (VexFlow 5.9.0)
+    @discardableResult
+    public func addConnectorThrowing(type: ConnectorType = .double) throws -> StaveConnector {
+        if type == .mensurstrich {
+            if partStaves.count != 2 {
+                throw VexError(
+                    "BadArgument", "A single Mensurstrich requires two staves. Use addMensurstriche() for a group."
+                )
+            }
+            let conn = try addMensurstriche()[0]
+            connector = conn
+            return conn
+        }
+        return addConnector(type: type)
+    }
+
+    /// Replace this measure's ending bars with one Mensurstrich per gap. Call after adding all staves.
+    /// (VexFlow 5.9.0)
+    @discardableResult
+    public func addMensurstriche() throws -> [StaveConnector] {
+        if partStaves.count < 2 {
+            throw VexError("BadArgument", "Mensurstriche require at least two staves.")
+        }
+        partStaves.forEach { $0.setEndBarType(.none) }
+        return partStaves.indices.dropFirst().map { index in
+            factory.StaveConnector(topStave: partStaves[index - 1], bottomStave: partStaves[index], type: .mensurstrich)
+        }
     }
 
     // MARK: - Add Stave

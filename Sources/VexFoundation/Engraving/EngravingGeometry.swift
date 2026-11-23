@@ -154,6 +154,15 @@ public func measureEngraving(_ element: VexElement, options: GeometryOptions = G
             } else if kind == StaveNote.self || kind == GraceNote.self, let note = owner as? StaveNote {
                 shape = try noteShape(note)
                 if note.renderOptions.draw != false { children(note.getModifiers()) }
+            } else if kind == KievanNote.self, let note = owner as? KievanNote {
+                // VexFlow 5.9.0
+                shape.parts.append(note.getTextInk(note.getAbsoluteX(), try note.getYsThrowing()[0]))
+                children(note.getModifiers())
+            } else if kind == GermanLuteNote.self, let note = owner as? GermanLuteNote {
+                // VexFlow 5.9.0
+                _ = try note.getYsThrowing()
+                shape.parts.append(contentsOf: note.getInkParts())
+                children(note.getModifiers())
             } else if kind == FiguredBass.self, let figuredBass = owner as? FiguredBass {
                 shape.parts.append(contentsOf: try figuredBass.getInkParts())
             } else if kind == GraceNoteGroup.self, let group = owner as? GraceNoteGroup {
@@ -185,7 +194,8 @@ public func measureEngraving(_ element: VexElement, options: GeometryOptions = G
                     "start": EngravingPoint(x: anchors.start.x, y: anchors.start.y),
                     "end": EngravingPoint(x: anchors.end.x, y: anchors.end.y),
                 ]
-            } else if kind == Annotation.self, let mark = owner as? Annotation {
+            } else if kind == FluteFingering.self || kind == Annotation.self || kind == AccordionRegister.self
+                || kind == HarpPedalDiagram.self, let mark = owner as? Annotation {
                 let x = try mark.computeX().x
                 let y = try mark.computeY().y
                 shape.parts.append(mark.getTextInk(x, y))

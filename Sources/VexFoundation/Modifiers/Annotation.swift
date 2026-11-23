@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/annotation.ts` (VexFlow 5.4.0).
+// Port of `src/annotation.ts` (VexFlow 5.9.0).
 
 import Foundation
 
@@ -24,7 +24,8 @@ public enum AnnotationVerticalJustify: Int, Sendable {
 // MARK: - Annotation
 
 /// Annotations are modifiers that can be attached to notes.
-public final class Annotation: Modifier {
+/// Instrument signs (`AccordionRegister`, `HarpPedalDiagram`, `FluteFingering`) subclass it. (VexFlow 5.9.0)
+public class Annotation: Modifier {
 
     override public class var category: String { "Annotation" }
 
@@ -168,7 +169,7 @@ public final class Annotation: Modifier {
 
         for annotation in annotations {
             // Text height is expressed in fractional stave spaces.
-            let textLines = (2 + VexFont.convertSizeToPixelValue(annotation.fontInfo.size)) / Tables.STAVE_LINE_DISTANCE
+            let textLines = (2 + annotation.getLayoutHeight()) / Tables.STAVE_LINE_DISTANCE
             var verticalSpaceNeeded = textLines
 
             let note = annotation.checkAttachedNote()
@@ -283,10 +284,15 @@ public final class Annotation: Modifier {
         return (x, textWidth)
     }
 
+    /// Vertical space reserved for this annotation, in renderer pixels. (VexFlow 5.9.0)
+    func getLayoutHeight() -> Double {
+        VexFont.convertSizeToPixelValue(fontInfo.size)
+    }
+
     /// Compute the text baseline after formatting. Subclasses may adjust this axis.
     /// (VexFlow 5.1.0)
     public func computeY() throws -> (y: Double, textHeight: Double) {
-        let textHeight = VexFont.convertSizeToPixelValue(fontInfo.size)
+        let textHeight = getLayoutHeight()
         if let baseline = textBaseline ?? layoutBaseline { return (baseline, textHeight) }
         let note = try checkAttachedNoteThrowing()
         let stemDirection = note.hasStem() ? note.getStemDirection() : Stem.UP

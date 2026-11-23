@@ -10,7 +10,11 @@
 // and `VexFlow.measureEngraving`. 5.4.0 adds `VexFlow.PhraseLayout`,
 // `FrettedInstrument`, `PercussionMap`, `FretDiagram`, `AlternatingTremolo`,
 // `WrittenAccidentalState`, `NotationSpelling`, `ScoreNavigation` and
-// `Publication`, all module types. 5.8.0 adds `FiguredBass`, a module type.)
+// `Publication`, all module types. 5.8.0 adds `FiguredBass`, a module type.
+// 5.9.0 instrument parts add `AccordionRegister`, `FluteFingering`, `HarpPedalChanges`
+// and `HarpPedalDiagram`; early notation adds `ChantPhrase`, `ChantDivision`,
+// `ChantStave`, `KeySignaturePresets`, `KievanNote`, `GermanLuteNote` and
+// `FrenchLuteNote`, all module types.)
 //
 // Global state (fonts, metrics) lives in the active `VexRuntimeContext`.
 

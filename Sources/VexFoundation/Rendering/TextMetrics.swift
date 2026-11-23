@@ -155,6 +155,35 @@ public enum TextMeasurer {
         return result
     }
 
+    /// HarfBuzz (Chromium) draws a Unicode space that the font lacks with the font's space glyph and a
+    /// width taken from the em size (`hb_ot_shape_fallback_spaces`). Return that advance in pixels.
+    static func fallbackSpaceAdvance(_ character: Character, _ font: CTFont) -> CGFloat? {
+        guard character.unicodeScalars.count == 1, let scalar = character.unicodeScalars.first else { return nil }
+        let em = CTFontGetSize(font)
+        func advance(of text: String) -> CGFloat? {
+            let utf16 = Array(text.utf16)
+            var glyph: CGGlyph = 0
+            guard utf16.count == 1, CTFontGetGlyphsForCharacters(font, utf16, &glyph, 1), glyph != 0 else { return nil }
+            var size = CGSize.zero
+            CTFontGetAdvancesForGlyphs(font, .default, &glyph, &size, 1)
+            return size.width
+        }
+        switch scalar.value {
+        case 0x2000, 0x2002: return em / 2
+        case 0x2001, 0x2003, 0x3000: return em
+        case 0x2004: return em / 3
+        case 0x2005: return em / 4
+        case 0x2006: return em / 6
+        case 0x2009: return em / 5
+        case 0x200A: return em / 16
+        case 0x205F: return em * 4 / 18
+        case 0x2007: return advance(of: "0")
+        case 0x2008: return advance(of: ".")
+        case 0x202F: return advance(of: " ").map { $0 / 2 }
+        default: return nil
+        }
+    }
+
     private static func fontIndex(for character: Character, in fonts: [CTFont]) -> Int? {
         let utf16 = Array(String(character).utf16)
         var glyphs = [CGGlyph](repeating: 0, count: utf16.count)
@@ -209,6 +238,12 @@ public enum TextMeasurer {
         // Segment text by the first family that covers each character.
         var segments: [(fontIndex: Int?, text: String)] = []
         for ch in text {
+            // A Unicode space missing from the first font keeps that font (HarfBuzz space fallback).
+            if fontIndex(for: ch, in: [primary]) == nil, fallbackSpaceAdvance(ch, primary) != nil,
+               fontIndex(for: " ", in: [primary]) != nil {
+                segments.append((-1, String(ch)))
+                continue
+            }
             let idx = fontIndex(for: ch, in: searchFonts)
             if let last = segments.last, last.fontIndex == idx {
                 segments[segments.count - 1].text.append(ch)
@@ -223,6 +258,20 @@ public enum TextMeasurer {
         var minY = CGFloat.infinity, maxY = -CGFloat.infinity
 
         for segment in segments {
+            if segment.fontIndex == -1 {
+                let utf16 = Array(" ".utf16)
+                var space: CGGlyph = 0
+                _ = CTFontGetGlyphsForCharacters(primary, utf16, &space, 1)
+                var positions: [CGPoint] = []
+                var glyphs: [CGGlyph] = []
+                for ch in segment.text {
+                    glyphs.append(space)
+                    positions.append(CGPoint(x: penX, y: 0))
+                    penX += fallbackSpaceAdvance(ch, primary) ?? 0
+                }
+                runs.append(TextGlyphRun(font: primary, glyphs: glyphs, positions: positions))
+                continue
+            }
             guard let fontIndex = segment.fontIndex else {
                 // No font in the stack has these characters. Browsers then draw
                 // the `.notdef` glyph of the first font (they do not fall back to

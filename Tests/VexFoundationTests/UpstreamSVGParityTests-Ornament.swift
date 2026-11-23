@@ -562,3 +562,32 @@ extension UpstreamSVGParityTests {
         }
     }
 }
+
+extension UpstreamSVGParityTests {
+    /// Mirrors upstream 5.9.0 `tests/ornament_tests.ts` (`fluteTrillKey`). The asserts are in Upstream59InstrumentsTests.
+    @Test("Ornament.Moving_flute_trill_key")
+    func ornamentMovingFluteTrillKeyMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Ornament", test: "Moving_flute_trill_key", width: 400, height: 215
+        ) { factory, _ in
+            let stave = factory.Stave(x: 10, y: 94, width: 380).addClef(.treble)
+            let pattern: [FluteKey: FluteKeyState] = [.l1: .closed, .l2: .closed, .r1: .closed]
+            let notes = try [1.0, 0.75].map { scale in
+                let note = factory.StaveNote(try StaveNoteStruct(parsingKeys: ["e/4"], duration: "h"))
+                _ = note.addModifier(try FluteFingering(pattern, scale: scale), index: 0)
+                return note
+            }
+            let voice = factory.Voice(time: VoiceTime(numBeats: 4, beatValue: 4)).addTickables(notes)
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            let moving = FluteTrillKey(key: .r2, start: .open, alternate: .closed)
+            for note in notes {
+                guard let diagram = note.getModifiers().first as? FluteFingering else { continue }
+                try diagram.setTrillKey(moving)
+                try diagram.setTrillKey(FluteTrillKey(key: .l1, start: .closed, alternate: .open))
+                diagram.clearTrillKey()
+                try diagram.setTrillKey(moving)
+            }
+            try factory.draw()
+        }
+    }
+}

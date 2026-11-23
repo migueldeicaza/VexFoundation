@@ -499,3 +499,23 @@ extension UpstreamSVGParityTests {
         }
     }
 }
+
+extension UpstreamSVGParityTests {
+    /// Mirrors upstream 5.9.0 `tests/gracenote_tests.ts` (`highlandEmbellishments`).
+    /// The asserts are in Upstream59InstrumentsTests.
+    @Test("Grace_Notes.Named_Highland_grip_and_taorluath")
+    func graceNotesNamedHighlandGripAndTaorluathMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Grace_Notes", test: "Named_Highland_grip_and_taorluath", width: 420, height: 155
+        ) { factory, _ in
+            let stave = factory.Stave(x: 10, y: 35, width: 390).addClef(.treble)
+            let groups = [try GraceNoteGroup.highland(.grip), try GraceNoteGroup.highland(.taorluath)]
+            let notes = try groups.map { group in
+                factory.StaveNote(try StaveNoteStruct(parsingKeys: ["a/4"], duration: "h")).addModifier(group, index: 0)
+            }
+            let voice = factory.Voice().addTickables(notes)
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+}

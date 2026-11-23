@@ -22,3 +22,16 @@ extension UpstreamSVGParityTests {
         }
     }
 }
+
+// VexFlow 5.9.0 cases. The drawing code is in `Upstream59Scenes`; the asserts are in `Upstream59NotationTests`.
+extension UpstreamSVGParityTests {
+    @Test("TimeSignature.White_mensural_long_values_and_signs")
+    func timeSignatureWhiteMensuralMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "TimeSignature", test: "White_mensural_long_values_and_signs", width: 510, height: 430,
+            referenceFontsOverride: ["Bravura"]
+        ) { factory, _ in
+            _ = try Upstream59Scenes.mensuralValuesAndSigns(factory)
+        }
+    }
+}
