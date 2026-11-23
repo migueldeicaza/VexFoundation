@@ -52,7 +52,7 @@ struct VexFontTests {
     }
 
     @Test func scaleSize() {
-        #expect(VexFont.scaleSize("10pt", 2.0) == "20.0pt")
+        #expect(VexFont.scaleSize("10pt", 2.0) == "20pt") // JavaScript number formatting
         #expect(VexFont.scaleSize(10.0, 2.0) == 20.0)
     }
 }

@@ -32,7 +32,8 @@ struct OrnamentTremoloHairpinConnectorTests {
         #expect(orn.type == "tr")
         #expect(orn.getText() == Glyphs.ornamentTrill)
         #expect(orn.getWidth() > 0)
-        #expect(orn.adjustForStemDirection == true)
+        // Upstream 5.0 constructor always sets adjustForStemDirection = false.
+        #expect(orn.adjustForStemDirection == false)
         #expect(orn.delayed == false)
     }
 
@@ -77,9 +78,9 @@ struct OrnamentTremoloHairpinConnectorTests {
         let scoop = Ornament("scoop")
         #expect(scoop.adjustForStemDirection == false)
 
-        // tr adjusts for stem direction
+        // Upstream 5.0: tr does not align with the note head and does not adjust for stem direction.
         let trill = Ornament("tr")
-        #expect(trill.adjustForStemDirection == true)
+        #expect(trill.adjustForStemDirection == false)
     }
 
     @Test func ornamentAttackTypes() {
@@ -138,8 +139,17 @@ struct OrnamentTremoloHairpinConnectorTests {
         #expect(result == false)
     }
 
+    /// A stem-up C4 note built the normal way (the constructor builds the stem,
+    /// then setStemDirection sets its direction), as upstream code does.
+    private func makeStemUpNote() -> StaveNote {
+        let note = StaveNote(StaveNoteStruct(keys: NonEmptyArray(StaffKeySpec(letter: .c, octave: 4)), duration: .quarter))
+        _ = note.setStave(Stave(x: 10, y: 40, width: 300))
+        _ = note.setStemDirection(Stem.UP)
+        return note
+    }
+
     @Test func ornamentFormatSingle() {
-        let note = makeNote()
+        let note = makeStemUpNote()
         let orn = Ornament("tr")
         _ = orn.setNote(note)
         _ = orn.setIndex(0)
@@ -147,12 +157,32 @@ struct OrnamentTremoloHairpinConnectorTests {
         var state = ModifierContextState()
         let result = Ornament.format([orn], state: &state)
         #expect(result == true)
-        #expect(state.textLine == 2)
-        #expect(state.topTextLine == 0)
+        // Upstream 5.0 (node build): "tr" is ABOVE; curTop = line 0 + stem 35/10 = 3.5 < 5 lines,
+        // so topTextLine moves to 1.5, then + 2.
+        #expect(orn.textLine == 1.5)
+        #expect(state.textLine == 0)
+        #expect(state.topTextLine == 3.5)
+    }
+
+    @Test func ornamentFormatStemWithoutDirection() {
+        // Upstream 5.0: buildStem() after setStemDirection() gives a Stem with direction 0,
+        // whose getHeight() is 0, so curTop = 0 and topTextLine moves to 5 (then + 2).
+        // See docs/port-notes/unit-test-findings.md (Stem default direction).
+        let note = makeNote()
+        let orn = Ornament("tr")
+        _ = orn.setNote(note)
+        _ = orn.setIndex(0)
+        var state = ModifierContextState()
+        Ornament.format([orn], state: &state)
+        withKnownIssue("Swift Stem() defaults to direction UP; upstream defaults to 0 (see unit-test-findings.md)") {
+            #expect(note.getStem()?.getHeight() == 0)
+            #expect(orn.textLine == 5)
+            #expect(state.topTextLine == 7)
+        }
     }
 
     @Test func ornamentFormatMultiple() {
-        let note = makeNote()
+        let note = makeStemUpNote()
         let orn1 = Ornament("tr")
         _ = orn1.setNote(note)
         _ = orn1.setIndex(0)
@@ -163,8 +193,11 @@ struct OrnamentTremoloHairpinConnectorTests {
 
         var state = ModifierContextState()
         Ornament.format([orn1, orn2], state: &state)
-        #expect(state.textLine == 4)
-        #expect(state.topTextLine == 0)
+        // Upstream 5.0 values (node build): both ornaments stack above the staff.
+        #expect(orn1.textLine == 1.5)
+        #expect(orn2.textLine == 3.5)
+        #expect(state.textLine == 0)
+        #expect(state.topTextLine == 5.5)
     }
 
     @Test func ornamentFormatAttackShiftsLeft() {
@@ -200,7 +233,7 @@ struct OrnamentTremoloHairpinConnectorTests {
         _ = note.addToModifierContext(mc)
         mc.preFormat()
 
-        #expect(mc.formatted == true)
+        #expect(mc.preFormatted) // upstream 5.0 preFormat() sets preFormatted, never formatted
         #expect(!mc.getMembers("Ornament").isEmpty)
     }
 

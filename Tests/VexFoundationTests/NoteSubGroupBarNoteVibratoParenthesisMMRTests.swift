@@ -457,7 +457,8 @@ struct NoteSubGroupBarNoteVibratoParenthesisMMRTests {
         #expect(opts.showNumber == true)
         #expect(opts.line == 2)
         #expect(opts.spacingBetweenLinesPx == Tables.STAVE_LINE_DISTANCE)
-        #expect(opts.semibreveRestGlyphScale == Tables.NOTATION_FONT_SCALE)
+        // Upstream 5.0: Metrics 'fontSize' (same as NoteHead).
+        #expect(opts.semibreveRestGlyphScale == Metrics.getDouble("fontSize"))
         #expect(opts.serifThickness == 2)
     }
 
@@ -465,8 +466,9 @@ struct NoteSubGroupBarNoteVibratoParenthesisMMRTests {
         let opts = MultiMeasureRestRenderOptions(numberOfMeasures: 4)
         let mmr = MultiMeasureRest(numberOfMeasures: 4, options: opts)
         let xs = mmr.getXs()
-        #expect(xs.left == 0)
-        #expect(xs.right == 0)
+        // Upstream 5.0 initializes xs to NaN until draw() computes them.
+        #expect(xs.left.isNaN)
+        #expect(xs.right.isNaN)
     }
 
     @Test func multiMeasureRestNumberGlyphPoint() {

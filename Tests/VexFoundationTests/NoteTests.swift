@@ -94,11 +94,13 @@ struct NoteTests {
     }
 
     @Test func codeNoteHead() {
-        #expect(Tables.codeNoteHead("D", duration: .quarter) == "noteheadDiamondBlack")
-        #expect(Tables.codeNoteHead("D", duration: .whole) == "noteheadDiamondWhole")
-        #expect(Tables.codeNoteHead("N", duration: .quarter) == "noteheadBlack")
-        #expect(Tables.codeNoteHead("N", duration: .whole) == "noteheadWhole")
-        #expect(Tables.codeNoteHead("X0", duration: .quarter) == "noteheadXWhole")
+        // VexFlow 5.0 returns SMuFL code points (Glyphs constants), not glyph names.
+        #expect(Tables.codeNoteHead("DI", duration: .quarter) == Glyphs.noteheadDiamondBlack)
+        #expect(Tables.codeNoteHead("DI", duration: .whole) == Glyphs.noteheadDiamondWhole)
+        #expect(Tables.codeNoteHead("D", duration: .quarter) == Glyphs.noteheadBlack)
+        #expect(Tables.codeNoteHead("N", duration: .quarter) == Glyphs.noteheadBlack)
+        #expect(Tables.codeNoteHead("N", duration: .whole) == Glyphs.noteheadWhole)
+        #expect(Tables.codeNoteHead("X0", duration: .quarter) == Glyphs.noteheadXWhole)
     }
 
     @Test func validTypes() {
@@ -659,11 +661,12 @@ struct NoteTests {
 
         note.buildStem()
 
+        // Upstream 5.0 getStemDirection() throws 'NoStem' whenever no stem direction is set.
         do {
             _ = try note.getStemDirectionThrowing()
             #expect(Bool(false))
         } catch {
-            #expect(error as? StemmableNoteError == .noStemDirection)
+            #expect(error as? StemmableNoteError == .noStem)
         }
     }
 

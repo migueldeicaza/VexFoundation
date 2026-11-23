@@ -648,9 +648,18 @@ struct TablatureAndChordSymbolTests {
     }
 
     @Test func chordSymbolWidth() {
+        // Upstream 5.0: ChordSymbol.format() sets the width (sum of block widths
+        // plus padding); before format the symbol has no width of its own.
         let cs = ChordSymbol()
         _ = cs.addText("Cmaj")
-        #expect(cs.getWidth() > 0)
+        let blockWidth = cs.symbolBlocks[0].getWidth()
+        #expect(blockWidth > 0)
+
+        let note = makeNote()
+        _ = note.addModifier(cs, index: 0)
+        var state = ModifierContextState()
+        ChordSymbol.format([cs], state: &state)
+        #expect(cs.getWidth() == blockWidth + ChordSymbol.minPadding)
     }
 
     @Test func chordSymbolWidthWithVAlign() {

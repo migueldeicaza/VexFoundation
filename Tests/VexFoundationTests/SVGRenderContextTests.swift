@@ -28,8 +28,11 @@ struct SVGRenderContextTests {
         let svg = ctx.getSVG()
         #expect(svg.contains("<svg "))
         #expect(svg.contains("viewBox=\"0 0 120 80\""))
-        #expect(svg.contains("<path d=\"M 10 10 L 50 10 L 30 40 Z\" fill=\"#ff0000\" />"))
-        #expect(svg.contains("<g class=\"debug\" id=\"g1\">"))
+        // Upstream 5.0 svgcontext.ts serialization (checked against the jsdom output):
+        // compact path data, attributes before 'd', and 'vf-' prefixed group class/id.
+        #expect(svg.contains("<path fill=\"#ff0000\" stroke=\"none\" d=\"M10 10L50 10L30 40Z\"/>"))
+        #expect(svg.contains("<g class=\"vf-debug\" id=\"vf-g1\" fill=\"#ff0000\">"))
+        #expect(svg.contains("<path stroke-width=\"2\" fill=\"none\" stroke=\"#0000ff\" d=\"M5 5L115 75\"/>"))
         #expect(svg.contains("stroke=\"#0000ff\""))
     }
 
@@ -44,7 +47,7 @@ struct SVGRenderContextTests {
 
         let svg = ctx.getSVG()
         #expect(svg.contains("viewBox=\"0 0 200 200\""))
-        #expect(svg.contains("d=\"M 10 10 L 20 20\""))
+        #expect(svg.contains("d=\"M10 10L20 20\""))
         #expect(svg.contains("stroke-width=\"2\""))
     }
 

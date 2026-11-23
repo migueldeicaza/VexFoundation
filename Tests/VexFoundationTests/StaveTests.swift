@@ -94,8 +94,9 @@ struct StaveTests {
         // Top/bottom boundary
         let topY = stave.getTopLineTopY()
         let botY = stave.getBottomLineBottomY()
-        #expect(topY < y0)
-        #expect(botY > y4)
+        // Upstream 5.0: the top line top Y is line 0; the bottom adds the line width.
+        #expect(topY == y0)
+        #expect(botY == y4 + 1)
     }
 
     @Test func staveModifierCount() {
@@ -141,9 +142,9 @@ struct StaveTests {
 
     @Test func clefTypes() {
         #expect(Clef.types[.treble] != nil)
-        #expect(Clef.types[.treble]!.code == "gClef")
-        #expect(Clef.types[.bass]!.code == "fClef")
-        #expect(Clef.types[.alto]!.code == "cClef")
+        #expect(Clef.types[.treble]!.code == Glyphs.gClef)
+        #expect(Clef.types[.bass]!.code == Glyphs.fClef)
+        #expect(Clef.types[.alto]!.code == Glyphs.cClef)
     }
 
     @Test func clefAddition() {
@@ -157,7 +158,9 @@ struct StaveTests {
 
     @Test func clefPoint() {
         let defaultPoint = Clef.getPoint(.default)
-        #expect(defaultPoint == Tables.NOTATION_FONT_SCALE)
+        // Upstream 5.0: Metrics 'fontSize' (30) for the default size, 2/3 of it otherwise.
+        #expect(defaultPoint == Metrics.getDouble("fontSize"))
+        #expect(defaultPoint == 30)
 
         let smallPoint = Clef.getPoint(.small)
         #expect(smallPoint < defaultPoint)

@@ -33,7 +33,9 @@ struct FretHandFingerParityTests {
         let finger = FretHandFinger("1")
         #expect(finger.getFretHandFinger() == "1")
         #expect(finger.position == .left)
-        #expect(finger.getWidth() == 7)
+        // VexFlow 5.0: the width is the measured width of the finger text.
+        #expect(finger.getWidth() > 0)
+        #expect(finger.getWidth() == finger.textMetrics.width)
 
         _ = finger.setFretHandFinger("3")
         _ = finger.setOffsetX(5)

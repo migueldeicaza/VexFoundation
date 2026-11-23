@@ -345,7 +345,8 @@ struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
 
     @Test func bendCreation() {
         let bend = Bend("Full")
-        #expect(bend.getText() == "Full")
+        // VexFlow 5: Bend keeps its text in the phrase, not in Element.text.
+        #expect(bend.phrase[0].text == "Full")
         #expect(bend.phrase.count == 1)
         #expect(bend.phrase[0].type == Bend.UP)
     }

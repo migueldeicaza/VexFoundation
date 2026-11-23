@@ -170,8 +170,9 @@ struct AccidentalBeamArticulationTests {
     @Test func accidentalColumnsTableData() throws {
         #expect(Tables.accidentalColumnsTable[1] != nil)
         #expect(Tables.accidentalColumnsTable[3]?["a"] == [1, 3, 2])
-        #expect(Tables.accidentalColumnsTable[4]?["spaced_out_tetrachord"] == [1, 2, 1, 2])
-        #expect(Tables.accidentalColumnsTable[6]?["very_spaced_out_hexachord"] == [1, 2, 1, 2, 1, 2])
+        // VexFlow 5.0 uses camelCase keys.
+        #expect(Tables.accidentalColumnsTable[4]?["spacedOutTetrachord"] == [1, 2, 1, 2])
+        #expect(Tables.accidentalColumnsTable[6]?["verySpacedOutHexachord"] == [1, 2, 1, 2, 1, 2])
     }
 
     @Test func accidentalApplyAccidentalsSingleVoiceParity() throws {
@@ -624,8 +625,9 @@ struct AccidentalBeamArticulationTests {
 
     @Test func articulationDirectGlyphCode() throws {
         // Use a direct glyph code instead of a table type
+        // Swift extension: a SMuFL glyph name resolves to its code point.
         let artic = Articulation("fermataAbove")
-        #expect(artic.type == "fermataAbove")
+        #expect(artic.type == Glyphs.fermataAbove)
         #expect(artic.getPosition() == .above)
     }
 
@@ -688,7 +690,7 @@ struct AccidentalBeamArticulationTests {
         _ = mc.addMember(artic)
         mc.preFormat()
 
-        #expect(mc.formatted)
+        #expect(mc.preFormatted) // upstream 5.0 preFormat() sets preFormatted, never formatted
     }
 
     // MARK: - Tables Articulation Data
@@ -696,18 +698,18 @@ struct AccidentalBeamArticulationTests {
     @Test func articulationTableLookup() throws {
         let staccato = Tables.articulationCode("a.")
         #expect(staccato != nil)
-        #expect(staccato?.code == "augmentationDot")
+        #expect(staccato?.code == Glyphs.augmentationDot)
         #expect(staccato?.betweenLines == true)
 
         let accent = Tables.articulationCode("a>")
         #expect(accent != nil)
-        #expect(accent?.aboveCode == "articAccentAbove")
-        #expect(accent?.belowCode == "articAccentBelow")
+        #expect(accent?.aboveCode == Glyphs.articAccentAbove)
+        #expect(accent?.belowCode == Glyphs.articAccentBelow)
 
         let fermata = Tables.articulationCode("a@")
         #expect(fermata != nil)
-        #expect(fermata?.aboveCode == "fermataAbove")
-        #expect(fermata?.belowCode == "fermataBelow")
+        #expect(fermata?.aboveCode == Glyphs.fermataAbove)
+        #expect(fermata?.belowCode == Glyphs.fermataBelow)
     }
 
     // MARK: - Combined: Note with Accidentals and Articulations
@@ -729,7 +731,7 @@ struct AccidentalBeamArticulationTests {
         mc.preFormat()
 
         // Should format both modifiers without error
-        #expect(mc.formatted)
+        #expect(mc.preFormatted) // upstream 5.0 preFormat() sets preFormatted, never formatted
         #expect(mc.getWidth() > 0)
     }
 

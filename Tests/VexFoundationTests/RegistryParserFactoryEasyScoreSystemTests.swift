@@ -798,6 +798,9 @@ struct RegistryParserFactoryEasyScoreSystemTests {
     @Test func systemDrawBeforeFormatThrows() throws {
         let factory = Factory()
         let system = factory.System()
+        // Upstream 5.0 System.draw() calls checkContext() before the format check,
+        // so a context must be attached to reach the 'NoFormatter' error.
+        system.setContext(SVGRenderContext(width: 200, height: 100))
         do {
             try system.draw()
             #expect(Bool(false))

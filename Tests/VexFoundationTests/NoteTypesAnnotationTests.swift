@@ -86,7 +86,10 @@ struct NoteTypesAnnotationTests {
     @Test func repeatNoteCreation() {
         let note = RepeatNote(type: "1")
         #expect(RepeatNote.category == "RepeatNote")
-        #expect(note.getGlyphWidth() > 0)
+        // Upstream 5.0: GlyphNote does not override getGlyphWidth() (returns 0);
+        // the glyph size is the element width.
+        #expect(note.getText() == Glyphs.repeat1Bar)
+        #expect(note.getWidth() > 0)
     }
 
     @Test func repeatNoteTypes() {
@@ -94,17 +97,21 @@ struct NoteTypesAnnotationTests {
         let note2 = RepeatNote(type: "2")
         let note4 = RepeatNote(type: "4")
         let slash = RepeatNote(type: "slash")
-        // All should have positive widths
-        #expect(note1.getGlyphWidth() > 0)
-        #expect(note2.getGlyphWidth() > 0)
-        #expect(note4.getGlyphWidth() > 0)
-        #expect(slash.getGlyphWidth() > 0)
+        // All should have positive widths (element width; getGlyphWidth() is 0 upstream)
+        #expect(note1.getWidth() > 0)
+        #expect(note2.getWidth() > 0)
+        #expect(note4.getWidth() > 0)
+        #expect(slash.getWidth() > 0)
+        #expect(note2.getText() == Glyphs.repeat2Bars)
+        #expect(note4.getText() == Glyphs.repeat4Bars)
+        #expect(slash.getText() == Glyphs.repeatBarSlash)
     }
 
     @Test func repeatNoteUnknownType() {
         // Unknown type defaults to repeat1Bar
         let note = RepeatNote(type: "unknown")
-        #expect(note.getGlyphWidth() > 0)
+        #expect(note.getText() == Glyphs.repeat1Bar)
+        #expect(note.getWidth() > 0)
     }
 
     // MARK: - ClefNote
@@ -366,7 +373,7 @@ struct NoteTypesAnnotationTests {
         _ = note.addToModifierContext(mc)
         mc.preFormat()
 
-        #expect(mc.formatted == true)
+        #expect(mc.preFormatted) // upstream 5.0 preFormat() sets preFormatted, never formatted
     }
 
     // MARK: - Glyph elements (5.0: glyphs are text elements)

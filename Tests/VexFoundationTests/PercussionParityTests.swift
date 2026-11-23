@@ -55,7 +55,8 @@ struct PercussionParityTests {
             #expect(note.getKeys().first == "x/")
             #expect(note.noteHeads.first?.getLine() == 0)
             #expect(note.getKeyProps().first?.key == "X")
-            #expect(note.noteHeads.first?.getText() == Glyphs.noteheadXBlack)
+            // Upstream 5.0: the "X" notehead follows the duration (whole note here).
+            #expect(note.noteHeads.first?.getText() == Glyphs.noteheadXWhole)
         }
     }
 
@@ -83,12 +84,19 @@ struct PercussionParityTests {
     }
 
     @Test func abstractCustomGlyphUsesActualDuration() throws {
-        let wholeDiamond = makePercussionNote(key: "g/5/d", duration: "1")
-        let quarterDiamond = makePercussionNote(key: "g/5/d", duration: "4")
+        // VexFlow 5.0: the duration-dependent diamond code is "DI". A bare "D" is not a
+        // notehead code and falls back to the default notehead for the duration.
+        let wholeDiamond = makePercussionNote(key: "g/5/di", duration: "1")
+        let quarterDiamond = makePercussionNote(key: "g/5/di", duration: "4")
         #expect(wholeDiamond != nil)
         #expect(quarterDiamond != nil)
         #expect(wholeDiamond?.noteHeads.first?.getText() == Glyphs.noteheadDiamondWhole)
         #expect(quarterDiamond?.noteHeads.first?.getText() == Glyphs.noteheadDiamondBlack)
+
+        let wholeD = makePercussionNote(key: "g/5/d", duration: "1")
+        let quarterD = makePercussionNote(key: "g/5/d", duration: "4")
+        #expect(wholeD?.noteHeads.first?.getText() == Glyphs.noteheadWhole)
+        #expect(quarterD?.noteHeads.first?.getText() == Glyphs.noteheadBlack)
 
         let wholeX = makePercussionNote(key: "g/5/x", duration: "1")
         let quarterX = makePercussionNote(key: "g/5/x", duration: "4")

@@ -106,7 +106,12 @@ struct RestsRhythmThreeVoiceUnisonTests {
         #expect(beams.allSatisfy { $0.getNotes().count == 2 })
         #expect(slashNotes.allSatisfy { $0.hasBeam() })
         #expect((slashNotes[0] as! StaveNote).getNoteType() == NoteType.slash.rawValue)
-        #expect((slashNotes[0] as! StaveNote).getGlyphWidth() == Tables.SLASH_NOTEHEAD_WIDTH)
+        // VexFlow 5.0: the glyph width is the measured width of the slash notehead
+        // (Tables.SLASH_NOTEHEAD_WIDTH is no longer used).
+        let first = slashNotes[0] as! StaveNote
+        #expect(first.noteHeads.first?.getText() == Glyphs.noteheadSlashVerticalEnds)
+        #expect(first.getGlyphWidth() > 0)
+        #expect(first.getGlyphWidth() == first.noteHeads.first?.getWidth())
     }
 
     @Test func rhythmSlashParserConvenienceParsesSlashDuration() throws {
@@ -122,8 +127,10 @@ struct RestsRhythmThreeVoiceUnisonTests {
             let note = StaveNote(parsed)
             #expect(note.getDuration() == "8")
             #expect(note.getNoteType() == NoteType.slash.rawValue)
-            #expect(note.getGlyphWidth() == Tables.SLASH_NOTEHEAD_WIDTH)
-            #expect(note.noteHeads.first?.getWidth() == Tables.SLASH_NOTEHEAD_WIDTH)
+            // VexFlow 5.0: the glyph width is the measured slash notehead width.
+            #expect(note.noteHeads.first?.getText() == Glyphs.noteheadSlashVerticalEnds)
+            #expect(note.getGlyphWidth() > 0)
+            #expect(note.getGlyphWidth() == note.noteHeads.first?.getWidth())
         }
     }
 

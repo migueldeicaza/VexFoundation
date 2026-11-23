@@ -187,7 +187,7 @@ struct GraceNoteDynamicsBracketsLinesTests {
         _ = note.addToModifierContext(mc)
         mc.preFormat()
 
-        #expect(mc.formatted == true)
+        #expect(mc.preFormatted) // upstream 5.0 preFormat() sets preFormatted, never formatted
         #expect(!mc.getMembers("GraceNoteGroup").isEmpty)
     }
 
@@ -277,7 +277,8 @@ struct GraceNoteDynamicsBracketsLinesTests {
         let note1 = makeFormattedNote()
         let note2 = makeFormattedNote()
         let bracket = TextBracket(start: note1, stop: note2, text: "8va", superscript: "a")
-        #expect(bracket.text == "8va")
+        // VexFlow 5.0: the text lives in textElement, not in Element.text.
+        #expect(bracket.textElement.getText() == "8va")
         #expect(bracket.superscriptText == "a")
         #expect(bracket.bracketPosition == .top)
     }
@@ -399,8 +400,9 @@ struct GraceNoteDynamicsBracketsLinesTests {
     }
 
     @Test func pedalMarkingGlyphs() {
-        #expect(PedalMarking.GLYPHS["pedal_depress"] == "keyboardPedalPed")
-        #expect(PedalMarking.GLYPHS["pedal_release"] == "keyboardPedalUp")
+        // VexFlow 5.0: camelCase keys, SMuFL code point values.
+        #expect(PedalMarking.GLYPHS["pedalDepress"] == Glyphs.keyboardPedalPed)
+        #expect(PedalMarking.GLYPHS["pedalRelease"] == Glyphs.keyboardPedalUp)
     }
 
     // MARK: - StaveLine Notes

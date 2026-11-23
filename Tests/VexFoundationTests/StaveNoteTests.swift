@@ -226,7 +226,9 @@ struct StaveNoteTests {
 
     @Test func dotCreation() {
         let dot = Dot()
-        #expect(dot.getWidth() == 5)
+        // VexFlow 5.0: the width is the measured width of the augmentation dot glyph.
+        #expect(dot.getWidth() > 0)
+        #expect(dot.getWidth() == dot.textMetrics.width)
         #expect(dot.getText() == Glyphs.augmentationDot)
         #expect(dot.position == .right)
     }
@@ -271,7 +273,6 @@ struct StaveNoteTests {
         let mc = ModifierContext()
         mc.preFormat()
         #expect(mc.preFormatted)
-        #expect(mc.formatted)
     }
 
     // MARK: - Formatter
@@ -345,13 +346,18 @@ struct StaveNoteTests {
         _ = formatter.joinVoices([voice])
         _ = formatter.format([voice], justifyWidth: 300)
 
-        // All tick contexts should have X positions
+        // All tick contexts should have increasing X positions.
+        // (Upstream 5.0 resets TickContext.preFormatted after formatting, so check X instead.)
         let contexts = formatter.getTickContexts()
+        var xs: [Double] = []
         for tick in contexts.list {
             if let ctx = contexts.map[tick] {
-                #expect(ctx.preFormatted)
+                xs.append(ctx.getX())
             }
         }
+        #expect(xs.count == 4)
+        #expect(xs == xs.sorted())
+        #expect(xs.last! > xs.first!)
     }
 
     @Test func formatterFormatToStave() {
@@ -371,12 +377,15 @@ struct StaveNoteTests {
         _ = formatter.joinVoices([voice])
         _ = formatter.formatToStave([voice], stave: stave)
 
-        // Notes should be positioned on the stave
+        // Notes should be preformatted and laid out within the stave width.
+        // (Upstream 5.0 formatToStave() does not attach the stave to the notes.)
+        var lastX = -Double.infinity
         for note in notes {
             #expect(note.preFormatted)
-            if let sn = note as? StaveNote {
-                #expect(sn.getStave() != nil)
-            }
+            let x = note.checkTickContext().getX()
+            #expect(x > lastX)
+            #expect(x < stave.getNoteEndX() - stave.getNoteStartX())
+            lastX = x
         }
     }
 
