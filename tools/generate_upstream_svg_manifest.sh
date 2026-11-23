@@ -27,10 +27,10 @@ const fontNames = new Set(['Bravura', 'Gonville', 'Petaluma', 'Leland']);
 
 const entries = fs
   .readdirSync(referenceDir)
-  .filter((file) => file.startsWith('pptr-') && file.endsWith('.svg'))
+  .filter((file) => (file.startsWith('svg_') || file.startsWith('pptr-')) && file.endsWith('.svg'))
   .sort()
   .map((file) => {
-    const stem = file.slice('pptr-'.length, -'.svg'.length);
+    const stem = file.slice(file.startsWith('svg_') ? 'svg_'.length : 'pptr-'.length, -'.svg'.length);
     const parts = stem.split('.');
     const moduleName = parts.shift() || '';
 

@@ -67,7 +67,7 @@ module_status_for() {
   local direct_path mapped_module mapped_path
 
   case "$module" in
-    canvascontext|renderer|svgcontext|web)
+    canvascontext|web)
       printf 'omitted|Intentional out-of-core browser runtime module'
       return
       ;;
@@ -79,6 +79,9 @@ module_status_for() {
     stavebarline) mapped_module='barline' ;;
     stavevolta) mapped_module='volta' ;;
     strokes) mapped_module='stroke' ;;
+    svgcontext) mapped_module='svgrendercontext' ;;
+    vexflow) mapped_module='flow' ;;
+    harppedalchanges|harppedaldiagram) mapped_module='harppedals' ;;
     *) mapped_module='' ;;
   esac
 
@@ -110,7 +113,7 @@ topic_status_for() {
   esac
 
   case "$topic" in
-    accidental|annotation|articulation|auto_beam_formatting|bach|barline|beam|bend|boundingbox|boundingboxcomputation|chordsymbol|clef|crossbeam|curve|dot|easyscore|factory|font|formatter|fraction|ghostnote|glyphnote|gracenote|gracetabnote|key_clef|keymanager|keysignature|modifier|multimeasurerest|music|notehead|notesubgroup|ornament|parser|pedalmarking|percussion|registry|rests|rhythm|stave|staveconnector|stavehairpin|staveline|stavemodifier|stavenote|stavetie|stringnumber|strokes|style|tabnote|tabslide|tabstave|tabtie|textbracket|textformatter|textnote|threevoice|tickcontext|timesignature|tremolo|tuning|tuplet|typeguard|unison|vf_prefix|vibrato|vibratobracket|voice)
+    accidental|annotation|articulation|auto_beam_formatting|bach|barline|beam|bend|boundingbox|boundingboxcomputation|chordsymbol|clef|crossbeam|curve|dot|easyscore|factory|font|formatter|fraction|ghostnote|glyphnote|gracenote|gracetabnote|key_clef|keymanager|keysignature|modifier|multimeasurerest|music|notehead|notesubgroup|ornament|parser|pedalmarking|percussion|registry|rests|rhythm|stave|staveconnector|stavehairpin|staveline|stavemodifier|stavenote|stavetie|stringnumber|strokes|style|tabnote|tabslide|tabstave|tabtie|textbracket|textformatter|textnote|threevoice|tickcontext|timesignature|tremolo|tuning|tuplet|typeguard|unison|vf_prefix|vibrato|vibratobracket|voice|accordionregister|chantphrase|demo_petzold|demo_repertoire|figuredbass|frenchlutenote|germanlutenote|kievannote|svgcontext)
       printf 'covered|Covered by category-based suites in `Tests/VexFoundationTests`'
       return
       ;;

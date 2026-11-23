@@ -8,8 +8,9 @@ The project keeps VexFlow concepts (`Factory`, `EasyScore`, `System`, notes, mod
 
 - Swift Package (`swift-tools-version: 6.0`)
 - Platforms: iOS 16+, macOS 13+
-- Active port: API parity with VexFlow is in progress and APIs may evolve
-- Current test suite: `845` passing tests
+- Port of VexFlow **5.9.0** (upstream tag `5.9.0`). See `docs/MIGRATING-5.md` for changes from the 4.x-based releases.
+- Music glyphs are SMuFL code points drawn as text with bundled OTF fonts (Bravura, Petaluma, Gonville, Leland, Academico, Petaluma Script, Edwin), measured with CoreText.
+- Current test suite: `1106` unit tests, plus `495` opt-in upstream SVG parity cases (see `docs/parity-status-5.9.0.md`)
 
 ## Installation
 
@@ -41,7 +42,6 @@ struct ScoreView: View {
     var body: some View {
         VexCanvas(width: 500, height: 200) { ctx in
             ctx.clear()
-            FontLoader.loadDefaultFonts()
 
             let f = Factory(options: FactoryOptions(width: 500, height: 200))
             _ = f.setContext(ctx)
@@ -78,7 +78,6 @@ struct TypedScoreView: View {
     var body: some View {
         VexCanvas(width: 500, height: 200) { ctx in
             ctx.clear()
-            FontLoader.loadDefaultFonts()
 
             let f = Factory(options: FactoryOptions(width: 500, height: 200))
             _ = f.setContext(ctx)
@@ -173,7 +172,7 @@ let maybeAccidental = f.Accidental(parsingOrNil: "invalid")
 
 VexFoundation ships lightweight compatibility symbols for migration scenarios:
 
-- `Flow`: selected constants/utilities and music-font helpers.
+- `Flow` (also available as `VexFlow`): constants, `setFonts`/`getFonts`, `setTextFonts`, build metadata.
 - `Vex`: selected helper utilities.
 - `Version` / `VexVersion`: build metadata.
 
@@ -182,8 +181,11 @@ String convenience APIs remain explicit and safe:
 ```swift
 import VexFoundation
 
-_ = try Flow.setMusicFont(parsing: ["Bravura", "Custom"])
-let maybeFonts = Flow.setMusicFont(parsingOrNil: ["Petaluma", "Custom"])
+// Music font first, then the text font (as VexFlow.setFonts).
+Flow.setFonts("Petaluma", "Petaluma Script")
+
+// Add your own font file under a CSS family name.
+try FontRegistry.shared.register(family: "My Font", url: fontURL)
 ```
 
 ## Runtime Context (State Isolation)
@@ -191,7 +193,7 @@ let maybeFonts = Flow.setMusicFont(parsingOrNil: ["Petaluma", "Custom"])
 Mutable runtime state is now scoped through `VexRuntimeContext`:
 
 - Default registry (`Registry.enableDefaultRegistry`)
-- Music font stack and glyph cache
+- Metrics tree (fonts, sizes, paddings: `Metrics.get`/`Metrics.set`)
 - Auto-generated element IDs
 - Runtime flags such as `Tables.UNISON`
 
@@ -203,8 +205,7 @@ import VexFoundation
 let context = Flow.makeRuntimeContext()
 
 Flow.withRuntimeContext(context) {
-    FontLoader.loadDefaultFonts()
-    Tables.UNISON = false
+        Tables.UNISON = false
 
     let reg = Registry()
     Registry.enableDefaultRegistry(reg)
@@ -242,7 +243,9 @@ tools/svg_snapshot.sh --regen
 
 ### Upstream SVG parity (opt-in)
 
-Compare Swift-rendered drawing output against upstream `pptr-*.svg` files:
+Compare Swift-rendered drawing output against the upstream reference SVGs (`svg_*.svg`).
+Generate them in a checkout of the upstream tag: `npm ci && npx grunt reference && VEX_GENERATE_OPTIONS='--backends=pptr' npx grunt generate:reference`
+in `../vexflow-5.9.0` (select another tag with `VEXFOUNDATION_UPSTREAM_TAG`). Summarize mismatches with `tools/parity_report.py`.
 
 ```bash
 tools/upstream_svg_parity.sh

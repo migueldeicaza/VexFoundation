@@ -1979,7 +1979,7 @@ struct UpstreamSVGParityTests {
     private var upstreamTag: String {
         let raw = ProcessInfo.processInfo.environment["VEXFOUNDATION_UPSTREAM_TAG"]?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return raw.isEmpty ? "5.0.0" : raw
+        return raw.isEmpty ? "5.9.0" : raw
     }
 
     private func referenceSVGDirectory() -> URL {

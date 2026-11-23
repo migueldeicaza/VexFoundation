@@ -16,12 +16,12 @@ jobs:
 
       - name: Checkout upstream VexFlow (pinned)
         run: |
-          git clone https://github.com/vexflow/vexflow ../vexflow
-          cd ../vexflow
-          git checkout a0c4d47a
+          git clone https://github.com/vexflow/vexflow ../vexflow-5.9.0
+          cd ../vexflow-5.9.0
+          git checkout 5.9.0
 
       - name: Verify parity matrix freshness
-        run: tools/generate_parity_matrix.sh --check
+        run: VF_UPSTREAM_DIR=../vexflow-5.9.0 tools/generate_parity_matrix.sh --check
 
       - name: Run Swift tests
         run: swift test

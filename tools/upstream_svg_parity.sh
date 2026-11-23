@@ -105,7 +105,9 @@ if [[ "$PARITY_MODE" == "tolerant" && -z "$SIGNATURE_EPSILON" ]]; then
 fi
 
 if [[ -z "$REFERENCE_DIR" ]]; then
-  if [[ -d ../vexmotion/build/images/reference ]]; then
+  if [[ -d "../vexflow-${VEXFOUNDATION_UPSTREAM_TAG:-5.9.0}/build/images/reference" ]]; then
+    REFERENCE_DIR="../vexflow-${VEXFOUNDATION_UPSTREAM_TAG:-5.9.0}/build/images/reference"
+  elif [[ -d ../vexmotion/build/images/reference ]]; then
     REFERENCE_DIR="../vexmotion/build/images/reference"
   elif [[ -d ../vexflow/build/images/reference ]]; then
     REFERENCE_DIR="../vexflow/build/images/reference"

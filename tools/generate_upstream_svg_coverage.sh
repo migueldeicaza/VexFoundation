@@ -183,12 +183,12 @@ function caseModule(caseName) {
 
 const referenceFiles = fs
   .readdirSync(referenceDir)
-  .filter((file) => file.startsWith('pptr-') && file.endsWith('.svg'))
+  .filter((file) => (file.startsWith('svg_') || file.startsWith('pptr-')) && file.endsWith('.svg'))
   .sort();
 
 const referenceByCase = new Map();
 for (const file of referenceFiles) {
-  const stem = file.slice('pptr-'.length, -'.svg'.length);
+  const stem = file.slice(file.startsWith('svg_') ? 'svg_'.length : 'pptr-'.length, -'.svg'.length);
   const parts = stem.split('.');
   const moduleName = parts.shift() || '';
   if (!moduleName || parts.length === 0) continue;
