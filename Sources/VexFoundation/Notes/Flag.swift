@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/flag.ts` (VexFlow 5.0.0).
+// Port of `src/flag.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -17,8 +17,9 @@ public final class Flag: VexElement {
     override public func draw() throws {
         let ctx = try checkContext()
         setRendered()
-        _ = ctx.openGroup("flag", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("flag"), getAttribute("id"))
         renderText(ctx, xPos: 0, yPos: 0)
+        drawPointerRect()
         ctx.closeGroup()
     }
 }

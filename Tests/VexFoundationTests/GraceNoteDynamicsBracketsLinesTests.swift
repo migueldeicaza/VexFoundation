@@ -315,7 +315,7 @@ struct GraceNoteDynamicsBracketsLinesTests {
     @Test func textBracketRenderOptionsDefaults() {
         let opts = TextBracketRenderOptions()
         #expect(opts.dashed == true)
-        #expect(opts.color == "black")
+        #expect(opts.color == nil) // VexFlow 5.1.0: inherit score and element colors
         #expect(opts.lineWidth == 1)
         #expect(opts.showBracket == true)
         #expect(opts.bracketHeight == 8)
@@ -393,7 +393,7 @@ struct GraceNoteDynamicsBracketsLinesTests {
 
     @Test func pedalMarkingRenderOptionsDefaults() {
         let opts = PedalMarkingRenderOptions()
-        #expect(opts.color == "black")
+        #expect(opts.color == nil) // VexFlow 5.1.0: inherit score and element colors
         #expect(opts.bracketHeight == 10)
         #expect(opts.textMarginRight == 6)
         #expect(opts.bracketLineWidth == 1)

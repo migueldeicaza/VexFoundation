@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stemmablenote.ts` (VexFlow 5.0.0).
+// Port of `src/stemmablenote.ts` (VexFlow 5.1.0).
 // `StemmableNote` is an abstract interface for notes with optional stems.
 // Examples of stemmable notes are `StaveNote` and `TabNote`.
 
@@ -121,6 +121,12 @@ open class StemmableNote: Note {
             length = beamIsUndefined ? 50 : 40
         case "128":
             length = beamIsUndefined ? 55 : 45
+        case "256":
+            length = beamIsUndefined ? 60 : 55
+        case "512":
+            length = beamIsUndefined ? 65 : 60
+        case "1024":
+            length = beamIsUndefined ? 70 : 65
         default:
             break
         }

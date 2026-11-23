@@ -562,4 +562,50 @@ extension UpstreamSVGParityTests {
         try voice.draw(context: context, stave: stave)
         return stave.getWidth()
     }
+
+    // VexFlow 5.1.0: repeated draws give the same articulation positions.
+    @Test("Articulation.Draw_Is_Idempotent")
+    func articulationDrawIsIdempotentMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Articulation", test: "Draw_Is_Idempotent", width: 500, height: 250) { _, context in
+            let stave = Stave(x: 10, y: 50, width: 480).addClef(.treble)
+            _ = stave.setContext(context)
+            try stave.drawWithStyle()
+
+            var articulations: [Articulation] = []
+            func note(_ key: String, _ stemDirection: StemDirection, _ position: ModifierPosition, _ codes: [String]) throws -> StaveNote {
+                let staveNote = StaveNote(try StaveNoteStruct(parsingKeys: [key], duration: "q", stemDirection: stemDirection))
+                for code in codes {
+                    let articulation = Articulation(code).setPosition(position)
+                    articulations.append(articulation)
+                    _ = staveNote.addModifier(articulation, index: 0)
+                }
+                return staveNote
+            }
+
+            let notes = [try note("c/4", .up, .above, ["a."]), try note("a/3", .up, .below, ["a."])]
+            let voice = Voice(time: VoiceTime(numBeats: 2, beatValue: 4)).addTickables(notes)
+            _ = Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+
+            func boxes() -> [[Double]] {
+                articulations.map { a in
+                    let box = a.getBoundingBox() ?? BoundingBox(x: 0, y: 0, w: 0, h: 0)
+                    return [box.x, box.y, box.w, box.h]
+                }
+            }
+
+            try voice.draw(context: context, stave: stave)
+            let first = boxes()
+            for _ in 2...3 {
+                try voice.draw(context: context, stave: stave)
+                #expect(boxes() == first)
+            }
+
+            // Setting the origin again must not depend on the position the articulation was drawn at.
+            let articulation = Articulation("a.")
+            articulation.setOrigin(0.5, 0.5)
+            let shifts = [articulation.getXShift(), articulation.getYShift()]
+            articulation.setX(240).setY(160).setOrigin(0.5, 0.5)
+            #expect([articulation.getXShift(), articulation.getYShift()] == shifts)
+        }
+    }
 }

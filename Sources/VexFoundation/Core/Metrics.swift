@@ -3,7 +3,8 @@
 //
 // Port of `src/metrics.ts`. The defaults tree lives in the active
 // `VexRuntimeContext`, so independent contexts can change fonts and sizes
-// without affecting each other.
+// without affecting each other. Updated to VexFlow 5.1.0 (separate text-font
+// defaults: `textFontFamily` and `isText`).
 
 import Foundation
 
@@ -83,13 +84,29 @@ public final class MetricsStore {
         let size = Metrics.number(get("\(key).fontSize")) ?? 30
         let scale = Metrics.number(get("\(key).fontScale")) ?? 1
         let info = FontInfo(
-            family: get("\(key).fontFamily") as? String ?? "Bravura,Academico",
+            family: fontFamily(key),
             size: "\(formatJSNumber(size * scale))pt",
             weight: Metrics.string(get("\(key).fontWeight")) ?? "normal",
             style: get("\(key).fontStyle") as? String ?? "normal"
         )
         cacheFont[key] = info
         return info
+    }
+
+    /// Keep text spaces in the text font while honoring class-specific font overrides.
+    /// Port of `Metrics.getFontFamily()` (VexFlow 5.1.0).
+    private func fontFamily(_ key: String) -> String {
+        guard get("\(key).isText", false) as? Bool == true else {
+            return get("\(key).fontFamily") as? String ?? "Bravura,Academico"
+        }
+        var family = tree["textFontFamily"] as? String ?? "Academico,Bravura"
+        var node: [String: Any]? = tree
+        for part in key.split(separator: ".", omittingEmptySubsequences: false).map(String.init) {
+            node = node?[part] as? [String: Any]
+            guard let current = node else { break }
+            family = current["fontFamily"] as? String ?? family
+        }
+        return family
     }
 
     public func getStyle(_ key: String) -> ElementStyle {
@@ -165,7 +182,9 @@ public enum Metrics {
 
     /// Default metrics (VexFlow `MetricsDefaults`).
     public static var defaults: [String: Any] { [
+        "pointerRect": false,
         "fontFamily": "Bravura,Academico",
+        "textFontFamily": "Academico,Bravura",
         "fontSize": 30.0,
         "fontScale": 1.0,
         "fontWeight": "normal",
@@ -179,14 +198,16 @@ public enum Metrics {
             "accidentalSpacing": 3.0,
         ] as [String: Any],
 
-        "Annotation": ["fontSize": 10.0],
+        "Annotation": ["isText": true, "fontSize": 10.0] as [String: Any],
 
         "Bend": [
+            "isText": true,
             "fontSize": 10.0,
             "line": ["strokeStyle": "#777777", "lineWidth": 1.0] as [String: Any],
         ] as [String: Any],
 
         "ChordSymbol": [
+            "isText": true,
             "fontSize": 12.0,
             "spacing": 0.05,
             "subscriptOffset": 0.2,
@@ -194,7 +215,7 @@ public enum Metrics {
             "superSubRatio": 0.6,
         ],
 
-        "FretHandFinger": ["fontSize": 9.0, "fontWeight": "bold"] as [String: Any],
+        "FretHandFinger": ["isText": true, "fontSize": 9.0, "fontWeight": "bold"] as [String: Any],
 
         "GraceNote": ["fontScale": 2.0 / 3.0],
 
@@ -203,11 +224,12 @@ public enum Metrics {
         "NoteHead": ["minPadding": 2.0],
 
         "PedalMarking": [
-            "text": ["fontSize": 12.0, "fontStyle": "italic"] as [String: Any],
+            "text": ["isText": true, "fontSize": 12.0, "fontStyle": "italic"] as [String: Any],
         ],
 
         "Repetition": [
             "text": [
+                "isText": true,
                 "fontSize": 12.0,
                 "fontWeight": "bold",
                 "offsetX": 12.0,
@@ -219,6 +241,7 @@ public enum Metrics {
         ],
 
         "Stave": [
+            "isText": true,
             "strokeStyle": "#999999",
             "fontSize": 8.0,
             "padding": 12.0,
@@ -227,11 +250,14 @@ public enum Metrics {
             "unalignedNotePadding": 10.0,
         ] as [String: Any],
 
-        "StaveConnector": ["text": ["fontSize": 16.0]],
+        "StaveConnector": ["text": ["isText": true, "fontSize": 16.0] as [String: Any]],
 
-        "StaveLine": ["fontSize": 10.0],
+        "StaveLine": ["isText": true, "fontSize": 10.0] as [String: Any],
+
+        "StaveNote": ["pointerRect": true],
 
         "StaveSection": [
+            "isText": true,
             "fontSize": 10.0,
             "fontWeight": "bold",
             "lineWidth": 2.0,
@@ -240,18 +266,20 @@ public enum Metrics {
         ] as [String: Any],
 
         "StaveTempo": [
+            "isText": true,
             "fontSize": 14.0,
-            "glyph": ["fontSize": 25.0],
+            "glyph": ["isText": false, "fontSize": 25.0] as [String: Any],
             "name": ["fontWeight": "bold"],
         ] as [String: Any],
 
-        "StaveText": ["fontSize": 16.0],
+        "StaveText": ["isText": true, "fontSize": 16.0] as [String: Any],
 
-        "StaveTie": ["fontSize": 10.0],
+        "StaveTie": ["isText": true, "fontSize": 10.0] as [String: Any],
 
         "Stem": ["strokeStyle": "black"],
 
         "StringNumber": [
+            "isText": true,
             "fontSize": 10.0,
             "fontWeight": "bold",
             "verticalPadding": 8.0,
@@ -261,25 +289,31 @@ public enum Metrics {
         ] as [String: Any],
 
         "Stroke": [
-            "text": ["fontSize": 10.0, "fontStyle": "italic", "fontWeight": "bold"] as [String: Any],
+            "text": ["isText": true, "fontSize": 10.0, "fontStyle": "italic", "fontWeight": "bold"] as [String: Any],
         ],
 
-        "TabNote": ["text": ["fontSize": 9.0]],
+        "TabNote": ["text": ["isText": true, "fontSize": 9.0] as [String: Any]],
 
-        "TabSlide": ["fontSize": 10.0, "fontStyle": "italic", "fontWeight": "bold"] as [String: Any],
+        "TabSlide": ["isText": true, "fontSize": 10.0, "fontStyle": "italic", "fontWeight": "bold"] as [String: Any],
 
-        "TabStave": ["strokeStyle": "#999999", "fontSize": 8.0] as [String: Any],
+        "TabStave": ["isText": true, "strokeStyle": "#999999", "fontSize": 8.0] as [String: Any],
 
-        "TabTie": ["fontSize": 10.0],
+        "TabTie": ["isText": true, "fontSize": 10.0] as [String: Any],
 
-        "TextBracket": ["fontSize": 15.0, "fontStyle": "italic"] as [String: Any],
+        "TextBracket": ["isText": true, "fontSize": 15.0, "fontStyle": "italic"] as [String: Any],
 
-        "TextNote": ["text": ["fontSize": 12.0]],
+        "TextNote": ["text": ["isText": true, "fontSize": 12.0] as [String: Any]],
 
         "Tremolo": ["spacing": 7.0],
 
-        "Tuplet": ["yOffset": 0.0, "textYOffset": 2.0],
+        "Tuplet": [
+            "pointerRect": true,
+            "yOffset": 0.0,
+            "textYOffset": 2.0,
+            "bracket": ["padding": 5.0, "lineWidth": 1.0, "legLength": 10.0],
+            "suffix": ["fontScale": 1.0 / 2.0, "extraSpacing": 1.0, "suffixOffsetY": -3.0],
+        ] as [String: Any],
 
-        "Volta": ["fontSize": 9.0, "fontWeight": "bold"] as [String: Any],
+        "Volta": ["isText": true, "fontSize": 9.0, "fontWeight": "bold"] as [String: Any],
     ] }
 }

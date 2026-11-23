@@ -65,6 +65,17 @@ public final class SwiftUICanvasContext: RenderContext {
 
     // MARK: - Canvas State
 
+    /// Score foreground defaults (VexFlow 5.1.0 `RenderContext.defaultStyle`).
+    private var defaultStyle = ElementStyle()
+
+    @discardableResult
+    public func setDefaultStyle(_ style: ElementStyle) -> Self {
+        defaultStyle = ElementStyle(fillStyle: style.fillStyle, strokeStyle: style.strokeStyle)
+        return self
+    }
+
+    public func getDefaultStyle() -> ElementStyle { defaultStyle }
+
     public func clear() {
         gc.fill(
             Path(CGRect(origin: .zero, size: canvasSize)),

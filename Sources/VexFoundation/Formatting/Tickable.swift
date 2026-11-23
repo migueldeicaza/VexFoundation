@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/tickable.ts` (VexFlow 5.0.0).
+// Port of `src/tickable.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -59,8 +59,9 @@ open class Tickable: VexElement {
     // MARK: - Properties
 
     public var ignoreTicks: Bool = false
-    public var tupletStack: [Tuplet] = []
-    public var tuplet: Tuplet?
+    /// The tuplets of this tickable, the most recently added last. Read only:
+    /// use `addTuplet`, `removeTuplet`, `setTupletStack` and `clearTuplets`. (VexFlow 5.1.0)
+    public private(set) var tupletStack: [Tuplet] = []
     /// Fractional value of ticks.
     public var ticks: Fraction = Fraction(0, 1)
     /// Shift from tick context if center aligned.
@@ -130,6 +131,7 @@ open class Tickable: VexElement {
     @discardableResult
     public func setIgnoreTicks(_ flag: Bool) -> Self {
         ignoreTicks = flag
+        voice?.invalidateTicks()
         return self
     }
 
@@ -217,52 +219,85 @@ open class Tickable: VexElement {
 
     // MARK: - Tuplets
 
-    /// Get the tuplet.
-    public func getTuplet() -> Tuplet? { tuplet }
+    /// Get the Tuplet, if any. If there are multiple Tuplets, the most recently added one is returned.
+    public func getTuplet() -> Tuplet? { tupletStack.last }
 
-    /// Return a list of Tuplets.
+    /// Return the Tuplets (might be empty).
     public func getTupletStack() -> [Tuplet] { tupletStack }
+
+    /// Remove the given tuplet. Throws if the tuplet is not in the tuplet stack.
+    @discardableResult
+    open func removeTuplet(_ tuplet: Tuplet) throws -> Self {
+        guard let i = tupletStack.firstIndex(where: { $0 === tuplet }) else {
+            throw VexError("BadArguments", "Tuplet is not found in this tickable")
+        }
+        tupletStack.remove(at: i)
+        let noteCount = tuplet.getNoteCount()
+        let notesOccupied = tuplet.getNotesOccupied()
+
+        // Revert old multiplier by inverting numerator & denominator:
+        // to remove a 3:2 tuplet, multiply the previous 2/3 by 3/2 to get 1/1.
+        applyTickMultiplier(noteCount, notesOccupied)
+        return self
+    }
+
+    /// Remove all tuplets from the tickable.
+    @discardableResult
+    open func clearTuplets() -> Self {
+        if tupletStack.isEmpty { return self }
+        tupletStack = []
+        tickMultiplier = Fraction(1, 1)
+        ticks = Fraction(Int(intrinsicTicks), 1)
+        voice?.invalidateTicks()
+        return self
+    }
 
     /// Reset the specific Tuplet (if this is not provided, all tuplets are reset).
     /// Remove any prior tuplets from the tick calculation and
     /// reset the intrinsic tick value.
+    @available(*, deprecated, message: "Use removeTuplet(_:) or clearTuplets().")
     @discardableResult
     open func resetTuplet(_ tuplet: Tuplet? = nil) -> Self {
         if let tuplet {
-            if let i = tupletStack.firstIndex(where: { $0 === tuplet }) {
-                tupletStack.remove(at: i)
-                let noteCount = tuplet.getNoteCount()
-                let notesOccupied = tuplet.getNotesOccupied()
-
-                // Revert old multiplier by inverting numerator & denom.:
-                applyTickMultiplier(noteCount, notesOccupied)
-            }
-            return self
-        }
-
-        while let last = tupletStack.popLast() {
-            let noteCount = last.getNoteCount()
-            let notesOccupied = last.getNotesOccupied()
-
-            // Revert old multiplier by inverting numerator & denom.:
-            applyTickMultiplier(noteCount, notesOccupied)
+            // resetTuplet fails silently if the tuplet is missing.
+            _ = try? removeTuplet(tuplet)
+        } else {
+            clearTuplets()
         }
         return self
     }
 
-    /// Attach to new tuplet.
+    /// Set the tuplet to the given Tuplet. Existing tuplets are cleared first. (VexFlow 5.1.0)
     @discardableResult
     open func setTuplet(_ tuplet: Tuplet?) -> Self {
-        if let tuplet {
-            tupletStack.append(tuplet)
-
-            let noteCount = tuplet.getNoteCount()
-            let notesOccupied = tuplet.getNotesOccupied()
-
-            applyTickMultiplier(notesOccupied, noteCount)
+        if !tupletStack.isEmpty {
+            clearTuplets()
         }
+        guard let tuplet else { return self }
+        return addTuplet(tuplet)
+    }
 
-        self.tuplet = tuplet
+    /// Add the given Tuplet to the tuplet stack without clearing it first.
+    @discardableResult
+    open func addTuplet(_ tuplet: Tuplet) -> Self {
+        if tupletStack.contains(where: { $0 === tuplet }) { return self }
+        tupletStack.append(tuplet)
+
+        let noteCount = tuplet.getNoteCount()
+        let notesOccupied = tuplet.getNotesOccupied()
+
+        // Apply the reciprocal of the tuplet. 3:2 multiplies by 2/3, etc.
+        applyTickMultiplier(notesOccupied, noteCount)
+        return self
+    }
+
+    /// Set all the tuplets of the tickable. The array is copied.
+    @discardableResult
+    open func setTupletStack(_ tupletStack: [Tuplet]) -> Self {
+        clearTuplets()
+        for tuplet in tupletStack {
+            addTuplet(tuplet)
+        }
         return self
     }
 
@@ -358,6 +393,7 @@ open class Tickable: VexElement {
     open func setIntrinsicTicks(_ intrinsicTicks: Double) {
         self.intrinsicTicks = intrinsicTicks
         ticks = tickMultiplier.clone().multiply(Int(intrinsicTicks))
+        voice?.invalidateTicks()
     }
 
     /// Get the tick multiplier.
@@ -367,13 +403,16 @@ open class Tickable: VexElement {
     open func applyTickMultiplier(_ numerator: Int, _ denominator: Int) {
         tickMultiplier.multiply(numerator, denominator)
         ticks = tickMultiplier.clone().multiply(Int(intrinsicTicks))
+        voice?.invalidateTicks()
     }
 
     /// Set the duration.
     open func setDuration(_ duration: Fraction) {
         let t = duration.numerator * (Tables.RESOLUTION / duration.denominator)
         ticks = tickMultiplier.clone().multiply(t)
-        intrinsicTicks = ticks.value()
+        // Keep the unscaled duration so later tuplets do not apply the ratio twice.
+        intrinsicTicks = Double(t)
+        voice?.invalidateTicks()
     }
 
     // MARK: - Modifier Context accessors

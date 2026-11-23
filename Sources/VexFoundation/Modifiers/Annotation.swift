@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/annotation.ts` (VexFlow 5.0.0).
+// Port of `src/annotation.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -55,6 +55,8 @@ public final class Annotation: Modifier {
 
     public var horizontalJustification: AnnotationHorizontalJustify
     public var verticalJustification: AnnotationVerticalJustify
+    /// Optional absolute baseline for lyrics aligned across a stave or system (VexFlow 5.1.0).
+    public private(set) var textBaseline: Double?
 
     // MARK: - Init
 
@@ -84,6 +86,21 @@ public final class Annotation: Modifier {
         if let value = Self.verticalJustifyString[just] {
             verticalJustification = value
         }
+        return self
+    }
+
+    /// Get the annotation's position relative to the note.
+    public func getVerticalJustification() -> AnnotationVerticalJustify {
+        verticalJustification
+    }
+
+    /// Use an absolute text baseline. Pass `nil` to restore automatic placement.
+    @discardableResult
+    public func setTextBaseline(_ y: Double?) throws -> Self {
+        if let y, !y.isFinite {
+            throw VexError("BadArgument", "Text baseline must be finite.")
+        }
+        textBaseline = y
         return self
     }
 
@@ -218,21 +235,13 @@ public final class Annotation: Modifier {
 
     // MARK: - Draw
 
-    /// Render text beside the note.
-    override public func draw() throws {
-        let ctx = try checkContext()
+    /// Compute horizontal placement after formatting, without drawing or changing position.
+    /// (VexFlow 5.1.0)
+    public func computeX() throws -> (x: Double, textWidth: Double) {
         let note = try checkAttachedNoteThrowing()
-        let stemDirection = note.hasStem() ? note.getStemDirection() : Stem.UP
         let start = note.getModifierStartXY(position: .above, index: index ?? 0)
-
-        setRendered()
-        _ = ctx.openGroup("annotation", getAttribute("id"))
-
         let textWidth = getWidth()
-        let textHeight = VexFont.convertSizeToPixelValue(fontInfo.size)
-        var x: Double
-        var y: Double
-
+        let x: Double
         switch horizontalJustification {
         case .left:
             x = start.x
@@ -243,6 +252,17 @@ public final class Annotation: Modifier {
         case .centerStem:
             x = ((note as? StemmableNote)?.getStemX() ?? start.x) - textWidth / 2
         }
+        return (x, textWidth)
+    }
+
+    /// Compute the text baseline after formatting. Subclasses may adjust this axis.
+    /// (VexFlow 5.1.0)
+    public func computeY() throws -> (y: Double, textHeight: Double) {
+        let textHeight = VexFont.convertSizeToPixelValue(fontInfo.size)
+        if let textBaseline { return (textBaseline, textHeight) }
+        let note = try checkAttachedNoteThrowing()
+        let stemDirection = note.hasStem() ? note.getStemDirection() : Stem.UP
+        var y: Double
 
         var stemExt: (topY: Double, baseY: Double) = (0, 0)
         var spacing: Double = 0
@@ -282,10 +302,22 @@ public final class Annotation: Modifier {
             let extents = note.getStemExtents()
             y = extents.topY + (extents.baseY - extents.topY) / 2 + textHeight / 2
         }
+        return (y, textHeight)
+    }
+
+    /// Render text beside the note, with the same positioning methods available to
+    /// callers before rendering.
+    override public func draw() throws {
+        let ctx = try checkContext()
+        let (x, _) = try computeX()
+        let (y, _) = try computeY()
+        setRendered()
+        _ = ctx.openGroup(groupClass("annotation"), getAttribute("id"))
 
         self.x = x
         self.y = y
         renderText(ctx, xPos: 0, yPos: 0)
+        drawPointerRect()
         ctx.closeGroup()
     }
 }

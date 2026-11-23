@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/gracenotegroup.ts` (VexFlow 5.0.0). `GraceNoteGroup` is used
+// Port of `src/gracenotegroup.ts` (VexFlow 5.1.0). `GraceNoteGroup` is used
 // to format and render grace notes.
 
 import Foundation
@@ -174,12 +174,33 @@ public final class GraceNoteGroup: Modifier {
 
     // MARK: - Draw
 
+    /// Position grace notes after the parent has been formatted and assigned a stave. (VexFlow 5.1.0)
+    private func positionGraceNotes() throws {
+        let note = try checkAttachedNoteThrowing()
+        _ = try note.checkStaveThrowing()
+        preFormat()
+        alignSubNotesWithNote(getGraceNotes(), note, position: position)
+        beams.forEach { $0.postFormat() }
+    }
+
+    /// Enclose the positioned grace notes (not the slur). Drawing is not required. (VexFlow 5.1.0)
+    override public func getBoundingBox() -> BoundingBox? {
+        if graceNotes.isEmpty { return super.getBoundingBox() }
+        guard (try? positionGraceNotes()) != nil else { return super.getBoundingBox() }
+        var boundingBox = graceNotes[0].getBoundingBox()
+        for graceNote in graceNotes.dropFirst() {
+            guard let bb = graceNote.getBoundingBox() else { continue }
+            if boundingBox == nil { boundingBox = bb } else { boundingBox?.mergeWith(bb) }
+        }
+        return boundingBox
+    }
+
     override public func draw() throws {
         let ctx = try checkContext()
         let note = try checkAttachedNoteThrowing()
         setRendered()
 
-        alignSubNotesWithNote(getGraceNotes(), note, position: position) // Modifier function
+        try positionGraceNotes()
 
         // Draw grace notes.
         for graceNote in graceNotes {

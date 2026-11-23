@@ -3,7 +3,7 @@
 // @author Joshua Koo / @zz85
 // @author @incompleteopus
 //
-// Port of `src/fraction.ts` (VexFlow 5.0.0).
+// Port of `src/fraction.ts` (VexFlow 5.1.0).
 //
 // Swift note: numerator and denominator are `Int` (upstream uses JS numbers).
 
@@ -65,6 +65,16 @@ public final class Fraction: @unchecked Sendable {
         self.numerator = numerator
         self.denominator = denominator
         return self
+    }
+
+    /// Set the numerator and denominator. Throws for a zero denominator (VexFlow 5.1.0
+    /// rejects invalid fractions; `Int` values are always finite).
+    @discardableResult
+    public func setThrowing(_ numerator: Int = 1, _ denominator: Int = 1) throws -> Fraction {
+        guard denominator != 0 else {
+            throw VexError("BadArgument", "Invalid fraction: \(numerator)/\(denominator)")
+        }
+        return set(numerator, denominator)
     }
 
     /// Return the floating-point value.

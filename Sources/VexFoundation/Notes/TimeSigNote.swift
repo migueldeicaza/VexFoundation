@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/timesignote.ts` (VexFlow 5.0.0).
+// Port of `src/timesignote.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -50,8 +50,9 @@ public final class TimeSigNote: Note {
         let ctx = try checkContext()
         setRendered()
 
-        _ = ctx.openGroup("timesignote", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("timesignote"), getAttribute("id"))
         timeSig.drawAt(ctx, stave, getAbsoluteX())
+        drawPointerRect()
         ctx.closeGroup()
     }
 }

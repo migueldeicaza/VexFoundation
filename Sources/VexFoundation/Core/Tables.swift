@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/tables.ts` (VexFlow 5.0.0).
+// Port of `src/tables.ts` (VexFlow 5.1.0).
 //
 // Swift notes:
 // - `GlyphProps` and `KeyProps` live in `Notes/Note.swift` (as upstream `note.ts`).
@@ -125,10 +125,14 @@ public enum Tables {
 
     // MARK: - Duration Tables
 
-    /// Map duration numbers to 'ticks', the unit of duration used throughout VexFlow.
+    /// Map duration numbers and strings to an integer number of ticks,
+    /// the unit of duration used throughout VexFlow.
     /// For example, a quarter note is 4, so it maps to RESOLUTION / 4 = 4096 ticks.
+    /// In some places ticks can also be Fractions (such as tuplets) but not in basic durations.
     public static let durations: [String: Int] = [
-        "1/2": RESOLUTION * 2,
+        "1/8": RESOLUTION * 8, // Maxima
+        "1/4": RESOLUTION * 4, // Longa
+        "1/2": RESOLUTION * 2, // Breve
         "1": RESOLUTION / 1,
         "2": RESOLUTION / 2,
         "4": RESOLUTION / 4,
@@ -138,10 +142,14 @@ public enum Tables {
         "64": RESOLUTION / 64,
         "128": RESOLUTION / 128,
         "256": RESOLUTION / 256,
+        "512": RESOLUTION / 512,
+        "1024": RESOLUTION / 1024,
     ]
 
     /// Duration aliases: shorthand names for durations.
     public static let durationAliases: [String: String] = [
+        "m": "1/8", // Maxima
+        "l": "1/4", // Longa
         "w": "1",
         "h": "2",
         "q": "4",
@@ -152,9 +160,10 @@ public enum Tables {
 
     /// Glyph properties per duration (upstream `Partial<GlyphProps>`: `codeHead` is empty).
     ///
-    /// 1/2, 1, 2, 4, 8, 16, 32, 64, 128 as upstream 5.0.0.
-    /// 4.x fix kept: a `256` entry (upstream 5.0.0 falls back to `4`).
+    /// 1/8, 1/4, 1/2, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024 (VexFlow 5.1.0).
     public static let durationCodes: [String: GlyphProps] = [
+        "1/8": GlyphProps(stem: true),
+        "1/4": GlyphProps(stem: false),
         "1/2": GlyphProps(stem: false),
         "1": GlyphProps(stem: false),
         "2": GlyphProps(stem: true),
@@ -164,14 +173,36 @@ public enum Tables {
         "32": GlyphProps(stemBeamExtension: 7.5, stem: true, codeFlagUp: Glyphs.flag32ndUp, beamCount: 3),
         "64": GlyphProps(stemBeamExtension: 15, stem: true, codeFlagUp: Glyphs.flag64thUp, beamCount: 4),
         "128": GlyphProps(stemBeamExtension: 22.5, stem: true, codeFlagUp: Glyphs.flag128thUp, beamCount: 5),
-        // 4.x-branch fix (a0c4d47a): 256th notes.
         "256": GlyphProps(stemBeamExtension: 25, stem: true, codeFlagUp: Glyphs.flag256thUp, beamCount: 6),
+        "512": GlyphProps(stemBeamExtension: 27.5, stem: true, codeFlagUp: Glyphs.flag512thUp, beamCount: 7),
+        "1024": GlyphProps(stemBeamExtension: 30, stem: true, codeFlagUp: Glyphs.flag1024thUp, beamCount: 8),
+    ]
+
+    /// SMuFL stem anchor Y offsets for noteheads, in staff spaces (positive = above notehead center).
+    /// Sourced from Bravura metadata `glyphsWithAnchors`: `stemUpSE[1]` (up) and `stemDownNW[1]` (down).
+    /// Used to position the stem base at the correct SMuFL attachment point rather than the
+    /// notehead center. (VexFlow 5.1.0)
+    public static let noteHeadStemYOffsets: [String: (up: Double, down: Double)] = [
+        Glyphs.noteheadXBlack: (up: 0.444, down: -0.44),
+        Glyphs.noteheadXHalf: (up: 0.412, down: -0.412),
     ]
 
     // MARK: - Key Signatures
 
+    /// `flats_0` … `flats_14` and `sharps_0` … `sharps_14` (VexFlow 5.1.0).
+    private static func generateKeySignatures() -> [String: KeySignatureSpec] {
+        var result: [String: KeySignatureSpec] = [:]
+        for i in 1...14 {
+            result["flats_\(i)"] = KeySignatureSpec(accidental: "b", num: i)
+            result["sharps_\(i)"] = KeySignatureSpec(accidental: "#", num: i)
+        }
+        result["flats_0"] = KeySignatureSpec(num: 0)
+        result["sharps_0"] = KeySignatureSpec(num: 0)
+        return result
+    }
+
     /// Key signature definitions: key name → accidental type + count.
-    public static let keySignatures: [String: KeySignatureSpec] = [
+    public static let keySignatures: [String: KeySignatureSpec] = generateKeySignatures().merging([
         "C": KeySignatureSpec(num: 0),
         "Am": KeySignatureSpec(num: 0),
         "F": KeySignatureSpec(accidental: "b", num: 1),
@@ -188,6 +219,8 @@ public enum Tables {
         "Ebm": KeySignatureSpec(accidental: "b", num: 6),
         "Cb": KeySignatureSpec(accidental: "b", num: 7),
         "Abm": KeySignatureSpec(accidental: "b", num: 7),
+        "Dbm": KeySignatureSpec(accidental: "b", num: 8),
+        "Gbm": KeySignatureSpec(accidental: "b", num: 9),
         "G": KeySignatureSpec(accidental: "#", num: 1),
         "Em": KeySignatureSpec(accidental: "#", num: 1),
         "D": KeySignatureSpec(accidental: "#", num: 2),
@@ -202,7 +235,10 @@ public enum Tables {
         "D#m": KeySignatureSpec(accidental: "#", num: 6),
         "C#": KeySignatureSpec(accidental: "#", num: 7),
         "A#m": KeySignatureSpec(accidental: "#", num: 7),
-    ]
+        "G#": KeySignatureSpec(accidental: "#", num: 8),
+        "D#": KeySignatureSpec(accidental: "#", num: 9),
+        "A#": KeySignatureSpec(accidental: "#", num: 10),
+    ]) { _, named in named }
 
     /// Staff line positions for flats (in order of key signature).
     public static let flatPositions: [Double] = [2, 0.5, 2.5, 1, 3, 1.5, 3.5]
@@ -218,11 +254,14 @@ public enum Tables {
             return []
         }
         let notes = accidental == "b" ? flatPositions : sharpPositions
-        var accList: [(type: String, line: Double)] = []
-        for i in 0..<keySpec.num {
-            accList.append((type: accidental, line: notes[i]))
-        }
-        return accList
+        // More than 7 accidentals: the first (num - 7) positions take double accidentals.
+        let accidentalCount = min(keySpec.num, 7)
+        let doubleAccidentalCount = max(keySpec.num - 7, 0)
+        let regular = notes[min(doubleAccidentalCount, accidentalCount)..<accidentalCount]
+            .map { (type: accidental, line: $0) }
+        let doubles = notes[0..<min(doubleAccidentalCount, notes.count)]
+            .map { (type: accidental + accidental, line: $0) }
+        return regular + doubles
     }
 
     public static func getKeySignatures() -> [String: KeySignatureSpec] {
@@ -857,6 +896,8 @@ public enum Tables {
             }
         case "R":
             switch duration {
+            case "1/8": return Glyphs.restMaxima
+            case "1/4": return Glyphs.restLonga
             case "1/2": return Glyphs.restDoubleWhole
             case "1": return Glyphs.restWhole
             case "2": return Glyphs.restHalf
@@ -866,8 +907,9 @@ public enum Tables {
             case "32": return Glyphs.rest32nd
             case "64": return Glyphs.rest64th
             case "128": return Glyphs.rest128th
-            // 4.x-branch fix (a0c4d47a): 256th rest.
             case "256": return Glyphs.rest256th
+            case "512": return Glyphs.rest512th
+            case "1024": return Glyphs.rest1024th
             default: break
             }
         case "S":
@@ -879,6 +921,8 @@ public enum Tables {
             }
         default:
             switch duration {
+            case "1/8": return Glyphs.mensuralNoteheadMaximaBlack
+            case "1/4": return Glyphs.mensuralNoteheadLongaBlack
             case "1/2": return Glyphs.noteheadDoubleWhole
             case "1": return Glyphs.noteheadWhole
             case "2": return Glyphs.noteheadHalf

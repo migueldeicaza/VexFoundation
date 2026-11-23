@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // Co-author: Benjamin W. Bohl
 //
-// Port of `src/clef.ts` (VexFlow 5.0.0).
+// Port of `src/clef.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -153,10 +153,11 @@ public final class Clef: StaveModifier {
         let ctx = try stave.checkContext()
         setRendered()
 
-        _ = ctx.openGroup("clef", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("clef"), getAttribute("id"))
 
         y = stave.getYForLine(line)
         renderText(ctx, xPos: 0, yPos: 0)
+        drawPointerRect()
         ctx.closeGroup()
     }
 }

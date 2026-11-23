@@ -310,4 +310,54 @@ extension UpstreamSVGParityTests {
             try beam.draw()
         }
     }
+
+    // VexFlow 5.1.0: Stroke.getBoundingBox(). Upstream renamed the stroke cases
+    // ("Strokes - Brush/Roll/Rasgueado" became "Brush/Roll/Rasgueado").
+    @Test("Strokes.Brush_Roll_Rasgueado___bounding_box")
+    func strokesBrushRollRasgueadoBoundingBoxMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Strokes", test: "Brush_Roll_Rasgueado___bounding_box", width: 600, height: 200) {
+            factory,
+            context in
+            let score = factory.EasyScore()
+
+            let stave1 = factory.Stave(width: 250).setEndBarType(.double)
+            let notes1 = score.notes("(a3 e4 a4)/4, (c4 e4 g4), (c4 e4 g4), (c4 e4 g4)", options: ["stem": "up"])
+            _ = notes1[0].addModifier(Stroke(type: .brushDown), index: 0)
+            _ = notes1[1]
+                .addModifier(Stroke(type: .brushUp), index: 0)
+                .addModifier(factory.Accidental(type: .sharp), index: 1)
+                .addModifier(factory.Accidental(type: .sharp), index: 2)
+                .addModifier(factory.Accidental(type: .sharp), index: 0)
+            _ = notes1[2].addModifier(Stroke(type: .brushDown), index: 0)
+            _ = notes1[3].addModifier(Stroke(type: .brushUp), index: 0)
+            let voice1 = score.voice(notes1)
+            _ = factory.Formatter().joinVoices([voice1]).formatToStave([voice1], stave: stave1)
+
+            let stave2 = factory
+                .Stave(x: stave1.getWidth() + stave1.getX(), y: stave1.getY(), width: 300)
+                .setEndBarType(.double)
+            let notes2 = score.notes("(c4 d4 g4)/4, (c4 d4 g4), (c4 d4 g4), (c4 d4 a4)", options: ["stem": "up"])
+            _ = notes2[0].addModifier(Stroke(type: .rollDown), index: 0)
+            _ = notes2[1].addModifier(Stroke(type: .rollUp), index: 0)
+            _ = notes2[2].addModifier(Stroke(type: .rasgueadoDown), index: 0)
+            _ = notes2[3]
+                .addModifier(Stroke(type: .rasgueadoUp), index: 0)
+                .addModifier(factory.Accidental(type: .doubleFlat), index: 0)
+                .addModifier(factory.Accidental(type: .doubleFlat), index: 1)
+                .addModifier(factory.Accidental(type: .doubleFlat), index: 2)
+            let voice2 = score.voice(notes2)
+            _ = factory.Formatter().joinVoices([voice2]).formatToStave([voice2], stave: stave2)
+
+            try factory.draw()
+
+            // Upstream adds each rect to the current path (no beginPath) and strokes it.
+            for note in notes1 + notes2 {
+                for stroke in note.getModifiersByType(Stroke.category) {
+                    guard let bb = stroke.getBoundingBox() else { continue }
+                    context.rect(bb.x, bb.y, bb.w, bb.h)
+                    context.stroke()
+                }
+            }
+        }
+    }
 }

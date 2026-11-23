@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Larry Kuhns 2011
 //
-// Port of `src/stavebarline.ts` (VexFlow 5.0.0).
+// Port of `src/stavebarline.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -19,6 +19,13 @@ public enum BarlineType: Int, Sendable {
     case none = 7
     /// VexFlowPatch: double heavy barline
     case doubleHeavy = 8
+}
+
+/// Optional brackets ("wings") on repeat bar lines (VexFlow 5.1.0).
+public enum RepeatBracketType: Int, Sendable {
+    case none = 0
+    case straight = 1
+    case curved = 2
 }
 
 // MARK: - Barline
@@ -49,6 +56,7 @@ public final class Barline: StaveModifier {
 
     public private(set) var thickness: Double
     private var type: BarlineType = .single
+    private var repeatBrackets: RepeatBracketType = .none
 
     // MARK: - Init
 
@@ -130,7 +138,7 @@ public final class Barline: StaveModifier {
         let ctx = try stave.checkContext()
         setRendered()
 
-        _ = ctx.openGroup("stavebarline", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("stavebarline"), getAttribute("id"))
         switch type {
         case .single:
             try drawVerticalBar(stave, x, false)
@@ -157,6 +165,7 @@ public final class Barline: StaveModifier {
             // Default is NONE, so nothing to draw
             break
         }
+        drawPointerRect()
         ctx.closeGroup()
     }
 
@@ -187,6 +196,58 @@ public final class Barline: StaveModifier {
         staveCtx.fillRect(x - 2, topY, 3, botY - topY)
     }
 
+    /// Set the repeat bracket style for repeat bar lines.
+    @discardableResult
+    public func setRepeatBracket(_ value: RepeatBracketType) -> Self {
+        repeatBrackets = value
+        return self
+    }
+
+    public func getRepeatBrackets() -> RepeatBracketType { repeatBrackets }
+
+    /// JavaScript `Math.round`.
+    private static func jsRound(_ v: Double) -> Double { (v + 0.5).rounded(.down) }
+
+    public func drawStraightBrackets(
+        _ stave: Stave, _ startX: Double, _ startY: Double, _ yDirection: Double, _ xDirection: Double
+    ) throws {
+        let staveCtx = try stave.checkContext()
+        let rptBracketW = Self.jsRound(1.5 * Tables.STAVE_LINE_DISTANCE) * xDirection
+        let rptBracketH = Self.jsRound(0.6 * Tables.STAVE_LINE_DISTANCE)
+        let rptBracketMH = Self.jsRound(rptBracketH / 2)
+        let brY = startY + yDirection
+        let brX = xDirection > 0 ? startX - 2 : startX
+        staveCtx.moveTo(brX, brY)
+        staveCtx.lineTo(brX, brY + rptBracketH * (-1 * yDirection))
+        staveCtx.lineTo(brX + rptBracketW, brY + rptBracketH * yDirection)
+        staveCtx.lineTo(brX + rptBracketW, brY + yDirection * (rptBracketH + rptBracketMH))
+        staveCtx.lineTo(brX, brY)
+        staveCtx.fill()
+    }
+
+    public func drawCurvedBrackets(
+        _ stave: Stave, _ startX: Double, _ startY: Double, _ yDirection: Double, _ xDirection: Double
+    ) throws {
+        let staveCtx = try stave.checkContext()
+        let rptBracketW = Self.jsRound(1.5 * Tables.STAVE_LINE_DISTANCE) * xDirection
+        let rptBracketH = Self.jsRound(0.6 * Tables.STAVE_LINE_DISTANCE)
+        let rptBracketMH = Self.jsRound(rptBracketH / 2)
+        let brY = startY + yDirection
+        let brX = xDirection > 0 ? startX - 2 : startX
+
+        staveCtx.moveTo(brX, brY)
+        staveCtx.lineTo(brX, brY + rptBracketH * (-1 * yDirection))
+        staveCtx.quadraticCurveTo(
+            brX + rptBracketW / 2,
+            brY + rptBracketH * (-1 * yDirection),
+            brX + rptBracketW,
+            brY + rptBracketH * yDirection
+        )
+        staveCtx.lineTo(brX + rptBracketW, brY + yDirection * (rptBracketH + rptBracketMH))
+        staveCtx.quadraticCurveTo(brX + rptBracketW / 2, brY, brX, brY)
+        staveCtx.fill()
+    }
+
     public func drawRepeatBar(_ stave: Stave, _ x: Double, _ begin: Bool) throws {
         let staveCtx = try stave.checkContext()
 
@@ -198,8 +259,16 @@ public final class Barline: StaveModifier {
             xShift = -5
         }
 
+        let xBracketDir: Double = begin ? 1 : -1
         staveCtx.fillRect(x + xShift, topY, 1, botY - topY)
         staveCtx.fillRect(x - 2, topY, 3, botY - topY)
+        if repeatBrackets == .curved {
+            try drawCurvedBrackets(stave, x, topY, -1, xBracketDir)
+            try drawCurvedBrackets(stave, x, botY, 1, xBracketDir)
+        } else if repeatBrackets == .straight {
+            try drawStraightBrackets(stave, x, topY, -1, xBracketDir)
+            try drawStraightBrackets(stave, x, botY, 1, xBracketDir)
+        }
 
         let dotRadius: Double = 2
 

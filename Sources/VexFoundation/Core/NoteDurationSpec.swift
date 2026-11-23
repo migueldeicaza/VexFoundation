@@ -5,6 +5,8 @@ import Foundation
 
 /// Canonical note values used for rhythmic duration.
 public enum NoteValue: String, CaseIterable, Sendable, Codable {
+    case maxima = "1/8"
+    case longa = "1/4"
     case doubleWhole = "1/2"
     case whole = "1"
     case half = "2"
@@ -15,8 +17,12 @@ public enum NoteValue: String, CaseIterable, Sendable, Codable {
     case sixtyFourth = "64"
     case oneTwentyEighth = "128"
     case twoFiftySixth = "256"
+    case fiveTwelfth = "512"
+    case oneThousandTwentyFourth = "1024"
 
     private static let aliases: [String: NoteValue] = [
+        "m": .maxima,
+        "l": .longa,
         "w": .whole,
         "h": .half,
         "q": .quarter,
@@ -128,7 +134,7 @@ public struct NoteDurationSpec: Equatable, Hashable, Sendable, Codable {
         let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { throw NoteDurationParseError.emptyInput }
 
-        let pattern = #"^([0-9]+(?:\/[0-9]+)?|[whqbWHQB])(d*)([a-zA-Z]*)$"#
+        let pattern = #"^([0-9]+(?:\/[0-9]+)?|[whqbmlWHQBML])(d*)([a-zA-Z]*)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern),
               let match = regex.firstMatch(
                   in: normalized,

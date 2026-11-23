@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/textdynamics.ts` (VexFlow 5.0.0).
+// Port of `src/textdynamics.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -111,6 +111,20 @@ public final class TextDynamics: Note {
 
     override public func preFormat() {
         _ = try? preFormatThrowing()
+    }
+
+    // MARK: - Bounding box
+
+    /// Measure at the same page coordinates used by `draw()`, after voice formatting. (VexFlow 5.1.0)
+    override public func getBoundingBox() -> BoundingBox? {
+        guard let stave = getStave() else { return nil }
+        let metrics = getTextMetrics()
+        return BoundingBox(
+            x: getAbsoluteX() + x + xShift,
+            y: stave.getYForLine(line - 3) + y + yShift - metrics.actualBoundingBoxAscent,
+            w: getWidth(),
+            h: getHeight()
+        )
     }
 
     // MARK: - Draw

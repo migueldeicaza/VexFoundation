@@ -24,6 +24,15 @@ public protocol RenderContext: AnyObject {
     /// Clear the entire rendering surface.
     func clear()
 
+    // MARK: - Score defaults (VexFlow 5.1.0)
+
+    /// Set foreground defaults supplied by a score (`fillStyle`, `strokeStyle`).
+    /// Explicit element colors take precedence. `Factory` scopes these to a single draw.
+    @discardableResult func setDefaultStyle(_ style: ElementStyle) -> Self
+
+    /// Return the current score defaults (only `fillStyle` and `strokeStyle` are used).
+    func getDefaultStyle() -> ElementStyle
+
     /// Save the current graphics state (colors, line width, font, etc.) onto a stack.
     @discardableResult func save() -> Self
 
@@ -195,6 +204,17 @@ extension RenderContext {
         return restore()
     }
 
+    /// Default storage for back ends that do not store score defaults themselves.
+    @discardableResult
+    public func setDefaultStyle(_ style: ElementStyle) -> Self {
+        RenderContextDefaultStyles.set(ElementStyle(fillStyle: style.fillStyle, strokeStyle: style.strokeStyle), for: self)
+        return self
+    }
+
+    public func getDefaultStyle() -> ElementStyle {
+        RenderContextDefaultStyles.get(for: self)
+    }
+
     /// Default: no pointer rectangle.
     @discardableResult
     public func pointerRect(_ x: Double, _ y: Double, _ width: Double, _ height: Double) -> Self { self }
@@ -204,6 +224,23 @@ extension RenderContext {
 
     /// Default: rotation is not supported.
     public func closeRotation() {}
+}
+
+/// Side table for `RenderContext` conformers that do not store the score defaults.
+private enum RenderContextDefaultStyles {
+    private final class Box { var style: ElementStyle; init(_ s: ElementStyle) { style = s } }
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static let table = NSMapTable<AnyObject, Box>.weakToStrongObjects()
+
+    static func set(_ style: ElementStyle, for ctx: AnyObject) {
+        lock.lock(); defer { lock.unlock() }
+        table.setObject(Box(style), forKey: ctx)
+    }
+
+    static func get(for ctx: AnyObject) -> ElementStyle {
+        lock.lock(); defer { lock.unlock() }
+        return table.object(forKey: ctx)?.style ?? ElementStyle()
+    }
 }
 
 // MARK: - Debug Helper

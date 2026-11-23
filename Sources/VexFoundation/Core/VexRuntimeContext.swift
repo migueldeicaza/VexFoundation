@@ -55,10 +55,30 @@ public final class VexRuntimeContext {
     }
 
     /// Set the music and text font stack, e.g. `setFonts("Bravura", "Academico")`.
-    /// Port of `VexFlow.setFonts()`.
+    /// Port of `VexFlow.setFonts()` (VexFlow 5.1.0): the known text faces in the list
+    /// also become the text-font stack (see `setTextFonts(_:)`).
     public func setFonts(_ fontNames: [String]) {
-        metrics.set("fontFamily", fontNames.joined(separator: ","))
+        let names = fontNames
+            .flatMap { $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } }
+            .filter { !$0.isEmpty }
+        metrics.set("fontFamily", names.joined(separator: ","))
+        let textNames = names.filter { VexFont.TEXT_FONT_NAMES.contains($0) }
+        // Music-only stacks retain a usable text face. Never reverse a music fallback stack.
+        setTextFonts(textNames.isEmpty ? ["Academico"] : textNames)
+    }
+
+    /// Choose text faces independently. Music fonts remain available for mixed glyph strings.
+    /// Port of `VexFlow.setTextFonts()` (VexFlow 5.1.0).
+    public func setTextFonts(_ fontNames: [String]) {
+        var seen = Set<String>()
+        let unique = (fontNames + getFonts()).filter { seen.insert($0).inserted }
+        metrics.set("textFontFamily", unique.joined(separator: ","))
         metrics.clear()
+    }
+
+    /// The text-first font stack used by new text elements. Port of `VexFlow.getTextFonts()`.
+    public func getTextFonts() -> [String] {
+        (metrics.get("textFontFamily") as? String ?? "").split(separator: ",").map(String.init)
     }
 
     /// The current font family names. Port of `VexFlow.getFonts()`.

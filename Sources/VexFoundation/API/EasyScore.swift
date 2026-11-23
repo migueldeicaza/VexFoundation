@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/easyscore.ts` (VexFlow 5.0.0).
+// Port of `src/easyscore.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -252,6 +252,15 @@ public final class Builder {
         rollingDuration = .eighth
         rollingDurationToken = "8"
         lastError = nil
+        // Initial duration for notes that omit one (VexFlow 5.1.0 `BuilderOptions.duration`).
+        if let duration = options?["duration"] {
+            if let parsed = try? NoteDurationSpec(parsing: duration) {
+                rollingDuration = parsed
+                rollingDurationToken = Note.durationToken(of: duration)
+            } else {
+                lastError = .invalidDuration(duration)
+            }
+        }
         resetPiece()
     }
 
@@ -655,6 +664,57 @@ public final class EasyScore {
             for (k, v) in options { mergedOptions[k] = v }
             _ = try parseThrowing(line, options: mergedOptions)
             return builder.getElements().notes
+        }
+    }
+
+    /// Parse bar-separated measures. Durations carry across bars; `notes()` is unchanged.
+    /// A bar may have adjacent commas. Quoted option values may contain literal bars.
+    /// Empty measures and invalid notation throw, rather than returning partial music.
+    /// Pass `options["duration"]` to set the initial duration. (VexFlow 5.1.0)
+    public func measures(_ line: String, options: [String: String] = [:]) throws -> [[StemmableNote]] {
+        var parts: [String] = []
+        var current = ""
+        var quote: Character?
+        for char in line {
+            if let q = quote {
+                if char == q { quote = nil }
+            } else if char == "\"" || char == "'" {
+                quote = char
+            } else if char == "|" {
+                parts.append(current)
+                current = ""
+                continue
+            }
+            current.append(char)
+        }
+        parts.append(current)
+        let measures = try parts.enumerated().map { index, part -> String in
+            var text = part.trimmingCharacters(in: .whitespacesAndNewlines)
+            if index > 0, text.hasPrefix(",") {
+                text = String(text.dropFirst()).trimmingCharacters(in: .whitespaces)
+            }
+            if index < parts.count - 1, text.hasSuffix(",") {
+                text = String(text.dropLast())
+                while let last = text.last, last.isWhitespace { text.removeLast() }
+            }
+            if text.isEmpty {
+                throw VexError("BadArguments", "Empty EasyScore measure. Use an explicit rest.")
+            }
+            return text
+        }
+        var duration = options["duration"]
+        return try VexRuntime.withContext(runtimeContext) {
+            try measures.map { text in
+                var mergedOptions = ["clef": defaults.clef.rawValue, "stem": defaults.stem]
+                for (k, v) in options { mergedOptions[k] = v }
+                mergedOptions["duration"] = duration
+                let result = parse(text, options: mergedOptions)
+                if !result.success {
+                    throw VexError("BadArguments", "Invalid EasyScore measure: \(text)")
+                }
+                duration = builder.rollingDurationToken ?? builder.rollingDuration.value.rawValue
+                return builder.getElements().notes
+            }
         }
     }
 

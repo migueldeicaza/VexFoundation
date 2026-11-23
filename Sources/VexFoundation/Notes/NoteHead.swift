@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/notehead.ts` (VexFlow 5.0.0).
+// Port of `src/notehead.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -305,7 +305,7 @@ public final class NoteHead: Note {
     override public func draw() throws {
         let ctx = try checkContext()
         setRendered()
-        _ = ctx.openGroup("notehead", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("notehead"), getAttribute("id"))
 
         x = getAbsoluteX()
 
@@ -330,6 +330,7 @@ public final class NoteHead: Note {
 
         renderText(ctx, xPos: xPatch, yPos: yPatch)
         try (parent as? StaveNote)?.drawModifiers(self)
+        drawPointerRect()
         ctx.closeGroup()
     }
 }

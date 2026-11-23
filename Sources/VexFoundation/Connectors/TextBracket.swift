@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Cyril Silverman
 //
-// Port of `src/textbracket.ts` (VexFlow 5.0.0).
+// Port of `src/textbracket.ts` (VexFlow 5.1.0).
 //
 // This file implements `TextBrackets` which extend between two notes.
 // The octave transposition markings (8va, 8vb, 15va, 15vb) can be created
@@ -22,7 +22,8 @@ public enum TextBracketPosition: Int, Sendable {
 public struct TextBracketRenderOptions {
     public var dashed: Bool = true
     public var dash: [Double] = [5]
-    public var color: String = "black"
+    /// Explicit color. `nil` (the 5.1.0 default) inherits the score and element styles.
+    public var color: String?
     public var lineWidth: Double = 1
     public var showBracket: Bool = true
     public var bracketHeight: Double = 8
@@ -32,7 +33,7 @@ public struct TextBracketRenderOptions {
     public init(
         dashed: Bool = true,
         dash: [Double] = [5],
-        color: String = "black",
+        color: String? = nil,
         lineWidth: Double = 1,
         showBracket: Bool = true,
         bracketHeight: Double = 8,
@@ -131,7 +132,7 @@ public final class TextBracket: VexElement {
     // MARK: - Style
 
     /// Apply the text bracket styling to the provided context.
-    /// Upstream overrides `Element.applyStyle(ctx)` and ignores the element style.
+    /// Upstream overrides `Element.applyStyle(ctx)`; 5.1.0 then applies the element style.
     @discardableResult
     override public func applyStyle(
         context ctx: RenderContext? = nil,
@@ -145,11 +146,12 @@ public final class TextBracket: VexElement {
 
         guard let ctx = ctx ?? getContext() else { return self }
         let options = renderOptions
-        ctx.setStrokeStyle(options.color)
-        ctx.setFillStyle(options.color)
+        if let color = options.color {
+            ctx.setStrokeStyle(color)
+            ctx.setFillStyle(color)
+        }
         ctx.setLineWidth(options.lineWidth)
-
-        return self
+        return super.applyStyle(context: ctx)
     }
 
     // MARK: - Setters

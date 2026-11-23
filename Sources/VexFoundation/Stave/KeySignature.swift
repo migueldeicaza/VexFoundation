@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Cyril Silverman
 //
-// Port of `src/keysignature.ts` (VexFlow 5.0.0).
+// Port of `src/keysignature.ts` (VexFlow 5.1.0).
 //
 // This file implements key signatures. A key signature sits on a stave
 // and indicates the notes with implicit accidentals.
@@ -288,10 +288,11 @@ public final class KeySignature: StaveModifier {
         if !formatted { format() }
         setRendered()
 
-        _ = ctx.openGroup("keysignature", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("keysignature"), getAttribute("id"))
         for glyph in children {
             glyph.renderText(ctx, xPos: x, yPos: 0)
         }
+        drawPointerRect()
         ctx.closeGroup()
     }
 }

@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Aaron (@AaronDavidNewman)
 //
-// Port of `src/chordsymbol.ts` (VexFlow 5.0.0).
+// Port of `src/chordsymbol.ts` (VexFlow 5.1.0).
 //
 // This implements chord symbols above/below a chord.
 // Chord symbols are modifiers that can be attached to notes.
@@ -438,7 +438,7 @@ public final class ChordSymbol: Modifier {
         let note = try checkAttachedNoteThrowing()
         setRendered()
 
-        _ = ctx.openGroup("chordsymbol", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("chordsymbol"), getAttribute("id"))
 
         let start = note.getModifierStartXY(position: .above, index: index ?? 0)
         ctx.setFont(fontInfo)
@@ -487,6 +487,7 @@ public final class ChordSymbol: Modifier {
             symbol.setY(y)
             symbol.renderText(ctx, xPos: 0, yPos: 0)
         }
+        drawPointerRect()
         ctx.closeGroup()
     }
 

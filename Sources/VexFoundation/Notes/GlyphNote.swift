@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/glyphnote.ts` (VexFlow 5.0.0).
+// Port of `src/glyphnote.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -72,12 +72,13 @@ open class GlyphNote: Note {
         let stave = checkStave()
         let ctx = try stave.checkContext()
         setRendered()
-        _ = ctx.openGroup("glyphNote", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("glyphNote"), getAttribute("id"))
 
         x = isCenterAligned() ? getAbsoluteX() - getWidth() / 2 : getAbsoluteX()
         y = stave.getYForLine(options.line)
         renderText(ctx, xPos: 0, yPos: 0)
         try drawModifiers()
+        drawPointerRect()
         ctx.closeGroup()
     }
 }

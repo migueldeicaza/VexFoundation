@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Larry Kuhns
 //
-// Port of `src/stringnumber.ts` (VexFlow 5.0.0). The `StringNumber` class
+// Port of `src/stringnumber.ts` (VexFlow 5.1.0). The `StringNumber` class
 // renders string number annotations beside notes.
 
 import Foundation
@@ -335,7 +335,6 @@ public final class StringNumber: Modifier {
         // Only StemmableNote objects have getStemX().
         if let lastNote = lastNote as? StemmableNote {
             let end = lastNote.getStemX() - note.getX() + 5
-            ctx.setStrokeStyle("#000000")
             ctx.setLineCap(.round)
             ctx.setLineWidth(0.6)
             if dashed {

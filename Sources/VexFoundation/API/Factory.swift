@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Mohit Cheppudira
 //
-// Port of `src/factory.ts` (VexFlow 5.0.0).
+// Port of `src/factory.ts` (VexFlow 5.1.0).
 //
 // Local changes (see docs/local-deviations.md):
 // - Every object is created inside the factory runtime context.
@@ -58,6 +58,10 @@ public final class Factory {
     private var voices: [Voice] = []
     private var renderQ: [VexElement] = []
     private var systems: [System] = []
+    private var sheets: [Sheet] = []
+    private var retained = false
+    /// Foreground defaults (score colors). They survive `reset()`, like renderer options.
+    private var scoreStyle = ElementStyle()
 
     // MARK: - Init
 
@@ -72,6 +76,8 @@ public final class Factory {
     // MARK: - Reset
 
     public func reset() {
+        sheets = []
+        retained = false
         renderQ = []
         systems = []
         staves = []
@@ -625,6 +631,26 @@ public final class Factory {
         return system
     }
 
+    // MARK: - Score style and Sheet (VexFlow 5.1.0)
+
+    /// Set score colors (`fillStyle`, `strokeStyle`). Explicit element styles take precedence.
+    @discardableResult
+    public func setStyle(_ style: ElementStyle) -> Self {
+        scoreStyle = ElementStyle(fillStyle: style.fillStyle, strokeStyle: style.strokeStyle)
+        return self
+    }
+
+    /// The score colors set with `setStyle(_:)`.
+    public func getStyle() -> ElementStyle { scoreStyle }
+
+    /// Create an optional continuous sheet from measure-sized Systems.
+    @discardableResult
+    public func Sheet(options: SheetOptions = SheetOptions()) throws -> VexFoundation.Sheet {
+        let sheet = try VexFoundation.Sheet(factory: self, options: options)
+        sheets.append(sheet)
+        return sheet
+    }
+
     // MARK: - EasyScore
 
     public func EasyScore(options: EasyScoreOptions = EasyScoreOptions()) -> VexFoundation.EasyScore {
@@ -683,32 +709,59 @@ public final class Factory {
     }
 
     /// Render the score.
-    public func draw() throws {
+    ///
+    /// With `retain: true`, the score is kept after drawing, so it can be drawn again
+    /// (for example after `Sheet.setWidth(_:)` or `setStyle(_:)`). (VexFlow 5.1.0)
+    public func draw(retain: Bool = false) throws {
         guard let ctx = context else {
             throw FactoryError.missingRenderContext
         }
 
+        for sheet in sheets {
+            try sheet.format()
+        }
+        let managed = Set(sheets.flatMap { $0.getSystems() }.map { ObjectIdentifier($0) })
         // Local: skip the format pass when `formatSystems()` already ran.
         if !systemsFormatted {
-            for system in systems {
+            for system in systems where !managed.contains(ObjectIdentifier(system)) {
                 system.setContext(ctx).format()
             }
         }
-        for stave in staves {
-            try stave.setContext(ctx).drawWithStyle()
+        let defaults = ctx.getDefaultStyle()
+        ctx.save()
+        ctx.setDefaultStyle(scoreStyle)
+        if let fill = scoreStyle.fillStyle { ctx.setFillStyle(fill) }
+        if let stroke = scoreStyle.strokeStyle { ctx.setStrokeStyle(stroke) }
+        // Clear draw flags so retained scores redraw beams and other queued elements.
+        if retained {
+            renderQ.forEach { $0.setRendered(false) }
         }
-        for voice in voices {
-            try voice.setContext(ctx).drawWithStyle()
-        }
-        for element in renderQ {
-            if !element.isRendered() {
-                try element.setContext(ctx).drawWithStyle()
+        do {
+            defer {
+                ctx.setDefaultStyle(defaults)
+                ctx.restore()
+            }
+            for stave in staves {
+                try stave.setContext(ctx).drawWithStyle()
+            }
+            for voice in voices {
+                try voice.setContext(ctx).drawWithStyle()
+            }
+            for element in renderQ {
+                if !element.isRendered() {
+                    try element.setContext(ctx).drawWithStyle()
+                }
+            }
+            for system in systems {
+                try system.setContext(ctx).drawWithStyle()
             }
         }
-        for system in systems {
-            try system.setContext(ctx).drawWithStyle()
+        retained = retain
+        if retain {
+            systemsFormatted = false
+        } else {
+            reset()
         }
-        reset()
     }
 }
 

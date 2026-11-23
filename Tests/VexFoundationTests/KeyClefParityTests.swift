@@ -47,7 +47,11 @@ struct KeyClefParityTests {
     }
 
     @Test func keySignatureParserParity() {
-        let invalidSpecs = ["asdf", "D!", "E#", "D#", "#", "b", "Kb", "Fb", "Dbm", "B#m"]
+        // VexFlow 5.1.0: "D#" and "Dbm" are valid; "flats_N" / "sharps_N" (N = 0...14) are added.
+        let invalidSpecs = [
+            "asdf", "D!", "E#", "#", "b", "Kb", "Fb", "B#m",
+            "flats_15", "sharps_16", "flat_1", "sharps_-1", "sharp_0", "sharps_B", "flats_c",
+        ]
         for spec in invalidSpecs {
             do {
                 _ = try Tables.keySignature(spec)
@@ -57,7 +61,10 @@ struct KeyClefParityTests {
             }
         }
 
-        let validSpecs = ["B", "C", "Fm", "Ab", "Abm", "F#", "G#m"]
+        let validSpecs = [
+            "B", "C", "Fm", "Ab", "Abm", "F#", "G#m",
+            "flats_8", "sharps_14", "flats_10", "sharps_8", "flats_0", "sharps_0",
+        ]
         for spec in validSpecs {
             #expect((try? Tables.keySignature(spec)) != nil)
         }

@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stave.ts` (VexFlow 5.0.0).
+// Port of `src/stave.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -158,7 +158,7 @@ open class Stave: VexElement {
         self.startX = x + 5
         self.endX = x + width
         self.options = options ?? StaveOptions()
-        self.defaultLedgerLineStyle = ElementStyle(strokeStyle: "#444", lineWidth: 2)
+        self.defaultLedgerLineStyle = ElementStyle(lineWidth: 2)
         super.init(category: nil)
 
         self.x = x
@@ -186,8 +186,18 @@ open class Stave: VexElement {
     }
 
     /// Get default style for ledger lines.
+    /// Without score colors, ledger lines fall back to `#444`. (VexFlow 5.1.0)
     public func getDefaultLedgerLineStyle() -> ElementStyle {
-        var s = getStyle() ?? ElementStyle()
+        let themed = getContext()?.getDefaultStyle().strokeStyle != nil
+        var s = themed ? ElementStyle() : ElementStyle(strokeStyle: "#444")
+        if styleExplicit, let own = getStyle() {
+            if let v = own.shadowColor { s.shadowColor = v }
+            if let v = own.shadowBlur { s.shadowBlur = v }
+            if let v = own.fillStyle { s.fillStyle = v }
+            if let v = own.strokeStyle { s.strokeStyle = v }
+            if let v = own.lineWidth { s.lineWidth = v }
+            if let v = own.lineDash { s.lineDash = v }
+        }
         let d = defaultLedgerLineStyle
         if let v = d.shadowColor { s.shadowColor = v }
         if let v = d.shadowBlur { s.shadowBlur = v }
@@ -544,11 +554,12 @@ open class Stave: VexElement {
     // MARK: - Barline Functions
 
     @discardableResult
-    public func setBegBarType(_ type: BarlineType) -> Self {
+    public func setBegBarType(_ type: BarlineType, repeatBracket: RepeatBracketType = .none) -> Self {
         // Only valid bar types at beginning of stave is none, single or begin repeat
         if type == .single || type == .repeatBegin || type == .none {
             if let barline = modifiers.first as? Barline {
                 barline.setType(type)
+                barline.setRepeatBracket(repeatBracket)
             }
             formatted = false
         }
@@ -556,11 +567,12 @@ open class Stave: VexElement {
     }
 
     @discardableResult
-    public func setEndBarType(_ type: BarlineType) -> Self {
+    public func setEndBarType(_ type: BarlineType, repeatBracket: RepeatBracketType = .none) -> Self {
         // Repeat end not valid at end of stave
         if type != .repeatBegin {
             if modifiers.count > 1, let barline = modifiers[1] as? Barline {
                 barline.setType(type)
+                barline.setRepeatBracket(repeatBracket)
             }
             formatted = false
         }
@@ -851,7 +863,7 @@ open class Stave: VexElement {
         let ctx = try checkContext()
         setRendered()
 
-        _ = ctx.openGroup("stave", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("stave"), getAttribute("id"))
         if !formatted { format() }
 
         let numLines = options.numLines
@@ -874,6 +886,7 @@ open class Stave: VexElement {
             }
         }
 
+        drawPointerRect()
         ctx.closeGroup()
 
         // Draw the modifiers (bar lines, coda, segno, repeat brackets, etc.)

@@ -107,4 +107,34 @@ extension UpstreamSVGParityTests {
             try factory.draw()
         }
     }
+
+    // VexFlow 5.1.0: Curve.getBoundingBox().
+    @Test("Curve.Bounding_Box")
+    func curveBoundingBoxMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Curve", test: "Bounding_Box", width: 350, height: 200) { factory, context in
+            let stave = factory.Stave(y: 50)
+            let score = factory.EasyScore()
+            let notes = score.notes("c4/8, f5, d5, g5, d6, f5, d5, g5", options: ["stem": "up"])
+
+            let curves: [Curve] = [
+                factory.Curve(from: notes[0], to: notes[3], options: CurveOptions(cps: [(x: 0, y: 10), (x: 0, y: 50)])),
+                factory.Curve(from: notes[4], to: notes[7], options: CurveOptions(thickness: 5, xShift: -10, invert: true)),
+                factory.Curve(from: notes[4], to: notes[7], options: CurveOptions(cps: [(x: 20, y: 30), (x: -20, y: -30)]))
+                    .setStyle(ElementStyle(lineDash: "10 10")),
+                factory.Curve(from: notes[1], to: nil), // partial curve
+                factory.Curve(from: notes[5], to: notes[6], options: CurveOptions(position: .nearTop, positionEnd: .nearTop)),
+            ]
+
+            let voices = [score.voice(notes.map { $0 as Note }, time: .meter(4, 4))]
+            _ = factory.Formatter().joinVoices(voices).formatToStave(voices, stave: stave)
+            try factory.draw()
+
+            for curve in curves {
+                let bb = try #require(curve.getBoundingBox())
+                context.beginPath()
+                context.rect(bb.x, bb.y, bb.w, bb.h)
+                context.stroke()
+            }
+        }
+    }
 }

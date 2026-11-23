@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/note.ts` (VexFlow 5.0.0).
+// Port of `src/note.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -361,10 +361,12 @@ open class Note: Tickable {
 
     /// Parse a duration string like "4d", "8", "qr" into components.
     /// The duration part of a duration string, as upstream `Note.parseDuration()` returns it
-    /// (`/(\d*\/?\d+|[a-z])(d*)([nrhms]|$)/`, group 1). For example `"hd"` gives `"h"`
-    /// and `"8r"` gives `"8"`.
+    /// (5.1.0: `/^(\d+(?:\/\d+)?|[a-z])(d*)([nrhms]?)$/`, group 1). For example `"hd"` gives `"h"`
+    /// and `"8r"` gives `"8"`. Durations are short tokens: longer strings give `nil`.
     public static func durationToken(of durationString: String) -> String? {
-        guard let regex = try? NSRegularExpression(pattern: "(\\d*\\/?\\d+|[a-z])(d*)([nrhms]|$)") else {
+        guard durationString.count <= 64,
+              let regex = try? NSRegularExpression(pattern: "^(\\d+(?:\\/\\d+)?|[a-z])(d*)([nrhms]?)$")
+        else {
             return nil
         }
         let range = NSRange(durationString.startIndex..., in: durationString)
@@ -375,7 +377,8 @@ open class Note: Tickable {
     }
 
     public static func parseDuration(_ durationString: String?) -> NoteDuration? {
-        guard let durationString, !durationString.isEmpty else { return nil }
+        // Durations are short tokens. Bound work before parsing untrusted score text.
+        guard let durationString, !durationString.isEmpty, durationString.count <= 64 else { return nil }
         guard let parsed = try? NoteDurationSpec(parsing: durationString) else { return nil }
         return NoteDuration(value: parsed.value, dots: parsed.dots, type: parsed.type)
     }

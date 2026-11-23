@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/beam.ts` (VexFlow 5.0.0).
+// Port of `src/beam.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -951,7 +951,7 @@ public final class Beam: VexElement {
 
     /// Render the beam lines.
     func drawBeamLines(_ ctx: RenderContext) throws {
-        let validBeamDurations = ["4", "8", "16", "32", "64"]
+        let validBeamDurations = ["4", "8", "16", "32", "64", "128", "256", "512", "1024"]
 
         let firstNote = notes[0]
         var beamY = getBeamYToDraw()
@@ -1032,9 +1032,10 @@ public final class Beam: VexElement {
         defer { ctx.restore() }
         applyStyle(context: ctx)
 
-        _ = ctx.openGroup("beam", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("beam"), getAttribute("id"))
         try drawStems(ctx)
         try drawBeamLines(ctx)
+        drawPointerRect()
         ctx.closeGroup()
     }
 }

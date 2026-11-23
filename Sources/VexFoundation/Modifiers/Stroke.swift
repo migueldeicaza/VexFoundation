@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Larry Kuhns
 //
-// Port of `src/strokes.ts` (VexFlow 5.0.0). The `Stroke` class renders chord
+// Port of `src/strokes.ts` (VexFlow 5.1.0). The `Stroke` class renders chord
 // strokes that can be arpeggiated, brushed, rasgueado, etc.
 
 import Foundation
@@ -86,6 +86,8 @@ public final class Stroke: Modifier {
     /// Multi voice: end note of stroke.
     public var noteEnd: Note?
     public var renderOptions: StrokeRenderOptions
+    /// Bounding box computed by `draw()`. (VexFlow 5.1.0)
+    private var boundingBox = BoundingBox(x: 0, y: 0, w: 0, h: 0)
 
     // MARK: - Init
 
@@ -158,6 +160,7 @@ public final class Stroke: Modifier {
         // Draw the stroke
         if strokeType == .brushDown || strokeType == .brushUp {
             ctx.fillRect(x + xShift, topY, 1, botY - topY)
+            boundingBox = BoundingBox(x: x + xShift, y: topY, w: 1, h: botY - topY)
         } else {
             // Select the wiggle glyph depending on the arrow direction
             let lineGlyph = arrow == Glyphs.arrowheadBlackDown
@@ -180,6 +183,12 @@ public final class Stroke: Modifier {
                 )
                 ctx.closeRotation()
                 textY = topY + el.getWidth() + 5
+                boundingBox = BoundingBox(
+                    x: x + xShift - el.getHeight() / 2,
+                    y: topY - el.getTextMetrics().actualBoundingBoxDescent + el.getHeight() / 2,
+                    w: el.getHeight(),
+                    h: el.getWidth()
+                )
             } else {
                 ctx.openRotation(-90, x + xShift, botY)
                 el.renderText(
@@ -189,6 +198,12 @@ public final class Stroke: Modifier {
                 )
                 ctx.closeRotation()
                 textY = botY - el.getWidth() - 5
+                boundingBox = BoundingBox(
+                    x: x + xShift - el.getHeight() / 2,
+                    y: botY - el.getTextMetrics().actualBoundingBoxDescent + el.getHeight() / 2 - el.getWidth(),
+                    w: el.getHeight(),
+                    h: el.getWidth()
+                )
             }
         }
 
@@ -202,6 +217,9 @@ public final class Stroke: Modifier {
                 xPos: x + xShift - el.getWidth() / 2,
                 yPos: arrowY
             )
+            boundingBox.mergeWith(BoundingBox(
+                x: x + xShift - el.getWidth() / 2, y: arrowY - el.getHeight(), w: el.getWidth(), h: el.getHeight()
+            ))
         }
 
         // Draw the rasgueado "R"
@@ -213,7 +231,18 @@ public final class Stroke: Modifier {
                 xPos: x + xShift - el.getWidth() / 2,
                 yPos: textY + (strokeType == .rasgueadoDown ? el.getHeight() : 0)
             )
+            boundingBox.mergeWith(BoundingBox(
+                x: x + xShift - el.getWidth() / 2,
+                y: textY + (strokeType == .rasgueadoDown ? el.getHeight() : 0) - el.getHeight(),
+                w: el.getWidth(),
+                h: el.getHeight()
+            ))
         }
+    }
+
+    /// The bounding box computed by the last `draw()`. (VexFlow 5.1.0)
+    override public func getBoundingBox() -> BoundingBox? {
+        boundingBox
     }
 }
 

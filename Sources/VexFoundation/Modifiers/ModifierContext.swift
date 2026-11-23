@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/modifiercontext.ts` (VexFlow 5.0.0).
+// Port of `src/modifiercontext.ts` (VexFlow 5.1.0).
 //
 // This class implements various types of members to notes (e.g. bends,
 // fingering positions etc.). The ModifierContext works with tickables
@@ -60,6 +60,8 @@ public final class ModifierContext {
     public var formatted: Bool = false
     public var width: Double = 0
     public var spacing: Double = 0
+    /// Horizontal space added only for annotations above or below the note (VexFlow 5.1.0).
+    public private(set) var annotationRightShift: Double = 0
 
     // MARK: - Members
 
@@ -104,6 +106,9 @@ public final class ModifierContext {
     public func getLeftShift() -> Double { state.leftShift }
 
     public func getRightShift() -> Double { state.rightShift }
+
+    /// Ties clear nearby modifiers, but must not start beyond a lyric's text box.
+    public func getRightShiftForTie() -> Double { state.rightShift - annotationRightShift }
 
     public func getState() -> ModifierContextState { state }
 
@@ -174,7 +179,17 @@ public final class ModifierContext {
         Ornament.format(getMembers("Ornament") as? [Ornament] ?? [], state: &state)
 
         // Format Annotation (text above/below notes)
-        Annotation.format(getMembers("Annotation") as? [Annotation] ?? [], state: &state)
+        let annotations = getMembers("Annotation") as? [Annotation] ?? []
+        let isOutsideNote: (Annotation) -> Bool = {
+            $0.getVerticalJustification() == .top || $0.getVerticalJustification() == .bottom
+        }
+        Annotation.format(annotations.filter { !isOutsideNote($0) }, state: &state)
+        let rightShiftBeforeAnnotations = state.rightShift
+        Annotation.format(annotations.filter(isOutsideNote), state: &state)
+        let rightShiftWithAnnotations = state.rightShift
+        // Keep annotation vertical placement in its original stage. Its horizontal
+        // text box must not push nearby modifiers away from the notehead.
+        state.rightShift = rightShiftBeforeAnnotations
 
         // Format ChordSymbol (chord symbols above/below notes)
         ChordSymbol.format(getMembers("ChordSymbol") as? [ChordSymbol] ?? [], state: &state)
@@ -186,6 +201,10 @@ public final class ModifierContext {
         Vibrato.format(
             getMembers("Vibrato") as? [Vibrato] ?? [], state: &state, context: self
         )
+
+        // Reserve enough note spacing for both the lyric and nearby modifiers.
+        annotationRightShift = max(0, rightShiftWithAnnotations - state.rightShift)
+        state.rightShift += annotationRightShift
 
         // Update width of this member context
         width = state.leftShift + state.rightShift

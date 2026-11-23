@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/font.ts` (VexFlow 5). Named `VexFont` to avoid a collision
+// Port of `src/font.ts` (VexFlow 5.1.0). Named `VexFont` to avoid a collision
 // with `SwiftUI.Font`. Font *files* are managed by `FontRegistry`.
 
 import Foundation
@@ -12,6 +12,26 @@ public enum VexFont {
     // MARK: - Constants
 
     /// Generic sans-serif family (kept for source compatibility).
+    /// Known text faces. Custom faces can be selected with `VexFlow.setTextFonts()`.
+    /// Port of `Font.TEXT_FONT_NAMES` (VexFlow 5.1.0).
+    public static let TEXT_FONT_NAMES: [String] = [
+        "Academico",
+        "Edwin",
+        "Bravura Text",
+        "Finale Ash Text",
+        "Finale Broadway Text",
+        "Finale Jazz Text",
+        "Finale Maestro Text",
+        "Gootville Text",
+        "Leland Text",
+        "MuseJazz Text",
+        "Nepomuk",
+        "Petaluma Script",
+        "Petaluma Text",
+        "Roboto Slab",
+        "Sebastian Text",
+    ]
+
     public static let SANS_SERIF = "Arial, sans-serif"
     /// Generic serif family (kept for source compatibility).
     public static let SERIF = "Times New Roman, serif"

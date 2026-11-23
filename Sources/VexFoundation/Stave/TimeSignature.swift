@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/timesignature.ts` (VexFlow 5.0.0).
+// Port of `src/timesignature.ts` (VexFlow 5.1.0).
 // Implements time signature glyphs for staves.
 
 import Foundation
@@ -34,6 +34,10 @@ public final class TimeSignature: StaveModifier {
     public private(set) var topStartX: Double = 0
     public private(set) var botStartX: Double = 0
     public private(set) var lineShift: Double = 0
+    /// Vertical positions of the top and bottom digits, set by `drawAt()`. Used for
+    /// the bounding box. (VexFlow 5.1.0)
+    public private(set) var topRenderY: Double = 0
+    public private(set) var botRenderY: Double = 0
 
     // MARK: - Init
 
@@ -182,8 +186,9 @@ public final class TimeSignature: StaveModifier {
         let stave = try checkStaveThrowing()
         let ctx = try stave.checkContext()
         setRendered()
-        _ = ctx.openGroup("timesignature", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("timesignature"), getAttribute("id"))
         drawAt(ctx, stave, x)
+        drawPointerRect()
         ctx.closeGroup()
     }
 
@@ -191,20 +196,40 @@ public final class TimeSignature: StaveModifier {
         setRendered()
 
         if isNumeric {
+            // render top text
             var startX = x + topStartX
-            var y: Double = 0
             if !botText.getText().isEmpty {
-                y = stave.getYForLine(topLine - lineShift)
+                topRenderY = stave.getYForLine(topLine - lineShift)
             } else {
-                y = (stave.getYForLine(topLine) + stave.getYForLine(bottomLine)) / 2
+                topRenderY = (stave.getYForLine(topLine) + stave.getYForLine(bottomLine)) / 2
             }
-            topText.renderText(ctx, xPos: startX, yPos: y)
+            topText.renderText(ctx, xPos: startX, yPos: topRenderY)
+
+            // render bottom text
             startX = x + botStartX
-            y = stave.getYForLine(bottomLine + lineShift)
-            botText.renderText(ctx, xPos: startX, yPos: y)
+            botRenderY = stave.getYForLine(bottomLine + lineShift)
+            botText.renderText(ctx, xPos: startX, yPos: botRenderY)
         } else {
             renderText(ctx, xPos: x - self.x, yPos: stave.getYForLine(line))
         }
+    }
+
+    /// Combined bounding box of the time signature. Call it after `drawAt()`, which
+    /// sets the vertical positions of a numeric signature. (VexFlow 5.1.0)
+    override public func getBoundingBox() -> BoundingBox? {
+        if isNumeric {
+            guard var topBoundingBox = topText.getBoundingBox(),
+                  var botBoundingBox = botText.getBoundingBox() else { return nil }
+            // Move the boxes to the positions of the text rendered by drawAt().
+            topBoundingBox.move(x + topStartX, topRenderY)
+            botBoundingBox.move(x + botStartX, botRenderY)
+            topBoundingBox.mergeWith(botBoundingBox)
+            return topBoundingBox
+        }
+        // Simple text (like "C" or "C|"): the element bounding box.
+        guard var textBoundingBox = super.getBoundingBox(), let stave = getStave() else { return nil }
+        textBoundingBox.move(0, stave.getYForLine(line))
+        return textBoundingBox
     }
 }
 

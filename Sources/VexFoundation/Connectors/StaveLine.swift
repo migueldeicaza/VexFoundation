@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/staveline.ts` (VexFlow 5.0.0).
+// Port of `src/staveline.ts` (VexFlow 5.1.0).
 //
 // This file implements `StaveLine` which are simply lines that connect
 // two notes. This object is highly configurable, see the `renderOptions`.
@@ -305,6 +305,8 @@ public final class StaveLine: VexElement {
             ctx.setFillStyle(color)
         }
 
+        applyStyle(context: ctx)
+
         // Draw the shaft of the arrow
         ctx.beginPath()
         ctx.moveTo(startX, startY)
@@ -424,6 +426,7 @@ public final class StaveLine: VexElement {
         // Draw the text
         let color = renderOptions.color
         applyStyle(context: ctx, style: ElementStyle(fillStyle: color, strokeStyle: color))
+        applyStyle(context: ctx)
         renderText(ctx, xPos: x, yPos: y)
     }
 }

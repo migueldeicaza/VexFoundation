@@ -663,4 +663,34 @@ extension UpstreamSVGParityTests {
             .init(positions: [.init(str: 6, fret: 6)], duration: "16", stemDirection: .down),
         ]
     }
+
+    // VexFlow 5.1.0: 256th, 512th and 1024th notes.
+    @Test("Beam.Mixed_Beam_3")
+    func beamMixed3MatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Beam", test: "Mixed_Beam_3", width: 450, height: 230) { factory, _ in
+            let stave = factory.Stave(y: 25)
+            let score = factory.EasyScore()
+
+            let voice1 = score.voice(
+                score.notes(
+                    "f5/32, d5/16, c5/32, c5/64, d5/128, e5/8, f5/16, d5/32, c5/64, c5/32, d5/16, e5/1024, e5/512, e5/512, e5/512, e5/1024",
+                    options: ["stem": "up"]
+                ),
+                time: .meter(31, 64)
+            )
+            let voice2 = score.voice(
+                score.notes(
+                    "f4/32, d4/16, c4/32, c4/64, d4/128, e4/8, f4/16, e4/256, e4/512, e4/1024, e4/1024, d4/32, c4/64, c4/32, d4/16",
+                    options: ["stem": "down"]
+                ),
+                time: .meter(31, 64)
+            )
+
+            _ = factory.Beam(notes: stemmableTickables(from: voice1))
+            _ = factory.Beam(notes: stemmableTickables(from: voice2))
+
+            _ = factory.Formatter().joinVoices([voice1, voice2]).formatToStave([voice1, voice2], stave: stave)
+            try factory.draw()
+        }
+    }
 }

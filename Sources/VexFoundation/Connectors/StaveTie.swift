@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stavetie.ts` (VexFlow 5.0.0).
+// Port of `src/stavetie.ts` (VexFlow 5.1.0).
 //
 // This class implements varies types of ties between contiguous notes. The
 // ties include: regular ties, hammer ons, pull offs, and slides.
@@ -253,7 +253,7 @@ open class StaveTie: VexElement {
 
         let firstIndexes = notes.firstIndexes
         let lastIndexes = notes.lastIndexes
-        _ = ctx.openGroup("stavetie", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("stavetie"), getAttribute("id"))
         for i in 0..<firstIndexes.count {
             let cpX = (lastX + lastXShift + (firstX + firstXShift)) / 2
             guard i < lastIndexes.count,
@@ -281,6 +281,7 @@ open class StaveTie: VexElement {
             ctx.closePath()
             ctx.fill()
         }
+        drawPointerRect()
         ctx.closeGroup()
     }
 

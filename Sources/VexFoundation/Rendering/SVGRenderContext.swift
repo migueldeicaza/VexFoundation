@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/svgcontext.ts` (VexFlow 5). Instead of a DOM, the context keeps
+// Port of `src/svgcontext.ts` (VexFlow 5.1.0). Instead of a DOM, the context keeps
 // a small element tree and serializes it with `getSVG()`. The serialization
 // follows the browser `XMLSerializer` output of upstream, so SVG files can be
 // compared with the upstream reference images.
@@ -189,7 +189,7 @@ public final class SVGRenderContext: RenderContext {
     private var groups: [SVGNode]
     private var groupAttributes: [SVGAttributes] = []
     private let precision: Double
-    private let options: SVGRenderOptions
+    let options: SVGRenderOptions
     public var backgroundFillStyle: String = "white"
     private var fontCSSString: String = ""
 
@@ -385,6 +385,17 @@ public final class SVGRenderContext: RenderContext {
         let lower = name.lowercased()
         return lower.hasPrefix("on") || lower == "href" || lower.hasSuffix(":href")
     }
+
+    /// Score foreground defaults (VexFlow 5.1.0 `RenderContext.defaultStyle`).
+    private var defaultStyle = ElementStyle()
+
+    @discardableResult
+    public func setDefaultStyle(_ style: ElementStyle) -> Self {
+        defaultStyle = ElementStyle(fillStyle: style.fillStyle, strokeStyle: style.strokeStyle)
+        return self
+    }
+
+    public func getDefaultStyle() -> ElementStyle { defaultStyle }
 
     public func clear() {
         svg.children.removeAll()

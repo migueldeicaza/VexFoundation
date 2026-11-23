@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/curve.ts` (VexFlow 5.0.0).
+// Port of `src/curve.ts` (VexFlow 5.1.0).
 // This class implements curves (for slurs).
 
 import Foundation
@@ -121,22 +121,31 @@ public final class Curve: VexElement {
 
     // MARK: - Render Curve
 
-    public func renderCurve(
-        firstX: Double,
-        firstY: Double,
-        lastX: Double,
-        lastY: Double,
-        direction: Double
-    ) throws {
-        let ctx = try checkContext()
+    /// End points and directions computed by `getRenderParams()`.
+    private struct RenderParams {
+        var firstX: Double
+        var firstY: Double
+        var lastX: Double
+        var lastY: Double
+        var direction: Double
+    }
 
+    /// End points and control points of the bezier curve(s) for `renderCurve()`.
+    /// The first bezier is the upper edge of the slur, the second one (only drawn for solid lines)
+    /// goes back from the last to the first point, at a distance of `thickness`. (VexFlow 5.1.0)
+    private func getBezierPoints(_ params: RenderParams) -> (
+        first: (x: Double, y: Double),
+        last: (x: Double, y: Double),
+        cps: [(x: Double, y: Double)],
+        thicknessCps: [(x: Double, y: Double)]
+    ) {
         let xShift = renderOptions.xShift
-        let yShift = renderOptions.yShift * direction
+        let yShift = renderOptions.yShift * params.direction
 
-        let firstX = firstX + xShift
-        let firstY = firstY + yShift
-        let lastX = lastX - xShift
-        let lastY = lastY + yShift
+        let firstX = params.firstX + xShift
+        let firstY = params.firstY + yShift
+        let lastX = params.lastX - xShift
+        let lastY = params.lastY + yShift
         let thickness = renderOptions.thickness
 
         let cps = renderOptions.cps
@@ -147,31 +156,89 @@ public final class Curve: VexElement {
 
         let controlPointSpacing = (lastX - firstX) / Double(cps.count + 2)
 
-        let hasLineDash = !(style?.lineDash ?? "").isEmpty
+        return (
+            first: (firstX, firstY),
+            last: (lastX, lastY),
+            cps: [
+                (firstX + controlPointSpacing + cp0x, firstY + cp0y * params.direction),
+                (lastX - controlPointSpacing + cp1x, lastY + cp1y * params.direction),
+            ],
+            thicknessCps: [
+                (lastX - controlPointSpacing + cp1x, lastY + (cp1y + thickness) * params.direction),
+                (firstX + controlPointSpacing + cp0x, firstY + (cp0y + thickness) * params.direction),
+            ]
+        )
+    }
+
+    private var hasLineDash: Bool { !(style?.lineDash ?? "").isEmpty }
+
+    public func renderCurve(
+        firstX: Double,
+        firstY: Double,
+        lastX: Double,
+        lastY: Double,
+        direction: Double
+    ) throws {
+        let ctx = try checkContext()
+        let (first, last, cps, thicknessCps) = getBezierPoints(
+            RenderParams(firstX: firstX, firstY: firstY, lastX: lastX, lastY: lastY, direction: direction)
+        )
 
         ctx.beginPath()
-        ctx.moveTo(firstX, firstY)
-        ctx.bezierCurveTo(
-            firstX + controlPointSpacing + cp0x,
-            firstY + cp0y * direction,
-            lastX - controlPointSpacing + cp1x,
-            lastY + cp1y * direction,
-            lastX,
-            lastY
-        )
+        ctx.moveTo(first.x, first.y)
+        ctx.bezierCurveTo(cps[0].x, cps[0].y, cps[1].x, cps[1].y, last.x, last.y)
         if !hasLineDash {
             ctx.bezierCurveTo(
-                lastX - controlPointSpacing + cp1x,
-                lastY + (cp1y + thickness) * direction,
-                firstX + controlPointSpacing + cp0x,
-                firstY + (cp0y + thickness) * direction,
-                firstX,
-                firstY
+                thicknessCps[0].x, thicknessCps[0].y, thicknessCps[1].x, thicknessCps[1].y, first.x, first.y
             )
         }
         ctx.stroke()
         ctx.closePath()
         if !hasLineDash { ctx.fill() }
+    }
+
+    /// Values of a cubic bezier curve (along one axis) at its end points and at its local extrema.
+    /// The extrema are where the derivative, a quadratic in t, is zero.
+    static func bezierExtrema(_ p0: Double, _ p1: Double, _ p2: Double, _ p3: Double) -> [Double] {
+        var values = [p0, p3]
+        // Derivative / 3 = a * t^2 + b * t + c
+        let a = -p0 + 3 * p1 - 3 * p2 + p3
+        let b = 2 * (p0 - 2 * p1 + p2)
+        let c = p1 - p0
+
+        var ts: [Double] = []
+        if abs(a) < 1e-12 {
+            if abs(b) > 1e-12 { ts.append(-c / b) }
+        } else {
+            let discriminant = b * b - 4 * a * c
+            if discriminant >= 0 {
+                let root = discriminant.squareRoot()
+                ts.append((-b + root) / (2 * a))
+                ts.append((-b - root) / (2 * a))
+            }
+        }
+        for t in ts where t > 0 && t < 1 {
+            let u = 1 - t
+            values.append(u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3)
+        }
+        return values
+    }
+
+    /// The bounding box of the drawn curve, including its thickness but not the stroke width.
+    /// The notes must be formatted. The box is fitted to the extrema of the bezier curves,
+    /// not to their control points. (VexFlow 5.1.0)
+    override public func getBoundingBox() -> BoundingBox? {
+        guard let params = try? getRenderParams() else { return nil }
+        let (first, last, cps, thicknessCps) = getBezierPoints(params)
+        var xs = Self.bezierExtrema(first.x, cps[0].x, cps[1].x, last.x)
+        var ys = Self.bezierExtrema(first.y, cps[0].y, cps[1].y, last.y)
+        if !hasLineDash {
+            xs += Self.bezierExtrema(last.x, thicknessCps[0].x, thicknessCps[1].x, first.x)
+            ys += Self.bezierExtrema(last.y, thicknessCps[0].y, thicknessCps[1].y, first.y)
+        }
+        let minX = xs.min() ?? 0
+        let minY = ys.min() ?? 0
+        return BoundingBox(x: minX, y: minY, w: (xs.max() ?? 0) - minX, h: (ys.max() ?? 0) - minY)
     }
 
     /// Source-compatibility overload that takes a `TieDirection`.
@@ -200,6 +267,22 @@ public final class Curve: VexElement {
         defer { ctx.restore() }
         applyStyle(context: ctx)
 
+        let params = try getRenderParams()
+        try renderCurve(
+            firstX: params.firstX,
+            firstY: params.firstY,
+            lastX: params.lastX,
+            lastY: params.lastY,
+            direction: params.direction
+        )
+    }
+
+    /// The points where the curve starts and ends, and the direction it bulges to.
+    /// Requires formatted notes.
+    private func getRenderParams() throws -> RenderParams {
+        guard from != nil || to != nil else {
+            throw CurveError.requiresStartOrEndNote
+        }
         let firstNote = from
         let lastNote = to
         var firstX: Double = 0
@@ -256,7 +339,7 @@ public final class Curve: VexElement {
             stemDirection = -1
         }
 
-        try renderCurve(
+        return RenderParams(
             firstX: firstX,
             firstY: firstY,
             lastX: lastX,

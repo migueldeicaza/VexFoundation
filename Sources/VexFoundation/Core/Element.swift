@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Mohit Cheppudira
 //
-// Port of `src/element.ts` (VexFlow 5).
+// Port of `src/element.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -51,6 +51,10 @@ open class VexElement {
     private var context: RenderContext?
     public private(set) var rendered: Bool = false
     public var style: ElementStyle?
+    /// Distinguishes caller overrides (`setStyle`, `setGroupStyle`) from built-in metric colors.
+    public internal(set) var styleExplicit = false
+    /// Draw an invisible pointer rectangle (metrics key `<category>.pointerRect`).
+    public var shouldDrawPointerRect: Bool
     private var attrs: ElementAttributes
     private weak var registry: Registry?
 
@@ -86,6 +90,7 @@ open class VexElement {
         self.fontScale = Metrics.number(runtimeContext.metrics.get("\(type).fontScale")) ?? 1
         let style = runtimeContext.metrics.getStyle(type)
         self.style = style.isEmpty ? nil : style
+        self.shouldDrawPointerRect = runtimeContext.metrics.get("\(type).pointerRect") as? Bool ?? false
         runtimeContext.getDefaultRegistry()?.register(self)
     }
 
@@ -96,6 +101,7 @@ open class VexElement {
         self.fontScale = Metrics.number(runtimeContext.metrics.get("\(type).fontScale")) ?? 1
         let style = runtimeContext.metrics.getStyle(type)
         self.style = style.isEmpty ? nil : style
+        self.shouldDrawPointerRect = runtimeContext.metrics.get("\(type).pointerRect") as? Bool ?? false
         runtimeContext.getDefaultRegistry()?.register(self)
     }
 
@@ -107,6 +113,7 @@ open class VexElement {
         let style = runtimeContext.metrics.getStyle(type)
         self.style = style.isEmpty ? nil : style
         self.fontScale = Metrics.number(runtimeContext.metrics.get("\(type).fontScale")) ?? 1
+        self.shouldDrawPointerRect = runtimeContext.metrics.get("\(type).pointerRect") as? Bool ?? false
 
         // Newly created elements register automatically when a default registry is enabled.
         runtimeContext.getDefaultRegistry()?.register(self)
@@ -141,6 +148,7 @@ open class VexElement {
     @discardableResult
     open func setStyle(_ style: ElementStyle?) -> Self {
         self.style = style
+        styleExplicit = true
         return self
     }
 
@@ -148,6 +156,7 @@ open class VexElement {
     @discardableResult
     open func setGroupStyle(_ style: ElementStyle) -> Self {
         self.style = style
+        styleExplicit = true
         children.forEach { $0.setGroupStyle(style) }
         return self
     }
@@ -165,8 +174,15 @@ open class VexElement {
         style: ElementStyle? = nil
     ) -> Self {
         let ctx = ctx ?? self.context
-        let style = style ?? self.style
-        guard let style, let ctx else { return self }
+        let usesOwnStyle = style == nil
+        guard var style = style ?? self.style, let ctx else { return self }
+        // Built-in colors yield to score defaults. Nested explicit styles inherit through
+        // the context, so a voice color also reaches its notes, stems, and modifiers.
+        if usesOwnStyle && !styleExplicit {
+            let defaults = ctx.getDefaultStyle()
+            if defaults.fillStyle != nil { style.fillStyle = nil }
+            if defaults.strokeStyle != nil { style.strokeStyle = nil }
+        }
         Self.apply(style, to: ctx)
         return self
     }
@@ -174,22 +190,45 @@ open class VexElement {
     /// Write `style` into `ctx` without saving state.
     static func apply(_ style: ElementStyle, to ctx: RenderContext) {
         if let sc = style.shadowColor, !sc.isEmpty { ctx.setShadowColor(sc) }
-        if let sb = style.shadowBlur, sb != 0 { ctx.setShadowBlur(sb) }
+        if let sb = style.shadowBlur { ctx.setShadowBlur(sb) }
         if let fs = style.fillStyle, !fs.isEmpty { ctx.setFillStyle(fs) }
         if let ss = style.strokeStyle, !ss.isEmpty { ctx.setStrokeStyle(ss) }
-        if let lw = style.lineWidth, lw != 0 { ctx.setLineWidth(lw) }
-        if let ld = style.lineDash, !ld.isEmpty {
-            ctx.setLineDash(ld.split(separator: " ").compactMap { Double($0) })
+        if let lw = style.lineWidth { ctx.setLineWidth(lw) }
+        if let ld = style.lineDash {
+            ctx.setLineDash(ld.isEmpty ? [] : ld.split(separator: " ").compactMap { Double($0) })
         }
     }
 
     /// Draw the element and its sub-elements with the element style.
+    /// An explicit fill or stroke style becomes the inherited default for nested elements.
     public func drawWithStyle() throws {
         let ctx = try checkContext()
+        let defaults = ctx.getDefaultStyle()
         ctx.save()
-        defer { ctx.restore() }
+        defer {
+            ctx.setDefaultStyle(defaults)
+            ctx.restore()
+        }
+        if styleExplicit {
+            var inherited = defaults
+            if let fill = style?.fillStyle { inherited.fillStyle = fill }
+            if let stroke = style?.strokeStyle { inherited.strokeStyle = stroke }
+            ctx.setDefaultStyle(inherited)
+        }
         applyStyle(context: ctx)
         try draw()
+    }
+
+    /// Draw the pointer rectangle when enabled. This allows mouse interaction with the element.
+    public func drawPointerRect() {
+        guard shouldDrawPointerRect, let bb = getBoundingBox() else { return }
+        context?.pointerRect(bb.x, bb.y, bb.w, bb.h)
+    }
+
+    /// The SVG group class for `name`, followed by the element `class` attribute when set.
+    func groupClass(_ name: String) -> String {
+        let cls = attrs.class
+        return cls.isEmpty ? name : "\(name) \(cls)"
     }
 
     /// Override in subclasses to perform drawing.
@@ -384,7 +423,7 @@ open class VexElement {
 
     /// Change the font size and keep the other font fields.
     @discardableResult
-    public func setFontSize(_ size: String) -> Self {
+    open func setFontSize(_ size: String) -> Self {
         let f = _fontInfo
         return setFont(family: f.family, size: size, weight: f.weight, style: f.style)
     }
@@ -542,14 +581,15 @@ open class VexElement {
 
     public func setOriginX(_ x: Double) {
         guard let bbox = getBoundingBox(), bbox.w != 0 else { return }
-        let originX = abs((bbox.x - xShift) / bbox.w)
+        // The bounding box includes x, which is not part of the origin.
+        let originX = abs((bbox.x - x - xShift) / bbox.w)
         let shift = (x - originX) * bbox.w
         xShift = -shift
     }
 
     public func setOriginY(_ y: Double) {
         guard let bbox = getBoundingBox(), bbox.h != 0 else { return }
-        let originY = abs((bbox.y - yShift) / bbox.h)
+        let originY = abs((bbox.y - y - yShift) / bbox.h)
         let shift = (y - originY) * bbox.h
         yShift = -shift
     }

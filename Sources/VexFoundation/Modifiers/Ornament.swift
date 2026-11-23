@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Cyril Silverman
 //
-// Port of `src/ornament.ts` (VexFlow 5.0.0). The 4.x delayed-draw fixes
+// Port of `src/ornament.ts` (VexFlow 5.1.0). The 4.x delayed-draw fixes
 // (b184399c, 7856e88a, 7ca08666) are part of 5.0.0.
 
 import Foundation
@@ -214,7 +214,7 @@ public final class Ornament: Modifier {
 
         let stave = try note.checkStaveThrowing()
 
-        _ = ctx.openGroup("ornament", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("ornament"), getAttribute("id"))
 
         // Get initial coordinates for the modifier position
         let start = note.getModifierStartXY(position: position, index: index ?? 0)
@@ -284,6 +284,7 @@ public final class Ornament: Modifier {
                 yPos: glyphY + yShift - accidentalUpper.getTextMetrics().actualBoundingBoxDescent
             )
         }
+        drawPointerRect()
         ctx.closeGroup()
     }
 }

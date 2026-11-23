@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/pedalmarking.ts` (VexFlow 5.0.0).
+// Port of `src/pedalmarking.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -21,13 +21,14 @@ public enum PedalMarkingType: Int, Sendable {
 // MARK: - Pedal Marking Render Options
 
 public struct PedalMarkingRenderOptions {
-    public var color: String = "black"
+    /// Explicit color. `nil` (the 5.1.0 default) inherits the score and element styles.
+    public var color: String?
     public var bracketHeight: Double = 10
     public var textMarginRight: Double = 6
     public var bracketLineWidth: Double = 1
 
     public init(
-        color: String = "black",
+        color: String? = nil,
         bracketHeight: Double = 10,
         textMarginRight: Double = 6,
         bracketLineWidth: Double = 1
@@ -129,7 +130,6 @@ public final class PedalMarking: VexElement {
         self.type = .text
         self.line = 0
         self.renderOptions = PedalMarkingRenderOptions(
-            color: "black",
             bracketHeight: 10,
             textMarginRight: 6,
             bracketLineWidth: 1
@@ -229,6 +229,62 @@ public final class PedalMarking: VexElement {
         return (note.getStave()?.getX() ?? 0) + (note.getStave()?.getWidth() ?? 0)
     }
 
+    // MARK: - Baseline
+
+    /// Compute a baseline below annotations in participating voices on this stave.
+    /// (VexFlow 5.1.0)
+    public func getYForStave(_ stave: Stave) -> Double {
+        var y = stave.getYForBottomText(line + 3)
+        let events = notes.filter { $0.getStave() === stave }
+        guard !events.isEmpty else { return y }
+        let xs = events.map { $0.getAbsoluteX() }
+        let startX = xs.min() ?? 0
+        let endX = xs.max() ?? 0
+        var voices: [Voice] = []
+        for note in events {
+            if let voice = try? note.getVoiceThrowing(), !voices.contains(where: { $0 === voice }) {
+                voices.append(voice)
+            }
+        }
+        // Bracket notches and text both extend upward from the baseline.
+        let text = VexElement(category: "PedalMarking").setFont(fontInfo)
+        let textHeight = max(
+            text.setText(depressText).getTextMetrics().actualBoundingBoxAscent,
+            text.setText(releaseText).getTextMetrics().actualBoundingBoxAscent
+        )
+        let isBracket = type == .bracket || type == .bracketOpenBegin
+            || type == .bracketOpenEnd || type == .bracketOpenBoth
+        let isMixed = type == .mixed || type == .mixedOpenEnd
+        let height = isBracket
+            ? renderOptions.bracketHeight
+            : max(textHeight, isMixed ? renderOptions.bracketHeight : 0)
+        for voice in voices {
+            for case let note as StaveNote in voice.getTickables() {
+                if note.getStave() !== stave { continue }
+                if note.getAbsoluteX() < startX || note.getAbsoluteX() > endX { continue }
+                for case let modifier as Annotation in note.getModifiers()
+                where modifier.getVerticalJustification() == .bottom {
+                    guard let computed = try? modifier.computeY() else { continue }
+                    let bottom = computed.y + modifier.getYShift()
+                        + modifier.getTextMetrics().actualBoundingBoxDescent
+                    y = max(y, bottom + 4 + height)
+                }
+            }
+        }
+        return y
+    }
+
+    private func baselines() -> [(stave: Stave, y: Double)] {
+        var result: [(stave: Stave, y: Double)] = []
+        for note in notes {
+            let stave = note.checkStave()
+            if !result.contains(where: { $0.stave === stave }) {
+                result.append((stave, getYForStave(stave)))
+            }
+        }
+        return result
+    }
+
     // MARK: - Draw Bracketed
 
     /// Draw the bracket based pedal markings.
@@ -238,6 +294,7 @@ public final class PedalMarking: VexElement {
         var prevX: Double?
         var prevY: Double?
         var textWidth: Double = 0
+        let baselines = baselines()
 
         // Iterate through each note
         for (index, note) in notes.enumerated() {
@@ -246,7 +303,8 @@ public final class PedalMarking: VexElement {
 
             // Get the initial coordinates for the note
             let x = note.getAbsoluteX()
-            let y = note.checkStave().getYForBottomText(line + 3)
+            let stave = note.checkStave()
+            let y = baselines.first(where: { $0.stave === stave })?.y ?? stave.getYForBottomText(line + 3)
 
             // Throw if current note is positioned before the previous note
             if let prevX, x < prevX {
@@ -306,13 +364,14 @@ public final class PedalMarking: VexElement {
         let ctx = try checkContext()
         var isPedalDepressed = false
         var textWidth: Double = 0
+        let baselines = baselines()
 
         // Iterate through each note, placing glyphs or custom text accordingly
         for note in notes {
             isPedalDepressed = !isPedalDepressed
             let stave = note.checkStave()
             let x = note.getAbsoluteX()
-            let y = stave.getYForBottomText(line + 3)
+            let y = baselines.first(where: { $0.stave === stave })?.y ?? stave.getYForBottomText(line + 3)
 
             if isPedalDepressed {
                 textWidth = ctx.measureText(depressText).width
@@ -332,8 +391,11 @@ public final class PedalMarking: VexElement {
         let ctx = try checkContext()
         setRendered()
 
-        ctx.setStrokeStyle(renderOptions.color)
-        ctx.setFillStyle(renderOptions.color)
+        if let color = renderOptions.color {
+            ctx.setStrokeStyle(color)
+            ctx.setFillStyle(color)
+        }
+        applyStyle(context: ctx)
         ctx.setFont(getFont())
 
         // VexFlowPatch: handle extended pedal types

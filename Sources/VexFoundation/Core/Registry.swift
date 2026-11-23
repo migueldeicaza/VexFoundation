@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Mohit Cheppudira
 //
-// Port of `src/registry.ts` (VexFlow 5.0.0).
+// Port of `src/registry.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -76,7 +76,14 @@ public final class Registry {
 
     // MARK: - Index Management
 
+    /// Only these attributes may select an index, even when called directly. (VexFlow 5.1.0)
+    public static func isValidIndexName(_ name: String) -> Bool {
+        name == "id" || name == "type" || name == "class"
+    }
+
+    /// Upstream 5.1.0 throws for an unknown index name; this ignores it.
     public func setIndexValue(name: String, value: String, id: String, elem: VexElement) {
+        guard Self.isValidIndexName(name) else { return }
         indexLock.lock()
         defer { indexLock.unlock() }
 
@@ -89,6 +96,7 @@ public final class Registry {
 
     /// Update the index when an element's attribute changes.
     public func updateIndex(_ info: RegistryUpdate) {
+        guard Self.isValidIndexName(info.name) else { return }
         indexLock.lock()
         defer { indexLock.unlock() }
 
@@ -141,6 +149,7 @@ public final class Registry {
     }
 
     public func getElementsByAttribute(_ attribute: String, value: String) -> [VexElement] {
+        guard Self.isValidIndexName(attribute) else { return [] }
         indexLock.lock()
         defer { indexLock.unlock() }
 
@@ -167,8 +176,7 @@ public final class Registry {
         indexLock.lock()
         defer { indexLock.unlock() }
 
-        let allowedNames = ["id", "type", "class"]
-        if allowedNames.contains(info.name) {
+        if Self.isValidIndexName(info.name) {
             updateIndex(info)
         }
         return self

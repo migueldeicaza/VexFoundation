@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/system.ts` (VexFlow 5.0.0).
+// Port of `src/system.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -175,6 +175,38 @@ public final class System: VexElement {
         partStaves.forEach { $0.setY(y) }
         return self
     }
+
+    /// Set a fixed layout width. A width that is not positive and finite is ignored;
+    /// see `setWidthThrowing(_:)`. (VexFlow 5.1.0)
+    @discardableResult
+    override public func setWidth(_ width: Double) -> Self {
+        (try? setWidthThrowing(width)) ?? self
+    }
+
+    /// Request the minimum width (auto width). Upstream `setWidth()` with no argument.
+    @discardableResult
+    public func setWidth() -> Self {
+        options.autoWidth = true
+        return self
+    }
+
+    /// Set a fixed layout width, or request the minimum width when `width` is `nil`.
+    /// Throws when the width is not positive and finite. (VexFlow 5.1.0)
+    @discardableResult
+    public func setWidthThrowing(_ width: Double?) throws -> Self {
+        if let width, !width.isFinite || width <= 0 {
+            throw VexError("BadArgument", "System width must be a positive finite number.")
+        }
+        options.autoWidth = width == nil
+        if let width {
+            options.width = width
+            partStaves.forEach { $0.setWidth(width) }
+        }
+        return self
+    }
+
+    /// Width assigned by the latest layout. (VexFlow 5.1.0)
+    override public func getWidth() -> Double { options.width }
 
     public func getRuntimeContext() -> VexRuntimeContext { runtimeContext }
 

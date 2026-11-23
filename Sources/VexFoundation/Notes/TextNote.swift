@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/textnote.ts` (VexFlow 5.0.0).
+// Port of `src/textnote.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -246,19 +246,19 @@ public final class TextNote: Note {
         if let font = noteStruct.font {
             setFont(font)
         } else if noteStruct.glyph == nil {
-            setFont(Metrics.getFontInfo("TextNote.text.fontSize"))
+            setFont(Metrics.getFontInfo("TextNote.text"))
         }
 
         // Scale the font size by 1/1.3.
         let smallerFontSize = VexFont.convertSizeToPointValue(fontInfo.size) * 0.769231
         if let sup = noteStruct.superscript, !sup.isEmpty {
-            let element = VexElement(category: "TexNote.subSuper")
+            let element = VexElement(category: "TextNote.text")
             element.setText(sup)
             element.setFontSize(smallerFontSize)
             superscript = element
         }
         if let sub = noteStruct.subscriptText, !sub.isEmpty {
-            let element = VexElement(category: "TexNote.subSuper")
+            let element = VexElement(category: "TextNote.text")
             element.setText(sub)
             element.setFontSize(smallerFontSize)
             `subscript` = element

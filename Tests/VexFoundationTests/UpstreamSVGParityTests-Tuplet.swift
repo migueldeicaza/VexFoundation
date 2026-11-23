@@ -305,4 +305,141 @@ extension UpstreamSVGParityTests {
             try formatAndDrawTupletVoices(factory, stave, [voice])
         }
     }
+
+    // MARK: - VexFlow 5.1.0 cases
+
+    private func makeBoundingTupletNotes(_ factory: Factory) throws -> [StaveNote] {
+        try (0..<21).map { i in
+            try makeTupletNote(factory, key: ["g/4", "a/4", "b/4"][i % 3], duration: "4", stemDirection: .up)
+        }
+    }
+
+    private func drawTupletBoundingBox(_ context: SVGRenderContext, _ tuplet: Tuplet?) throws {
+        let t = try #require(tuplet)
+        let bb = try #require(t.getBoundingBox())
+        context.beginPath()
+        context.rect(bb.x, bb.y, bb.w, bb.h)
+        context.stroke()
+    }
+
+    private func runTupletBoundingCase(test: String, location: TupletLocation?) throws {
+        try runCategorySVGParityCase(module: "Tuplet", test: test, width: 600, height: 140) { factory, context in
+            let stave = factory.Stave(x: 10, y: 10)
+            let notes = try makeBoundingTupletNotes(factory)
+            func tuplet(_ range: Range<Int>, bracketed: Bool? = nil, ratioed: Bool? = nil, suffix: String? = nil) -> Tuplet? {
+                factory.Tuplet(
+                    notes: Array(notes[range]).map { $0 as Note },
+                    options: TupletOptions(
+                        numNotes: 3, notesOccupied: 2, bracketed: bracketed, ratioed: ratioed,
+                        location: location, suffix: suffix
+                    )
+                )
+            }
+            let tuplets = [
+                tuplet(0..<3, bracketed: false),
+                tuplet(3..<6, bracketed: false, ratioed: true),
+                tuplet(6..<9, bracketed: false, suffix: Glyphs.metNoteQuarterUp),
+                tuplet(9..<12, bracketed: false, ratioed: true, suffix: Glyphs.metNoteQuarterUp),
+                tuplet(12..<15),
+                tuplet(15..<18, ratioed: true),
+                tuplet(18..<21, ratioed: true, suffix: Glyphs.metNoteQuarterUp),
+            ]
+
+            let voice = factory.Voice().setStrict(false).addTickables(notes.map { $0 as Tickable })
+            _ = Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+
+            for t in tuplets {
+                try drawTupletBoundingBox(context, t)
+            }
+        }
+    }
+
+    @Test("Tuplet.Bounding_Box_Above")
+    func tupletBoundingBoxAboveMatchesUpstream() throws {
+        try runTupletBoundingCase(test: "Bounding_Box_Above", location: nil)
+    }
+
+    @Test("Tuplet.Bounding_Box_Below")
+    func tupletBoundingBoxBelowMatchesUpstream() throws {
+        try runTupletBoundingCase(test: "Bounding_Box_Below", location: .bottom)
+    }
+
+    @Test("Tuplet.Suffixed_Tuplet")
+    func tupletSuffixedTupletMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Tuplet", test: "Suffixed_Tuplet", width: 450, height: 140) { factory, _ in
+            let stave = factory.Stave(x: 10, y: 10, width: 350).addTimeSignature(.meter(4, 4))
+            let specs: [(String, String)] = [
+                ("f/4", "4"), ("a/4", "4"), ("b/4", "4"),
+                ("g/4", "8"), ("e/4", "8"), ("g/4", "8"),
+            ]
+            let notes = try specs.map { try makeTupletNote(factory, key: $0.0, duration: $0.1, stemDirection: .up) }
+            _ = factory.Beam(notes: Array(notes[3..<6]))
+            _ = factory.Tuplet(
+                notes: Array(notes[0..<3]).map { $0 as Note },
+                options: TupletOptions(ratioed: true, suffix: Glyphs.noteQuarterUp)
+            )
+            _ = factory.Tuplet(
+                notes: Array(notes[3..<6]).map { $0 as Note },
+                options: TupletOptions(notesOccupied: 4, ratioed: true, suffix: Glyphs.note8thUp)
+            )
+            let voice = factory.Voice().setStrict(true).addTickables(notes.map { $0 as Tickable })
+            _ = Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("Tuplet.Bottom_Suffixed_Tuplet")
+    func tupletBottomSuffixedTupletMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Tuplet", test: "Bottom_Suffixed_Tuplet", width: 350, height: 160) { factory, _ in
+            let stave = factory.Stave(x: 10, y: 10).addTimeSignature(.meter(5, 8))
+            let specs: [(String, String)] = [
+                ("f/4", "4"), ("c/4", "4"), ("d/4", "4"),
+                ("d/5", "8"), ("g/5", "8"), ("b/4", "8"),
+            ]
+            let notes = try specs.map { try makeTupletNote(factory, key: $0.0, duration: $0.1, stemDirection: .down) }
+            _ = factory.Beam(notes: Array(notes[3..<6]))
+            _ = factory.Tuplet(
+                notes: Array(notes[0..<3]).map { $0 as Note },
+                options: TupletOptions(ratioed: true, location: .bottom, suffix: Glyphs.metNoteQuarterUp)
+            )
+            _ = factory.Tuplet(
+                notes: Array(notes[3..<6]).map { $0 as Note },
+                options: TupletOptions(notesOccupied: 1, location: .bottom, suffix: Glyphs.metNote8thUp)
+            )
+            let voice = factory.Voice(time: VoiceTime(numBeats: 5, beatValue: 8))
+                .setStrict(true)
+                .addTickables(notes.map { $0 as Tickable })
+            _ = Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
+    @Test("Tuplet.Nested_Tuplets_Only_Tuplet_Children")
+    func tupletNestedTupletsOnlyTupletChildrenMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Tuplet", test: "Nested_Tuplets_Only_Tuplet_Children", width: 450, height: 140) { factory, _ in
+            let stave = factory.Stave(x: 10, y: 10).addTimeSignature(.meter(4, 4))
+            let specs: [(String, String)] = [
+                ("b/4", "4"), ("a/4", "4"), ("c/4", "4"),
+                ("g/4", "8"), ("a/4", "8"), ("f/4", "8"),
+            ]
+            let notes = try specs.map { try makeTupletNote(factory, key: $0.0, duration: $0.1, stemDirection: .up) }
+            _ = factory.Beam(notes: Array(notes[3...]))
+            _ = factory.Tuplet(
+                notes: Array(notes[0..<3]).map { $0 as Note },
+                options: TupletOptions(numNotes: 3, notesOccupied: 2)
+            )
+            _ = factory.Tuplet(
+                notes: Array(notes[3...]).map { $0 as Note },
+                options: TupletOptions(numNotes: 3, notesOccupied: 2)
+            )
+            _ = factory.Tuplet(
+                notes: notes.map { $0 as Note },
+                options: TupletOptions(numNotes: 3, notesOccupied: 4)
+            )
+            let voice = factory.Voice().setStrict(true).addTickables(notes.map { $0 as Tickable })
+            _ = Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
 }

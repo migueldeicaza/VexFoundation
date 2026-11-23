@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stavenote.ts` (VexFlow 5.0.0).
+// Port of `src/stavenote.ts` (VexFlow 5.1.0).
 // This file implements notes for standard notation. A note has one or more
 // `NoteHead`s, an optional stem, and an optional flag.
 
@@ -315,8 +315,16 @@ public enum StaveNoteError: Error, LocalizedError, Equatable, Sendable {
 }
 
 // Helper methods for rest positioning in ModifierContext.
-private func shiftRestVertical(_ rest: inout StaveNoteFormatSettings, _ dir: Double) {
-    let delta = dir
+private func shiftRestVertical(
+    _ rest: inout StaveNoteFormatSettings,
+    _ note: StaveNoteFormatSettings,
+    _ dir: Double
+) {
+    // Move far enough to clear the other voice, including tall chords and stems.
+    // Whole-space steps preserve the rest's line/space alignment.
+    let clearance = 0.5
+    let distance = dir > 0 ? note.maxLine + clearance - rest.minLine : rest.maxLine + clearance - note.minLine
+    let delta = dir * max(1, distance.rounded(.up))
 
     rest.line += delta
     rest.maxLine += delta
@@ -485,10 +493,10 @@ open class StaveNote: StemmableNote {
             } else if noteU.minLine <= noteL.maxLine + lineSpacing {
                 if noteU.isrest {
                     // shift rest up
-                    shiftRestVertical(&noteU, 1)
+                    shiftRestVertical(&noteU, noteL, 1)
                 } else if noteL.isrest {
                     // shift rest down
-                    shiftRestVertical(&noteL, -1)
+                    shiftRestVertical(&noteL, noteU, -1)
                 } else {
                     // Instead of shifting notes, remove the appropriate flag.
                     // If we are sharing a line, switch one notes stem direction.
@@ -611,11 +619,11 @@ open class StaveNote: StemmableNote {
         }
         if noteU.isrest && noteU.minLine <= noteM.maxLine {
             // shift upper voice rest up
-            shiftRestVertical(&noteU, 1)
+            shiftRestVertical(&noteU, noteM, 1)
         }
         if noteL.isrest && noteM.minLine <= noteL.maxLine {
             // shift lower voice rest down
-            shiftRestVertical(&noteL, -1)
+            shiftRestVertical(&noteL, noteM, -1)
         }
         // If middle voice intersects upper or lower voice
         if noteU.minLine <= noteM.maxLine + 0.5 || noteM.minLine <= noteL.maxLine {
@@ -713,8 +721,6 @@ open class StaveNote: StemmableNote {
         } else {
             setStemDirection(noteStruct.stemDirection ?? .up)
         }
-        reset()
-        buildFlag()
     }
 
     public convenience init(validating noteStruct: StaveNoteStruct) throws {
@@ -779,6 +785,9 @@ open class StaveNote: StemmableNote {
     /// Build a `NoteHead` for each key in the note.
     @discardableResult
     public func buildNoteHeads() -> [NoteHead] {
+        // Replace owned heads, rather than retaining obsolete children after reflow.
+        let oldHeads = Set(noteHeads.map { ObjectIdentifier($0) })
+        children.removeAll { oldHeads.contains(ObjectIdentifier($0)) }
         let stemDirection = getStemDirection()
         let count = sortedKeyProps.count
         var heads = [NoteHead?](repeating: nil, count: count)
@@ -955,12 +964,17 @@ open class StaveNote: StemmableNote {
 
     // MARK: - Bounding Box
 
-    /// The `BoundingBox` of the entire note.
+    /// The `BoundingBox` of the entire note. Measures noteheads and flags from layout
+    /// coordinates, including before `draw()`.
     override public func getBoundingBox() -> BoundingBox? {
         var boundingBox = BoundingBox(x: getAbsoluteX(), y: ys.first ?? 0, w: 0, h: 0)
         for notehead in noteHeads {
-            if let bb = notehead.getBoundingBox() {
-                _ = boundingBox.mergeWith(bb)
+            let displacement = notehead.isDisplaced()
+                ? (notehead.getWidth() - Stem.WIDTH / 2) * getStemDirection().signDouble
+                : 0
+            if var box = notehead.getBoundingBox() {
+                box.x = getNoteHeadBeginX() + displacement + notehead.getXShift()
+                _ = boundingBox.mergeWith(box)
             }
         }
         let bounds = getNoteHeadBounds()
@@ -972,7 +986,10 @@ open class StaveNote: StemmableNote {
                 : bounds.yBottom - noteStemHeight + flag.getTextMetrics().actualBoundingBoxAscent
             _ = boundingBox.mergeWith(BoundingBox(x: getAbsoluteX(), y: stemY, w: 0, h: 0))
         }
-        if hasFlag(), let bbFlag = flag.getBoundingBox() {
+        if shouldDrawFlag(), var bbFlag = flag.getBoundingBox() {
+            let position = getFlagPosition()
+            bbFlag.x = position.x + flag.getXShift()
+            bbFlag.y = position.y + flag.getYShift() - flag.getTextMetrics().actualBoundingBoxAscent
             _ = boundingBox.mergeWith(bbFlag)
         }
         for modifier in modifiers {
@@ -1078,7 +1095,7 @@ open class StaveNote: StemmableNote {
         setYs(ys)
 
         if let stem {
-            let bounds = getNoteHeadBounds()
+            let bounds = getStemYBounds()
             stem.setYBounds(bounds.yTop, bounds.yBottom)
         }
 
@@ -1104,7 +1121,7 @@ open class StaveNote: StemmableNote {
         var tieStartX = getAbsoluteX()
         tieStartX += getGlyphWidth() + xShift + rightDisplacedHeadPx
         if let mc = modifierContext {
-            tieStartX += mc.getRightShift()
+            tieStartX += mc.getRightShiftForTie()
         }
         return tieStartX
     }
@@ -1181,14 +1198,18 @@ open class StaveNote: StemmableNote {
         // Additional y shifts for rests
         var restShift: Double = 0
         switch noteHeads[index].getText() {
-        case Glyphs.restDoubleWhole, Glyphs.restWhole:
+        case Glyphs.restWhole:
             restShift += 0.5
         case Glyphs.restHalf, Glyphs.restQuarter, Glyphs.rest8th, Glyphs.rest16th:
             restShift -= 0.5
         case Glyphs.rest32nd, Glyphs.rest64th:
             restShift -= 1.5
-        case Glyphs.rest128th:
+        case Glyphs.rest128th, Glyphs.rest256th:
             restShift -= 2.5
+        case Glyphs.rest512th:
+            restShift -= 3.5
+        case Glyphs.rest1024th:
+            restShift -= 4.5
         default:
             break
         }
@@ -1341,6 +1362,26 @@ open class StaveNote: StemmableNote {
     // MARK: - NoteHead Bounds
 
     /// The staff line and y value of the highest and lowest noteheads.
+    /// Y bounds for the stem, adjusted for SMuFL stem anchor offsets defined in
+    /// `Tables.noteHeadStemYOffsets`. Stems attach at the correct point on the notehead
+    /// (e.g. the arm tip of an X notehead) rather than the center. (VexFlow 5.1.0)
+    func getStemYBounds() -> (yTop: Double, yBottom: Double) {
+        let up = stemDirection == Stem.UP
+        var yTop = Double.infinity
+        var yBottom = -Double.infinity
+        for nh in noteHeads {
+            let anchor = Tables.noteHeadStemYOffsets[nh.text].map { up ? $0.up : $0.down } ?? 0
+            let y = nh.getY() - anchor * Tables.STAVE_LINE_DISTANCE
+            yTop = min(y, yTop)
+            yBottom = max(y, yBottom)
+        }
+        if !yTop.isFinite || !yBottom.isFinite {
+            let bounds = getNoteHeadBounds()
+            return (bounds.yTop, bounds.yBottom)
+        }
+        return (yTop, yBottom)
+    }
+
     public func getNoteHeadBounds() -> StaveNoteHeadBounds {
         // Top and bottom Y values for stem.
         var yTop = Double.infinity
@@ -1504,20 +1545,25 @@ open class StaveNote: StemmableNote {
         return hasStem && hasFlag && hasNoBeam && !isRest()
     }
 
+    /// Share flag coordinates between measurement and drawing.
+    private func getFlagPosition() -> (x: Double, y: Double) {
+        let bounds = getNoteHeadBounds()
+        let noteStemHeight = stem?.getHeight() ?? 0
+        let x = getStemX() - Tables.STEM_WIDTH / 2
+        let y = getStemDirection() == Stem.DOWN
+            // Down stems are below the notehead and have flags on the right.
+            ? bounds.yTop - noteStemHeight - flag.getTextMetrics().actualBoundingBoxDescent
+            // Up stems are above the notehead and have flags on the right.
+            : bounds.yBottom - noteStemHeight + flag.getTextMetrics().actualBoundingBoxAscent
+        return (x, y)
+    }
+
     /// Draw the flag of the note.
     public func drawFlag() throws {
         let ctx = try checkContext()
 
         if shouldDrawFlag() {
-            let bounds = getNoteHeadBounds()
-
-            let noteStemHeight = stem?.getHeight() ?? 0
-            let flagX = getStemX() - Tables.STEM_WIDTH / 2
-            let flagY = getStemDirection() == Stem.DOWN
-                // Down stems are below the notehead and have flags on the right.
-                ? bounds.yTop - noteStemHeight - flag.getTextMetrics().actualBoundingBoxDescent
-                // Up stems are above the notehead and have flags on the right.
-                : bounds.yBottom - noteStemHeight + flag.getTextMetrics().actualBoundingBoxAscent
+            let (flagX, flagY) = getFlagPosition()
 
             // Draw the Flag
             try flag.setContext(ctx).setX(flagX).setY(flagY).drawWithStyle()
@@ -1624,14 +1670,12 @@ open class StaveNote: StemmableNote {
         }
 
         // Apply the overall style -- may be contradicted by local settings:
-        _ = ctx.openGroup("stavenote", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("stavenote"), getAttribute("id"))
         try drawLedgerLines()
         if shouldRenderStem { try drawStem() }
         try drawNoteHeads()
         try drawFlag()
-        if let bb = getBoundingBox() {
-            ctx.pointerRect(bb.getX(), bb.getY(), bb.getW(), bb.getH())
-        }
+        drawPointerRect()
         ctx.closeGroup()
         setRendered()
     }

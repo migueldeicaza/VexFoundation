@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/tabnote.ts` (VexFlow 5.0.0).
+// Port of `src/tabnote.ts` (VexFlow 5.1.0).
 //
 // Notes for tablature notation. A tab note has one or more fret positions
 // and can be drawn with or without a stem.
@@ -360,7 +360,20 @@ open class TabNote: StemmableNote {
 
     // MARK: - Width
 
-    /// Calculate and store the width of the note.
+    /// Explicit fret size; otherwise use text metrics and this note's grace scale. (VexFlow 5.1.0)
+    public private(set) var fretFontSize: String?
+
+    /// Resize fret text as well as the parent. Set sizes before formatting the voice. (VexFlow 5.1.0)
+    @discardableResult
+    override open func setFontSize(_ size: String) -> Self {
+        super.setFontSize(size)
+        fretFontSize = size
+        updateWidth()
+        preFormatted = false
+        return self
+    }
+
+    /// Calculate and store the width of the note, retaining explicit sizes across ghost changes.
     public func updateWidth() {
         fretElement = []
         width = 0
@@ -368,6 +381,11 @@ open class TabNote: StemmableNote {
             var fret = positions[i].fret
             if ghost { fret = "(" + fret + ")" }
             let el = TabNote.tabToElement(fret, useAlternativeXGlyph: useAlternativeXNoteheadGlyph)
+            let defaultSize = VexFont.convertSizeToPointValue(Metrics.getFontInfo("TabNote.text").size)
+            let size = fretFontSize.map { VexFont.convertSizeToPointValue($0) } ?? defaultSize * getFontScale()
+            el.setFontSize(VexFont.convertSizeToPointValue(el.fontInfo.size) * size / defaultSize)
+            let metrics = el.getTextMetrics()
+            el.setYShift((metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2)
             fretElement.append(el)
             width = max(el.getWidth(), width)
         }
@@ -605,7 +623,7 @@ open class TabNote: StemmableNote {
         setRendered()
         let renderStem = beam == nil && renderOptions.drawStem
 
-        _ = ctx.openGroup("tabnote", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("tabnote"), getAttribute("id"))
         try drawPositions()
         try drawStemThrough()
 
@@ -618,6 +636,7 @@ open class TabNote: StemmableNote {
 
         try drawFlag()
         try drawModifiers()
+        drawPointerRect()
         ctx.closeGroup()
     }
 }

@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stem.ts` (VexFlow 5.0.0).
+// Port of `src/stem.ts` (VexFlow 5.1.0).
 // The `Stem` object is generally handled by its parent `StemmableNote`.
 
 import Foundation
@@ -219,7 +219,7 @@ public final class Stem: VexElement {
         let stemletYOffset = isStemlet ? stemHeight - stemletHeight * stemDirection.signDouble : 0
 
         // Draw the stem
-        _ = ctx.openGroup("stem", getAttribute("id"))
+        _ = ctx.openGroup(groupClass("stem"), getAttribute("id"))
         ctx.beginPath()
         ctx.setLineWidth(Stem.WIDTH)
         ctx.moveTo(stemX, stemY - stemletYOffset + yBaseOffset)

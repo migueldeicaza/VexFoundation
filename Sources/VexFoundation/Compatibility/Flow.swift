@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of the static API of `src/vexflow.ts` (VexFlow 5.0.0). Upstream 5
+// Port of the static API of `src/vexflow.ts` (VexFlow 5.1.0). Upstream 5
 // merged `flow.ts` and `vex.ts` into the `VexFlow` class. In Swift, the
 // classes are module types (use `VexFoundation.StaveNote` and so on), so this
 // facade holds only the static functions and constants.
@@ -122,6 +122,22 @@ public enum Flow {
     /// The font families of the active runtime context.
     public static func getFonts() -> [String] {
         VexRuntime.getCurrentContext().getFonts()
+    }
+
+    /// Choose text faces independently of the music fonts (VexFlow 5.1.0).
+    /// Call it after `setFonts(_:)` to select a custom text face.
+    public static func setTextFonts(_ fontNames: String...) {
+        setTextFonts(fontNames)
+    }
+
+    /// Array form of `setTextFonts(_:)`.
+    public static func setTextFonts(_ fontNames: [String]) {
+        VexRuntime.getCurrentContext().setTextFonts(fontNames)
+    }
+
+    /// The text-first font stack used by new text elements.
+    public static func getTextFonts() -> [String] {
+        VexRuntime.getCurrentContext().getTextFonts()
     }
 
     // MARK: Music font (deprecated typed API)

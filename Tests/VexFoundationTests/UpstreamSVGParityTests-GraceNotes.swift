@@ -470,4 +470,32 @@ extension UpstreamSVGParityTests {
             try drawGraceMultipleVoicesCase(factory: factory, stave: stave, drawTwice: true)
         }
     }
+
+    // VexFlow 5.1.0: GraceNoteGroup.getBoundingBox().
+    @Test("Grace_Notes.Grace_Note_Group_Bounding_Box")
+    func graceNotesGroupBoundingBoxMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Grace_Notes", test: "Grace_Note_Group_Bounding_Box", width: 300, height: 130) { factory, context in
+            let stave = factory.Stave(x: 10, y: 10, width: 250)
+            let graceNotes = try [("e/4", "16"), ("f/4", "16"), ("g/5", "16")].map {
+                try makeGraceNote(factory, keys: [$0.0], duration: $0.1)
+            }
+            let group = factory.GraceNoteGroup(notes: graceNotes)
+            group.beamNotes()
+
+            let note = factory.StaveNote(try StaveNoteStruct(parsingKeys: ["b/4"], duration: "q"))
+                .addModifier(group, index: 0)
+            let voice = factory.Voice().setStrict(false).addTickables([note])
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+
+            let bb = try #require(group.getBoundingBox())
+            context.beginPath()
+            context.rect(bb.x, bb.y, bb.w, bb.h)
+            context.stroke()
+
+            #expect(bb.x > 0 && bb.y > 0)
+            #expect(bb.x + bb.w <= note.getAbsoluteX())
+            #expect(bb.y < stave.getBottomLineBottomY() && bb.y + bb.h > stave.getTopLineTopY())
+        }
+    }
 }

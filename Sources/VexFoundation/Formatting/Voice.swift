@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/voice.ts` (VexFlow 5.0.0).
+// Port of `src/voice.ts` (VexFlow 5.1.0).
 
 import Foundation
 
@@ -92,12 +92,57 @@ public final class Voice: VexElement {
     public private(set) var largestTickWidth: Double = 0
     public private(set) var tickables: [Tickable] = []
     public let time: VoiceTime
+    /// Durations can change after insertion, for example when attaching tuplets.
+    private var ticksDirty = false
 
     // MARK: - Init
 
-    /// Default time signature is 4/4.
+    /// Reject invalid meters before they can introduce overflow or division by zero
+    /// into tick arithmetic. (VexFlow 5.1.0)
+    public static func validate(_ time: VoiceTime) throws {
+        guard time.numBeats > 0, time.beatValue > 0, time.resolution > 0 else {
+            throw VexError("BadArgument", "Meter and resolution must be positive safe integers.")
+        }
+        let (perBeat, _) = (time.resolution / time.beatValue, 0)
+        let (total, overflow) = time.numBeats.multipliedReportingOverflow(by: perBeat)
+        guard !overflow, total > 0, total <= 9_007_199_254_740_991 else {
+            throw VexError("BadArgument", "Meter exceeds the supported tick range.")
+        }
+    }
+
+    /// Strict parse of a time signature shortcut such as `"4/4"` or `"3/8"`. (VexFlow 5.1.0)
+    public static func parseTime(_ time: String) throws -> VoiceTime {
+        guard time.count <= 64,
+              let regex = try? NSRegularExpression(pattern: "^(\\d+)/(\\d+)$"),
+              let match = regex.firstMatch(in: time, range: NSRange(time.startIndex..., in: time)),
+              let r1 = Range(match.range(at: 1), in: time),
+              let r2 = Range(match.range(at: 2), in: time),
+              let numBeats = Int(time[r1]),
+              let beatValue = Int(time[r2])
+        else {
+            throw VexError("BadArgument", "Invalid time signature. Expected positive integers such as 4/4.")
+        }
+        let voiceTime = VoiceTime(numBeats: numBeats, beatValue: beatValue)
+        try validate(voiceTime)
+        return voiceTime
+    }
+
+    /// Throwing initializer: invalid meters throw, as upstream 5.1.0 does.
+    public convenience init(validating time: VoiceTime) throws {
+        try Voice.validate(time)
+        self.init(time: time)
+    }
+
+    /// Throwing initializer from a time signature string such as `"4/4"`.
+    public convenience init(parsingTime time: String) throws {
+        self.init(time: try Voice.parseTime(time))
+    }
+
+    /// Default time signature is 4/4. An invalid meter (see `validate(_:)`) gives 4/4;
+    /// use `init(validating:)` to get an error instead.
     public init(time: VoiceTime? = nil) {
-        let t = time ?? VoiceTime()
+        var t = time ?? VoiceTime()
+        if (try? Voice.validate(t)) == nil { t = VoiceTime() }
         self.time = t
         // Recalculate total ticks.
         self.totalTicks = Fraction(t.numBeats * (t.resolution / t.beatValue), 1)
@@ -108,34 +153,9 @@ public final class Voice: VexElement {
     }
 
     /// Time signature shortcut: "4/4", "3/8", etc. A string that does not
-    /// match `<n>/<n>` gives 4/4 (upstream behavior).
+    /// match `<n>/<n>` gives 4/4 (upstream 5.1.0 throws: see `init(parsingTime:)`).
     public convenience init(time: String) {
-        self.init(time: Voice.parseVoiceTime(time))
-    }
-
-    static func parseVoiceTime(_ time: String) -> VoiceTime {
-        // Upstream: time.match(/(\d+)\/(\d+)/)
-        let chars = Array(time)
-        var i = 0
-        while i < chars.count {
-            if chars[i].isASCII, chars[i].isNumber {
-                var j = i
-                while j < chars.count, chars[j].isASCII, chars[j].isNumber { j += 1 }
-                if j < chars.count, chars[j] == "/" {
-                    var k = j + 1
-                    while k < chars.count, chars[k].isASCII, chars[k].isNumber { k += 1 }
-                    if k > j + 1,
-                       let num = Int(String(chars[i..<j])),
-                       let den = Int(String(chars[(j + 1)..<k])) {
-                        return VoiceTime(numBeats: num, beatValue: den)
-                    }
-                }
-                i = j
-            } else {
-                i += 1
-            }
-        }
-        return VoiceTime()
+        self.init(time: (try? Voice.parseTime(time)) ?? VoiceTime())
     }
 
     /// Convenience init from a typed time signature.
@@ -151,10 +171,22 @@ public final class Voice: VexElement {
 
     // MARK: - Accessors
 
-    public func getTotalTicks() -> Fraction { totalTicks }
-    public func getTicksUsed() -> Fraction { ticksUsed }
+    public func getTotalTicks() -> Fraction {
+        refreshTicks()
+        return totalTicks
+    }
+
+    public func getTicksUsed() -> Fraction {
+        refreshTicks()
+        return ticksUsed
+    }
+
     public func getLargestTickWidth() -> Double { largestTickWidth }
-    public func getSmallestTickCount() -> Fraction { smallestTickCount }
+
+    public func getSmallestTickCount() -> Fraction {
+        refreshTicks()
+        return smallestTickCount
+    }
     public func getTickables() -> [Tickable] { tickables }
     public func getMode() -> VoiceMode { mode }
 
@@ -164,10 +196,13 @@ public final class Voice: VexElement {
         return self
     }
 
-    public func getResolutionMultiplier() -> Int { resolutionMultiplier }
+    public func getResolutionMultiplier() -> Int {
+        refreshTicks()
+        return resolutionMultiplier
+    }
 
     public func getActualResolution() -> Int {
-        resolutionMultiplier * time.resolution
+        getResolutionMultiplier() * time.resolution
     }
 
     // MARK: - Stave
@@ -213,6 +248,7 @@ public final class Voice: VexElement {
     }
 
     public func isComplete() -> Bool {
+        refreshTicks()
         if mode == .strict || mode == .full {
             return ticksUsed.equals(totalTicks)
         }
@@ -238,9 +274,35 @@ public final class Voice: VexElement {
     }
 
     public func softmax(_ tickValue: Double) -> Double {
+        refreshTicks()
         let expTicks = expTicksUsed ?? reCalculateExpTicksUsed()
         let total = ticksUsed.value()
         return pow(options.softmaxFactor, tickValue / total) / expTicks
+    }
+
+    // MARK: - Tick invalidation (VexFlow 5.1.0)
+
+    /// Invalidate cached duration totals when a member's duration changes.
+    public func invalidateTicks() {
+        ticksDirty = true
+        expTicksUsed = nil
+    }
+
+    /// Recount once after a batch of duration edits; avoid partial-tuplet validation.
+    private func refreshTicks() {
+        guard ticksDirty else { return }
+        ticksUsed.set(0, 1)
+        totalTicks.set(time.numBeats * (time.resolution / time.beatValue), 1)
+        smallestTickCount = totalTicks.clone()
+        for tickable in tickables {
+            if tickable.shouldIgnoreTicks() { continue }
+            let ticks = tickable.getTicks()
+            ticksUsed.add(ticks)
+            if ticks.lessThan(smallestTickCount) { smallestTickCount = ticks.clone() }
+        }
+        resolutionMultiplier = ticksUsed.denominator
+        totalTicks.add(0, resolutionMultiplier)
+        ticksDirty = false
     }
 
     // MARK: - Add Tickables
@@ -256,6 +318,7 @@ public final class Voice: VexElement {
 
     @discardableResult
     public func addTickableThrowing(_ tickable: Tickable) throws -> Self {
+        refreshTicks()
         if !tickable.shouldIgnoreTicks() {
             let ticks = tickable.getTicks()
             ticksUsed.add(ticks)
