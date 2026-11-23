@@ -837,9 +837,9 @@ struct Upstream57Tests {
                             EasyScoreLyricMark(note: ids[1], text: "fa"),
                             EasyScoreLyricMark(note: ids[2], text: "sol"),
                         ],
-                        bar == 0
+                        EasyScoreVerse(syllables: bar == 0
                             ? ids.enumerated().map { i, id in EasyScoreLyricMark(note: id, text: ["do", "re", "mi"][i]) }
-                            : [EasyScoreLyricMark(note: ids[0], text: "do", extendTo: ids[2])],
+                            : [EasyScoreLyricMark(note: ids[0], text: "do", extendTo: ids[2])]),
                     ]
                 )
             }

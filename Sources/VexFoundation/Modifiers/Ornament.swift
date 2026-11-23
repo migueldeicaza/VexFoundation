@@ -2,8 +2,9 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Cyril Silverman
 //
-// Port of `src/ornament.ts` (VexFlow 5.4.0). The 4.x delayed-draw fixes
+// Port of `src/ornament.ts` (VexFlow 5.8.0). The 4.x delayed-draw fixes
 // (b184399c, 7856e88a, 7ca08666) are part of 5.0.0.
+// Places ornaments, editorial parentheses, accidentals and written trill partners on their principal notes.
 
 import Foundation
 
@@ -79,6 +80,11 @@ public final class Ornament: Modifier {
     private var accidentalUpper: VexElement?
     private var accidentalLower: VexElement?
     private var delayXShift: Double?
+    /// Separate glyphs preserve the identity and alignment of the enclosed ornament. (VexFlow 5.8.0)
+    private var parentheses: (left: VexElement, right: VexElement)?
+    /// A written, untimed trill partner. Its column follows earlier right-hand modifiers. (VexFlow 5.8.0)
+    private var auxiliary: (pitch: String, glyph: VexElement, headOffset: Double, headWidth: Double)?
+    private var auxiliaryOffset: Double = 0
     /// Side spacing is recomputed per format and is independent of authored shifts. (VexFlow 5.3.0)
     private var sideOffset: Double = 0
 
@@ -97,14 +103,20 @@ public final class Ornament: Modifier {
             let increment: Double = 2
 
             ornament.sideOffset = 0
+            if let auxiliary = ornament.auxiliary {
+                ornament.auxiliaryOffset = rightShift
+                rightShift += auxiliary.glyph.getWidth() + Ornament.minPadding + 2
+            }
+            let markWidth = ornament.getWidth()
+            let sidePadding = (markWidth - ornament.width) / 2
             if ornament.position == .right {
-                ornament.sideOffset = rightShift + 2
-                rightShift += ornament.width + Ornament.minPadding
+                ornament.sideOffset = rightShift + sidePadding + 2
+                rightShift += markWidth + Ornament.minPadding
             } else if ornament.position == .left {
-                ornament.sideOffset = -(leftShift + ornament.width + 2)
-                leftShift += ornament.width + Ornament.minPadding
+                ornament.sideOffset = -(leftShift + markWidth - sidePadding + 2)
+                leftShift += markWidth + Ornament.minPadding
             } else if ornament.position == .above {
-                width = max(ornament.getWidth(), width)
+                width = max(markWidth, width)
                 let note = ornament.getNote()
                 var curTop = note.getLineNumber(isTopNote: true) + state.topTextLine
                 if let stem = (note as? StemmableNote)?.getStem(), note.getStemDirection() == Stem.UP {
@@ -116,7 +128,7 @@ public final class Ornament: Modifier {
                 _ = ornament.setTextLine(state.topTextLine)
                 state.topTextLine += increment
             } else {
-                width = max(ornament.getWidth(), width)
+                width = max(markWidth, width)
                 _ = ornament.setTextLine(state.textLine)
                 state.textLine += increment
             }
@@ -189,6 +201,42 @@ public final class Ornament: Modifier {
 
     // MARK: - Accidentals
 
+    // MARK: - Editorial Parentheses (VexFlow 5.8.0)
+
+    /// Enclose an editorial ornament in round parentheses. Pass false to remove them.
+    @discardableResult
+    public func setParenthesized(_ parenthesized: Bool = true) -> Self {
+        if parenthesized {
+            if parentheses == nil {
+                parentheses = (
+                    left: VexElement().setText(Glyphs.noteheadParenthesisLeft),
+                    right: VexElement().setText(Glyphs.noteheadParenthesisRight)
+                )
+            }
+        } else {
+            parentheses = nil
+        }
+        return self
+    }
+
+    /// True when the ornament has editorial parentheses.
+    public var isParenthesized: Bool { parentheses != nil }
+
+    /// Leave ink clearance on each side, scaled to the active music font.
+    private var parenthesisGap: Double {
+        fontSizeInPixels / 24
+    }
+
+    /// Reserve symmetric space so that the ornament itself stays centered on its note.
+    override public func getWidth() -> Double {
+        guard let parentheses else { return width }
+        let left = parentheses.left.setFont(fontInfo).getTextInk(0, 0).w
+        let right = parentheses.right.setFont(fontInfo).getTextInk(0, 0).w
+        let ink = getTextInk(-xShift, -yShift)
+        let margin = max(left - ink.x, ink.x + ink.w - width + right) + parenthesisGap
+        return width + 2 * max(0, margin)
+    }
+
     /// Set the upper accidental for the ornament.
     @discardableResult
     public func setUpperAccidental(_ accid: String) -> Self {
@@ -205,6 +253,46 @@ public final class Ornament: Modifier {
         element.setText(Tables.accidentalCodes(accid))
         accidentalLower = element
         return self
+    }
+
+    // MARK: - Pitched Trill (VexFlow 5.8.0)
+
+    /// The written pitch of the trill partner, for example `bb/4`, or nil.
+    public var auxiliaryPitch: String? { auxiliary?.pitch }
+
+    /// Show a parenthesized cue beside the trill's written principal, e.g. bb/4, an/4 or a/4.
+    /// Pass nil to remove the cue. Throw `BadArguments` when the ornament is not a trill or
+    /// the pitch is not valid.
+    @discardableResult
+    public func setAuxiliaryPitch(_ pitch: String?) throws -> Self {
+        guard let pitch else {
+            auxiliary = nil
+            return self
+        }
+        guard type == "tr", let spelling = Ornament.parseAuxiliaryPitch(pitch) else {
+            throw VexError("BadArguments", "A pitched trill needs a written pitch such as bb/4.")
+        }
+        let accidental = spelling.isEmpty ? "" : Tables.accidentalCodes(spelling.lowercased())
+        let glyph = VexElement().setFont(fontInfo).setFontSize(fontSizeInPoints * 0.65)
+        let prefix = Glyphs.accidentalParensLeft + accidental
+        let headOffset = glyph.setText(prefix).getWidth()
+        let headWidth = glyph.setText(Glyphs.noteheadBlack).getWidth()
+        glyph.setText(prefix + Glyphs.noteheadBlack + Glyphs.accidentalParensRight)
+        auxiliary = (pitch: pitch.lowercased(), glyph: glyph, headOffset: headOffset, headWidth: headWidth)
+        return self
+    }
+
+    /// Match `/^([a-g])(bb|##|b|#|n)?\/(-?\d)$/i`. Return the accidental part, or nil for no match.
+    private static func parseAuxiliaryPitch(_ pitch: String) -> String? {
+        let chars = Array(pitch)
+        guard chars.count >= 3, "abcdefg".contains(chars[0].lowercased()) else { return nil }
+        guard let slash = chars.firstIndex(of: "/") else { return nil }
+        let accidental = String(chars[1..<slash])
+        guard ["", "bb", "##", "b", "#", "n"].contains(accidental.lowercased()) else { return nil }
+        var octave = chars[(slash + 1)...]
+        if octave.first == "-" { octave = octave.dropFirst() }
+        guard octave.count == 1, let digit = octave.first, digit.isASCII, digit.isNumber else { return nil }
+        return accidental
     }
 
     // MARK: - Draw
@@ -275,6 +363,15 @@ public final class Ornament: Modifier {
         x = glyphX - (position == .above || position == .below ? width / 2 : 0)
         y = glyphY + offset
         parts.append((element: self, x: 0, y: 0))
+        if let parentheses {
+            let ink = getTextInk(x, y)
+            // Center the signs on the ornament's ink, even when their glyph baselines differ.
+            for (side, element) in [parentheses.left, parentheses.right].enumerated() {
+                let sign = element.setFont(fontInfo).getTextInk(0, 0)
+                let edge = side == 0 ? ink.x - parenthesisGap - sign.w : ink.x + ink.w + parenthesisGap
+                parts.append((element: element, x: edge - sign.x, y: ink.y + (ink.h - sign.h) / 2 - sign.y))
+            }
+        }
         if let accidentalUpper {
             parts.append((
                 element: accidentalUpper,
@@ -283,16 +380,57 @@ public final class Ornament: Modifier {
                     - accidentalUpper.getTextMetrics().actualBoundingBoxDescent
             ))
         }
+        if let auxiliary {
+            guard let staveNote = note as? StaveNote, !note.isRest() else {
+                throw VexError("BadArguments", "A trill partner needs a pitched staff note.")
+            }
+            // Measure the diatonic interval from the written key. The principal's actual line
+            // also accounts for octave clefs and authored staff placement.
+            let index = try checkIndexThrowing()
+            let principal = try Tables.keyProperties(staveNote.getKeys()[index], clef: .treble)
+            let partner = try Tables.keyProperties(auxiliary.pitch, clef: .treble)
+            let y = staveNote.getYs()[index] - (partner.line - principal.line) * staffSpace
+            let right = staveNote.getModifierStartXY(position: .right, index: index, forceFlagRight: true)
+            let headEdge = staveNote.getHeadInk().map { $0.x + $0.w }.max() ?? -Double.infinity
+            parts.append((element: auxiliary.glyph, x: max(right.x, headEdge + 2) + auxiliaryOffset, y: y))
+        }
         return parts
     }
 
-    /// Include both auxiliary signs in the measured ornament. (VexFlow 5.3.0)
+    /// Outside the staff, ledger lines belong to the cue head alone. (VexFlow 5.8.0)
+    private func cueLedgers(_ element: VexElement, _ x: Double, _ y: Double) -> [BoundingBox] {
+        guard let auxiliary, element === auxiliary.glyph,
+              let stave = (try? checkAttachedNoteThrowing())?.getStave() else { return [] }
+        let top = stave.getYForLine(0)
+        let bottom = stave.getYForLine(Double(stave.getNumLines() - 1))
+        let step = stave.getSpacingBetweenLines()
+        if !(step > 0) || !y.isFinite { return [] }
+        var lines: [BoundingBox] = []
+        let left = x + auxiliary.headOffset - 1
+        let width = auxiliary.headWidth + 2
+        var line = top - step
+        while line >= y {
+            lines.append(BoundingBox(left, line, width, 1))
+            line -= step
+        }
+        line = bottom + step
+        while line <= y {
+            lines.append(BoundingBox(left, line, width, 1))
+            line += step
+        }
+        return lines
+    }
+
+    /// Measure the ornament and all of its visible signs together. (VexFlow 5.8.0)
     override public func getBoundingBox() -> BoundingBox? {
         guard let parts = try? positionElements() else { return nil }
         var result: BoundingBox?
         for part in parts {
-            let box = part.element.getTextInk(part.x + part.element.getX(), part.y + part.element.getY())
-            if result == nil { result = box } else { _ = result?.mergeWith(box) }
+            let boxes = [part.element.getTextInk(part.x + part.element.getX(), part.y + part.element.getY())]
+                + cueLedgers(part.element, part.x, part.y)
+            for box in boxes {
+                if result == nil { result = box } else { _ = result?.mergeWith(box) }
+            }
         }
         return result
     }
@@ -303,6 +441,9 @@ public final class Ornament: Modifier {
         setRendered()
         _ = ctx.openGroup(groupClass("ornament"), getAttribute("id"))
         for part in try positionElements() {
+            for line in cueLedgers(part.element, part.x, part.y) {
+                ctx.fillRect(line.x, line.y, line.w, line.h)
+            }
             part.element.renderText(ctx, xPos: part.x, yPos: part.y)
         }
         drawPointerRect()

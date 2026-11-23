@@ -553,12 +553,38 @@ public final class Factory {
         position: ModifierPosition? = nil,
         upperAccidental: String? = nil,
         lowerAccidental: String? = nil,
+        auxiliaryPitch: String? = nil,
+        parenthesized: Bool = false,
         delayed: Bool? = nil
     ) -> VexFoundation.Ornament {
+        // Upstream throws for a bad auxiliary pitch. This form drops the bad pitch; use `OrnamentThrowing`.
+        let ornament = try? OrnamentThrowing(
+            type, position: position, upperAccidental: upperAccidental, lowerAccidental: lowerAccidental,
+            auxiliaryPitch: auxiliaryPitch, parenthesized: parenthesized, delayed: delayed
+        )
+        return ornament ?? Ornament(
+            type, position: position, upperAccidental: upperAccidental, lowerAccidental: lowerAccidental,
+            parenthesized: parenthesized, delayed: delayed
+        )
+    }
+
+    /// Create an ornament. Throw `BadArguments` for an auxiliary pitch that is not valid. (VexFlow 5.8.0)
+    @discardableResult
+    public func OrnamentThrowing(
+        _ type: String,
+        position: ModifierPosition? = nil,
+        upperAccidental: String? = nil,
+        lowerAccidental: String? = nil,
+        auxiliaryPitch: String? = nil,
+        parenthesized: Bool = false,
+        delayed: Bool? = nil
+    ) throws -> VexFoundation.Ornament {
         let ornament = inRuntimeContext { VexFoundation.Ornament(type) }
         if let position {
             _ = ornament.setPosition(position)
         }
+        if parenthesized { _ = ornament.setParenthesized() }
+        if let auxiliaryPitch { _ = try inRuntimeContext { try ornament.setAuxiliaryPitch(auxiliaryPitch) } }
         if let upperAccidental, !upperAccidental.isEmpty {
             _ = ornament.setUpperAccidental(upperAccidental)
         }
@@ -582,8 +608,10 @@ public final class Factory {
     }
 
     @discardableResult
-    public func Fingering(number: String = "0", position: ModifierPosition = .left) -> FretHandFinger {
-        let fingering = inRuntimeContext { FretHandFinger(number) }
+    public func Fingering(
+        number: String = "0", position: ModifierPosition = .left, drawCircle: Bool = false
+    ) -> FretHandFinger {
+        let fingering = inRuntimeContext { FretHandFinger(number).setDrawCircle(drawCircle) }
         _ = fingering.setPosition(position)
         if let ctx = context { _ = fingering.setContext(ctx) }
         return own(fingering)
@@ -687,14 +715,16 @@ public final class Factory {
         autoStem: Bool = false,
         secondaryBeamBreaks: [Int] = [],
         partialBeamDirections: [Int: PartialBeamDirection] = [:],
-        feathered: FeatheredBeamDirection? = nil
+        feathered: FeatheredBeamDirection? = nil,
+        frenchBeams: Bool = false
     ) -> VexFoundation.Beam? {
         try? BeamThrowing(
             notes: notes,
             autoStem: autoStem,
             secondaryBeamBreaks: secondaryBeamBreaks,
             partialBeamDirections: partialBeamDirections,
-            feathered: feathered
+            feathered: feathered,
+            frenchBeams: frenchBeams
         )
     }
 
@@ -704,10 +734,12 @@ public final class Factory {
         autoStem: Bool = false,
         secondaryBeamBreaks: [Int] = [],
         partialBeamDirections: [Int: PartialBeamDirection] = [:],
-        feathered: FeatheredBeamDirection? = nil
+        feathered: FeatheredBeamDirection? = nil,
+        frenchBeams: Bool = false
     ) throws -> VexFoundation.Beam {
         let beam = try inRuntimeContext { try VexFoundation.Beam(notes, autoStem: autoStem) }
         if let ctx = context { _ = beam.setContext(ctx) }
+        if frenchBeams { beam.renderOptions.frenchBeams = true }
         if let feathered { beam.renderOptions.feathered = feathered }
         _ = beam.breakSecondaryAt(secondaryBeamBreaks)
         for (noteIndex, direction) in partialBeamDirections {
@@ -727,9 +759,14 @@ public final class Factory {
         return own(curve)
     }
 
+    /// `laissezVibrer` (VexFlow 5.8.0 `options.laissezVibrer`) is the local reach in pixels
+    /// of a let-ring tie on one outgoing pitched head. When it is given, it replaces `notes.laissezVibrer`.
     @discardableResult
     public func StaveTie(notes: TieNotes, text: String? = nil,
-                         direction: TieDirection? = nil) -> VexFoundation.StaveTie {
+                         direction: TieDirection? = nil,
+                         laissezVibrer: Double? = nil) -> VexFoundation.StaveTie {
+        var notes = notes
+        if let laissezVibrer { notes.laissezVibrer = laissezVibrer }
         let tie = inRuntimeContext { VexFoundation.StaveTie(notes: notes, text: text) }
         if let direction { _ = tie.setDirection(direction) }
         if let ctx = context { _ = tie.setContext(ctx) }
@@ -866,6 +903,12 @@ public final class Factory {
         if let ctx = context { _ = element.setContext(ctx) }
         // A new element has no owner and a valid role, so adoption cannot fail.
         return (try? adopt(element, role: role)) ?? element
+    }
+
+    /// Queue independent figured-bass rows beneath their bass notes. (VexFlow 5.8.0)
+    @discardableResult
+    public func FiguredBass(_ spec: FiguredBassSpec) throws -> VexFoundation.FiguredBass {
+        adoptNew(musicGlyph(try inRuntimeContext { try VexFoundation.FiguredBass(spec) }), role: .drawable)
     }
 
     /// Construct a native Bend with an explicit drawing role.

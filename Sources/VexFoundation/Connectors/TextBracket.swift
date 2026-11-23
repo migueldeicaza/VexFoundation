@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Cyril Silverman
 //
-// Port of `src/textbracket.ts` (VexFlow 5.4.0).
+// Port of `src/textbracket.ts` (VexFlow 5.8.0).
 //
 // This file implements `TextBrackets` which extend between two notes.
 // The octave transposition markings (8va, 8vb, 15va, 15vb) can be created
@@ -157,11 +157,23 @@ public final class TextBracket: VexElement {
     // MARK: - Setters
 
     /// Set whether the bracket line should be `dashed`. You can also
-    /// optionally set the `dash` pattern.
+    /// optionally set the `dash` pattern. An invalid pattern changes nothing
+    /// (use `setDashedThrowing(_:dash:)` to get the error).
     @discardableResult
     public func setDashed(_ dashed: Bool, dash: [Double]? = nil) -> Self {
+        _ = try? setDashedThrowing(dashed, dash: dash)
+        return self
+    }
+
+    /// Optionally store the new pattern when changing the bracket style. (VexFlow 5.8.0)
+    /// Throws `VexError("BadDashPattern")` and changes nothing when the pattern is not valid.
+    @discardableResult
+    public func setDashedThrowing(_ dashed: Bool, dash: [Double]? = nil) throws -> Self {
+        if let dash {
+            try validateDashPattern(dash)
+            renderOptions.dash = dash
+        }
         renderOptions.dashed = dashed
-        if let dash { renderOptions.dash = dash }
         return self
     }
 
@@ -170,44 +182,6 @@ public final class TextBracket: VexElement {
     public func setLine(_ line: Double) -> Self {
         self.line = line
         return self
-    }
-
-    /// Port of `Renderer.drawDashedLine`.
-    static func drawDashedLine(
-        _ context: RenderContext,
-        _ fromX: Double,
-        _ fromY: Double,
-        _ toX: Double,
-        _ toY: Double,
-        _ dashPattern: [Double]
-    ) {
-        context.beginPath()
-
-        let dx = toX - fromX
-        let dy = toY - fromY
-        let angle = atan2(dy, dx)
-        var x = fromX
-        var y = fromY
-        context.moveTo(fromX, fromY)
-        var idx = 0
-        var draw = true
-        while !dashPattern.isEmpty && !((dx < 0 ? x <= toX : x >= toX) && (dy < 0 ? y <= toY : y >= toY)) {
-            let dashLength = dashPattern[idx % dashPattern.count]
-            idx += 1
-            let nx = x + cos(angle) * dashLength
-            x = dx < 0 ? max(toX, nx) : min(toX, nx)
-            let ny = y + sin(angle) * dashLength
-            y = dy < 0 ? max(toY, ny) : min(toY, ny)
-            if draw {
-                context.lineTo(x, y)
-            } else {
-                context.moveTo(x, y)
-            }
-            draw.toggle()
-        }
-
-        context.closePath()
-        context.stroke()
     }
 
     // MARK: - Draw
@@ -320,10 +294,10 @@ public final class TextBracket: VexElement {
             }
 
             // Main line
-            Self.drawDashedLine(ctx, startX, lineY, endX, lineY, renderOptions.dash)
+            try Renderer.drawDashedLine(ctx, startX, lineY, endX, lineY, renderOptions.dash)
             // Ending Bracket
             if renderOptions.showBracket {
-                Self.drawDashedLine(
+                try Renderer.drawDashedLine(
                     ctx,
                     endX,
                     lineY + 1 * posValue,

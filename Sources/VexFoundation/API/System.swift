@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/system.ts` (VexFlow 5.4.0).
+// Port of `src/system.ts` (VexFlow 5.8.0).
 
 import Foundation
 
@@ -326,6 +326,7 @@ public final class System: VexElement {
 
             var y = options.y
             var startX: Double = 0
+            var stanzaStartX: Double = 0
             var debugNoteMetricsYs: [(y: Double, stave: Stave)] = []
 
             for (index, part) in partStaves.enumerated() {
@@ -338,7 +339,10 @@ public final class System: VexElement {
                     debugNoteMetricsYs.append((y: y, stave: part))
                     y += 15
                 }
-                startX = max(startX, part.getNoteStartX())
+                // VexFlow 5.8.0: reserve a shared column for stanza labels.
+                let column = phrase?.getStanzaColumnWidth(part) ?? 0
+                if column != 0 { stanzaStartX = max(stanzaStartX, part.getX() + column) }
+                startX = max(startX, part.getNoteStartX(), stanzaStartX)
             }
 
             // Re-assign stave for Y position update
@@ -363,6 +367,8 @@ public final class System: VexElement {
                 options.width = justifyWidth + Stave.rightPadding + (startX - options.x) + (row?.endPadding ?? 0)
                 for part in partStaves {
                     part.setWidth(options.width)
+                    // Resizing invalidates the native prefix. Keep the space reserved for stanza labels.
+                    if stanzaStartX != 0 { _ = part.setNoteStartX(startX) }
                 }
             } else {
                 if options.noPadding {
@@ -414,7 +420,7 @@ public final class System: VexElement {
             }
             setRendered()
 
-            phrase?.draw(ctx)
+            try phrase?.draw(ctx)
             if options.debugFormatter {
                 Formatter.plotDebugging(
                     ctx: ctx,

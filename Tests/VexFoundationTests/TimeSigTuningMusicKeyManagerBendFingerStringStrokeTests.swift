@@ -463,9 +463,10 @@ struct TimeSigTuningMusicKeyManagerBendFingerStringStrokeTests {
     }
 
     @Test func stringNumberThrowingFormatRequiresStaveNote() throws {
+        // VexFlow 5.8.0 accepts TAB frets too, so use a note that is neither pitched nor TAB.
         let sn = StringNumber("1")
-        let tab = TabNote(TabNoteStruct(positions: [TabNotePosition(str: 1, fret: 3)], duration: .quarter))
-        _ = tab.addModifier(sn, index: 0)
+        let ghost = GhostNote(.quarter)
+        _ = ghost.addModifier(sn, index: 0)
         var state = ModifierContextState()
         do {
             _ = try StringNumber.formatThrowing([sn], state: &state)

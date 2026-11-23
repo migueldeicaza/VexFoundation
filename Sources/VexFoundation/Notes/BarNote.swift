@@ -1,7 +1,8 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/barnote.ts` (VexFlow 5.0.0).
+// Port of `src/barnote.ts` (VexFlow 5.8.0).
+// Inline barlines reserve horizontal space without advancing the voice.
 
 import Foundation
 
@@ -36,6 +37,9 @@ public final class BarNote: Note {
             .repeatEnd: 14,
             .repeatBoth: 18,
             .none: 0,
+            .dashed: 8,
+            .dotted: 9,
+            .doubleHeavy: 17,
         ]
 
         // Tell the formatter that bar notes have no duration.

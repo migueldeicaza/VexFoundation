@@ -2,9 +2,9 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Raffaele Viglianti, 2012 http://itisnotsound.wordpress.com/
 //
-// Port of `src/stavehairpin.ts` (VexFlow 5.7.0).
+// Port of `src/stavehairpin.ts` (VexFlow 5.8.0).
 // This class implements hairpins between notes.
-// Hairpins can be either crescendo or decrescendo, with an optional circled niente tip.
+// A crescendo or decrescendo can have straight or flared arms and a circled niente tip.
 
 import Foundation
 
@@ -32,6 +32,8 @@ public enum HairpinType: Int, Sendable {
 // MARK: - Hairpin Render Options
 
 public struct HairpinRenderOptions {
+    /// Widen the arms gradually near the closed tip, then more rapidly toward the open end. (VexFlow 5.8.0)
+    public var flared: Bool
     /// Draw an open niente circle at the closed end of the wedge.
     public var niente: Bool
     public var rightShiftTicks: Double?
@@ -48,8 +50,10 @@ public struct HairpinRenderOptions {
         yShift: Double = 0,
         rightShiftTicks: Double? = 0,
         leftShiftTicks: Double? = 0,
-        niente: Bool = false
+        niente: Bool = false,
+        flared: Bool = false
     ) {
+        self.flared = flared
         self.niente = niente
         self.leftShiftPx = leftShiftPx
         self.rightShiftPx = rightShiftPx
@@ -308,14 +312,23 @@ public final class StaveHairpin: VexElement {
         let ctx = try checkContext()
         let e = edges(firstX: firstX, lastX: lastX, firstY: firstY, staffHeight: staffHeight)
         let middle = e.top + e.height / 2
-        ctx.beginPath()
-        ctx.moveTo(e.openX, e.top)
-        ctx.lineTo(e.closedX, middle)
-        // At a circled tip use separate arms to keep a sharp miter out of the circle.
-        if e.tip != nil { ctx.moveTo(e.closedX, middle) }
-        ctx.lineTo(e.openX, e.top + e.height)
-        ctx.stroke()
-        ctx.closePath()
+        if renderOptions.flared {
+            drawFlaredHairpin(
+                ctx,
+                HairpinPoint(x: e.closedX, y: middle, progress: 0),
+                HairpinPoint(x: e.openX, y: middle, progress: 1),
+                e.height / 2
+            )
+        } else {
+            ctx.beginPath()
+            ctx.moveTo(e.openX, e.top)
+            ctx.lineTo(e.closedX, middle)
+            // At a circled tip use separate arms to keep a sharp miter out of the circle.
+            if e.tip != nil { ctx.moveTo(e.closedX, middle) }
+            ctx.lineTo(e.openX, e.top + e.height)
+            ctx.stroke()
+            ctx.closePath()
+        }
         if let tip = e.tip { drawNienteTip(ctx, tip) }
     }
 

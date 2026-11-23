@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/clefnote.ts` (VexFlow 5.6.1).
+// Port of `src/clefnote.ts` (VexFlow 5.8.0).
 // Inline clef changes participate in note spacing using the attached stave's glyph.
 
 import Foundation
@@ -32,7 +32,12 @@ public final class ClefNote: Note {
     public func setType(_ type: ClefName, size: ClefSize = .default, annotation: ClefAnnotation? = nil) -> Self {
         clef = Clef(type: type, size: size, annotation: annotation)
         if let stave { clef.setStave(stave) }
-        setWidth(clef.getWidth())
+        // A double-octave F clef can fill its entire advance. Keep ink clear of the next head. (VexFlow 5.8.0)
+        var width = clef.getWidth()
+        if (annotation == .doubleOctaveUp || annotation == .doubleOctaveDown) && clef.code != Clef.types[type]?.code {
+            width = max(width, clef.getTextMetrics().actualBoundingBoxRight + 2)
+        }
+        setWidth(width)
         return self
     }
 

@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stem.ts` (VexFlow 5.3.0).
+// Port of `src/stem.ts` (VexFlow 5.8.0).
 // The `Stem` object is generally handled by its parent `StemmableNote`.
 
 import Foundation
@@ -196,8 +196,9 @@ public final class Stem: VexElement {
         renderHeightAdjustment = Metrics.getDouble("Stem.heightAdjustmentForFlag", -3)
     }
 
-    public func adjustHeightForBeam() {
-        renderHeightAdjustment = -Stem.WIDTH / 2
+    /// Inset the drawn tip into the chosen beam strip while retaining the primary beam fit. (VexFlow 5.8.0)
+    public func adjustHeightForBeam(_ inset: Double = 0) {
+        renderHeightAdjustment = -Stem.WIDTH / 2 - inset
     }
 
     // MARK: - Draw

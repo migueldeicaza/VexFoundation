@@ -154,6 +154,8 @@ public func measureEngraving(_ element: VexElement, options: GeometryOptions = G
             } else if kind == StaveNote.self || kind == GraceNote.self, let note = owner as? StaveNote {
                 shape = try noteShape(note)
                 if note.renderOptions.draw != false { children(note.getModifiers()) }
+            } else if kind == FiguredBass.self, let figuredBass = owner as? FiguredBass {
+                shape.parts.append(contentsOf: try figuredBass.getInkParts())
             } else if kind == GraceNoteGroup.self, let group = owner as? GraceNoteGroup {
                 children(try group.getLayoutElements())
             } else if kind == Articulation.self, let articulation = owner as? Articulation {

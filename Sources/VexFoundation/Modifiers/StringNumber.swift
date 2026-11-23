@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Larry Kuhns
 //
-// Port of `src/stringnumber.ts` (VexFlow 5.1.0). The `StringNumber` class
+// Port of `src/stringnumber.ts` (VexFlow 5.8.0). The `StringNumber` class
 // renders string number annotations beside notes.
 
 import Foundation
@@ -14,7 +14,7 @@ public enum StringNumberError: Error, LocalizedError, Equatable, Sendable {
     public var errorDescription: String? {
         switch self {
         case .requiresStaveNote:
-            return "StringNumber requires a StaveNote."
+            return "String numbers require a pitched note or TAB fret."
         case .invalidPosition(let position):
             return "The position \(position) is invalid."
         }
@@ -76,16 +76,14 @@ public final class StringNumber: Modifier {
         var prevNote: Note?
         var extraXSpaceForDisplacedNotehead: Double = 0
         var shiftRight: Double = 0
-        let modLines: Double = 0
 
         for num in nums {
             let note = num.getNote()
             let pos = num.getPosition()
-            guard note is StaveNote else {
+            guard note is StaveNote || note is TabNote else {
                 throw StringNumberError.requiresStaveNote
             }
-            let index = num.checkIndex()
-            let props = note.getKeyProps()[index]
+            let line = try num.getAttachedLine()
             let verticalSpaceNeeded = (num.radius * 2) / Tables.STAVE_LINE_DISTANCE + 0.5
 
             // Upstream reads `note.getModifierContext().getState()`. The
@@ -115,13 +113,11 @@ public final class StringNumber: Modifier {
                 prevNote = note
             }
 
-            let glyphLine = modLines == 0 ? props.line : modLines
-
             numsList.append(NumInfo(
                 pos: pos,
                 note: note,
                 num: num,
-                line: glyphLine,
+                line: line,
                 shiftL: extraXSpaceForDisplacedNotehead,
                 shiftR: shiftRight
             ))
@@ -245,44 +241,6 @@ public final class StringNumber: Modifier {
 
     // MARK: - Draw
 
-    /// Port of `Renderer.drawDashedLine`.
-    private static func drawDashedLine(
-        _ ctx: any RenderContext,
-        _ fromX: Double,
-        _ fromY: Double,
-        _ toX: Double,
-        _ toY: Double,
-        _ dashPattern: [Double]
-    ) {
-        ctx.beginPath()
-
-        let dx = toX - fromX
-        let dy = toY - fromY
-        let angle = atan2(dy, dx)
-        var x = fromX
-        var y = fromY
-        ctx.moveTo(fromX, fromY)
-        var idx = 0
-        var draw = true
-        while !((dx < 0 ? x <= toX : x >= toX) && (dy < 0 ? y <= toY : y >= toY)) {
-            let dashLength = dashPattern[idx % dashPattern.count]
-            idx += 1
-            let nx = x + cos(angle) * dashLength
-            x = dx < 0 ? max(toX, nx) : min(toX, nx)
-            let ny = y + sin(angle) * dashLength
-            y = dy < 0 ? max(toY, ny) : min(toY, ny)
-            if draw {
-                ctx.lineTo(x, y)
-            } else {
-                ctx.moveTo(x, y)
-            }
-            draw.toggle()
-        }
-
-        ctx.closePath()
-        ctx.stroke()
-    }
-
     override public func draw() throws {
         let ctx = try checkContext()
         let note = try checkAttachedNoteThrowing()
@@ -322,6 +280,9 @@ public final class StringNumber: Modifier {
             throw StringNumberError.invalidPosition(position)
         }
 
+        if note is TabNote && (position == .left || position == .right) {
+            ctx.clearRect(dotX - radius, dotY - 2, 2 * radius, 4)
+        }
         if drawCircle {
             ctx.beginPath()
             ctx.arc(dotX, dotY, radius, 0, Double.pi * 2, false)
@@ -338,20 +299,20 @@ public final class StringNumber: Modifier {
             ctx.setLineCap(.round)
             ctx.setLineWidth(0.6)
             if dashed {
-                Self.drawDashedLine(ctx, dotX + 10, dotY, dotX + end, dotY, [3, 3])
+                try Renderer.drawDashedLine(ctx, dotX + 10, dotY, dotX + end, dotY, [3, 3])
             } else {
-                Self.drawDashedLine(ctx, dotX + 10, dotY, dotX + end, dotY, [3, 0])
+                try Renderer.drawDashedLine(ctx, dotX + 10, dotY, dotX + end, dotY, [3, 0])
             }
 
             switch leg {
             case .up:
                 let len: Double = -10
                 let pattern: [Double] = dashed ? [3, 3] : [3, 0]
-                Self.drawDashedLine(ctx, dotX + end, dotY, dotX + end, dotY + len, pattern)
+                try Renderer.drawDashedLine(ctx, dotX + end, dotY, dotX + end, dotY + len, pattern)
             case .down:
                 let len: Double = 10
                 let pattern: [Double] = dashed ? [3, 3] : [3, 0]
-                Self.drawDashedLine(ctx, dotX + end, dotY, dotX + end, dotY + len, pattern)
+                try Renderer.drawDashedLine(ctx, dotX + end, dotY, dotX + end, dotY + len, pattern)
             case .none:
                 break
             }

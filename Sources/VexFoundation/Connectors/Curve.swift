@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/curve.ts` (VexFlow 5.4.0).
+// Port of `src/curve.ts` (VexFlow 5.8.0).
 // This class implements curves (for slurs).
 
 import Foundation
@@ -37,6 +37,8 @@ public enum CurveOpeningDirection: String, Sendable {
 // MARK: - Curve Options
 
 public struct CurveOptions {
+    /// Stroke the first half of the fitted slur with dashes and the second half solid. (VexFlow 5.8.0)
+    public var halfDashed: Bool
     /// Two control points for the bezier curves.
     public var cps: [(x: Double, y: Double)]
     public var thickness: Double
@@ -57,8 +59,10 @@ public struct CurveOptions {
         position: CurvePosition = .auto,
         positionEnd: CurvePosition = .auto,
         invert: Bool = false,
-        openingDirection: CurveOpeningDirection = .auto
+        openingDirection: CurveOpeningDirection = .auto,
+        halfDashed: Bool = false
     ) {
+        self.halfDashed = halfDashed
         self.cps = cps ?? [(0, 10), (0, 10)]
         self.authoredControls = cps != nil
         self.thickness = thickness
@@ -129,7 +133,7 @@ public final class Curve: VexElement {
         let outer = [point(first)] + cps.map(point) + [point(last)]
         return ribbonParts(
             outer,
-            hasLineDash ? outer : [point(first)] + thicknessCps.reversed().map(point) + [point(last)],
+            renderOptions.halfDashed || hasLineDash ? outer : [point(first)] + thicknessCps.reversed().map(point) + [point(last)],
             padding: (getStyle()?.lineWidth ?? 1) / 2
         )
     }
@@ -222,6 +226,17 @@ public final class Curve: VexElement {
             RenderParams(firstX: firstX, firstY: firstY, lastX: lastX, lastY: lastY, direction: direction)
         )
 
+        if renderOptions.halfDashed {
+            // JavaScript `lineDash.split(' ').map(Number)`: an empty item is 0.
+            let dash = hasLineDash
+                ? style?.lineDash?.split(separator: " ", omittingEmptySubsequences: false)
+                    .map { $0.isEmpty ? 0 : Double($0) ?? .nan }
+                : nil
+            let point: ((x: Double, y: Double)) -> RibbonPoint = { RibbonPoint(x: $0.x, y: $0.y) }
+            drawHalfDashedSlur(ctx, [point(first)] + cps.map(point) + [point(last)], dash: dash ?? [4, 3])
+            return
+        }
+
         ctx.beginPath()
         ctx.moveTo(first.x, first.y)
         ctx.bezierCurveTo(cps[0].x, cps[0].y, cps[1].x, cps[1].y, last.x, last.y)
@@ -270,7 +285,7 @@ public final class Curve: VexElement {
         let (first, last, cps, thicknessCps) = getBezierPoints(params)
         var xs = Self.bezierExtrema(first.x, cps[0].x, cps[1].x, last.x)
         var ys = Self.bezierExtrema(first.y, cps[0].y, cps[1].y, last.y)
-        if !hasLineDash {
+        if !renderOptions.halfDashed && !hasLineDash {
             xs += Self.bezierExtrema(last.x, thicknessCps[0].x, thicknessCps[1].x, first.x)
             ys += Self.bezierExtrema(last.y, thicknessCps[0].y, thicknessCps[1].y, first.y)
         }

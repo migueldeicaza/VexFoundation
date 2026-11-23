@@ -2,7 +2,7 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // Co-author: Benjamin W. Bohl
 //
-// Port of `src/clef.ts` (VexFlow 5.6.1).
+// Port of `src/clef.ts` (VexFlow 5.8.0).
 // Select, position, and measure native clef glyphs against their attached stave.
 
 import Foundation
@@ -28,7 +28,30 @@ public enum ClefSize: String, Sendable {
 public enum ClefAnnotation: String, Sendable {
     case octaveUp = "8va"
     case octaveDown = "8vb"
+    /// Two octaves up (`15ma`). (VexFlow 5.8.0)
+    case doubleOctaveUp = "15ma"
+    /// Two octaves down (`15mb`). (VexFlow 5.8.0)
+    case doubleOctaveDown = "15mb"
 }
+
+/// Octave annotations share the G- or F-clef anchor, including clefs on nonstandard lines. (VexFlow 5.8.0)
+private let octaveGlyphs: [String: [ClefAnnotation: String]] = [
+    Glyphs.gClef: [
+        .octaveUp: Glyphs.gClef8va,
+        .octaveDown: Glyphs.gClef8vb,
+        .doubleOctaveUp: Glyphs.gClef15ma,
+        .doubleOctaveDown: Glyphs.gClef15mb,
+    ],
+    Glyphs.fClef: [
+        .octaveUp: Glyphs.fClef8va,
+        .octaveDown: Glyphs.fClef8vb,
+        .doubleOctaveUp: Glyphs.fClef15ma,
+        .doubleOctaveDown: Glyphs.fClef15mb,
+    ],
+]
+
+/// These composite glyphs can have annotation ink outside their advance. (VexFlow 5.8.0)
+private let doubleOctaveGlyphs: Set<String> = [Glyphs.gClef15ma, Glyphs.gClef15mb, Glyphs.fClef15ma, Glyphs.fClef15mb]
 
 // MARK: - Clef
 
@@ -106,22 +129,9 @@ public final class Clef: StaveModifier {
         line = clefType.line
         self.size = size
 
-        // If an annotation, such as 8va, is specified, add it to the Clef object.
-        if annotation == .octaveUp {
-            if code == Glyphs.gClef {
-                code = Glyphs.gClef8va
-            }
-            if code == Glyphs.fClef {
-                code = Glyphs.fClef8va
-            }
-        }
-        if annotation == .octaveDown {
-            if code == Glyphs.gClef {
-                code = Glyphs.gClef8vb
-            }
-            if code == Glyphs.fClef {
-                code = Glyphs.fClef8vb
-            }
+        // Octave clefs use complete SMuFL glyphs at the ordinary written-pitch anchor.
+        if let annotation {
+            code = octaveGlyphs[code]?[annotation] ?? code
         }
         text = code
         fontInfo.size = "\(formatJSNumber(floor(Clef.getPoint(self.size))))pt"
@@ -194,6 +204,15 @@ public final class Clef: StaveModifier {
     /// Positioned glyph ink, including an octave annotation if present. (VexFlow 5.4.0)
     public func getInkBounds() throws -> BoundingBox {
         getTextInk(getX(), try getGlyphY())
+    }
+
+    /// The "15" can extend beyond the advance width in some fonts. Include its actual ink in hit testing.
+    /// (VexFlow 5.8.0)
+    override public func getBoundingBox() -> BoundingBox? {
+        if stave != nil && doubleOctaveGlyphs.contains(code), let ink = try? getInkBounds() {
+            return ink
+        }
+        return super.getBoundingBox()
     }
 
     // MARK: - Draw

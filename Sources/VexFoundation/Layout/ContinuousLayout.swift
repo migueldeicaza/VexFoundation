@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/continuouslayout.ts` (VexFlow 5.7.0).
+// Port of `src/continuouslayout.ts` (VexFlow 5.8.0).
 // Row-dependent notation for a responsive EasyScore composition. Source measures and notes keep their identity.
 
 import Foundation
@@ -89,10 +89,33 @@ public struct ContinuousGroup: Sendable, Equatable {
     }
 }
 
+/// Ordered event IDs that share one native duration ratio and a bracket that follows them across systems.
+/// (VexFlow 5.8.0)
+public struct ContinuousTuplet: Sendable, Equatable {
+    public var id: String
+    public var members: [String]
+    public var numNotes: Int
+    public var notesOccupied: Int
+    public var side: ContinuousSpanSide?
+
+    public init(id: String, members: [String], numNotes: Int, notesOccupied: Int, side: ContinuousSpanSide? = nil) {
+        self.id = id
+        self.members = members
+        self.numNotes = numNotes
+        self.notesOccupied = notesOccupied
+        self.side = side
+    }
+}
+
 /// Continuous-score options of an EasyScore composition. (VexFlow 5.4.0)
 public struct ContinuousOptions: Sendable, Equatable {
+    /// Reflow staff-local measure grids on a common rhythmic timeline. (VexFlow 5.8.0)
+    public var independentMeters: Bool
     public var mode: SystemBreakMode?
     public var boundaries: [ContinuousBoundary]
+    /// Ordered event IDs share one native duration ratio and a bracket that follows them across systems.
+    /// (VexFlow 5.8.0)
+    public var tuplets: [ContinuousTuplet]
     public var spans: [ContinuousSpan]
     public var hideEmptyStaves: Bool
     public var compressRests: Bool
@@ -105,8 +128,11 @@ public struct ContinuousOptions: Sendable, Equatable {
     public init(
         mode: SystemBreakMode? = nil, boundaries: [ContinuousBoundary] = [], spans: [ContinuousSpan] = [],
         hideEmptyStaves: Bool = false, compressRests: Bool = false, measureNumbers: Bool = false,
-        courtesy: Bool = true, splitChords: [ContinuousSplitChord] = [], groups: [ContinuousGroup] = []
+        courtesy: Bool = true, splitChords: [ContinuousSplitChord] = [], groups: [ContinuousGroup] = [],
+        independentMeters: Bool = false, tuplets: [ContinuousTuplet] = []
     ) {
+        self.independentMeters = independentMeters
+        self.tuplets = tuplets
         self.mode = mode
         self.boundaries = boundaries
         self.spans = spans
@@ -183,7 +209,7 @@ private func resolveTabTie(_ span: ContinuousSpan, _ first: TabNote, _ last: Tab
     resolved.toHead = toHead
     resolved.string = string
     if span.bend != nil, Double(from.fret) == nil { throw invalid("A tied bend needs a pitched fret.") }
-    resolved.side = span.side ?? (span.bend != nil ? .below : .above)
+    // VexFlow 5.8.0: the side stays unset, so that `fitTabTie` can choose it. `spanAbove` gives the default.
     return resolved
 }
 
@@ -263,6 +289,8 @@ public final class ContinuousLayout {
     /// which owns the sheet that owns this layout.
     private let score: (systems: [System], staves: [[Stave]], voices: [[[Voice]]], notes: [[[[Tickable]]]])
     private let spec: EasyScoreCompositionSpec
+    /// Staff-local barlines inside a shared formatting window. (VexFlow 5.8.0)
+    private let interiorBars: [InteriorBar]
 
     /// True when `Factory.draw` skips `element`.
     public func isHidden(_ element: AnyObject) -> Bool {
@@ -306,10 +334,11 @@ public final class ContinuousLayout {
 
     init(
         _ score: EasyScoreComposition, _ spec: EasyScoreCompositionSpec, _ starts: [[EasyScoreResolvedStaffState]],
-        _ ends: [[EasyScoreResolvedStaffState]], _ placed: Set<ObjectIdentifier>?
+        _ ends: [[EasyScoreResolvedStaffState]], _ placed: Set<ObjectIdentifier>?, _ interiorBars: [InteriorBar] = []
     ) throws {
         self.score = (score.systems, score.staves, score.voices, score.notes)
         self.spec = spec
+        self.interiorBars = interiorBars
         self.options = spec.continuous ?? ContinuousOptions()
         for voice in score.voices.flatMap({ $0.flatMap { $0 } }) { voice.preserveStaveAssignments = true }
         let ids = spec.staves.map { $0.id }
@@ -443,11 +472,23 @@ public final class ContinuousLayout {
         }
         var pendingBeams: [(index: Int, members: [ContinuousBeamMember])] = []
         var claimedNotes = Set<ObjectIdentifier>()
-        for span in options.spans {
+        let tuplets = options.tuplets.map { t in
+            ContinuousSpan(
+                id: t.id, kind: .tuplet, from: t.members.first ?? "", to: t.members.last ?? "", side: t.side,
+                text: String(t.numNotes)
+            )
+        }
+        for span in options.spans + tuplets {
             guard !span.id.isEmpty, !seen.contains(span.id), let first = locate(span.from), let last = locate(span.to),
                   first.measure <= last.measure
             else { throw invalid("Expected a unique span ID and ordered composition anchors.") }
             var spec = span
+            if span.wavy == true && span.kind != .glissando { throw invalid("A wavy slide needs a glissando span.") }
+            if span.flared == true && span.kind != .crescendo && span.kind != .diminuendo {
+                throw invalid("A flared profile needs a crescendo or diminuendo span.")
+            }
+            if span.halfDashed == true && span.kind != .slur { throw invalid("A half-dashed curve needs a slur span.") }
+            if span.dashed == true && span.kind != .tie { throw invalid("A dashed tie needs a tie span.") }
             if span.bend != nil && !(span.kind == .tie && first.note is TabNote && last.note is TabNote) {
                 throw invalid("A tied bend needs two TAB endpoints.")
             }
@@ -588,6 +629,9 @@ public final class ContinuousLayout {
         let staves = score.staves[i]
         return staves.enumerated().map { j, s in
             let marks = self.marks[i][j]
+            if options.independentMeters && boundaries[i]?.repeatStart != true {
+                s.setBegBarType(start && spec.staves[j].options?.leftBar != false ? .single : .none)
+            }
             s.setBoundaryModifiers(
                 (start ? marks.start : []) + (end ? marks.end : []),
                 notePadding: start ? continuationPadding[ObjectIdentifier(s)] ?? 0 : 0
@@ -747,6 +791,7 @@ public final class ContinuousLayout {
         } while try reserveChordSpacing(rows.map { $0.systems }, &padding)
         for s in spans {
             let indices = fragments.indices.filter { fragments[$0].id == s.spec.id }
+            if s.spec.kind == .tie && s.spec.string != nil { fitTabTieRows(s, indices) }
             let total = indices.reduce(0.0) { $0 + fragments[$1].x2 - fragments[$1].x1 }
             var prior = 0.0
             for k in indices {
@@ -770,6 +815,26 @@ public final class ContinuousLayout {
             drawing.append { ctx in try beam.setContext(ctx).drawWithStyle() }
         }
         return rows
+    }
+
+    /// A TAB tie chooses its side once, after all row-local fret coordinates have settled. (VexFlow 5.8.0)
+    private func fitTabTieRows(_ span: ResolvedSpan, _ indices: [Int]) {
+        var parts = indices.map { fragments[$0] }
+        let ink = parts.map { f in
+            rows[f.row].measures.flatMap { m -> [BoundingBox] in
+                let stave = score.staves[m - 1][span.first.staff]
+                return score.notes[m - 1].flatMap { $0.flatMap { $0 } }.flatMap { n -> [BoundingBox] in
+                    guard let n = n as? TabNote, n.getStave() === stave, n !== span.first.note, n !== span.last.note
+                    else { return [] }
+                    return n.getFretInk().filter { b in b.x + b.w >= f.x1 - f.space && b.x <= f.x2 + f.space }
+                }
+            }
+        }
+        let missed = fitTabTie(&parts, ink, span.spec.side == nil && span.spec.bend == nil)
+        for (k, i) in indices.enumerated() { fragments[i] = parts[k] }
+        for f in missed {
+            diagnostics.append(ContinuousDiagnostic(code: .curveCollision, measures: rows[f.row].measures, source: span.spec.id))
+        }
     }
 
     /// Measure native ink once the horizontal positions and beam fits for this row are known.
@@ -859,7 +924,11 @@ public final class ContinuousLayout {
             + units.enumerated().reduce(0) { $0 + $1.element.width + ($1.offset + 1 < units.count ? $1.element.after : 0) }
             + units[0].start + units[units.count - 1].end
             + Double(units.count - 1) * options.measureGap
-        let extra = options.justify ? max(0, options.width - minimum) / Double(units.count) : 0
+        // A one-beat polymetric window gets less justification than a three-beat window at the same pulse.
+        let weights = units.map { u in
+            self.options.independentMeters ? score.voices[u.first][0][0].getTotalTicks().value() : 1
+        }
+        let extra = options.justify ? max(0, options.width - minimum) / weights.reduce(0, +) : 0
         var x = options.x + indent
         var offsets = spec.staves.map { _ in 0.0 }
         var positions: [PlacedMeasure] = []
@@ -869,7 +938,7 @@ public final class ContinuousLayout {
             sys.setX(x).setY(0)
             let chordPadding = end ? 0 : u.after
             let endPadding = install(u.first, u.last, begin, end) + chordPadding
-            let width = u.width + extra + chordPadding + (begin ? u.start : 0) + (end ? u.end : 0)
+            let width = u.width + extra * weights[k] + chordPadding + (begin ? u.start : 0) + (end ? u.end : 0)
             try sys.setWidthThrowing(width).formatThrowing(row: SystemRowLayout(endPadding: endPadding))
             for j in 1..<max(1, visible.count) {
                 let staves = sys.getStaves(), b = visible[j]
@@ -1060,6 +1129,10 @@ public final class ContinuousLayout {
         var fragment = SpanFragment(
             id: s.spec.id,
             kind: kind,
+            flared: s.spec.flared == true ? true : nil,
+            wavy: s.spec.wavy == true ? true : nil,
+            halfDashed: s.spec.halfDashed == true ? true : nil,
+            dashed: s.spec.dashed == true ? true : nil,
             row: rows.count,
             part: starts ? (ends ? .single : .first) : ends ? .last : .middle,
             x1: x1,
@@ -1089,7 +1162,7 @@ public final class ContinuousLayout {
         }
         if s.spec.niente == true && kind == .crescendo && starts { fragment.nienteTip = nienteTip(x1, y1, space, .left) }
         if s.spec.niente == true && kind == .diminuendo && ends { fragment.nienteTip = nienteTip(x2, y2, space, .right) }
-        if kind == .tie || kind == .slur {
+        if kind == .slur || (kind == .tie && s.spec.string == nil) {
             let events = units.flatMap { u -> [StaveNote] in
                 let staves = score.staves[u.first]
                 return score.notes[u.first].flatMap { $0.flatMap { $0 } }.compactMap { n in
@@ -1146,6 +1219,12 @@ public final class ContinuousLayout {
             if g.barlines {
                 for u in units {
                     let staves = score.staves[u.first]
+                    if self.options.independentMeters && members.contains(where: { j in
+                        (staves[j].getModifiers(position: .end, category: Barline.category).first as? Barline)?.getType()
+                            == BarlineType.none
+                    }) {
+                        continue
+                    }
                     let line = StaveConnector(topStave: staves[top], bottomStave: staves[bottom]).setType(.singleRight)
                     drawing.append { ctx in try line.setContext(ctx).drawWithStyle() }
                 }
@@ -1181,5 +1260,13 @@ public final class ContinuousLayout {
     /// Draw the row-dependent notation: names, connectors, headers, numbered rests, shared stems and spans.
     public func draw(_ context: RenderContext) throws {
         for draw in drawing { try draw(context) }
+        // A sustained note in a different voice can keep this local boundary inside a formatting window.
+        for interior in interiorBars {
+            let stave = interior.next.checkStave()
+            if hidden.contains(ObjectIdentifier(stave)) { continue }
+            interior.bar.setStave(stave)
+            interior.bar.setX(interior.next.getTieLeftX() - stave.space(0.5))
+            try interior.bar.draw()
+        }
     }
 }

@@ -2,6 +2,35 @@ import Testing
 @testable import VexFoundation
 
 extension UpstreamSVGParityTests {
+    /// Mirrors upstream 5.8.0 `tabFingerings` (the `fillText` recording is a logic test in Upstream58GuitarTests).
+    @Test("StringNumber.TAB_fingerings_follow_selected_fret_positions")
+    func stringNumberTabFingeringsMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "StringNumber",
+            test: "TAB_fingerings_follow_selected_fret_positions",
+            width: 470,
+            height: 150
+        ) { factory, _ in
+            let stave = factory.TabStave(x: 5, y: 0, width: 450).addTabGlyph()
+            let positions: [[TabNotePosition]] = [
+                [TabNotePosition(str: 2, fret: 3)],
+                [TabNotePosition(str: 4, fret: 0)],
+                [TabNotePosition(str: 1, fret: 7), TabNotePosition(str: 3, fret: 10)],
+            ]
+            let notes = positions.map { factory.TabNote(TabNoteStruct(positions: $0, duration: .quarter)) }
+            let finger = factory.Fingering(number: "2", drawCircle: true)
+            let open = factory.Fingering(number: "0", position: .right)
+            let thumb = factory.Fingering(number: "T", position: .left)
+            let string = factory.StringNumber(number: "3", position: .right)
+            _ = notes[0].addModifier(finger, index: 0)
+            _ = notes[1].addModifier(open, index: 0)
+            _ = notes[2].addModifier(thumb, index: 1).addModifier(string, index: 1)
+            let voice = factory.EasyScore().voice(notes, time: .meter(3, 4)).setStave(stave)
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+            try factory.draw()
+        }
+    }
+
     @Test("StringNumber.String_Number_In_Notation")
     func stringNumberInNotationMatchesUpstream() throws {
         try runStringNumberInNotationCase(

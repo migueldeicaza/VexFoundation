@@ -264,6 +264,15 @@ extension UpstreamSVGParityTests {
         }
     }
 
+    /// Upstream `timedNiente`: reformat the same two voices at 460, 260 and 460 px. (VexFlow 5.8.0)
+    @Test("TextNote.Timed_piano_and_niente")
+    func textNoteTimedPianoAndNienteMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "TextNote", test: "Timed_piano_and_niente", width: 500, height: 160) { factory, context in
+            let study = try UpstreamTimedNienteStudy(factory)
+            for width in [460.0, 260.0, 460.0] { _ = try study.draw(width, context) }
+        }
+    }
+
     private func makeUpstreamTextNoteStaveNote(
         _ factory: Factory,
         _ keys: [String],
@@ -358,5 +367,39 @@ extension UpstreamSVGParityTests {
         _ = context.closePath()
         _ = context.fill()
         _ = context.restore()
+    }
+}
+
+/// The staves and voices of upstream `timedNiente` (textnote_tests.ts, VexFlow 5.8.0).
+struct UpstreamTimedNienteStudy {
+    let factory: Factory
+    let stave: Stave
+    let notes: [StemmableNote]
+    let melody: Voice
+    let piano: TextDynamics
+    let niente: TextDynamics
+    let dynamics: Voice
+
+    init(_ f: Factory) throws {
+        factory = f
+        stave = f.Stave(x: 10, y: 5, width: 460).addClef(.treble).addTimeSignature(.meter(4, 4))
+        let score = f.EasyScore()
+        notes = score.notes("G4/q, A4, B4, G4")
+        melody = score.voice(notes.map { $0 as Note })
+        piano = f.TextDynamics(TextNoteStruct(duration: .quarter, text: "p", line: 10))
+        niente = f.TextDynamics(TextNoteStruct(duration: .quarter, text: "n", line: 10))
+        dynamics = score.voice([piano, f.GhostNote(duration: .half), niente])
+    }
+
+    /// Format and draw at `width`. Return the niente x position.
+    func draw(_ width: Double, _ ctx: RenderContext) throws -> Double {
+        _ = stave.setWidth(width)
+        let voices = [melody, dynamics]
+        _ = factory.Formatter().joinVoices(voices).formatToStave(voices, stave: stave)
+        ctx.clear()
+        try stave.drawWithStyle()
+        try melody.draw(context: ctx, stave: stave)
+        try dynamics.draw(context: ctx, stave: stave)
+        return niente.getAbsoluteX()
     }
 }

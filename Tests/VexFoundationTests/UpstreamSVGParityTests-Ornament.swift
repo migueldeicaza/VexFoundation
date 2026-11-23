@@ -482,3 +482,83 @@ extension UpstreamSVGParityTests {
         try voice.draw(context: context, stave: stave)
     }
 }
+
+// MARK: - VexFlow 5.8.0 cases (Opt-in SVG parity cases for the ornament tests added in VexFlow 5.8.0 (tests/ornament_tests.ts).)
+
+extension UpstreamSVGParityTests {
+    @Test("Ornament.Parenthesized_editorial_turn")
+    func ornamentParenthesizedEditorialTurnMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Ornament", test: "Parenthesized_editorial_turn", width: 300, height: 155
+        ) { factory, context in
+            let stave = factory.Stave(x: 10, y: 30, width: 280).addClef(.treble)
+            let notes = try (0..<2).map { _ in
+                factory.StaveNote(try StaveNoteStruct(parsingKeys: ["g/4"], duration: "q", stemDirection: .down))
+            }
+            let bare = Ornament("turn")
+            let marked = factory.Ornament("turn", parenthesized: true)
+            _ = notes[0].addModifier(bare, index: 0)
+            _ = notes[1].addModifier(marked, index: 0)
+            let voice = factory.Voice(time: VoiceTime(numBeats: 2, beatValue: 4)).addTickables(notes)
+            _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+
+            func draw() throws {
+                context.clear()
+                try stave.draw()
+                try voice.draw(context: context, stave: stave)
+            }
+            // Upstream draws four times and keeps the last drawing.
+            try draw()
+            try draw()
+            marked.setParenthesized(false)
+            try draw()
+            marked.setParenthesized().setParenthesized()
+            try draw()
+        }
+    }
+
+    @Test("Ornament.Pitched_trill_partners")
+    func ornamentPitchedTrillPartnersMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Ornament", test: "Pitched_trill_partners", width: 620, height: 280
+        ) { factory, context in
+            for (row, width) in [290.0, 170.0].enumerated() {
+                for (i, pitch) in ["bb/4", "a/4"].enumerated() {
+                    let stave = factory.Stave(x: 12 + Double(i) * width, y: 20 + Double(row) * 130, width: width)
+                        .addClef(.treble)
+                    let principal = factory.StaveNote(
+                        try StaveNoteStruct(parsingKeys: ["g/4"], duration: "h", stemDirection: .down)
+                    )
+                    let trill = try factory.OrnamentThrowing("tr", auxiliaryPitch: pitch)
+                    _ = principal.addModifier(trill, index: 0)
+                    let next = factory.StaveNote(try StaveNoteStruct(parsingKeys: ["a/4"], duration: "q"))
+                    let voice = factory.Voice(time: VoiceTime(numBeats: 3, beatValue: 4)).addTickables([principal, next])
+                    _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+                    try stave.draw()
+                    try voice.draw(context: context, stave: stave)
+                }
+            }
+        }
+    }
+
+    @Test("Ornament.Changing_a_pitched_trill_partner")
+    func ornamentChangingAPitchedTrillPartnerMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Ornament", test: "Changing_a_pitched_trill_partner", width: 300, height: 220
+        ) { factory, context in
+            let stave = factory.Stave(y: 65).addClef(.treble)
+            let principal = factory.StaveNote(try StaveNoteStruct(parsingKeys: ["g/4"], duration: "h"))
+            let trill = factory.Ornament("tr")
+            _ = principal.addModifier(trill, index: 0)
+            let next = factory.StaveNote(try StaveNoteStruct(parsingKeys: ["a/4"], duration: "q"))
+            let voice = factory.Voice(time: VoiceTime(numBeats: 3, beatValue: 4)).addTickables([principal, next])
+            for pitch in [nil, "bb/4", "a/4", "d/6"] as [String?] {
+                try trill.setAuxiliaryPitch(pitch)
+                _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+                context.clear()
+                try stave.draw()
+                try voice.draw(context: context, stave: stave)
+            }
+        }
+    }
+}

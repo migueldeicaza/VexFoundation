@@ -20,6 +20,22 @@ extension UpstreamSVGParityTests {
         }
     }
 
+    /// The editorial tie and its solid control both belong to the lower note of each dyad. (VexFlow 5.8.0)
+    @Test("StaveTie.Dashed_ties_on_selected_heads")
+    func staveTieDashedTiesOnSelectedHeadsMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "StaveTie", test: "Dashed_ties_on_selected_heads", width: 510, height: 155) { factory, context in
+            _ = try drawUpstreamDashedPitchTies(factory, context)
+        }
+    }
+
+    /// Keep the open end next to the chosen chord head, including after a width change. (VexFlow 5.8.0)
+    @Test("StaveTie.Laissez_vibrer_on_one_chord_head")
+    func staveTieLaissezVibrerOnOneChordHeadMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "StaveTie", test: "Laissez_vibrer_on_one_chord_head", width: 600, height: 240) { factory, context in
+            _ = try drawUpstreamLaissezVibrerTies(factory, context)
+        }
+    }
+
     @Test("StaveTie.Chord_StaveTie")
     func staveTieChordMatchesUpstream() throws {
         try runStaveTieParityCase(
@@ -213,4 +229,63 @@ extension UpstreamSVGParityTests {
             try factory.draw()
         }
     }
+}
+
+/// Upstream `dashedPitchTies` (stavetie_tests.ts, VexFlow 5.8.0). Returns the ties and voices.
+func drawUpstreamDashedPitchTies(_ f: Factory, _ ctx: RenderContext) throws -> [(tie: StaveTie, voice: Voice)] {
+    var result: [(tie: StaveTie, voice: Voice)] = []
+    for (bar, key) in ["e/4", "g/4"].enumerated() {
+        let stave = f.Stave(x: 10 + Double(bar) * 240, y: 15, width: 240).addClef(.treble)
+        let dyad = {
+            f.StaveNote(try StaveNoteStruct(parsingKeys: [key, "b/4"], duration: "h", stemDirection: .up))
+        }
+        let first = try dyad()
+        let last = try dyad()
+        let voice = f.Voice().addTickables([first, last])
+        _ = f.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+        let tie = f.StaveTie(notes: TieNotes(firstNote: first, lastNote: last, firstIndexes: [0], lastIndexes: [0]))
+            .setDirection(TieDirection.up)
+        if bar == 0 { _ = tie.setStyle(ElementStyle(lineDash: "4 3")) }
+        try stave.draw()
+        try voice.draw(context: ctx, stave: stave)
+        try tie.drawWithStyle()
+        result.append((tie, voice))
+    }
+    return result
+}
+
+/// Upstream `localTies` (stavetie_tests.ts, VexFlow 5.8.0).
+func drawUpstreamLaissezVibrerTies(
+    _ f: Factory,
+    _ ctx: RenderContext
+) throws -> [(stave: Stave, lower: StaveNote, rest: StaveNote, upper: StaveNote, voice: Voice, ties: [StaveTie])] {
+    var result: [(stave: Stave, lower: StaveNote, rest: StaveNote, upper: StaveNote, voice: Voice, ties: [StaveTie])] = []
+    for (row, width) in [540.0, 290.0].enumerated() {
+        let stave = f.Stave(x: 12, y: 12 + Double(row) * 110, width: width).addClef(.treble)
+        let chord = {
+            f.StaveNote(try StaveNoteStruct(parsingKeys: ["d/4", "a/4"], duration: "q", stemDirection: .up))
+        }
+        let lower = try chord()
+        let rest = f.StaveNote(try StaveNoteStruct(parsingKeys: ["b/4"], duration: "qr"))
+        let upper = try chord()
+        let voice = f.Voice().addTickables([
+            lower, rest, upper, f.StaveNote(try StaveNoteStruct(parsingKeys: ["b/4"], duration: "qr")),
+        ])
+        _ = f.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+        let down = f.StaveTie(
+            notes: TieNotes(firstNote: lower, firstIndexes: [0]),
+            direction: .up,
+            laissezVibrer: 18
+        )
+        let up = f.StaveTie(
+            notes: TieNotes(firstNote: upper, firstIndexes: [1]),
+            direction: .down,
+            laissezVibrer: 22
+        )
+        try stave.draw()
+        try voice.draw(context: ctx, stave: stave)
+        for tie in [down, up] { try tie.drawWithStyle() }
+        result.append((stave, lower, rest, upper, voice, [down, up]))
+    }
+    return result
 }

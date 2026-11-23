@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/sheet.ts` (VexFlow 5.7.0).
+// Port of `src/sheet.ts` (VexFlow 5.8.0).
 // Optional continuous-sheet layout for existing Systems. No music data model or pagination.
 
 import Foundation
@@ -58,6 +58,18 @@ public final class Sheet {
     private var systems: [System] = []
     private var rows: [SheetRow] = []
     private var continuous: ContinuousLayout?
+    private var alignedWidths: [Double]?
+
+    /// Fit a single reference system to the already formatted measures of a publication. Give one positive
+    /// width for each measure. (VexFlow 5.8.0, upstream `@internal`)
+    @discardableResult
+    func alignToMeasures(_ widths: [Double]) throws -> Self {
+        if widths.count != systems.count || widths.contains(where: { !$0.isFinite || $0 <= 0 }) {
+            throw VexError("BadArgument", "Expected a positive width for each reference measure.")
+        }
+        alignedWidths = widths
+        return self
+    }
 
     /// Composition installs a score-aware layout while retaining the native sheet resize and draw API.
     /// (VexFlow 5.4.0)
@@ -132,6 +144,16 @@ public final class Sheet {
         }
         let widths = try measureSystems()
         var padding: [ObjectIdentifier: Double] = [:]
+        if let fixed = alignedWidths {
+            var row = try formatRow(Array(systems.indices), fixed, padding, options.y)
+            // An overfull ossia keeps its barlines aligned and reports the tightest measure to the publication.
+            _ = try reserveChordSpacing([row.systems], &padding)
+            row.overflow = max(0, widths.enumerated().map { i, minimum in
+                minimum + (padding[ObjectIdentifier(systems[i])] ?? 0) - fixed[i]
+            }.max() ?? 0)
+            rows = [row]
+            return self
+        }
         repeat {
             rows = []
             var y = options.y

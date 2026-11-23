@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/modifier.ts` (VexFlow 5.0.0).
+// Port of `src/modifier.ts` (VexFlow 5.8.0).
 
 import Foundation
 
@@ -147,6 +147,26 @@ open class Modifier: VexElement {
 
     /// Get note index, which is a specific note in a chord.
     public func getIndex() -> Int? { index }
+
+    /// Vertical sort key for a selected pitched head or TAB fret. Higher positions sort first. (VexFlow 5.8.0)
+    ///
+    /// A TAB fret gives `-str`, because string 1 is the highest string.
+    public func getAttachedLine() throws -> Double {
+        let note = try checkAttachedNoteThrowing()
+        let index = try checkIndexThrowing()
+        if let tab = note as? TabNote {
+            let positions = tab.getPositions()
+            guard index >= 0 && index < positions.count else {
+                throw VexError("BadArguments", "TAB modifier index must select a fret position.")
+            }
+            return -Double(positions[index].str)
+        }
+        let keyProps = note.getKeyProps()
+        guard index >= 0 && index < keyProps.count else {
+            throw VexError("BadArguments", "Modifier index must select a notehead.")
+        }
+        return keyProps[index].line
+    }
 
     /// Check and get note index, which is a specific note in a chord.
     public func checkIndex() -> Int {

@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/continuousspan.ts` (VexFlow 5.7.0).
+// Port of `src/continuousspan.ts` (VexFlow 5.8.0).
 // Logical event anchors and renderer-independent drawing of continuous-score span fragments.
 
 import Foundation
@@ -35,6 +35,14 @@ public enum ContinuousSpanSide: String, Sendable {
 /// A relationship between two composition notes, named by their IDs. (VexFlow 5.4.0)
 public struct ContinuousSpan: Sendable, Equatable {
     public var kind: ContinuousSpanKind
+    /// Apply a flared aperture along the whole crescendo or diminuendo. (VexFlow 5.8.0)
+    public var flared: Bool?
+    /// Draw this pitched glissando with waves perpendicular to its slope. (VexFlow 5.8.0)
+    public var wavy: Bool?
+    /// Stroke the first half of the logical slur with dashes, even across a break. (VexFlow 5.8.0)
+    public var halfDashed: Bool?
+    /// Draw this pitch tie as a dashed arc, including its continuation fragments. (VexFlow 5.8.0)
+    public var dashed: Bool?
     /// Mark the closed musical endpoint of a crescendo or diminuendo with an open circle. (VexFlow 5.7.0)
     public var niente: Bool?
     /// Bend one TAB string through this tie, with rise on the first event and release on the second.
@@ -62,8 +70,13 @@ public struct ContinuousSpan: Sendable, Equatable {
     public init(
         id: String, kind: ContinuousSpanKind, from: String, to: String, fromHead: Int? = nil, toHead: Int? = nil,
         side: ContinuousSpanSide? = nil, text: String? = nil, strings: [Int]? = nil, string: Int? = nil,
-        labelFontSize: Double? = nil, syllableId: String? = nil, niente: Bool? = nil, bend: TiedBend? = nil
+        labelFontSize: Double? = nil, syllableId: String? = nil, niente: Bool? = nil, bend: TiedBend? = nil,
+        flared: Bool? = nil, wavy: Bool? = nil, halfDashed: Bool? = nil, dashed: Bool? = nil
     ) {
+        self.flared = flared
+        self.wavy = wavy
+        self.halfDashed = halfDashed
+        self.dashed = dashed
         self.niente = niente
         self.bend = bend
         self.string = string
@@ -114,6 +127,14 @@ public enum SpanFragmentPart: String, Sendable {
 public struct SpanFragment: Sendable, Equatable {
     public var id: String
     public var kind: ContinuousSpanKind
+    /// Apply a flared aperture along the whole crescendo or diminuendo. (VexFlow 5.8.0)
+    public var flared: Bool?
+    /// Draw this pitched glissando with waves perpendicular to its slope. (VexFlow 5.8.0)
+    public var wavy: Bool?
+    /// Stroke the first half of the logical slur with dashes, even across a break. (VexFlow 5.8.0)
+    public var halfDashed: Bool?
+    /// Draw this pitch tie as a dashed arc, including its continuation fragments. (VexFlow 5.8.0)
+    public var dashed: Bool?
     public var row: Int
     public var part: SpanFragmentPart
     public var x1: Double
@@ -139,7 +160,8 @@ public struct SpanFragment: Sendable, Equatable {
         a.id == b.id && a.kind == b.kind && a.row == b.row && a.part == b.part && a.x1 == b.x1 && a.x2 == b.x2
             && a.y1 == b.y1 && a.y2 == b.y2 && a.progress == b.progress && a.strings == b.strings && a.from == b.from
             && a.to == b.to && a.rise == b.rise && a.above == b.above && a.space == b.space
-            && a.nienteTip == b.nienteTip && a.bend == b.bend
+            && a.nienteTip == b.nienteTip && a.bend == b.bend && a.flared == b.flared && a.wavy == b.wavy
+            && a.halfDashed == b.halfDashed && a.dashed == b.dashed
     }
 }
 
@@ -160,8 +182,10 @@ public func spanLabel(_ spec: ContinuousSpan) -> VexElement? {
 }
 
 /// Slurs, voltas, ottavas, trills and tuplets go above unless the span names a side. (VexFlow 5.4.0)
+/// A TAB tie goes above its string, and a tied bend below it. (VexFlow 5.8.0)
 public func spanAbove(_ span: ContinuousSpan) -> Bool {
     if let side = span.side { return side == .above }
+    if span.kind == .tie && span.string != nil { return span.bend == nil }
     return [.slur, .volta, .ottava, .trill, .tuplet].contains(span.kind)
 }
 
@@ -229,6 +253,38 @@ public func fitSpan(_ f: inout SpanFragment, _ obstacles: [BoundingBox]) -> Bool
     return cost == 0
 }
 
+/// Fit whole waves to the pitch line so both tips meet their anchors. (VexFlow 5.8.0)
+private func drawWavyGlissando(_ ctx: RenderContext, _ f: SpanFragment) {
+    let dx = f.x2 - f.x1
+    let dy = f.y2 - f.y1
+    let length = hypot(dx, dy)
+    let cycles = max(1, jsRound(length / (f.space * 0.85)))
+    let halves = 2 * cycles
+    // A quadratic reaches half its control-point offset at its crest.
+    let offset = 2 * min(f.space * 0.18, length / (cycles * 4))
+    let normalX = (-dy / length) * offset
+    let normalY = (dx / length) * offset
+    ctx.beginPath()
+    ctx.moveTo(f.x1, f.y1)
+    var i = 0.0
+    while i < halves {
+        let mid = (i + 0.5) / halves
+        let end = (i + 1) / halves
+        let side: Double = Int(i) % 2 == 0 ? -1 : 1
+        ctx.quadraticCurveTo(
+            f.x1 + dx * mid + side * normalX,
+            f.y1 + dy * mid + side * normalY,
+            f.x1 + dx * end,
+            f.y1 + dy * end
+        )
+        i += 1
+    }
+    ctx.stroke()
+}
+
+/// JavaScript `Math.round` (halves round up).
+private func jsRound(_ v: Double) -> Double { (v + 0.5).rounded(.down) }
+
 /// Draw only the hooks, labels and wedge apertures belonging to this particular segment. (VexFlow 5.4.0)
 public func drawSpan(_ ctx: RenderContext, _ f: SpanFragment, label: VexElement? = nil, bendLabel: VexElement? = nil) {
     let kind = f.kind, space = f.space, x1 = f.x1, x2 = f.x2, y1 = f.y1, y2 = f.y2, above = f.above
@@ -244,17 +300,35 @@ public func drawSpan(_ ctx: RenderContext, _ f: SpanFragment, label: VexElement?
     ctx.save()
     defer { ctx.restore() }
     if kind == .glissando {
-        line(x1, y1, x2, y2)
+        if f.wavy == true { drawWavyGlissando(ctx, f) } else { line(x1, y1, x2, y2) }
         return
     }
     if let bend = f.bend, let bendLabel { drawTiedBend(ctx, bend, f.space, bendLabel) }
     if kind == .slur || kind == .tie {
         let (dx, a, b) = controls(f)
+        if kind == .slur && f.halfDashed == true {
+            drawHalfDashedSlur(
+                ctx,
+                [
+                    RibbonPoint(x: x1, y: y1),
+                    RibbonPoint(x: x1 + dx, y: a),
+                    RibbonPoint(x: x2 - dx, y: b),
+                    RibbonPoint(x: x2, y: y2),
+                ],
+                (f.progress.0, f.progress.1)
+            )
+            return
+        }
         ctx.beginPath()
         ctx.moveTo(x1, y1)
         if kind == .tie {
             let x = (x1 + x2) / 2, y = (a + b) / 2
             ctx.quadraticCurveTo(x, y, x2, y2)
+            if f.dashed == true {
+                ctx.setLineDash([4, 3])
+                ctx.stroke()
+                return
+            }
             ctx.quadraticCurveTo(x, y + sign * space * 0.22, x1, y1)
         } else {
             ctx.bezierCurveTo(x1 + dx, a, x2 - dx, b, x2, y2)
@@ -265,10 +339,17 @@ public func drawSpan(_ ctx: RenderContext, _ f: SpanFragment, label: VexElement?
         return
     }
     if kind == .crescendo || kind == .diminuendo {
-        let aperture = { (t: Double) in space * 0.55 * (kind == .crescendo ? t : 1 - t) }
-        let left = aperture(f.progress.0), right = aperture(f.progress.1)
-        line(x1, y1 - left, x2, y2 - right)
-        line(x1, y1 + left, x2, y2 + right)
+        let open = { (t: Double) in kind == .crescendo ? t : 1 - t }
+        let startOpen = open(f.progress.0), endOpen = open(f.progress.1)
+        let halfHeight = space * 0.55
+        if f.flared == true {
+            drawFlaredHairpin(
+                ctx, HairpinPoint(x: x1, y: y1, progress: startOpen), HairpinPoint(x: x2, y: y2, progress: endOpen), halfHeight
+            )
+        } else {
+            line(x1, y1 - halfHeight * startOpen, x2, y2 - halfHeight * endOpen)
+            line(x1, y1 + halfHeight * startOpen, x2, y2 + halfHeight * endOpen)
+        }
         if let tip = f.nienteTip { drawNienteTip(ctx, tip) }
         return
     }

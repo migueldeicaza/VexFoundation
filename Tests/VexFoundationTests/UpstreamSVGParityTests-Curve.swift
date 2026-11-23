@@ -22,6 +22,15 @@ extension UpstreamSVGParityTests {
         }
     }
 
+    /// An editorial opening and its solid ending share the apex above the middle B. (VexFlow 5.8.0)
+    @Test("Curve.Half_dashed_slur_at_two_widths")
+    func curveHalfDashedSlurAtTwoWidthsMatchesUpstream() throws {
+        try runCategorySVGParityCase(module: "Curve", test: "Half_dashed_slur_at_two_widths", width: 420, height: 300) { factory, _ in
+            _ = try drawUpstreamHalfDashedSlurs(factory)
+            try factory.draw()
+        }
+    }
+
     @Test("Curve.Opening_Direction___up")
     func curveOpeningDirectionUpMatchesUpstream() throws {
         try runCurveParityCase(testName: "Opening_Direction___up", noteGroup1: ("c4/8, f5, d5, g5", ["stem": "up"]), noteGroup2: ("d6/8, f5, d5, g5", ["stem": "down"])) { factory, notes in
@@ -153,4 +162,24 @@ extension UpstreamSVGParityTests {
             }
         }
     }
+}
+
+/// The staves, notes and slurs of upstream `halfDashedSlur` (curve_tests.ts, VexFlow 5.8.0).
+/// The caller draws the factory.
+func drawUpstreamHalfDashedSlurs(_ f: Factory) throws -> [(notes: [StemmableNote], slur: Curve)] {
+    let score = f.EasyScore()
+    var result: [(notes: [StemmableNote], slur: Curve)] = []
+    for (i, width) in [395.0, 240.0].enumerated() {
+        let stave = f.Stave(x: 10, y: 15 + 120 * Double(i), width: width).addClef(.treble)
+        let notes = score.notes("g4/q, a4, b4, a4, g4", options: ["stem": "down"])
+        let voice = score.voice(notes.map { $0 as Note }, time: .meter(5, 4)).setStave(stave)
+        _ = f.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+        let slur = f.Curve(
+            from: notes[0],
+            to: notes[4],
+            options: CurveOptions(openingDirection: .down, halfDashed: true)
+        )
+        result.append((notes, slur))
+    }
+    return result
 }

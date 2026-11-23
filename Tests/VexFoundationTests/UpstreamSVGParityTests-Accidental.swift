@@ -1116,3 +1116,39 @@ extension UpstreamSVGParityTests {
         _ = context.restore()
     }
 }
+
+// MARK: - VexFlow 5.8.0 cases (Opt-in SVG parity case for the accidental test added in VexFlow 5.8.0 (tests/accidental_tests.ts).)
+
+extension UpstreamSVGParityTests {
+    @Test("Accidental.Square_editorial_enclosures")
+    func accidentalSquareEditorialEnclosuresMatchesUpstream() throws {
+        try runCategorySVGParityCase(
+            module: "Accidental", test: "Square_editorial_enclosures", width: 520, height: 250
+        ) { factory, _ in
+            for (row, width) in [475.0, 275.0].enumerated() {
+                let stave = factory.Stave(x: 10, y: 5 + 110 * Double(row), width: width).addClef(.treble)
+                let sharp = { factory.Accidental(type: .sharp) }
+                let plain = sharp()
+                let round = sharp().setAsCautionary()
+                let square = sharp().setAsCautionary(.brackets)
+                let natural = factory.Accidental(type: .natural).setAsCautionary(.brackets)
+                let flat = factory.Accidental(type: .flat).setAsCautionary(.brackets)
+                func note(_ keys: [String]) throws -> StaveNote {
+                    factory.StaveNote(try StaveNoteStruct(parsingKeys: keys, duration: "q"))
+                }
+                let chord = try note(["g/4", "b/4"]).addModifier(plain, index: 0).addModifier(natural, index: 1)
+                let notes: [StaveNote] = [
+                    try note(["f/4"]).addModifier(round, index: 0),
+                    try note(["f/4"]).addModifier(square, index: 0),
+                    try note(["b/4"]).addModifier(flat, index: 0),
+                    chord,
+                ]
+                let voice = factory.Voice().addTickables(notes)
+                _ = factory.Formatter().joinVoices([voice]).formatToStave([voice], stave: stave)
+                _ = voice.setStave(stave)
+                notes.forEach { _ = $0.setStave(stave) }
+            }
+            try factory.draw()
+        }
+    }
+}

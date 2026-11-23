@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/phraselayout.ts` (VexFlow 5.7.0).
+// Port of `src/phraselayout.ts` (VexFlow 5.8.0).
 // Place attachments and lyrics within one formatted system. All solver coordinates are renderer pixels.
 
 import Foundation
@@ -58,6 +58,27 @@ public struct PhraseLaneOptions {
     }
 }
 
+/// Verse options. `stanza` prints its text one time at the left margin of the verse. (VexFlow 5.8.0)
+public struct PhraseVerseOptions {
+    public var side: PhraseLaneSide?
+    /// Pin the common baseline in staff spaces from the top line, positive downward.
+    public var baselineSpaces: Double?
+    public var stanza: String?
+
+    public init(side: PhraseLaneSide? = nil, baselineSpaces: Double? = nil, stanza: String? = nil) {
+        self.side = side
+        self.baselineSpaces = baselineSpaces
+        self.stanza = stanza
+    }
+
+    public init(_ lane: PhraseLaneOptions, stanza: String? = nil) {
+        self.init(side: lane.side, baselineSpaces: lane.baselineSpaces, stanza: stanza)
+    }
+
+    /// The lane options (upstream `PhraseVerseOptions extends PhraseLaneOptions`).
+    public var lane: PhraseLaneOptions { PhraseLaneOptions(side: side, baselineSpaces: baselineSpaces) }
+}
+
 public struct PhraseDiagnostic: Equatable, Sendable {
     public enum Code: String, Sendable {
         case pinnedCollision = "PinnedCollision"
@@ -83,6 +104,8 @@ public enum PhraseLayoutError: Error, LocalizedError, Equatable, Sendable {
     case foreignSyllable
     /// VexFlow 5.7.0.
     case invalidElision
+    /// VexFlow 5.8.0.
+    case invalidStanza
 
     public var errorDescription: String? {
         switch self {
@@ -92,6 +115,7 @@ public enum PhraseLayoutError: Error, LocalizedError, Equatable, Sendable {
         case .invalidSyllables: return "Expected syllables with a following syllable for each hyphen."
         case .foreignSyllable: return "A syllable must belong to the requested stave."
         case .invalidElision: return "An elision needs a second syllable."
+        case .invalidStanza: return "A stanza label needs text."
         }
     }
 }
@@ -101,6 +125,7 @@ private final class Lane {
     let marks: [PhraseMark]
     let options: PhraseLaneOptions
     var syllables: [PhraseSyllable]?
+    var stanzaLabel: Annotation?
 
     init(stave: Stave, marks: [PhraseMark], options: PhraseLaneOptions) {
         self.stave = stave
@@ -172,6 +197,7 @@ public final class PhraseLayout {
     private var restLines: [(note: StaveNote, before: Double, after: Double)] = []
     private var obstacles: [Obstacle] = []
     private var connectors: [BoundingBox] = []
+    private var stanzaLabels: [Annotation] = []
     private var messages = Set<String>()
     private var iterationLimit = 4
     private var lockedStaves = Set<ObjectIdentifier>()
@@ -238,7 +264,18 @@ public final class PhraseLayout {
     public func addVerse(
         _ stave: Stave,
         _ syllables: [PhraseSyllable],
-        options: PhraseLaneOptions = PhraseLaneOptions()
+        options: PhraseLaneOptions
+    ) throws -> [Annotation] {
+        try addVerse(stave, syllables, options: PhraseVerseOptions(options))
+    }
+
+    /// Each whole syllable uses native text shaping and participates in ModifierContext horizontal spacing.
+    /// A stanza label shares the lane of the verse. (VexFlow 5.8.0)
+    @discardableResult
+    public func addVerse(
+        _ stave: Stave,
+        _ syllables: [PhraseSyllable],
+        options: PhraseVerseOptions = PhraseVerseOptions()
     ) throws -> [Annotation] {
         if syllables.isEmpty || syllables.enumerated().contains(where: { i, s in
             s.text.isEmpty || (s.hyphenAfter && (s.extendTo != nil || i == syllables.count - 1))
@@ -253,6 +290,9 @@ public final class PhraseLayout {
         if syllables.contains(where: { $0.note.getStave() != nil && $0.note.getStave() !== stave }) {
             throw PhraseLayoutError.foreignSyllable
         }
+        if let stanza = options.stanza, stanza.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw PhraseLayoutError.invalidStanza
+        }
         var marks: [Annotation] = []
         for (i, s) in syllables.enumerated() {
             let hyphenated = s.hyphenAfter || (i > 0 && syllables[i - 1].hyphenAfter)
@@ -263,10 +303,37 @@ public final class PhraseLayout {
                 .setVerticalJustification(options.side == .above ? .top : .bottom)
                 .setConnectorPadding(hyphenated ? stave.space(0.4) : 0))
         }
-        try addLane(stave, marks, options: options)
-        lanes[lanes.count - 1].syllables = syllables
+        // The label shares the lane solver and the baseline of its first note. Only sung text enters the note
+        // formatter.
+        let label = options.stanza.map { stanza in
+            Annotation(stanza)
+                .setFont(FontInfo(
+                    family: marks[0].fontInfo.family, size: marks[0].fontInfo.size, weight: "bold",
+                    style: marks[0].fontInfo.style
+                ))
+                .setJustification(.left)
+                .setPosition(options.side == .above ? .above : .below)
+                .setNote(syllables[0].note)
+                .setIndex(0)
+        }
+        try addLane(stave, label.map { marks + [$0] } ?? marks, options: options.lane)
+        let lane = lanes[lanes.count - 1]
+        lane.syllables = syllables
+        lane.stanzaLabel = label
         for (i, mark) in marks.enumerated() { syllables[i].note.addModifier(mark, index: 0) }
         return marks
+    }
+
+    /// Width of the shared stanza column, with its side margins in staff spaces. (VexFlow 5.8.0)
+    public func getStanzaColumnWidth(_ stave: Stave) -> Double {
+        var column = 0.0
+        for lane in lanes where lane.stave === stave {
+            if let label = lane.stanzaLabel {
+                let width = label.getTextInk(0, 0).w
+                column = max(column, stave.space(1.2) + width)
+            }
+        }
+        return column
     }
 
     /// Restore derived rest positions before native formatting; preserve subsequent authored edits.
@@ -627,6 +694,13 @@ public final class PhraseLayout {
         let options = lane.options
         let above = options.side == .above
         let gap = stave.space(0.35)
+        if let label = lane.stanzaLabel {
+            // Align the visible left edges even when the digits have different side bearings.
+            let margin = stave.getNoteStartX() - getStanzaColumnWidth(stave) + stave.space(0.4)
+            let x = (try? label.computeX().x) ?? 0
+            label.setXShift(margin - x + label.textMetrics.actualBoundingBoxLeft)
+            stanzaLabels.append(label)
+        }
         let authored = marks.compactMap { $0 as? Annotation }.filter { $0.getTextBaseline() != nil }
         let pinned = options.baselineSpaces != nil || !authored.isEmpty
         var y: Double
@@ -711,6 +785,7 @@ public final class PhraseLayout {
             passes = pass
             obstacles = []
             connectors = []
+            stanzaLabels = []
             diagnostics.removeAll()
             messages.removeAll()
             collect(notes, staves, ticks.filter { !($0 is StaveNote) })
@@ -787,8 +862,9 @@ public final class PhraseLayout {
         connectors
     }
 
-    /// Draw only lyric connectors; notes and registered marks retain their native rendering ownership.
-    public func draw(_ context: RenderContext) {
+    /// Draw stanza labels and connectors. Syllables are drawn by their notes.
+    public func draw(_ context: RenderContext) throws {
+        for label in stanzaLabels { try label.setContext(context).drawWithStyle() }
         for b in connectors { context.fillRect(b.x, b.y, b.w, b.h) }
     }
 }

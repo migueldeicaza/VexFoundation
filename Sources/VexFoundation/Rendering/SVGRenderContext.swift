@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/svgcontext.ts` (VexFlow 5.6.0). Instead of a DOM, the context keeps
+// Port of `src/svgcontext.ts` (VexFlow 5.8.0). Instead of a DOM, the context keeps
 // a small element tree and serializes it with `getSVG()`. The serialization
 // follows the browser `XMLSerializer` output of upstream, so SVG files can be
 // compared with the upstream reference images.
@@ -382,10 +382,11 @@ public final class SVGRenderContext: RenderContext {
         }
     }
 
-    /// Reject attribute names that could run script or load resources.
+    /// Return true for attribute names that can install script or raw CSS on a live SVG element.
+    /// (VexFlow 5.8.0 `isUnsafeAttributeName`: also `style`.)
     static func isUnsafeAttributeName(_ name: String) -> Bool {
         let lower = name.lowercased()
-        return lower.hasPrefix("on") || lower == "href" || lower.hasSuffix(":href")
+        return lower.hasPrefix("on") || lower == "style" || lower == "href" || lower.hasSuffix(":href")
     }
 
     /// Score foreground defaults (VexFlow 5.1.0 `RenderContext.defaultStyle`).
@@ -536,10 +537,61 @@ public final class SVGRenderContext: RenderContext {
         return self
     }
 
+    /// VexFlow 5.8.0 sets `path.style.filter = drop-shadow(0 0 <blur / 1.5>px <color>)`.
+    /// A browser serializes that as `style="filter: drop-shadow(<color> 0px 0px <blur>px);"`:
+    /// the color comes first, zero lengths get a unit and numbers keep six significant digits.
+    /// A CSS drop-shadow filter blur looks different than a canvas shadowBlur of the same radius,
+    /// so the radius is scaled to look close to the canvas shadow.
     private func shadowStyle() -> String {
         let blur: Double
         if case .number(let b)? = attributes["shadowBlur"] { blur = b } else { blur = 0 }
-        return "filter: drop-shadow(0 0 \(num(blur / 1.5))px \(attributes["shadowColor"]?.stringValue ?? "black"))"
+        let color = Self.cssColor(attributes["shadowColor"]?.stringValue ?? "black")
+        return "filter: drop-shadow(\(color) 0px 0px \(Self.cssNumber(blur / 1.5))px);"
+    }
+
+    /// CSSOM number serialization (six significant digits, no trailing zeros).
+    static func cssNumber(_ value: Double) -> String {
+        if value == value.rounded(), abs(value) < 1e6 { return formatJSNumber(value) }
+        var text = String(format: "%.6g", value)
+        if let e = text.firstIndex(where: { $0 == "e" || $0 == "E" }) {
+            var mantissa = String(text[..<e])
+            let exponent = String(text[e...])
+            if mantissa.contains(".") {
+                while mantissa.hasSuffix("0") { mantissa.removeLast() }
+                if mantissa.hasSuffix(".") { mantissa.removeLast() }
+            }
+            text = mantissa + exponent
+        } else if text.contains(".") {
+            while text.hasSuffix("0") { text.removeLast() }
+            if text.hasSuffix(".") { text.removeLast() }
+        }
+        return text
+    }
+
+    /// CSSOM color serialization: keywords stay, hex colors become `rgb()` or `rgba()`.
+    static func cssColor(_ color: String) -> String {
+        let trimmed = color.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("#") else { return trimmed }
+        var hex = String(trimmed.dropFirst())
+        guard [3, 4, 6, 8].contains(hex.count), hex.allSatisfy(\.isHexDigit) else { return trimmed }
+        if hex.count <= 4 { hex = hex.map { "\($0)\($0)" }.joined() }
+        var values: [Int] = []
+        var index = hex.startIndex
+        while index < hex.endIndex {
+            let next = hex.index(index, offsetBy: 2)
+            values.append(Int(hex[index..<next], radix: 16) ?? 0)
+            index = next
+        }
+        if values.count == 4 {
+            if values[3] == 255 { return "rgb(\(values[0]), \(values[1]), \(values[2]))" }
+            // Browsers keep the shortest alpha that round-trips through 8 bits.
+            var alpha = (Double(values[3]) / 255 * 100).rounded() / 100
+            if (alpha * 255).rounded() != Double(values[3]) {
+                alpha = (Double(values[3]) / 255 * 1000).rounded() / 1000
+            }
+            return "rgba(\(values[0]), \(values[1]), \(values[2]), \(formatJSNumber(alpha)))"
+        }
+        return "rgb(\(values[0]), \(values[1]), \(values[2]))"
     }
 
     private var hasShadow: Bool {
@@ -560,8 +612,8 @@ public final class SVGRenderContext: RenderContext {
         let node = SVGNode("path")
         var attrs = attrs
         attrs["d"] = .string(path)
-        if hasShadow { attrs["style"] = .string(shadowStyle()) }
         applyAttributes(node, attrs)
+        // VexFlow 5.8.0: `path.style.filter`. The reference SVGs serialize `style` last.
         if hasShadow { node.setAttribute("style", shadowStyle()) }
         add(node)
         return self

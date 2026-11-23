@@ -22,6 +22,7 @@ public enum VexCategory: String, CaseIterable, Sendable {
     case curve = "Curve"
     case dot = "Dot"
     case element = "Element"
+    case figuredBass = "FiguredBass"
     case flag = "Flag"
     case fraction = "Fraction"
     case fretDiagram = "FretDiagram"

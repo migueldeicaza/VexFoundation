@@ -1,12 +1,12 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/publicationview.ts` (VexFlow 5.6.0).
+// Port of `src/publicationview.ts` (VexFlow 5.8.0).
 // Project declarative EasyScore music into an independent printed score or part.
 
 import Foundation
 
-/// A small written-pitch reference staff over one source measure. Cues do not change the player's rest.
+/// A small written-pitch reference staff over source measures. Cues do not change the player's rest.
 /// (VexFlow 5.4.0)
 public struct PublicationRegion: Sendable, Equatable {
     public enum Kind: String, Sendable {
@@ -17,16 +17,25 @@ public struct PublicationRegion: Sendable, Equatable {
     public var kind: Kind
     public var staff: String
     public var measure: Int
+    /// Last source measure of an ossia, inclusive. Defaults to the starting measure. (VexFlow 5.8.0)
+    public var endMeasure: Int?
     public var label: String
     /// Scale in (0, 1]. Default 0.7.
     public var scale: Double?
+    /// Written interval applied to the quoted pitches and their key signature. Only for a cue. (VexFlow 5.8.0)
+    public var transpose: CueTransposition?
 
-    public init(kind: Kind, staff: String, measure: Int, label: String, scale: Double? = nil) {
+    public init(
+        kind: Kind, staff: String, measure: Int, label: String, scale: Double? = nil, endMeasure: Int? = nil,
+        transpose: CueTransposition? = nil
+    ) {
         self.kind = kind
         self.staff = staff
         self.measure = measure
+        self.endMeasure = endMeasure
         self.label = label
         self.scale = scale
+        self.transpose = transpose
     }
 }
 
@@ -34,6 +43,8 @@ public struct PublicationRegion: Sendable, Equatable {
 /// A page turn follows its named measure. (VexFlow 5.4.0)
 public struct PublicationView: Sendable, Equatable {
     public var staves: [String]?
+    /// Engrave two source players on one conductor staff. (VexFlow 5.8.0)
+    public var condense: PublicationCondense?
     public var systemBreaks: [Int]
     public var pageBreaks: [Int]
     public var preferredTurns: [Int]
@@ -42,9 +53,10 @@ public struct PublicationView: Sendable, Equatable {
 
     public init(
         staves: [String]? = nil, systemBreaks: [Int] = [], pageBreaks: [Int] = [], preferredTurns: [Int] = [],
-        forbiddenTurns: [Int] = [], regions: [PublicationRegion] = []
+        forbiddenTurns: [Int] = [], regions: [PublicationRegion] = [], condense: PublicationCondense? = nil
     ) {
         self.staves = staves
+        self.condense = condense
         self.systemBreaks = systemBreaks
         self.pageBreaks = pageBreaks
         self.preferredTurns = preferredTurns
@@ -63,6 +75,11 @@ func checkView(_ source: EasyScoreCompositionSpec, _ view: PublicationView) thro
     let count = source.staves.first?.measures.count ?? 0
     if count == 0 { throw invalidPage("Expected at least one measure.") }
     let validMeasure = { (n: Int) in n >= 1 && n <= count }
+    if let passage = view.condense?.measures {
+        if passage.count != 2 || !validMeasure(passage[0]) || !validMeasure(passage[1]) || passage[1] < passage[0] {
+            throw invalidPage("Invalid condensed passage.")
+        }
+    }
     for values in [view.systemBreaks, view.pageBreaks, view.preferredTurns, view.forbiddenTurns]
     where values.contains(where: { !validMeasure($0) }) {
         throw invalidPage("Break or turn outside the score.")
@@ -72,8 +89,14 @@ func checkView(_ source: EasyScoreCompositionSpec, _ view: PublicationView) thro
         throw invalidPage("Expected distinct source staff IDs.")
     }
     for region in view.regions {
+        // Swift: the interval fields are integers, so only the region kind needs a check.
+        if region.transpose != nil && region.kind != .cue {
+            throw invalidPage("A transposed cue needs integer semitones and diatonic steps.")
+        }
         let scale = region.scale ?? 0.7
-        if !validMeasure(region.measure) || !staffIds.contains(region.staff)
+        let badEnd = region.endMeasure.map { end in region.kind != .ossia || !validMeasure(end) || end < region.measure }
+            ?? false
+        if !validMeasure(region.measure) || badEnd || !staffIds.contains(region.staff)
             || region.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !scale.isFinite || scale <= 0 || scale > 1 {
             throw invalidPage("Expected a labeled cue or ossia on a source staff and measure with scale in (0, 1].")
@@ -110,8 +133,11 @@ func projectScore(
     reference: EasyScoreComposition? = nil,
     omitted: ((String, [Int]) -> Void)? = nil
 ) throws -> EasyScoreCompositionSpec {
-    let selected = Set(view.staves ?? source.staves.map { $0.id })
-    let staves = source.staves.filter { selected.contains($0.id) }.map { view.staves != nil ? homeStaff($0, selected) : $0 }
+    let selected = Set(view.staves ?? view.condense?.players ?? source.staves.map { $0.id })
+    let staves = source.staves.filter { selected.contains($0.id) }
+        .map { view.staves != nil || view.condense != nil ? homeStaff($0, selected) : $0 }
+    let printedStaves = try view.condense.map { try condenseStaves(staves, $0) } ?? staves
+    let printedIds = Set(printedStaves.map { $0.id })
     // Follow rhythmic ownership when a note is displayed on a different staff.
     var owners: [ObjectIdentifier: (staff: String, measure: Int)] = [:]
     if let reference {
@@ -150,10 +176,18 @@ func projectScore(
         change(&boundaries[n]!)
     }
     for n in view.systemBreaks + view.pageBreaks { boundary(n) { $0.breakBefore = .force } }
+    if let passage = view.condense?.measures, passage.count == 2 {
+        boundary(passage[0]) { $0.breakBefore = .force }
+        if passage[1] < source.staves[0].measures.count { boundary(passage[1] + 1) { $0.breakBefore = .force } }
+    }
     // Cued rests must remain individually addressable even when their neighbours form a multi-measure rest.
-    for region in view.regions { boundary(region.measure) { $0.keepRest = true } }
+    for region in view.regions {
+        for m in region.measure...max(region.measure, region.endMeasure ?? region.measure) {
+            boundary(m) { $0.keepRest = true }
+        }
+    }
     var projected = source
-    projected.staves = staves
+    projected.staves = printedStaves
     projected.sheet.x = 0
     projected.sheet.y = 0
     projected.sheet.rowGap = 150
@@ -162,13 +196,14 @@ func projectScore(
     var continuous = original
     continuous.boundaries = order.compactMap { boundaries[$0] }
     continuous.spans = original.spans.filter { keep($0.from, $0.to, $0.id) }
+    continuous.tuplets = original.tuplets.filter { keep($0.members.first, $0.members.last, $0.id) }
     continuous.splitChords = original.splitChords.filter { keep($0.upper, $0.lower, $0.id) }
-    if view.staves != nil {
+    if view.staves != nil || view.condense != nil {
         continuous.groups = original.groups.compactMap { g in
             guard let start = source.staves.firstIndex(where: { $0.id == g.first }),
                   let end = source.staves.firstIndex(where: { $0.id == g.last }), start <= end
             else { return nil }
-            let members = source.staves[start...end].filter { selected.contains($0.id) }
+            let members = source.staves[start...end].filter { printedIds.contains($0.id) }
             guard members.count >= 2, let top = members.first, let bottom = members.last else { return nil }
             var group = g
             group.first = top.id
@@ -205,9 +240,9 @@ private func homeStaff(_ staff: EasyScoreStaveSpec, _ selected: Set<String>) -> 
     return result
 }
 
-/// Carry written clef, key and meter into a one-measure inset, including preceding inline changes.
-/// (VexFlow 5.4.0)
-func insetStaff(_ staff: EasyScoreStaveSpec, _ measure: Int) -> EasyScoreStaveSpec {
+/// Carry written clef, key and meter into a reference fragment, including preceding inline changes.
+/// `endMeasure` is inclusive and defaults to `measure`. (VexFlow 5.8.0)
+func insetStaff(_ staff: EasyScoreStaveSpec, _ measure: Int, _ endMeasure: Int? = nil) -> EasyScoreStaveSpec {
     var state = EasyScoreStaffState(
         clef: staff.clef, key: staff.key, time: staff.time, showTimeSignature: staff.showTimeSignature
     )
@@ -234,7 +269,7 @@ func insetStaff(_ staff: EasyScoreStaveSpec, _ measure: Int) -> EasyScoreStaveSp
     inset.showTimeSignature = state.showTimeSignature
     inset.name = nil
     inset.shortName = nil
-    inset.measures = [staff.measures[measure - 1]]
+    inset.measures = Array(staff.measures[(measure - 1)..<min(endMeasure ?? measure, staff.measures.count)])
     return homeStaff(inset, [staff.id])
 }
 

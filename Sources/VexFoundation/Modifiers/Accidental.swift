@@ -3,7 +3,7 @@
 // @author Mohit Cheppudira
 // @author Greg Ristow (modifications)
 //
-// Port of `src/accidental.ts` (VexFlow 5.3.0).
+// Port of `src/accidental.ts` (VexFlow 5.8.0) and `src/automaticaccidentals.ts` (VexFlow 5.8.0).
 
 import Foundation
 
@@ -99,6 +99,16 @@ public enum AccidentalApplyError: Error, LocalizedError, Equatable, Sendable {
     }
 }
 
+// MARK: - Accidental Enclosure
+
+/// The pair of glyphs around a cautionary or editorial accidental. (VexFlow 5.8.0)
+public enum AccidentalEnclosure: String, Sendable {
+    /// Round parentheses (cautionary accidental).
+    case parentheses
+    /// Square brackets (editorial accidental).
+    case brackets
+}
+
 // MARK: - Accidental
 
 /// An `Accidental` inherits from `Modifier`, and is formatted within a
@@ -118,6 +128,14 @@ public final class Accidental: Modifier {
 
     /// Identify explicit cautionary signs without inspecting protected engraving state. (VexFlow 5.2.0)
     public func isCautionary() -> Bool { cautionary }
+    /// The printed sign at this same head, recomputed whenever the modifier group is formatted. (VexFlow 5.8.0)
+    private weak var sharedWith: Accidental?
+    /// Select the pair of glyphs around a cautionary or editorial accidental. (VexFlow 5.8.0)
+    public private(set) var enclosure: AccidentalEnclosure = .parentheses
+    /// An ordinary sign supplied by key-aware spelling, so engraving can share it at unisons.
+    /// Explicit and cautionary signs retain independent placement. This flag replaces the
+    /// upstream `automaticAccidentals` WeakSet (`src/automaticaccidentals.ts`). (VexFlow 5.8.0)
+    var isAutomatic = false
     public private(set) var initError: AccidentalError?
 
     /// True if `type` is a key of the accidental table or a single SMuFL code point.
@@ -204,9 +222,9 @@ public final class Accidental: Modifier {
             text += Tables.accidentalCodes(type)
             setFontSize(Metrics.getDouble("Accidental.fontSize"))
         } else {
-            text += Tables.accidentalCodes("{")
+            text += enclosure == .brackets ? Glyphs.accidentalBracketLeft : Glyphs.accidentalParensLeft
             text += Tables.accidentalCodes(type)
-            text += Tables.accidentalCodes("}")
+            text += enclosure == .brackets ? Glyphs.accidentalBracketRight : Glyphs.accidentalParensRight
             setFontSize(Metrics.getDouble("Accidental.cautionary.fontSize"))
         }
         // Accidentals attached to grace notes are rendered smaller.
@@ -227,12 +245,55 @@ public final class Accidental: Modifier {
 
     // MARK: - Cautionary
 
-    /// If called, draws parenthesis around accidental.
+    /// Enclose the sign in round parentheses or square editorial brackets without changing its pitch spelling.
     @discardableResult
-    public func setAsCautionary() -> Self {
+    public func setAsCautionary(_ enclosure: AccidentalEnclosure = .parentheses) -> Self {
+        self.enclosure = enclosure
         cautionary = true
         reset()
         return self
+    }
+
+    // MARK: - Shared Unison Signs (VexFlow 5.8.0)
+
+    /// At one onset, compare the actual heads after StaveNote.format has separated colliding voices.
+    private static func shareUnisonSigns(_ signs: [Accidental]) -> [Accidental] {
+        if !signs.contains(where: { $0.isAutomatic }) { return signs }
+        func automatic(_ mark: Accidental) -> Bool { mark.isAutomatic && !mark.isCautionary() }
+        for mark in signs { mark.sharedWith = nil }
+        if signs.count < 2 { return signs }
+
+        // Prefer an explicit matching sign, even if its voice was supplied last.
+        var visible = signs.filter { !automatic($0) }
+        for mark in signs {
+            if !automatic(mark) { continue }
+            mark.sharedWith = visible.first { mark.sharesHeadWith($0) }
+            if mark.sharedWith == nil { visible.append(mark) }
+        }
+        return signs.filter { $0.sharedWith == nil }
+    }
+
+    /// A displaced chord head or a separate unison column needs its own sign.
+    private func sharesHeadWith(_ other: Accidental) -> Bool {
+        if other.type != type { return false }
+        guard let a = note as? StaveNote, let b = other.note as? StaveNote, a !== b else { return false }
+        guard let stave = a.getStave(), stave === b.getStave(),
+              a.renderOptions.draw, b.renderOptions.draw,
+              a.isCenterAligned() == b.isCenterAligned(),
+              a.getCenterXShift() == b.getCenterXShift()
+        else { return false }
+        let i = checkIndex()
+        let j = other.checkIndex()
+        guard i < a.keys.count, j < b.keys.count, i < a.noteHeads.count, j < b.noteHeads.count else { return false }
+        if a.keys[i].lowercased() != b.keys[j].lowercased() { return false }
+        let h = a.noteHeads[i]
+        let k = b.noteHeads[j]
+        return h.getLine() == k.getLine()
+            && h.getText() == k.getText()
+            && h.getFont() == k.getFont()
+            && h.getYShift() == k.getYShift()
+            && a.getXShift() + h.getDisplacementX() + h.getXShift()
+                == b.getXShift() + k.getDisplacementX() + k.getXShift()
     }
 
     // MARK: - Static Format
@@ -242,6 +303,8 @@ public final class Accidental: Modifier {
     public static func format(_ accidentals: [Accidental], state: inout ModifierContextState) -> Bool {
         // If there are no accidentals, no need to format their positions.
         if accidentals.isEmpty { return false }
+
+        let accidentals = shareUnisonSigns(accidentals)
 
         let noteheadAccidentalPadding = Metrics.getDouble("Accidental.noteheadAccidentalPadding")
         let leftShift = state.leftShift + noteheadAccidentalPadding
@@ -719,16 +782,29 @@ public final class Accidental: Modifier {
 
     /// Visible glyph after formatting, including cautionary or authored shifts. (VexFlow 5.3.0)
     public func getInkBounds() throws -> BoundingBox {
+        if let sharedWith { return try sharedWith.getInkBounds() }
         try positionGlyph()
         return getTextInk(x, y)
     }
 
-    override public func draw() throws {
-        let ctx = try checkContext()
-        try positionGlyph()
-        setRendered()
-        renderText(ctx, xPos: 0, yPos: 0)
+    /// Both voices report the published bounds of their shared sign. (VexFlow 5.8.0)
+    override public func getBoundingBox() -> BoundingBox? {
+        if let sharedWith { return sharedWith.getBoundingBox() }
+        return super.getBoundingBox()
     }
+
+    /// The representative accidental draws the glyph for every voice sharing this head. (VexFlow 5.8.0)
+    override public func draw() throws {
+        if sharedWith == nil {
+            let ctx = try checkContext()
+            try positionGlyph()
+            renderText(ctx, xPos: 0, yPos: 0)
+        }
+        setRendered()
+    }
+
+    /// True when another accidental at the same printed unison head draws the sign. (VexFlow 5.8.0)
+    public var isShared: Bool { sharedWith != nil }
 }
 
 // MARK: - Preview

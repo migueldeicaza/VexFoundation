@@ -108,7 +108,7 @@ extension UpstreamSVGParityTests {
             module: "Demo___Greensleeves",
             test: "Greensleeves",
             width: 900,
-            height: 486
+            height: 550
         ) { factory, _ in
             // Written guitar pitches sound an octave lower. Each pair is [string, fret], counting from high E.
             let positions: [String: (Int, Int)] = [
@@ -128,12 +128,20 @@ extension UpstreamSVGParityTests {
                 ("E", "E3+E4+B4/h G#4/q"),
                 ("E5", "E3+B3+E4/h"),
             ]
+            // Finger just the strings that sound in the opening four voicings. The tab supplies their frets.
+            let fingers: [String: [Int?]] = [
+                "Am": [nil, nil, 2, 3, 1, nil],
+                "C": [nil, 3, nil, nil, 1, nil],
+                "G": [2, nil, nil, nil, 3, nil],
+                "Em": [nil, 2, nil, nil, nil, nil],
+            ]
+            var frames: [(diagram: FretDiagram, anchor: StemmableNote)] = []
             for (i, bar) in bars.enumerated() {
                 let (chordName, barText) = bar
                 let row = i >= 5 ? 1 : 0
                 let width = Double(row != 0 ? 218 : i == 0 ? 112 : 190)
                 let x = row != 0 ? 12 + Double(i - 5) * width : i == 0 ? 12 : 124 + Double(i - 1) * width
-                let y = Double(28 + row * 230)
+                let y = Double(92 + row * 230)
                 // Read each voicing low to high so chord indexes agree on the staff and tab.
                 let events: [(pitches: [String], duration: String)] = barText.split(separator: " ").map { token in
                     let parts = token.split(separator: "/").map(String.init)
@@ -157,6 +165,16 @@ extension UpstreamSVGParityTests {
                         },
                         duration: event.duration.replacingOccurrences(of: ".", with: ""),
                         dots: event.duration.contains(".") ? 1 : 0
+                    ))
+                }
+                if row == 0 && !chordName.isEmpty {
+                    var frets = [FretDiagramString](repeating: .muted, count: 6)
+                    for position in tab[0].getPositions() {
+                        frets[6 - position.str] = .fret(Int(position.fret) ?? 0)
+                    }
+                    frames.append((
+                        try FretDiagram(FretDiagramSpec(frets: frets, fingerings: fingers[chordName], rows: 3)),
+                        notes[0]
                     ))
                 }
                 if i == 1 || i == 5 {
@@ -188,6 +206,14 @@ extension UpstreamSVGParityTests {
                 }
             }
             try factory.draw()
+            // Center each five-space frame on the chord that the formatter placed below it.
+            for (diagram, anchor) in frames {
+                diagram.setContext(factory.getContext())
+                _ = diagram.setX(anchor.getAbsoluteX() - 44.5)
+                _ = diagram.setY(10)
+                try diagram.draw()
+            }
+            #expect(frames.count == 4, "Each opening chord has its own fingering diagram")
         }
     }
 
@@ -627,7 +653,8 @@ extension UpstreamSVGParityTests {
                         from: notes[0],
                         to: notes[3],
                         type: i == 0 ? .crescendo : .decrescendo,
-                        options: HairpinRenderOptions(height: 7, yShift: -4)
+                        // The opening phrase emerges from silence; the second swell releases into the final bar.
+                        options: HairpinRenderOptions(height: 7, yShift: -4, niente: i == 0)
                     )
                 }
                 let stave = factory

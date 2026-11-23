@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/publication.ts` (VexFlow 5.7.0).
+// Port of `src/publication.ts` (VexFlow 5.8.0).
 // Print-ready SVG pages over independent EasyScore views. Public dimensions are millimeters.
 //
 // Swift: upstream draws into a hidden DOM host and reads `getBBox()`, canvas `measureText()` and computed
@@ -47,6 +47,8 @@ public struct PublicationOptions: @unchecked Sendable, Equatable {
     /// Apply the source's EasyScore note decorations to every independently built part and cue. (VexFlow 5.5.0)
     public var noteHooks: [CommitHook]
     public var staves: [String]?
+    /// Engrave two source players on one conductor staff. (VexFlow 5.8.0)
+    public var condense: PublicationCondense?
     public var systemBreaks: [Int]
     public var pageBreaks: [Int]
     public var preferredTurns: [Int]
@@ -70,10 +72,11 @@ public struct PublicationOptions: @unchecked Sendable, Equatable {
         staffSize: Double? = nil, margins: PublicationMargins = PublicationMargins(), title: String? = nil,
         subtitle: String? = nil, header: String? = nil, footer: String? = nil, pageNumbers: Bool = true,
         systemGap: Double? = nil, maxExtraGap: Double? = nil, justifyLast: Bool = false,
-        noteHooks: [CommitHook] = []
+        noteHooks: [CommitHook] = [], condense: PublicationCondense? = nil
     ) {
         self.noteHooks = noteHooks
         self.staves = staves
+        self.condense = condense
         self.systemBreaks = systemBreaks
         self.pageBreaks = pageBreaks
         self.preferredTurns = preferredTurns
@@ -93,7 +96,8 @@ public struct PublicationOptions: @unchecked Sendable, Equatable {
     }
 
     public static func == (a: PublicationOptions, b: PublicationOptions) -> Bool {
-        a.noteHooks.count == b.noteHooks.count && a.staves == b.staves && a.systemBreaks == b.systemBreaks
+        a.noteHooks.count == b.noteHooks.count && a.staves == b.staves && a.condense == b.condense
+            && a.systemBreaks == b.systemBreaks
             && a.pageBreaks == b.pageBreaks && a.preferredTurns == b.preferredTurns
             && a.forbiddenTurns == b.forbiddenTurns && a.regions == b.regions && a.paper == b.paper
             && a.staffSize == b.staffSize && a.margins == b.margins && a.title == b.title && a.subtitle == b.subtitle
@@ -105,7 +109,7 @@ public struct PublicationOptions: @unchecked Sendable, Equatable {
     public var view: PublicationView {
         PublicationView(
             staves: staves, systemBreaks: systemBreaks, pageBreaks: pageBreaks, preferredTurns: preferredTurns,
-            forbiddenTurns: forbiddenTurns, regions: regions
+            forbiddenTurns: forbiddenTurns, regions: regions, condense: condense
         )
     }
 }
@@ -216,6 +220,8 @@ private struct SemanticEvent {
     var staff: String
     var voice: Int
     var event: Int
+    /// The exact tick offset in the staff-local measure of an independently metered score. (VexFlow 5.8.0)
+    var onset: String?
     var keys: [String]
     var notation: [NotationIdentity]
     var ticks: String
@@ -228,6 +234,9 @@ private struct SemanticEvent {
             ("staff", .string(staff)),
             ("voice", .number(Double(voice))),
             ("event", .number(Double(event))),
+        ]
+        if let onset { pairs.append(("onset", .string(onset))) }
+        pairs += [
             ("keys", .array(keys.map { .string($0) })),
         ]
         if !notation.isEmpty {
@@ -243,17 +252,26 @@ private struct SemanticEvent {
     }
 }
 
-private func semanticEvents(_ score: EasyScoreComposition, _ spec: EasyScoreCompositionSpec, _ measure: Int) -> [SemanticEvent] {
+/// A condensed staff reports each voice as the source player's single voice. An independently metered score
+/// reports the staff-local measure, event and onset. (VexFlow 5.8.0)
+private func semanticEvents(
+    _ score: EasyScoreComposition, _ spec: EasyScoreCompositionSpec, _ measure: Int,
+    _ condense: PublicationCondense? = nil
+) -> [SemanticEvent] {
     score.notes[measure - 1].enumerated().flatMap { j, voices in
         voices.enumerated().flatMap { voice, ticks in
             ticks.filter { !$0.shouldIgnoreTicks() }.enumerated().compactMap { event, n -> SemanticEvent? in
                 guard let n = n as? Note else { return nil }
+                let position = score.getMeterPosition(n)
+                let condensed = condense?.players.first == spec.staves[j].id
+                let players = condense?.players ?? []
                 return SemanticEvent(
                     id: n.getAttribute("id") ?? "",
-                    measure: measure,
-                    staff: spec.staves[j].id,
-                    voice: voice,
-                    event: event,
+                    measure: position?.measure ?? measure,
+                    staff: condensed && voice < players.count ? players[voice] : spec.staves[j].id,
+                    voice: condensed ? 0 : voice,
+                    event: position?.event ?? event,
+                    onset: score.meterPositions == nil ? nil : position?.onset.toString(),
                     keys: n.getKeys(),
                     notation: n.notation,
                     ticks: n.getTicks().toString(),
@@ -307,29 +325,46 @@ private struct Composed {
     var score: EasyScoreComposition
 }
 
-/// Compose a view on its own SVG context.
-private func compose(_ spec: EasyScoreCompositionSpec, _ hooks: [CommitHook] = []) throws -> Composed {
+/// Compose a view on its own SVG context. A transposed cue parses its strings with a `CueBuilder`.
+private func compose(
+    _ spec: EasyScoreCompositionSpec, _ hooks: [CommitHook] = [], _ transpose: CueTransposition? = nil
+) throws -> Composed {
     let ctx = SVGRenderContext(width: 1, height: 1)
     let factory = Factory(options: FactoryOptions(width: 1, height: 1))
     _ = factory.setContext(ctx)
-    let easyScore = factory.EasyScore()
+    let easyScore = factory.EasyScore(
+        options: transpose.map { EasyScoreOptions(builder: CueBuilder(factory: factory, interval: $0)) }
+            ?? EasyScoreOptions()
+    )
     for hook in hooks { easyScore.addCommitHook(hook) }
     let score = try easyScore.compose(spec)
     return Composed(ctx: ctx, factory: factory, score: score)
 }
 
+/// The region fields followed by the fragment's measures and events (upstream `{ ...region, measure,
+/// endMeasure, events }`). Swift: the keys follow the `PublicationRegion` field order, not the caller's
+/// object literal.
 private struct Reference {
-    var kind: PublicationRegion.Kind
-    var staff: String
+    var region: PublicationRegion
     var measure: Int
-    var label: String
+    var endMeasure: Int?
     var events: [SemanticEvent]
 
     var json: JSON {
-        .object([
-            ("kind", .string(kind.rawValue)), ("staff", .string(staff)), ("measure", .number(Double(measure))),
-            ("label", .string(label)), ("events", .array(events.map { $0.json })),
-        ])
+        var pairs: [(String, JSON)] = [
+            ("kind", .string(region.kind.rawValue)), ("staff", .string(region.staff)),
+            ("measure", .number(Double(measure))),
+        ]
+        if let endMeasure { pairs.append(("endMeasure", .number(Double(endMeasure)))) }
+        pairs.append(("label", .string(region.label)))
+        if let scale = region.scale { pairs.append(("scale", .number(scale))) }
+        if let t = region.transpose {
+            pairs.append(("transpose", .object([
+                ("semitones", .number(Double(t.semitones))), ("steps", .number(Double(t.steps))),
+            ])))
+        }
+        pairs.append(("events", .array(events.map { $0.json })))
+        return .object(pairs)
     }
 }
 
@@ -458,55 +493,83 @@ private func furniture(_ host: SVGNode, _ size: Size, _ o: PublicationOptions, _
     return Furniture(group: group, top: y, height: end - y, overflow: overflow)
 }
 
-/// A cue or ossia gets its own native rendering at the anchor bar's width and written clef.
+/// Engrave the portion of a reference staff that fits above one performing system. (VexFlow 5.8.0)
+private func addInsetFragment(
+    _ spec: EasyScoreCompositionSpec, _ hooks: [CommitHook], _ score: EasyScoreComposition, _ row: RowDrawing,
+    _ region: PublicationRegion, _ measures: [Int], _ diagnostics: inout [PublicationDiagnostic]
+) throws {
+    guard let first = measures.first, let last = measures.last,
+          let source = spec.staves.first(where: { $0.id == region.staff }) else { return }
+    let scale = region.scale ?? 0.7
+    let hosts = measures.map { score.staves[$0 - 1][0] }
+    let lastHost = hosts[hosts.count - 1]
+    let width = lastHost.getX() + lastHost.getWidth() - hosts[0].getX()
+    let gap = hosts.count > 1 ? hosts[1].getX() - hosts[0].getX() - hosts[0].getWidth() : 0
+    let quoted = insetStaff(source, first, last)
+    var insetSpec = EasyScoreCompositionSpec(
+        staves: [try region.transpose.map { try writtenCue(quoted, $0) } ?? quoted],
+        sheet: SheetOptions(width: width / scale, x: 0, y: 0, measureGap: max(0, gap) / scale, measurePadding: 4),
+        accidentals: region.transpose != nil ? .keyAware : spec.accidentals,
+        graceAccidentals: region.transpose != nil ? .ordered : spec.graceAccidentals
+    )
+    // Keep the existing single-bar signature and spacing policy. A longer fragment shares one signature prefix.
+    if hosts.count == 1 { insetSpec.continuous = ContinuousOptions() }
+    let inset = try compose(insetSpec, hooks, region.transpose)
+    if hosts.count > 1 { try inset.score.sheet.alignToMeasures(hosts.map { $0.getWidth() / scale }) }
+    try inset.factory.draw()
+    row.references.append(Reference(
+        region: region, measure: first, endMeasure: region.endMeasure != nil ? last : nil,
+        events: measures.enumerated().flatMap { i, measure in
+            semanticEvents(inset.score, insetSpec, i + 1).map { var e = $0; e.measure = measure; return e }
+        }
+    ))
+
+    let svg = inset.ctx.svg
+    let music = musicGroup(svg)
+    for child in svg.children { music.appendMoving(child) }
+    svg.append(music)
+    guard let ink = try svgInkBox(music) else { return }
+    let wrap = SVGNode.make("g", [
+        ("data-region", region.kind.rawValue), ("data-source-staff", region.staff), ("data-measure", String(first)),
+    ])
+    if region.endMeasure != nil { wrap.setAttribute("data-end-measure", String(last)) }
+    wrap.setAttribute("transform", "translate(\(formatJSNumber(hosts[0].getX())),\(formatJSNumber(row.insetHeight)))")
+    var captionHeight: Double = 0
+    var right = (ink.x + ink.w) * scale
+    if first == region.measure {
+        let caption = label(svg, region.label, 12)
+        caption.el.setAttribute("y", formatJSNumber(-caption.box.y))
+        wrap.appendMoving(caption.el)
+        captionHeight = caption.box.h + 2
+        right = max(right, caption.box.w)
+    }
+    music.setAttribute(
+        "transform",
+        "translate(0,\(formatJSNumber(captionHeight - ink.y * scale))) scale(\(formatJSNumber(scale)))"
+    )
+    if right > width + 1 || inset.score.sheet.getRows().contains(where: { $0.overflow * scale > 1 }) {
+        diagnostics.append(PublicationDiagnostic(
+            code: .systemOverflow, measures: measures, detail: region.kind.rawValue + " exceeds its measure width."
+        ))
+    }
+    wrap.appendMoving(music)
+    row.insets.append(wrap)
+    row.insetHeight += captionHeight + ink.h * scale + 6
+}
+
+/// Split each region at the host system boundaries before measuring the page's vertical space.
 private func addInsets(
     _ spec: EasyScoreCompositionSpec, _ o: PublicationOptions, _ score: EasyScoreComposition, _ rows: [RowDrawing],
     _ diagnostics: inout [PublicationDiagnostic]
 ) throws {
-    for r in o.regions {
-        guard let row = rows.first(where: { $0.measures.contains(r.measure) }),
-              let source = spec.staves.first(where: { $0.id == r.staff }) else { continue }
-        let stave = score.staves[r.measure - 1][0]
-        let scale = r.scale ?? 0.7
-        let staff = insetStaff(source, r.measure)
-        let insetSpec = EasyScoreCompositionSpec(
-            staves: [staff],
-            sheet: SheetOptions(width: stave.getWidth() / scale, x: 0, y: 0, measurePadding: 4),
-            accidentals: spec.accidentals,
-            graceAccidentals: spec.graceAccidentals,
-            continuous: ContinuousOptions()
-        )
-        let inset = try compose(insetSpec, o.noteHooks)
-        try inset.factory.draw()
-        row.references.append(Reference(
-            kind: r.kind, staff: r.staff, measure: r.measure, label: r.label,
-            events: semanticEvents(inset.score, insetSpec, 1).map { var e = $0; e.measure = r.measure; return e }
-        ))
-        let svg = inset.ctx.svg
-        let g = musicGroup(svg)
-        for child in svg.children { g.appendMoving(child) }
-        svg.append(g)
-        guard let ink = try svgInkBox(g) else { continue }
-        let caption = label(svg, r.label, 12)
-        let wrap = SVGNode.make("g", [
-            ("data-region", r.kind.rawValue), ("data-source-staff", r.staff), ("data-measure", String(r.measure)),
-        ])
-        wrap.setAttribute("transform", "translate(\(formatJSNumber(stave.getX())),\(formatJSNumber(row.insetHeight)))")
-        caption.el.setAttribute("y", formatJSNumber(-caption.box.y))
-        g.setAttribute(
-            "transform",
-            "translate(0,\(formatJSNumber(caption.box.h + 2 - ink.y * scale))) scale(\(formatJSNumber(scale)))"
-        )
-        let right = max(ink.w * scale, caption.box.w)
-        if right > stave.getWidth() + 1 {
-            diagnostics.append(PublicationDiagnostic(
-                code: .systemOverflow, measures: [r.measure], detail: r.kind.rawValue + " exceeds its measure width."
-            ))
+    for region in o.regions {
+        let end = region.endMeasure ?? region.measure
+        for row in rows {
+            let measures = row.measures.filter { $0 >= region.measure && $0 <= end }
+            if !measures.isEmpty {
+                try addInsetFragment(spec, o.noteHooks, score, row, region, measures, &diagnostics)
+            }
         }
-        wrap.appendMoving(caption.el)
-        wrap.appendMoving(g)
-        row.insets.append(wrap)
-        row.insetHeight += caption.box.h + ink.h * scale + 8
     }
 }
 
@@ -582,7 +645,9 @@ private func buildPages(
     _ measured: [RowDrawing], _ breaks: [PageBreak], _ diagnostics: inout [PublicationDiagnostic]
 ) throws -> [PublicationPage] {
     let uid = viewCounter.next()
-    let fragments = score.sheet.getContinuousLayout()?.fragments ?? []
+    let continuousLayout = score.sheet.getContinuousLayout()
+    let fragments = continuousLayout?.fragments ?? []
+    let layoutRows = continuousLayout?.rows ?? []
     var pages: [PublicationPage] = []
     for (index, b) in breaks.enumerated() {
         let number = index + 1
@@ -616,6 +681,7 @@ private func buildPages(
             ))
         }
         let measures = systems.flatMap { $0.measures }
+        let systemStarts = Set(systems.map { $0.measures[0] })
         if f.overflow {
             diagnostics.append(PublicationDiagnostic(
                 code: .textOverflow, measures: measures, detail: "Page furniture exceeds the margin.", page: number
@@ -634,7 +700,10 @@ private func buildPages(
             ))
         }
         let metadata = SVGNode.make("metadata")
-        let spans: [JSON] = fragments.filter { $0.row >= b.first && $0.row < b.end }.map { f in
+        let spans: [JSON] = fragments.filter { f in
+            // A filtered condensed passage changes the row indexes, so match the first measure. (VexFlow 5.8.0)
+            f.row < layoutRows.count && layoutRows[f.row].measures.first.map(systemStarts.contains) == true
+        }.map { f in
             var pairs: [(String, JSON)] = [("id", .string(f.id)), ("kind", .string(f.kind.rawValue)), ("part", .string(f.part.rawValue))]
             if let strings = f.strings {
                 pairs.append(("strings", .array(strings.map { .number(Double($0)) })))
@@ -658,7 +727,7 @@ private func buildPages(
             ("page", .number(Double(number))),
             ("measures", .array(measures.map { .number(Double($0)) })),
             ("staves", .array(spec.staves.map { .string($0.id) })),
-            ("events", .array(measures.flatMap { semanticEvents(score, spec, $0) }.map { $0.json })),
+            ("events", .array(measures.flatMap { semanticEvents(score, spec, $0, options.condense) }.map { $0.json })),
             ("regions", .array(measured[b.first..<b.end].flatMap { $0.references }.map { $0.json })),
             ("spans", .array(spans)),
             ("text", .array(text)),
@@ -689,8 +758,9 @@ public final class Publication {
         Registry.disableDefaultRegistry()
         defer { if let registry { Registry.enableDefaultRegistry(registry) } }
         var diagnostics: [PublicationDiagnostic] = []
-        let needsReference = options.staves != nil
+        let needsReference = (options.staves != nil || options.condense != nil)
             && (!source.spans.isEmpty || !(source.continuous?.spans.isEmpty ?? true)
+                || !(source.continuous?.tuplets.isEmpty ?? true)
                 || !(source.continuous?.splitChords.isEmpty ?? true))
         let ref = needsReference ? try compose(source, options.noteHooks).score : nil
         // A one-unit inset keeps edge strokes inside the requested margin.
@@ -701,6 +771,11 @@ public final class Publication {
         }
         diagnostics += omitted
         let composed = try compose(spec, options.noteHooks)
+        if let condense = options.condense {
+            try markCondensedPlayers(
+                composed.score, spec.staves.firstIndex { $0.id == condense.players.first } ?? -1, condense
+            )
+        }
         try composed.factory.draw()
         guard let layout = composed.score.sheet.getContinuousLayout() else {
             throw invalidPage("Expected a continuous layout.")
@@ -712,7 +787,11 @@ public final class Publication {
                 detail: d.source.map { d.code.rawValue + " " + $0 } ?? d.code.rawValue
             ))
         }
-        let rows = try splitRows(composed.ctx.svg, layout.rows, composed.score)
+        let passage = options.condense?.measures
+        let rows = try splitRows(composed.ctx.svg, layout.rows, composed.score).filter { row in
+            guard let passage, passage.count == 2 else { return true }
+            return row.measures[0] >= passage[0] && row.measures[0] <= passage[1]
+        }
         try addInsets(source, options, composed.score, rows, &diagnostics)
         for r in rows { r.height = (r.bottom - r.top + r.insetHeight) * size.scale }
         let surface = pageSurface(size)

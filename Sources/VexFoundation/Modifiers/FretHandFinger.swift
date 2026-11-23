@@ -2,7 +2,8 @@
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 // @author Larry Kuhns 2013
 //
-// Port of `src/frethandfinger.ts` (VexFlow 5.0.0).
+// Port of `src/frethandfinger.ts` (VexFlow 5.8.0).
+// Left-hand fingerings on pitched notes and TAB frets, with optional enclosing circles.
 
 import Foundation
 
@@ -32,6 +33,16 @@ public final class FretHandFinger: Modifier {
         _ nums: [FretHandFinger],
         state: inout ModifierContextState
     ) -> Bool {
+        (try? formatThrowing(nums, state: &state)) ?? false
+    }
+
+    /// Arrange fingerings inside a ModifierContext. Throws when a fingering does not select
+    /// a notehead or a TAB fret. (VexFlow 5.8.0)
+    @discardableResult
+    public static func formatThrowing(
+        _ nums: [FretHandFinger],
+        state: inout ModifierContextState
+    ) throws -> Bool {
         let leftShift = state.leftShift
         let rightShift = state.rightShift
         let numSpacing: Double = 1
@@ -55,8 +66,7 @@ public final class FretHandFinger: Modifier {
         for num in nums {
             let note = num.getNote()
             let pos = num.getPosition()
-            let index = num.checkIndex()
-            let props = note.getKeyProps()[index]
+            let line = try num.getAttachedLine()
             let textHeight = Metrics.getDouble("FretHandFinger.fontSize")
             if num.position == .above {
                 state.topTextLine += textHeight / Tables.STAVE_LINE_DISTANCE + 0.5
@@ -81,7 +91,7 @@ public final class FretHandFinger: Modifier {
                 note: note,
                 num: num,
                 pos: pos,
-                line: props.line,
+                line: line,
                 shiftL: shiftLeft,
                 shiftR: shiftRight
             ))
@@ -151,6 +161,7 @@ public final class FretHandFinger: Modifier {
 
     // MARK: - Properties
 
+    private var drawCircle = false
     /// Horizontal offset from default.
     public var xOffset: Double
     /// Vertical offset from default.
@@ -171,6 +182,18 @@ public final class FretHandFinger: Modifier {
     }
 
     // MARK: - Setters
+
+    /// Enclose the fingering in a circle without changing the authored finger label. (VexFlow 5.8.0)
+    @discardableResult
+    public func setDrawCircle(_ drawCircle: Bool) -> Self {
+        self.drawCircle = drawCircle
+        return self
+    }
+
+    /// Reserve enough room for the complete enclosure at the current font size. (VexFlow 5.8.0)
+    override public func getWidth() -> Double {
+        drawCircle ? max(width, height) + 5 : width
+    }
 
     @discardableResult
     public func setFretHandFinger(_ finger: String) -> Self {
@@ -218,7 +241,38 @@ public final class FretHandFinger: Modifier {
             throw FretHandFingerError.invalidPosition(position)
         }
 
-        renderText(ctx, xPos: dotX, yPos: dotY)
+        let tab = note is TabNote
+        if !tab && !drawCircle {
+            renderText(ctx, xPos: dotX, yPos: dotY)
+            return
+        }
+        // Place the actual ink on the selected string. Leave the fret number and the finger independent.
+        let side = position == .left || position == .right
+        let width = getWidth()
+        let centerX: Double
+        switch position {
+        case .left: centerX = start.x + xOffset - width / 2
+        case .right: centerX = start.x + xOffset + width / 2 + 1
+        default: centerX = start.x + xOffset
+        }
+        let centerY = side ? start.y + yOffset : dotY - 5
+        let metrics = getTextMetrics()
+        if tab && side {
+            ctx.clearRect(centerX + xShift - width / 2 - 1, centerY + yShift - 2, width + 2, 4)
+        }
+        if drawCircle {
+            ctx.save()
+            ctx.beginPath()
+            ctx.arc(centerX + xShift, centerY + yShift, width / 2 - 0.5, 0, 2 * Double.pi, false)
+            ctx.setLineWidth(1)
+            ctx.stroke()
+            ctx.restore()
+        }
+        renderText(
+            ctx,
+            xPos: centerX - self.width / 2,
+            yPos: centerY + (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2
+        )
     }
 }
 

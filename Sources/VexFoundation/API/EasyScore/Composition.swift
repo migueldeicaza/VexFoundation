@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/easyscore/composition.ts` (VexFlow 5.7.0).
+// Port of `src/easyscore/composition.ts` (VexFlow 5.8.0).
 // Structured construction delegates timing and layout to native Voice, System, and Sheet objects.
 
 import Foundation
@@ -77,6 +77,23 @@ public struct EasyScoreLyricMark: Equatable, Sendable {
         self.elideWith = elideWith
         self.hyphenAfter = hyphenAfter
         self.extendTo = extendTo
+    }
+}
+
+/// One verse: ordered syllables that form a separate lyric lane. A verse can give a printed stanza label on the
+/// measure where it starts (upstream `LyricMark[] | { stanza, syllables }`). An array literal of
+/// `EasyScoreLyricMark` makes a verse without a label. (VexFlow 5.8.0)
+public struct EasyScoreVerse: Equatable, Sendable, ExpressibleByArrayLiteral {
+    public var stanza: String?
+    public var syllables: [EasyScoreLyricMark]
+
+    public init(stanza: String? = nil, syllables: [EasyScoreLyricMark]) {
+        self.stanza = stanza
+        self.syllables = syllables
+    }
+
+    public init(arrayLiteral elements: EasyScoreLyricMark...) {
+        self.init(syllables: elements)
     }
 }
 
@@ -209,13 +226,14 @@ public struct EasyScoreMeasureSpec {
     /// Literal chord names sharing a lane above their notes. (VexFlow 5.6.0)
     public var chords: [EasyScoreLeadMark]
     /// Each ordered list of syllables forms a separate lyric lane. (VexFlow 5.6.0)
-    public var verses: [[EasyScoreLyricMark]]
+    /// A verse can give a printed stanza label on the measure where it starts. (VexFlow 5.8.0)
+    public var verses: [EasyScoreVerse]
 
     public init(
         clef: ClefName? = nil, key: String? = nil, time: TimeSignatureSpec? = nil,
         span: VoiceTime? = nil, voices: [EasyScoreVoiceSpec], instrument: EasyScoreInstrumentName? = nil,
         showTimeSignature: Bool? = nil, endBarline: BarlineType? = nil, chords: [EasyScoreLeadMark] = [],
-        verses: [[EasyScoreLyricMark]] = []
+        verses: [EasyScoreVerse] = []
     ) {
         self.showTimeSignature = showTimeSignature
         self.endBarline = endBarline
@@ -355,7 +373,16 @@ public final class EasyScoreComposition {
     public internal(set) var notes: [[[[Tickable]]]] = []
     public internal(set) var spans: [VexElement] = []
     public internal(set) var diagnostics: [EasyScoreCompositionDiagnostic] = []
+    /// The staff-local measure and tick offset of each attack in an independently metered score, keyed by
+    /// `ObjectIdentifier` of the tickable. `nil` for an aligned score. (VexFlow 5.8.0)
+    public internal(set) var meterPositions: [ObjectIdentifier: MeterPosition]?
     private let score: EasyScore
+
+    /// The source position of `tickable` in an independently metered score (upstream `meterPositions.get`).
+    /// (VexFlow 5.8.0)
+    public func getMeterPosition(_ tickable: Tickable) -> MeterPosition? {
+        meterPositions?[ObjectIdentifier(tickable)]
+    }
 
     init(sheet: Sheet, score: EasyScore) {
         self.sheet = sheet
@@ -410,7 +437,8 @@ private func timedTicks(_ notes: ArraySlice<Tickable>) -> Fraction {
 
 /// Scope staff defaults and build one voice's notation, without assigning a Voice yet.
 private func buildVoice(
-    _ score: EasyScore, _ spec: EasyScoreVoiceSpec, _ initial: EasyScoreResolvedStaffState, _ display: Bool
+    _ score: EasyScore, _ spec: EasyScoreVoiceSpec, _ initial: EasyScoreResolvedStaffState, _ display: Bool,
+    deferBeam: Bool = false
 ) throws -> BuiltVoice {
     try score.withDefaults(clef: initial.clef, time: initial.time, stem: spec.stem) { score in
         var state = initial
@@ -473,14 +501,70 @@ private func buildVoice(
             if members.count != group.count { throw invalid("Tuplets require native notes.") }
             _ = try score.make.tuplet(notes: members, options: group.options)
         }
-        if let autoBeam = spec.autoBeam {
-            let stemmable = timed.compactMap { $0 as? StemmableNote }
-            if stemmable.count != timed.count { throw invalid("Automatic beams require stemmable notes.") }
-            score.set(time: initial.time)
-            _ = try score.autoBeam(stemmable, options: autoBeam)
-        }
+        if !deferBeam { try autoBeamVoice(score, spec, timed, initial.time) }
         return BuiltVoice(notes: notes, state: state, changes: changes, assignments: assignments, generated: generated)
     }
+}
+
+/// Beam the timed members after the measure-local and cross-measure ratios are applied. (VexFlow 5.8.0)
+private func autoBeamVoice(
+    _ score: EasyScore, _ spec: EasyScoreVoiceSpec, _ timed: [Tickable], _ time: TimeSignatureSpec
+) throws {
+    guard let autoBeam = spec.autoBeam else { return }
+    let stemmable = timed.compactMap { $0 as? StemmableNote }
+    if stemmable.count != timed.count { throw invalid("Automatic beams require stemmable notes.") }
+    _ = try score.withDefaults(time: time) { score in try score.autoBeam(stemmable, options: autoBeam) }
+}
+
+/// Build the unvoiced members of cross-measure tuplets before a strict measure counts its ticks.
+/// The result is staff-first, then measure, then voice. (VexFlow 5.8.0)
+private func prepareTupletVoices(
+    _ score: EasyScore, _ spec: EasyScoreCompositionSpec, _ initial: [EasyScoreResolvedStaffState]
+) throws -> [[[BuiltVoice]]]? {
+    guard let groups = spec.continuous?.tuplets, !groups.isEmpty else { return nil }
+    final class LaneBox { var notes: [Tickable] = [] }
+    var locations: [ObjectIdentifier: (lane: LaneBox, index: Int, measure: Int)] = [:]
+    let prepared = try spec.staves.enumerated().map { j, staff -> [[BuiltVoice]] in
+        var state = initial[j]
+        var lanes: [LaneBox] = []
+        return try staff.measures.enumerated().map { m, measure -> [BuiltVoice] in
+            if measure.voices.isEmpty { throw invalid("Every stave measure needs at least one voice.") }
+            let start = measureState(measure, state)
+            let voices = try measure.voices.enumerated().map { v, voice -> BuiltVoice in
+                let built = try buildVoice(score, voice, start, v == 0, deferBeam: true)
+                while lanes.count <= v { lanes.append(LaneBox()) }
+                let lane = lanes[v]
+                for tick in built.notes where !tick.shouldIgnoreTicks() {
+                    locations[ObjectIdentifier(tick)] = (lane, lane.notes.count, m)
+                    lane.notes.append(tick)
+                }
+                return built
+            }
+            state = voices[0].state
+            return voices
+        }
+    }
+    for group in groups {
+        if group.members.isEmpty || group.numNotes <= 0 || group.notesOccupied <= 0 {
+            throw invalid("A continuous tuplet needs members and a positive integer ratio.")
+        }
+        let notes = try group.members.map { try score.getNote($0) }
+        var previous: (lane: LaneBox, index: Int, measure: Int)?
+        for note in notes {
+            let at = locations[ObjectIdentifier(note)]
+            if at == nil
+                || (previous != nil
+                    && (at!.lane !== previous!.lane || at!.index != previous!.index + 1
+                        || at!.measure > previous!.measure + 1)) {
+                throw invalid("Continuous tuplet members must be consecutive timed notes in one voice, in score order.")
+            }
+            previous = at
+        }
+        // The notes own the native timing group. ContinuousLayout draws its bracket one time on each visible
+        // fragment.
+        _ = try Tuplet(notes: notes, options: TupletOptions(numNotes: group.numNotes, notesOccupied: group.notesOccupied))
+    }
+    return prepared
 }
 
 /// Inline changes must describe the same staff state at the same exact onset in every voice.
@@ -544,14 +628,16 @@ private func addLeadMarks(
         return note
     }
     for verse in measure.verses {
-        if verse.isEmpty { throw invalid("A verse needs at least one syllable.") }
-        let syllables = try verse.map { mark in
+        if verse.syllables.isEmpty { throw invalid("A verse needs at least one syllable.") }
+        let syllables = try verse.syllables.map { mark in
             PhraseSyllable(
                 note: try lyricAnchor(mark.note), text: mark.text, hyphenAfter: mark.hyphenAfter,
                 extendTo: try mark.extendTo.map { try lyricAnchor($0) }, elideWith: mark.elideWith
             )
         }
-        try system.getPhraseLayout().addVerse(syllables[0].note.checkStave(), syllables)
+        try system.getPhraseLayout().addVerse(
+            syllables[0].note.checkStave(), syllables, options: PhraseVerseOptions(stanza: verse.stanza)
+        )
     }
 }
 
@@ -563,6 +649,22 @@ private func measureState(
         clef: measure.clef ?? previous.clef, key: measure.key ?? previous.key, time: measure.time ?? previous.time,
         showTimeSignature: measure.showTimeSignature ?? previous.showTimeSignature
     )
+}
+
+/// Use the prepared timed tuplet members for a local bar or for a shared formatting window. (VexFlow 5.8.0)
+private func measureVoices(
+    _ score: EasyScore, _ measure: EasyScoreMeasureSpec, _ state: EasyScoreResolvedStaffState,
+    _ prepared: [BuiltVoice]?
+) throws -> [BuiltVoice] {
+    guard let prepared else {
+        return try measure.voices.enumerated().map { voiceIndex, voice in
+            try buildVoice(score, voice, state, voiceIndex == 0)
+        }
+    }
+    for (i, voice) in prepared.enumerated() {
+        try autoBeamVoice(score, measure.voices[i], voice.notes.filter { !$0.shouldIgnoreTicks() }, state.time)
+    }
+    return prepared
 }
 
 /// Resolve owned notes only after the entire composition is constructed.
@@ -619,7 +721,8 @@ private struct StaffMeasure {
 /// Build one staff measure before joining it to the shared native System.
 private func buildStaffMeasure(
     _ score: EasyScore, _ spec: EasyScoreCompositionSpec, _ staff: EasyScoreStaveSpec, _ index: Int,
-    _ previous: EasyScoreResolvedStaffState, seen: inout Set<ObjectIdentifier>, noteMeasures: inout [ObjectIdentifier: Int]
+    _ previous: EasyScoreResolvedStaffState, seen: inout Set<ObjectIdentifier>, noteMeasures: inout [ObjectIdentifier: Int],
+    prepared: [BuiltVoice]? = nil
 ) throws -> StaffMeasure {
     var assignments: [(note: Note, stave: String)] = []
     let measure = staff.measures[index]
@@ -627,9 +730,7 @@ private func buildStaffMeasure(
     let state = measureState(measure, previous)
     let span = try measure.span ?? VoiceTime(timeSignature: state.time)
     let ticks = try ticksFor(span)
-    let built = try measure.voices.enumerated().map { voiceIndex, voice in
-        try buildVoice(score, voice, state, voiceIndex == 0)
-    }
+    let built = try measureVoices(score, measure, state, prepared)
     let changes = stateChanges(built[0])
     func signature(_ items: [(at: Fraction, state: EasyScoreResolvedStaffState)]) -> [String] {
         items.map {
@@ -688,14 +789,15 @@ private func buildStaffMeasure(
     )
 }
 
-/// Compose aligned measure arrays atomically. Formatting and drawing remain explicit native operations.
-func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) throws -> EasyScoreComposition {
+/// Check the source policies before staff-local or shared-window construction changes native inputs.
+/// (VexFlow 5.8.0)
+private func validateComposition(_ spec: EasyScoreCompositionSpec) throws -> [Note] {
     let count = spec.staves.first?.measures.count ?? 0
     if count == 0 || spec.staves.isEmpty { throw invalid("A composition needs staves and measures.") }
     if Set(spec.staves.map { $0.id }).count != spec.staves.count || spec.staves.contains(where: { $0.id.isEmpty }) {
         throw invalid("Staff IDs must be unique and nonempty.")
     }
-    if spec.staves.contains(where: { $0.measures.count != count }) {
+    if spec.continuous?.independentMeters != true && spec.staves.contains(where: { $0.measures.count != count }) {
         throw invalid("All staves need the same number of measures.")
     }
     if spec.graceAccidentals == .ordered && spec.accidentals != .keyAware {
@@ -716,11 +818,64 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
             measure.voices.contains { $0.autoBeam != nil || !$0.tuplets.isEmpty }
         }
     }
-    if !nativeInputs.isEmpty && (spec.accidentals == .keyAware || usesRhythmPolicies) {
+    if !nativeInputs.isEmpty
+        && (spec.accidentals == .keyAware || !(spec.continuous?.tuplets.isEmpty ?? true) || usesRhythmPolicies) {
         throw invalid(
             "Apply rhythm and accidental policies before adopting native inputs, or use typed note descriptions."
         )
     }
+    return nativeInputs
+}
+
+/// The grid data that an independently metered composition gives to `composeAligned`. (VexFlow 5.8.0)
+private struct GridContext {
+    var assignments: [ObjectIdentifier: (note: Note, stave: String)]
+    var interior: [InteriorBar]
+    var placed: Set<ObjectIdentifier>
+}
+
+/// Compose aligned measure arrays atomically. Formatting and drawing remain explicit native operations.
+func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) throws -> EasyScoreComposition {
+    let nativeInputs = try validateComposition(spec)
+    if spec.continuous?.independentMeters != true { return try composeAligned(score, spec, nativeInputs) }
+    return try score.build { score in
+        var assignments: [ObjectIdentifier: (note: Note, stave: String)] = [:]
+        var placed = Set<ObjectIdentifier>()
+        let prepared = try prepareTupletVoices(score, spec, spec.staves.map(initialStaffState))
+        let grid = try independentMeterGrid(spec) { j, bar, initial, m in
+            if bar.voices.isEmpty { throw invalid("Every stave measure needs at least one voice.") }
+            let built = try measureVoices(score, bar, initial, prepared?[j][m])
+            let voices = built.map { $0.notes }
+            for v in built { for a in v.assignments { assignments[ObjectIdentifier(a.note)] = a } }
+            if spec.accidentals == .keyAware {
+                var key = initial.key
+                var changes: [EasyScoreKeyChange] = []
+                for change in stateChanges(built[0]) where change.state.key != key {
+                    key = change.state.key
+                    changes.append(EasyScoreKeyChange(at: change.at, key: key))
+                }
+                try applyCompositionAccidentals(
+                    score, voices, initial.key, changes,
+                    built.reduce(into: Set<ObjectIdentifier>()) { $0.formUnion($1.generated) },
+                    nil, spec.graceAccidentals == .ordered, { placed.insert(ObjectIdentifier($0)) }
+                )
+            }
+            return (voices, built[0].state)
+        }
+        let result = try composeAligned(
+            score, grid.spec, nativeInputs,
+            grid: GridContext(assignments: assignments, interior: grid.interior, placed: placed)
+        )
+        result.meterPositions = grid.positions
+        return result
+    }
+}
+
+/// Construct one shared System for each formatting window. The original note objects stay the same.
+private func composeAligned(
+    _ score: EasyScore, _ spec: EasyScoreCompositionSpec, _ nativeInputs: [Note], grid: GridContext? = nil
+) throws -> EasyScoreComposition {
+    let count = spec.staves[0].measures.count
     let priorNative = nativeInputs.map { (stave: $0.getStave(), modifiers: $0.getModifiers().count) }
     // Avoid assigning the same note to more than one voice, even when references are supplied directly.
     var seen = Set<ObjectIdentifier>()
@@ -734,20 +889,14 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
                         + "Sheet does not repeat them at wrapped row starts."
                 ))
             }
-            var states = spec.staves.map { stave in
-                EasyScoreResolvedStaffState(
-                    clef: stave.clef ?? (stave.kind == .tab ? .tab : .treble),
-                    key: stave.key ?? "C",
-                    time: stave.time ?? .default,
-                    showTimeSignature: stave.showTimeSignature ?? true
-                )
-            }
+            var states = spec.staves.map(initialStaffState)
             var noteMeasures: [ObjectIdentifier: Int] = [:]
             // Staff states at the start and end of each measure, and the generated accidentals, for the
             // continuous layout. (VexFlow 5.4.0)
             var starts: [[EasyScoreResolvedStaffState]] = []
             var ends: [[EasyScoreResolvedStaffState]] = []
-            var placed: Set<ObjectIdentifier>? = spec.continuous != nil ? [] : nil
+            var placed: Set<ObjectIdentifier>? = grid?.placed ?? (spec.continuous != nil ? [] : nil)
+            let prepared = grid == nil ? try prepareTupletVoices(score, spec, states) : nil
             for index in 0..<count {
                 starts.append(spec.staves.enumerated().map { j, staff in measureState(staff.measures[index], states[j]) })
                 let system = result.sheet.addSystem(spec.system)
@@ -755,7 +904,8 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
                 var parts: [StaffMeasure] = []
                 for (staffIndex, staff) in spec.staves.enumerated() {
                     let part = try buildStaffMeasure(
-                        score, spec, staff, index, states[staffIndex], seen: &seen, noteMeasures: &noteMeasures
+                        score, spec, staff, index, states[staffIndex], seen: &seen, noteMeasures: &noteMeasures,
+                        prepared: prepared?[staffIndex][index]
                     )
                     states[staffIndex] = part.state
                     system.addStave(SystemStave(
@@ -769,19 +919,26 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
                 }
                 let staves = parts.map { $0.stave }
                 let voices = parts.map { $0.voices }
-                for part in parts {
-                    for (note, id) in part.assignments {
-                        guard let target = spec.staves.firstIndex(where: { $0.id == id }) else {
-                            throw invalid("Unknown cross-staff target: \(id)")
+                var assignments = parts.flatMap { $0.assignments }
+                if let grid {
+                    for case let note as Note in parts.flatMap({ $0.notes.flatMap { $0 } }) {
+                        if let target = grid.assignments[ObjectIdentifier(note)] {
+                            assignments.removeAll { $0.note === note }
+                            assignments.append(target)
                         }
-                        _ = note.setStave(staves[target])
                     }
+                }
+                for (note, id) in assignments {
+                    guard let target = spec.staves.firstIndex(where: { $0.id == id }) else {
+                        throw invalid("Unknown cross-staff target: \(id)")
+                    }
+                    _ = note.setStave(staves[target])
                 }
                 if spec.accidentals == .keyAware {
                     let generated = parts.reduce(into: Set<ObjectIdentifier>()) { $0.formUnion($1.generated) }
                     for (staffIndex, part) in parts.enumerated() {
                         try applyCompositionAccidentals(
-                            score, voices.flatMap { $0 }, part.key, part.changes, generated, staves[staffIndex],
+                            score, voices.flatMap { $0 }.map { $0.getTickables() }, part.key, part.changes, generated, staves[staffIndex],
                             spec.graceAccidentals == .ordered,
                             placed == nil ? nil : { placed?.insert(ObjectIdentifier($0)) }
                         )
@@ -797,7 +954,9 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
             }
             result.spans = try buildSpans(score, spec, noteMeasures, &result.diagnostics)
             if spec.continuous != nil {
-                result.sheet.setContinuousLayout(try ContinuousLayout(result, spec, starts, ends, placed))
+                result.sheet.setContinuousLayout(
+                    try ContinuousLayout(result, spec, starts, ends, placed, grid?.interior ?? [])
+                )
             }
             return result
         }

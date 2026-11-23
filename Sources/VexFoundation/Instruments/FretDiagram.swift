@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/fretdiagram.ts` (VexFlow 5.6.0).
+// Port of `src/fretdiagram.ts` (VexFlow 5.8.0).
 // A standalone chord frame. Strings run from the lowest (left) to the highest (right).
 
 import Foundation
@@ -35,12 +35,18 @@ public struct FretDiagramSpec: Equatable, Sendable {
     }
 
     public var frets: [FretDiagramString]
+    /// Left-hand fingers 1-4, low string first. `nil` or an omitted entry leaves the dot plain. (VexFlow 5.8.0)
+    public var fingerings: [Int?]?
     public var firstFret: Int?
     public var rows: Int?
     public var barre: Barre?
 
-    public init(frets: [FretDiagramString], firstFret: Int? = nil, rows: Int? = nil, barre: Barre? = nil) {
+    public init(
+        frets: [FretDiagramString], fingerings: [Int?]? = nil, firstFret: Int? = nil, rows: Int? = nil,
+        barre: Barre? = nil
+    ) {
         self.frets = frets
+        self.fingerings = fingerings
         self.firstFret = firstFret
         self.rows = rows
         self.barre = barre
@@ -52,6 +58,7 @@ public final class FretDiagram: VexElement {
     override public class var category: String { "FretDiagram" }
 
     private let frets: [FretDiagramString]
+    private var fingerings: [Int?] = []
     private let first: Int
     private let rows: Int
     private let barre: FretDiagramSpec.Barre?
@@ -77,11 +84,41 @@ public final class FretDiagram: VexElement {
             }
         }
         super.init()
+        try setFingerings(spec.fingerings ?? [])
+    }
+
+    /// Replace the finger assignments for this chord. Passing no assignments clears all labels. (VexFlow 5.8.0)
+    @discardableResult
+    public func setFingerings(_ fingerings: [Int?] = []) throws -> Self {
+        if fingerings.count > frets.count || fingerings.enumerated().contains(where: { i, finger in
+            guard let finger else { return false }
+            return finger < 1 || finger > 4 || frets[i] == .fret(0) || frets[i] == .muted
+        }) {
+            throw VexError("BadArguments", "Assign fingers 1–4 to stopped strings only.")
+        }
+        self.fingerings = fingerings
+        return self
+    }
+
+    /// The finger on string `i` (low string first), or `nil`.
+    private func finger(_ i: Int) -> Int? {
+        i < fingerings.count ? fingerings[i] : nil
     }
 
     /// The top-left position includes the open-string marks and starting fret label.
     override public func getBoundingBox() -> BoundingBox? {
         BoundingBox(getX(), getY(), 28 + Double(frets.count - 1) * 9, 17 + Double(rows) * 11)
+    }
+
+    /// Paint the digit over the dot and any barre that passes through it.
+    private func drawFinger(_ ctx: RenderContext, _ finger: Int, _ x: Double, _ y: Double) {
+        ctx.save()
+        ctx.setFont(VexFont.validate(family: fontInfo.family, size: "7.5px", weight: "bold"))
+        ctx.setFillStyle("white")
+        let text = String(finger)
+        // A digit's cap height is about five pixels at this fixed marker size.
+        ctx.fillText(text, x - ctx.measureText(text).width / 2, y + 2.5)
+        ctx.restore()
     }
 
     override public func draw() throws {
@@ -101,7 +138,10 @@ public final class FretDiagram: VexElement {
         let group = ctx.openGroup("fret-diagram", getAttribute("id"))
         (group as? SVGNode)?.setAttribute(
             "aria-label",
-            "Chord frame, low to high: " + frets.map(\.description).joined(separator: ", ")
+            "Chord frame, low to high: "
+                + frets.enumerated().map { i, fret in
+                    finger(i).map { "\(fret) (finger \($0))" } ?? fret.description
+                }.joined(separator: ", ")
                 + (barre.map { ", barre at fret \($0.fret)" } ?? "")
         )
         if first > 1 {
@@ -121,13 +161,19 @@ public final class FretDiagram: VexElement {
                 line(x + 2.5, top - 8, x - 2.5, top - 3)
             case .fret(let n):
                 ctx.beginPath()
-                ctx.arc(x, n != 0 ? fretY(n) : top - 5.5, n != 0 ? 3 : 2.5, 0, 2 * Double.pi, false)
+                let radius: Double = finger(i) != nil ? 4 : 3
+                ctx.arc(x, n != 0 ? fretY(n) : top - 5.5, n != 0 ? radius : 2.5, 0, 2 * Double.pi, false)
                 if n != 0 { ctx.fill() } else { ctx.stroke() }
             }
         }
         if let barre {
             ctx.setLineWidth(5)
             line(right - Double(barre.from - 1) * 9, fretY(barre.fret), right - Double(barre.to - 1) * 9, fretY(barre.fret))
+        }
+        for i in fingerings.indices {
+            if let finger = finger(i), case .fret(let n) = frets[i] {
+                drawFinger(ctx, finger, left + Double(i) * 9, fretY(n))
+            }
         }
         ctx.closeGroup()
         ctx.restore()

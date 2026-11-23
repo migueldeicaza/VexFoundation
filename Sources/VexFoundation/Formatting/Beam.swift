@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/beam.ts` (VexFlow 5.7.0).
+// Port of `src/beam.ts` (VexFlow 5.8.0).
 // Beam grouping, slope fitting and stem geometry for rhythmic notation.
 
 import Foundation
@@ -16,6 +16,10 @@ public enum BeamError: Error, LocalizedError, Equatable, Sendable {
     case badContinuationProgress
     /// A continuing beam edge without a finite x or a positive beam count. (VexFlow 5.7.0)
     case badContinuationEdge
+    /// `slopeIterations` is not an integer from 1 to 1000. (VexFlow 5.8.0)
+    case badSlopeIterations
+    /// The slope bounds are not finite, or `minSlope` is more than `maxSlope`. (VexFlow 5.8.0)
+    case badSlopeBounds
 
     public var errorDescription: String? {
         switch self {
@@ -33,6 +37,10 @@ public enum BeamError: Error, LocalizedError, Equatable, Sendable {
             return "A continuing beam needs progress between zero and one."
         case .badContinuationEdge:
             return "A continuing beam requires a finite edge and a positive beam count."
+        case .badSlopeIterations:
+            return "slopeIterations must be an integer from 1 to \(maxSlopeIterations)."
+        case .badSlopeBounds:
+            return "Beam slope bounds must be finite with minSlope <= maxSlope."
         }
     }
 }
@@ -83,6 +91,8 @@ public struct BeamContinuation: Sendable {
 public struct BeamRenderOptions {
     /// Fan the secondary beams toward this end. The primary beam and written timing stay fixed. (VexFlow 5.7.0)
     public var feathered: FeatheredBeamDirection?
+    /// Stop interior stems at the innermost beam that continues through the note. (VexFlow 5.8.0)
+    public var frenchBeams: Bool = false
     public var flatBeamOffset: Double?
     public var flatBeams: Bool = false
     public var secondaryBreakTicks: Double?
@@ -100,6 +110,7 @@ public struct BeamRenderOptions {
     public var minSlope: Double = -0.25
     /// Keep automatic slope in the endpoint contour and align level in-staff beams to a half-space. (VexFlow 5.3.0)
     public var contourSlope: Bool = false
+    /// Number of intervals between the slope bounds: an integer from 1 to 1000. (VexFlow 5.8.0)
     public var slopeIterations: Int = 20
     public var slopeCost: Double = 100
     public var stemletExtension: Double = 7
@@ -136,6 +147,8 @@ public struct BeamConfig {
     public var stemPolicy: BeamStemPolicy?
     /// Fan the secondary beams of each generated beam. (VexFlow 5.7.0)
     public var feathered: FeatheredBeamDirection?
+    /// Stop interior stems of each generated beam at the innermost continuing beam. (VexFlow 5.8.0)
+    public var frenchBeams: Bool = false
     public var flatBeams: Bool = false
     public var flatBeamOffset: Double?
     public var secondaryBreaks: String?
@@ -151,9 +164,11 @@ public struct BeamConfig {
         flatBeamOffset: Double? = nil,
         secondaryBreaks: String? = nil,
         stemPolicy: BeamStemPolicy? = nil,
-        feathered: FeatheredBeamDirection? = nil
+        feathered: FeatheredBeamDirection? = nil,
+        frenchBeams: Bool = false
     ) {
         self.feathered = feathered
+        self.frenchBeams = frenchBeams
         self.stemPolicy = stemPolicy
         self.groups = groups
         self.stemDirection = stemDirection
@@ -168,6 +183,35 @@ public struct BeamConfig {
 }
 
 // MARK: - Helper Functions
+
+/// Cap synchronous fitting work per note while allowing finer sampling than the default 20 intervals. (VexFlow 5.8.0)
+let maxSlopeIterations = 1000
+
+/// Sample the requested range with exact endpoints and at most one candidate per interior division. (VexFlow 5.8.0)
+func beamSlopes(_ minSlope: Double, _ maxSlope: Double, _ intervals: Int) -> [Double] {
+    var slopes = [minSlope]
+    if minSlope == maxSlope { return slopes }
+
+    let increment = (maxSlope - minSlope) / Double(intervals)
+    var slope = minSlope
+    var index = 1
+    while index < intervals {
+        // Preserve the original rounding of interior candidates because it breaks ties between equally good fits.
+        let nextSlope = slope + increment
+        if nextSlope > slope && nextSlope < maxSlope {
+            slope = nextSlope
+        } else {
+            // Interpolate when a narrow range rounds away the step or a wide range overflows it.
+            let fraction = Double(index) / Double(intervals)
+            let interpolated = (1 - fraction) * minSlope + fraction * maxSlope
+            slope = max(slope, min(maxSlope, interpolated))
+        }
+        slopes.append(slope)
+        index += 1
+    }
+    slopes.append(maxSlope)
+    return slopes
+}
 
 private func calculateStemDirection(_ notes: [StemmableNote]) -> StemDirection {
     var lineSum: Double = 0
@@ -557,6 +601,7 @@ public class Beam: VexElement {
         for group in beamedNoteGroups {
             let beam = try Beam(group)
 
+            if config.frenchBeams { beam.renderOptions.frenchBeams = true }
             if let feathered = config.feathered { beam.renderOptions.feathered = feathered }
             if config.showStemlets {
                 beam.renderOptions.showStemlets = true
@@ -704,31 +749,35 @@ public class Beam: VexElement {
         firstY + (x - firstX) * slope
     }
 
-    /// Calculate the best possible slope for the provided notes.
-    public func calculateSlope() {
+    /// Fit the beam between two finite, ordered slope bounds. Equal bounds select one fixed slope.
+    /// `slopeIterations` sets the number of intervals between the bounds (integer from 1 to 1000, default 20).
+    /// (VexFlow 5.8.0)
+    public func calculateSlope() throws {
         let maxSlope = renderOptions.maxSlope
         let minSlope = renderOptions.minSlope
-        let slopeIterations = Double(renderOptions.slopeIterations)
+        let slopeIterations = renderOptions.slopeIterations
         let slopeCost = renderOptions.slopeCost
+
+        if slopeIterations < 1 || slopeIterations > maxSlopeIterations {
+            throw BeamError.badSlopeIterations
+        }
+        if !minSlope.isFinite || !maxSlope.isFinite || minSlope > maxSlope {
+            throw BeamError.badSlopeBounds
+        }
 
         let stemDirection = _stemDirection.signDouble
 
         let firstNote = notes[0]
         let initialSlope = getStemSlope(firstNote, notes[notes.count - 1])
-        let increment = (maxSlope - minSlope) / slopeIterations
-        var minCost = Double.greatestFiniteMagnitude
-        var bestSlope: Double = 0
+        var minCost = Double.infinity
+        // Even a degenerate note span must honor a requested fixed or one-sided slope.
+        var bestSlope = max(minSlope, min(0, maxSlope))
         var yShift: Double = 0
 
         // Explicit slope bounds take precedence when they exclude the horizontal candidate.
         let followContour = renderOptions.contourSlope && minSlope <= 0 && maxSlope >= 0
-        // iterate through slope values to find best weighted fit
-        var slope = minSlope
-        while slope <= maxSlope {
-            if followContour && abs(slope) > 1e-8 && slope * initialSlope <= 0 {
-                slope += increment
-                continue
-            }
+        for slope in beamSlopes(minSlope, maxSlope, slopeIterations) {
+            if followContour && abs(slope) > 1e-8 && slope * initialSlope <= 0 { continue }
             var totalStemExtension: Double = 0
             var yShiftTemp: Double = 0
 
@@ -768,7 +817,6 @@ public class Beam: VexElement {
                 bestSlope = slope
                 yShift = yShiftTemp
             }
-            slope += increment
         }
 
         if renderOptions.contourSlope && abs(bestSlope) < 1e-8 {
@@ -877,6 +925,43 @@ public class Beam: VexElement {
         }
     }
 
+    /// The error of the last `calculateSlope()` call in `postFormat()`. `draw()` throws it. (VexFlow 5.8.0)
+    public private(set) var slopeError: Error?
+
+    /// Measure the French stem inset from the primary beam to each unbroken secondary strip. (VexFlow 5.8.0)
+    private func getFrenchBeamInsets(_ primaryY: Double) -> [Double] {
+        var insets = notes.map { _ in 0.0 }
+        let firstX = notes[0].getStemX()
+        var previousDuration = ""
+        var index = 0
+        for strip in (try? getStrips(primaryY)) ?? [] {
+            let duration = strip.duration
+            if duration == "4" { continue } // The primary strip is the reference for all stem tips.
+            if previousDuration != duration {
+                previousDuration = duration
+                index = 0
+            }
+            // Strip endpoints include drawing overhang. Compare the original anchor positions
+            // so stems at either end of a strip still connect it to the primary beam.
+            let end = strip.x2 - 1
+            if end <= strip.x1 { continue }
+            while index < notes.count {
+                let note = notes[index]
+                let x = note.getStemX() - Stem.WIDTH / 2
+                // A lone note at the end of an incoming strip is anchored at the stem center.
+                if end - x <= Stem.WIDTH / 2 { break }
+                if x > strip.x1 && !note.isRest() && note.getStemDirection() == _stemDirection {
+                    // Interpolating the actual strip also follows the spread of a feathered group.
+                    let secondaryY = strip.y1 + ((x - strip.x1) / (end - strip.x1)) * (strip.y2 - strip.y1)
+                    let primaryAtX = getSlopeY(x, firstX, primaryY, slope)
+                    insets[index] = abs(secondaryY - primaryAtX)
+                }
+                index += 1
+            }
+        }
+        return insets
+    }
+
     /// Calculate a slope and y-shift for flat beams.
     public func calculateFlatSlope() {
         let beamWidth = renderOptions.beamWidth
@@ -966,8 +1051,9 @@ public class Beam: VexElement {
         let firstNote = notes[0]
         let firstStemTipY = getBeamYToDraw()
         let firstStemX = firstNote.getStemX()
+        let insets = renderOptions.frenchBeams ? getFrenchBeamInsets(firstStemTipY + yShift) : nil
 
-        for note in notes {
+        for (i, note) in notes.enumerated() {
             guard let stem = note.getStem() else { continue }
             let stemX = note.getStemX()
             let stemTipY = note.getStemExtents().topY
@@ -986,7 +1072,7 @@ public class Beam: VexElement {
             let after = preBeamExtension + beamExtension + crossStemExtension
             fittedStems.append((stem: stem, before: preBeamExtension, after: after))
             stem.setExtension(after)
-            stem.adjustHeightForBeam()
+            stem.adjustHeightForBeam(insets?[i] ?? 0)
 
             if note.isRest() && showStemlets {
                 let totalBeamWidth = Double(beamCount - 1) * beamWidth * 1.5 + beamWidth
@@ -1191,6 +1277,8 @@ public class Beam: VexElement {
 
     /// One filled strip: two sloping edges separated by a signed thickness. (VexFlow 5.3.0)
     struct Strip {
+        /// The beam level of the strip, as a duration key ("4" is the primary beam). (VexFlow 5.8.0)
+        var duration: String
         var x1: Double
         var x2: Double
         var y1: Double
@@ -1222,6 +1310,7 @@ public class Beam: VexElement {
             for line in getBeamLines(duration) {
                 guard let end = line.end else { throw BeamError.noLastBeamX }
                 strips.append(Strip(
+                    duration: duration,
                     x1: line.start,
                     x2: end + 1,
                     y1: getSlopeY(line.start, firstX, originAt(line.start), slope),
@@ -1327,7 +1416,15 @@ public class Beam: VexElement {
             calculateFlatSlope()
             flatOffset = (before: before, after: renderOptions.flatBeamOffset)
         } else {
-            calculateSlope()
+            // Upstream throws from postFormat for bad slope options. The Swift postFormat
+            // does not throw: keep the error, stop here (not formatted) and throw it from draw().
+            do {
+                try calculateSlope()
+                slopeError = nil
+            } catch {
+                slopeError = error
+                return
+            }
             clearOtherVoiceHeads()
         }
         applyStemExtensions()
@@ -1344,6 +1441,7 @@ public class Beam: VexElement {
         if !postFormatted {
             postFormat()
         }
+        if let slopeError { throw slopeError }
 
         // Local change (1af03ba): apply the element style in draw().
         ctx.save()

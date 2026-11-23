@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/easyscore/policies.ts` (VexFlow 5.4.0).
+// Port of `src/easyscore/policies.ts` (VexFlow 5.8.0).
 // Opt-in accidental generation preserves written pitches and explicit native decorations.
 
 import Foundation
@@ -34,11 +34,11 @@ private func orderedAttacks(_ hosts: [StaveNote], _ includeGrace: Bool) -> [[Sta
 /// Each onset is evaluated against one prior state, so voice ordering cannot change accidental output.
 func applyCompositionAccidentals(
     _ score: EasyScore,
-    _ voices: [Voice],
+    _ voices: [[Tickable]],
     _ key: String,
     _ changes: [EasyScoreKeyChange],
     _ generated: Set<ObjectIdentifier>,
-    _ stave: Stave,
+    _ stave: Stave?,
     _ includeGrace: Bool = false,
     _ placed: ((Accidental) -> Void)? = nil
 ) throws {
@@ -49,12 +49,12 @@ func applyCompositionAccidentals(
     var positions: [String: (at: Fraction, notes: [StaveNote])] = [:]
     for voice in voices {
         let at = Fraction(0, 1)
-        for note in voice.getTickables() {
+        for note in voice {
             if note.shouldIgnoreTicks() { continue }
             let id = at.clone().simplify().description
             var group = positions[id] ?? (at.clone(), [])
             if positions[id] == nil { positionOrder.append(id) }
-            if let staveNote = note as? StaveNote, staveNote.getStave() === stave {
+            if let staveNote = note as? StaveNote, stave == nil || staveNote.getStave() === stave {
                 group.notes.append(staveNote)
             }
             positions[id] = group
@@ -94,6 +94,7 @@ func applyCompositionAccidentals(
                 }
                 if explicit.isEmpty && (previous != pitch || (simultaneous[p.id]?.count ?? 0) > 1) {
                     let mark = try score.make.accidental(type: p.accidental)
+                    mark.isAutomatic = true
                     try score.attach(note, mark, index: index)
                     placed?(mark)
                 }

@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/textdynamics.ts` (VexFlow 5.1.0).
+// Port of `src/textdynamics.ts` (VexFlow 5.8.0).
 
 import Foundation
 
@@ -18,11 +18,10 @@ public enum TextDynamicsError: Error, LocalizedError, Equatable, Sendable {
 
 // MARK: - TextDynamics
 
-/// `TextDynamics` renders traditional text dynamics markings, for example
-/// p, f, sfz, rfz, ppp.
+/// A timed music-font dynamic such as p, mf, sfz, or n (niente).
 ///
 /// You can render any dynamics string that contains a combination of the
-/// letters P, M, F, Z, R, S.
+/// letters P, M, F, N, Z, R, S.
 public final class TextDynamics: Note {
 
     override public class var category: String { "TextDynamics" }
@@ -32,6 +31,7 @@ public final class TextDynamics: Note {
         "f": Glyphs.dynamicForte,
         "p": Glyphs.dynamicPiano,
         "m": Glyphs.dynamicMezzo,
+        "n": Glyphs.dynamicNiente,
         "s": Glyphs.dynamicSforzando,
         "z": Glyphs.dynamicZ,
         "r": Glyphs.dynamicRinforzando,
@@ -48,7 +48,7 @@ public final class TextDynamics: Note {
     /// Create the dynamics marking. `TextDynamics` is a `Note`, so it can be
     /// formatted in a `Voice`.
     ///
-    /// - Parameter noteStruct: a `duration` and the `text` (the sequence of letters to render).
+    /// - Parameter noteStruct: a `duration` and the dynamics letters in `text`.
     public init(_ noteStruct: TextNoteStruct) {
         self.sequence = (noteStruct.text ?? "").lowercased()
         self.line = noteStruct.line ?? 0
@@ -93,19 +93,16 @@ public final class TextDynamics: Note {
 
     /// Preformat the dynamics text. Throws for an invalid dynamics character.
     public func preFormatThrowing() throws {
-        // Create new glyphs if the note was formatted before.
-        text = ""
-        // Iterate through each letter
+        // Resolve the entire sequence before replacing its text, including on repeated formatting.
+        let glyphs = TextDynamics.GLYPHS
+        var text = ""
         for letter in sequence {
-            // Get the glyph data for the letter
-            guard let glyph = TextDynamics.GLYPHS[letter] else {
+            guard let glyph = glyphs[letter] else {
                 throw TextDynamicsError.invalidDynamicsCharacter(letter)
             }
-
-            // Add the glyph
             text += glyph
         }
-
+        self.text = text
         preFormatted = true
     }
 

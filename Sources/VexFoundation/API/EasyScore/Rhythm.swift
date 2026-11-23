@@ -19,6 +19,8 @@ public struct EasyScoreAutoBeamOptions {
     public var secondaryBreaks: String?
     /// Fan the secondary beams of each generated beam. (VexFlow 5.7.0)
     public var feathered: FeatheredBeamDirection?
+    /// Stop interior stems of each generated beam at the innermost continuing beam. (VexFlow 5.8.0)
+    public var frenchBeams: Bool
     /// `true` recalculates every stem, `false` preserves every stem, `nil` respects explicit stems.
     public var autoStem: Bool?
 
@@ -26,9 +28,10 @@ public struct EasyScoreAutoBeamOptions {
         groups: [Fraction]? = nil, stemDirection: StemDirection? = nil, beamRests: Bool = false,
         beamMiddleOnly: Bool = false, showStemlets: Bool = false, maintainStemDirections: Bool = false,
         flatBeams: Bool = false, flatBeamOffset: Double? = nil, secondaryBreaks: String? = nil,
-        autoStem: Bool? = nil, feathered: FeatheredBeamDirection? = nil
+        autoStem: Bool? = nil, feathered: FeatheredBeamDirection? = nil, frenchBeams: Bool = false
     ) {
         self.feathered = feathered
+        self.frenchBeams = frenchBeams
         self.groups = groups
         self.stemDirection = stemDirection
         self.beamRests = beamRests
@@ -74,7 +77,8 @@ func easyScoreAutoBeam(_ score: EasyScore, _ notes: [StemmableNote], _ options: 
         flatBeamOffset: options.flatBeamOffset,
         secondaryBreaks: options.secondaryBreaks,
         stemPolicy: stemPolicy,
-        feathered: options.feathered
+        feathered: options.feathered,
+        frenchBeams: options.frenchBeams
     )
     return try score.build { score in
         try Beam.generateBeams(notes, config: config).map { try score.adopt($0, role: .drawable) }

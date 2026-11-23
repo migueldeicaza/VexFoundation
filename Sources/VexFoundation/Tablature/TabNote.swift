@@ -596,6 +596,17 @@ open class TabNote: StemmableNote {
         }
     }
 
+    // MARK: - Fret Ink
+
+    /// The visible fret text for each string, including ghost parentheses, font sizing and baseline shifts.
+    /// (VexFlow 5.8.0)
+    public func getFretInk() -> [BoundingBox] {
+        let x = getAbsoluteX()
+        return fretElement.enumerated().map { i, el in
+            el.getTextInk(x - el.getWidth() / 2, (i < ys.count ? ys[i] : .nan) + renderOptions.yShift)
+        }
+    }
+
     // MARK: - Draw Positions
 
     /// Draw the fret positions.

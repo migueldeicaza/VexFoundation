@@ -1,10 +1,9 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/stavetie.ts` (VexFlow 5.6.0).
+// Port of `src/stavetie.ts` (VexFlow 5.8.0).
 //
-// This class implements varies types of ties between contiguous notes. The
-// ties include: regular ties, hammer ons, pull offs, and slides.
+// Measures and draws indexed pitch ties, including partial ties and dashed editorial arcs.
 
 import Foundation
 
@@ -13,6 +12,8 @@ public enum StaveTieError: Error, LocalizedError, Equatable, Sendable {
     case mismatchedIndices(firstCount: Int, lastCount: Int)
     case noYValues
     case badIndices
+    /// A laissez vibrer tie needs one outgoing pitched head and a positive reach. (VexFlow 5.8.0)
+    case invalidLaissezVibrer
 
     public var errorDescription: String? {
         switch self {
@@ -24,6 +25,8 @@ public enum StaveTieError: Error, LocalizedError, Equatable, Sendable {
             return "No Y-values to render"
         case .badIndices:
             return "Bad indexes for tie rendering."
+        case .invalidLaissezVibrer:
+            return "A laissez vibrer tie needs one outgoing pitched head and a positive reach."
         }
     }
 }
@@ -32,6 +35,8 @@ public enum StaveTieError: Error, LocalizedError, Equatable, Sendable {
 
 /// Specifies the notes and indexes for a tie connection.
 public struct TieNotes {
+    /// Local reach in pixels for a laissez vibrer tie on one outgoing pitched head. (VexFlow 5.8.0)
+    public var laissezVibrer: Double?
     public var firstNote: Note?
     public var lastNote: Note?
     public var firstIndexes: [Int]
@@ -41,8 +46,10 @@ public struct TieNotes {
         firstNote: Note? = nil,
         lastNote: Note? = nil,
         firstIndexes: [Int] = [0],
-        lastIndexes: [Int] = [0]
+        lastIndexes: [Int] = [0],
+        laissezVibrer: Double? = nil
     ) {
+        self.laissezVibrer = laissezVibrer
         self.firstNote = firstNote
         self.lastNote = lastNote
         self.firstIndexes = firstIndexes
@@ -114,6 +121,13 @@ open class StaveTie: VexElement {
             return (TieNotes(firstIndexes: [0], lastIndexes: [0]), .requiresStartOrEndNote)
         }
 
+        if !isValidLaissezVibrer(notes) {
+            // Upstream throws. Keep an ordinary partial tie so that drawing stays safe.
+            var normalized = notes
+            normalized.laissezVibrer = nil
+            return (normalizedTieNotes(normalized).notes, .invalidLaissezVibrer)
+        }
+
         var normalized = notes
         if normalized.firstIndexes.isEmpty { normalized.firstIndexes = [0] }
         if normalized.lastIndexes.isEmpty { normalized.lastIndexes = [0] }
@@ -134,6 +148,17 @@ open class StaveTie: VexElement {
             normalized.lastIndexes = [0]
         }
         return (normalized, error)
+    }
+
+    /// Upstream `setNotes` check of `laissezVibrer`. (VexFlow 5.8.0)
+    private static func isValidLaissezVibrer(_ notes: TieNotes) -> Bool {
+        guard let reach = notes.laissezVibrer else { return true }
+        guard reach.isFinite, reach > 0,
+              let first = notes.firstNote as? StaveNote, !first.isRest(),
+              notes.lastNote == nil,
+              notes.firstIndexes.count == 1 else { return false }
+        let index = notes.firstIndexes[0]
+        return index >= 0 && index < first.getKeys().count
     }
 
     // MARK: - Init
@@ -200,6 +225,9 @@ open class StaveTie: VexElement {
     public func setNotesThrowing(_ notes: TieNotes) throws -> Self {
         guard notes.firstNote != nil || notes.lastNote != nil else {
             throw StaveTieError.requiresStartOrEndNote
+        }
+        guard Self.isValidLaissezVibrer(notes) else {
+            throw StaveTieError.invalidLaissezVibrer
         }
 
         var n = notes
@@ -324,7 +352,8 @@ open class StaveTie: VexElement {
             let end = RibbonPoint(x: r.x2, y: r.lastY)
             parts.append(contentsOf: ribbonParts(
                 [start, RibbonPoint(x: r.cpX, y: r.topControlPointY), end],
-                [start, RibbonPoint(x: r.cpX, y: r.bottomControlPointY), end]
+                [start, RibbonPoint(x: r.cpX, y: hasLineDash ? r.topControlPointY : r.bottomControlPointY), end],
+                padding: hasLineDash ? (style?.lineWidth ?? 1) / 2 : 0
             ))
         }
         return parts
@@ -342,9 +371,17 @@ open class StaveTie: VexElement {
         )
         var box: BoundingBox?
         for curve in curves {
-            let top = min(curve.firstY, curve.lastY, curve.topControlPointY, curve.bottomControlPointY)
-            let bottom = max(curve.firstY, curve.lastY, curve.topControlPointY, curve.bottomControlPointY)
-            let part = BoundingBox(x: min(curve.x1, curve.x2), y: top, w: abs(curve.x2 - curve.x1), h: bottom - top)
+            // A dashed tie is a single stroked arc (VexFlow 5.8.0).
+            let edge = hasLineDash ? curve.topControlPointY : curve.bottomControlPointY
+            let padding = hasLineDash ? (style?.lineWidth ?? 1) / 2 : 0
+            let top = min(curve.firstY, curve.lastY, curve.topControlPointY, edge) - padding
+            let bottom = max(curve.firstY, curve.lastY, curve.topControlPointY, edge) + padding
+            let part = BoundingBox(
+                x: min(curve.x1, curve.x2) - padding,
+                y: top,
+                w: abs(curve.x2 - curve.x1) + 2 * padding,
+                h: bottom - top
+            )
             if box == nil { box = part } else { _ = box?.mergeWith(part) }
         }
         return box ?? BoundingBox(x: getFirstX(), y: getFirstYs().first ?? 0, w: 0, h: 0)
@@ -367,6 +404,14 @@ open class StaveTie: VexElement {
             ctx.beginPath()
             ctx.moveTo(curve.x1, curve.firstY)
             ctx.quadraticCurveTo(curve.cpX, curve.topControlPointY, curve.x2, curve.lastY)
+            if hasLineDash {
+                // VexFlow 5.8.0: a dashed tie is an open stroked arc.
+                ctx.save()
+                applyStyle(context: ctx)
+                ctx.stroke()
+                ctx.restore()
+                continue
+            }
             ctx.quadraticCurveTo(curve.cpX, curve.bottomControlPointY, curve.x1, curve.firstY)
             ctx.closePath()
             ctx.fill()
@@ -404,6 +449,13 @@ open class StaveTie: VexElement {
     /// Returns the X position in pixels that the tie will be drawn starting from;
     /// ideally from the firstNote, alternatively from the lastNote, or 0 if all else fails.
     public func getFirstX() -> Double {
+        if notes.laissezVibrer != nil, let note = notes.firstNote as? StaveNote {
+            let ink = note.getHeadInk()
+            if let index = notes.firstIndexes.first, index >= 0, index < ink.count {
+                let head = ink[index]
+                return head.x + head.w + renderOptions.tieSpacing
+            }
+        }
         if let firstNote = notes.firstNote {
             return firstNote.getTieRightX() + renderOptions.tieSpacing
         } else if let lastNote = notes.lastNote {
@@ -416,6 +468,7 @@ open class StaveTie: VexElement {
     /// Returns the X position in pixels that the tie will be drawn ending at;
     /// ideally from the lastNote, alternatively from the firstNote, or 0 if all else fails.
     public func getLastX() -> Double {
+        if let reach = notes.laissezVibrer { return getFirstX() + reach }
         if let lastNote = notes.lastNote {
             return lastNote.getTieLeftX() + renderOptions.tieSpacing
         } else if let firstNote = notes.firstNote {
@@ -464,6 +517,16 @@ open class StaveTie: VexElement {
             notes.firstIndexes = notes.lastIndexes
         }
     }
+
+    /// A let-ring tie occupies only the local curve leaving its selected head. (VexFlow 5.8.0)
+    override open func getBoundingBox() -> BoundingBox? {
+        guard notes.laissezVibrer != nil else { return super.getBoundingBox() }
+        guard let parts = try? getRouteParts(), var box = parts.first else { return nil }
+        for part in parts.dropFirst() { _ = box.mergeWith(part) }
+        return box
+    }
+
+    private var hasLineDash: Bool { !(style?.lineDash ?? "").isEmpty }
 
     // MARK: - Draw
 
