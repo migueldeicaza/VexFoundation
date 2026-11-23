@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/easyscore/composition.ts` (VexFlow 5.4.0 part 1; the continuous-layout hooks are TODO).
+// Port of `src/easyscore/composition.ts` (VexFlow 5.4.0).
 // Structured construction delegates timing and layout to native Voice, System, and Sheet objects.
 
 import Foundation
@@ -236,6 +236,9 @@ public enum EasyScoreCrossMeasureSpanPolicy: Sendable {
 /// Layout policies are explicit. Sheet does not split spans or repeat signatures at row starts.
 public struct EasyScoreCompositionSpec {
     public var staves: [EasyScoreStaveSpec]
+    /// Lay out the composition as a continuous score: row-dependent signatures, names, spans split at
+    /// system breaks, hidden empty staves and compressed rests. (VexFlow 5.4.0)
+    public var continuous: ContinuousOptions?
     public var sheet: SheetOptions
     /// Options for each measure System. The sheet sets `factory`, `width`, `autoWidth` and `noJustification`.
     public var system: SystemOptions
@@ -250,8 +253,9 @@ public struct EasyScoreCompositionSpec {
         staves: [EasyScoreStaveSpec], sheet: SheetOptions = SheetOptions(), system: SystemOptions = SystemOptions(),
         accidentals: EasyScoreAccidentalPolicy = .literal, signatures: EasyScoreSignaturePolicy = .changes,
         spans: [EasyScoreSpanSpec] = [], crossMeasureSpans: EasyScoreCrossMeasureSpanPolicy = .reject,
-        graceAccidentals: EasyScoreGraceAccidentalPolicy? = nil
+        graceAccidentals: EasyScoreGraceAccidentalPolicy? = nil, continuous: ContinuousOptions? = nil
     ) {
+        self.continuous = continuous
         self.graceAccidentals = graceAccidentals
         self.staves = staves
         self.sheet = sheet
@@ -581,9 +585,7 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
     do {
         return try score.build { score in
             let result = EasyScoreComposition(sheet: try score.sheet(spec.sheet), score: score)
-            // TODO(5.4.0 part 2): skip this diagnostic when `spec.continuous` is set
-            // (upstream `!spec.continuous && spec.signatures !== 'every-measure'`).
-            if spec.signatures != .everyMeasure {
+            if spec.continuous == nil && spec.signatures != .everyMeasure {
                 result.diagnostics.append(EasyScoreCompositionDiagnostic(
                     code: .signaturePolicy,
                     message: "Signatures appear at the first measure and explicit changes. "
@@ -598,10 +600,16 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
                 )
             }
             var noteMeasures: [ObjectIdentifier: Int] = [:]
-            // TODO(5.4.0 part 2): with `spec.continuous`, record the staff states at the start (`starts`) and
-            // end (`ends`) of each measure and the generated accidentals (`placed`), then install
-            // `ContinuousLayout(result, spec, starts, ends, placed)` with `result.sheet.setContinuousLayout(_:)`.
+            // Staff states at the start and end of each measure, and the generated accidentals, for the
+            // continuous layout. (VexFlow 5.4.0)
+            var starts: [[EasyScoreResolvedStaffState]] = []
+            var ends: [[EasyScoreResolvedStaffState]] = []
+            var placed: Set<ObjectIdentifier>? = spec.continuous != nil ? [] : nil
             for index in 0..<count {
+                starts.append(spec.staves.enumerated().map { j, staff in
+                    let m = staff.measures[index], p = states[j]
+                    return EasyScoreResolvedStaffState(clef: m.clef ?? p.clef, key: m.key ?? p.key, time: m.time ?? p.time)
+                })
                 let system = result.sheet.addSystem(spec.system)
                 result.systems.append(system)
                 var parts: [StaffMeasure] = []
@@ -634,15 +642,20 @@ func easyScoreCompose(_ score: EasyScore, _ spec: EasyScoreCompositionSpec) thro
                     for (staffIndex, part) in parts.enumerated() {
                         try applyCompositionAccidentals(
                             score, voices.flatMap { $0 }, part.key, part.changes, generated, staves[staffIndex],
-                            spec.graceAccidentals == .ordered
+                            spec.graceAccidentals == .ordered,
+                            placed == nil ? nil : { placed?.insert(ObjectIdentifier($0)) }
                         )
                     }
                 }
+                ends.append(states)
                 result.staves.append(staves)
                 result.voices.append(voices)
                 result.notes.append(parts.map { $0.notes })
             }
             result.spans = try buildSpans(score, spec, noteMeasures, &result.diagnostics)
+            if spec.continuous != nil {
+                result.sheet.setContinuousLayout(try ContinuousLayout(result, spec, starts, ends, placed))
+            }
             return result
         }
     } catch {

@@ -1,7 +1,7 @@
 // VexFoundation - Ported from VexFlow (https://vexflow.com)
 // Original: Copyright (c) 2023-present VexFlow contributors. MIT License.
 //
-// Port of `src/sheet.ts` (VexFlow 5.4.0 part 1; the continuous-layout hooks are TODO).
+// Port of `src/sheet.ts` (VexFlow 5.4.0).
 // Optional continuous-sheet layout for existing Systems. No music data model or pagination.
 
 import Foundation
@@ -57,6 +57,18 @@ public final class Sheet {
     private unowned let factory: Factory
     private var systems: [System] = []
     private var rows: [SheetRow] = []
+    private var continuous: ContinuousLayout?
+
+    /// Composition installs a score-aware layout while retaining the native sheet resize and draw API.
+    /// (VexFlow 5.4.0)
+    @discardableResult
+    public func setContinuousLayout(_ layout: ContinuousLayout) -> Self {
+        continuous = layout
+        return self
+    }
+
+    /// The continuous layout of a composition with `continuous` options. (VexFlow 5.4.0)
+    public func getContinuousLayout() -> ContinuousLayout? { continuous }
 
     /// Create a sheet. Usually created with `Factory.Sheet(options:)`.
     /// Throws when the width is not positive and finite, or when another dimension
@@ -114,7 +126,10 @@ public final class Sheet {
     /// Measure and pack rows. Always recompute, so repeated resize is deterministic.
     @discardableResult
     public func format() throws -> Self {
-        // TODO(5.4.0 part 2): `if let continuous { rows = try continuous.format(options); return self }`.
+        if let continuous {
+            rows = try continuous.format(options).map { $0.sheetRow }
+            return self
+        }
         let widths = try measureSystems()
         rows = []
         var y = options.y

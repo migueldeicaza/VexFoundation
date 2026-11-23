@@ -15,7 +15,7 @@ When `VexRuntimeContext.upstreamParityMode` is `true`, the items marked **(gated
 - [ ] Tables and Note: `useAlternativeXGlyph`, a classical X notehead for tab notes.
 - [ ] Tables: TI (inverted triangle) notehead shift properties **(gated)**.
 - [ ] Stave: guard against a NaN modifier width.
-- [ ] Stave: do not overwrite `modifier.x` or `startX` when they are already larger (alignment) **(gated)**.
+- [ ] Stave: do not overwrite `modifier.x` or `startX` when they are already larger (alignment) **(gated)**. `Stave.setBoundaryModifiers` (VexFlow 5.4.0) resets `startX` and the begin modifier positions to the stave edge, and `setX` also moves the boundary modifiers, so a continuous layout reflows to the same positions.
 - [ ] Barline: double heavy barline type.
 - [ ] TabNote: configurable background color instead of `clearRect`.
 - [ ] StaveTempo: SVG groups around the tempo marking and the BPM text **(gated)**.

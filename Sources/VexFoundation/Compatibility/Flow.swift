@@ -9,8 +9,8 @@
 // 5.3.0 adds `VexFlow.EngravingProfile`, the module type `EngravingProfile`,
 // and `VexFlow.measureEngraving`. 5.4.0 adds `VexFlow.PhraseLayout`,
 // `FrettedInstrument`, `PercussionMap`, `FretDiagram`, `AlternatingTremolo`,
-// `WrittenAccidentalState` and `NotationSpelling`, all module types.
-// `ScoreNavigation` and `Publication` come with the second 5.4.0 pass.)
+// `WrittenAccidentalState`, `NotationSpelling`, `ScoreNavigation` and
+// `Publication`, all module types.)
 //
 // Global state (fonts, metrics) lives in the active `VexRuntimeContext`.
 

@@ -1086,21 +1086,25 @@ public final class Factory {
                 ctx.setDefaultStyle(defaults)
                 ctx.restore()
             }
-            // TODO(5.4.0 part 2): collect `sheet.getContinuousLayout()` of each sheet, skip the staves, voices,
-            // queued elements and systems in `layout.hidden`, then call `layout.draw(ctx)` after the systems.
-            for stave in staves {
+            // Continuous layouts hide omitted measures and silent staves. (VexFlow 5.4.0)
+            let layouts = sheets.compactMap { $0.getContinuousLayout() }
+            let hidden = layouts.reduce(into: Set<ObjectIdentifier>()) { $0.formUnion($1.hidden) }
+            for stave in staves where !hidden.contains(ObjectIdentifier(stave)) {
                 try stave.setContext(ctx).drawWithStyle()
             }
-            for voice in voices {
+            for voice in voices where !hidden.contains(ObjectIdentifier(voice)) {
                 try voice.setContext(ctx).drawWithStyle()
             }
-            for element in renderQ {
+            for element in renderQ where !hidden.contains(ObjectIdentifier(element)) {
                 if !element.isRendered() {
                     try element.setContext(ctx).drawWithStyle()
                 }
             }
-            for system in systems {
+            for system in systems where !hidden.contains(ObjectIdentifier(system)) {
                 try system.setContext(ctx).drawWithStyle()
+            }
+            for layout in layouts {
+                try layout.draw(ctx)
             }
         }
         retained = retain

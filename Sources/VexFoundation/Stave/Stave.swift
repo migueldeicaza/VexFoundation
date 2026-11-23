@@ -308,6 +308,10 @@ open class Stave: VexElement {
         for mod in modifiers {
             mod.setX(mod.getX() + shift)
         }
+        // Derived row-start and courtesy signs move with the stave too. (VexFlow 5.4.0 continuous layout)
+        for mod in boundaryModifiers {
+            mod.setX(mod.getX() + shift)
+        }
         return self
     }
 
@@ -662,7 +666,14 @@ open class Stave: VexElement {
     /// Replace only the derived row-start and courtesy signs on a responsive sheet. (VexFlow 5.4.0)
     public func setBoundaryModifiers(_ modifiers: [StaveModifier]) {
         boundaryModifiers = modifiers
-        for mark in modifiers { _ = mark.setStave(self) }
+        for mark in modifiers {
+            _ = mark.setStave(self)
+            // The gated alignment patch in `format()` keeps a larger `modifier.x` or `startX`. The derived
+            // signs changed, so all begin signs start from the stave edge (upstream always recomputes them).
+            mark.setX(x)
+        }
+        for mark in self.modifiers where mark.getPosition() == .begin { mark.setX(x) }
+        startX = x
         formatted = false
     }
 
