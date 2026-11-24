@@ -844,21 +844,15 @@ struct Upstream57Tests {
                 )
             }
             let (f, ctx) = makeFactory(width: 660, height: 530)
-            let music = try f.EasyScore().compose(EasyScoreCompositionSpec(
+            let music: EasyScoreComposition = try f.EasyScore().compose(EasyScoreCompositionSpec(
                 staves: [EasyScoreStaveSpec(id: "voice", time: .meter(3, 4), measures: measures)],
                 sheet: SheetOptions(width: 620, x: 10, y: 8),
                 continuous: ContinuousOptions()
             ))
-            let note = try music.getNote("word-1-0")
-            let annotations = note.getModifiers().compactMap { $0 as? Annotation }
+            let elidedNote: Note = try music.getNote("word-1-0")
+            let annotations = elidedNote.getModifiers().compactMap { $0 as? Annotation }
             let group = annotations[0], plain = annotations[1]
-            struct Frame: Equatable {
-                var rows: Int
-                var x: Double
-                var baseline: Double
-                var width: Double
-            }
-            var frames: [Frame] = []
+            var frames: [ElisionFrame] = []
             for width in [620.0, 220, 620] {
                 try music.sheet.setWidth(width)
                 ctx.clear()
@@ -869,7 +863,7 @@ struct Upstream57Tests {
                 let connectors = music.systems[1].getPhraseLayout().getLyricConnectors()
                 #expect(connectors.count == 2)
                 #expect(group.getText() == "la" + Glyphs.lyricsElision + "mi")
-                #expect(group.checkAttachedNote() === note && plain.checkAttachedNote() === note)
+                #expect(group.checkAttachedNote() === elidedNote && plain.checkAttachedNote() === elidedNote)
                 #expect(abs(x + textWidth / 2 - (try plain.computeX().x) - plain.getWidth() / 2) < 1e-6)
                 #expect(plain.getText() == "do")
                 #expect(baseline < (try plain.computeY().y))
@@ -878,7 +872,7 @@ struct Upstream57Tests {
                 let last = try #require(try music.getNote("word-1-2") as? StaveNote)
                 #expect(connectors[1].x + connectors[1].w == last.getNoteHeadBeginX() + last.getGlyphWidth())
                 #expect(music.systems[1].getPhraseLayout().diagnostics == [])
-                frames.append(Frame(rows: music.sheet.getRows().count, x: x, baseline: baseline, width: textWidth))
+                frames.append(ElisionFrame(rows: music.sheet.getRows().count, x: x, baseline: baseline, width: textWidth))
             }
             #expect(frames.map(\.rows) == [1, 2, 1])
             #expect(frames[2] == frames[0])
@@ -979,4 +973,13 @@ private func expectBadArguments(_ body: () throws -> Void) {
     } catch {
         Issue.record("Unexpected error \(error).")
     }
+}
+
+/// One layout state in `twoElidedSyllablesShareOneCenteredAnchor`. At file scope:
+/// some compilers report a circular reference for a local type in that closure.
+private struct ElisionFrame: Equatable {
+    var rows: Int
+    var x: Double
+    var baseline: Double
+    var width: Double
 }

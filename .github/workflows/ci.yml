@@ -14,6 +14,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Show toolchain
+        run: |
+          xcode-select -p
+          swift --version
+
       - name: Checkout upstream VexFlow (pinned)
         run: |
           git clone https://github.com/vexflow/vexflow ../vexflow-5.9.0
