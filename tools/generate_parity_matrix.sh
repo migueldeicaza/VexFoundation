@@ -46,7 +46,7 @@ find "$ROOT_DIR/Sources/VexFoundation" -name '*.swift' -type f \
       fi
     done
 
-rg -o "from './[^']+'" "$UPSTREAM_INDEX" \
+grep -oE "from './[^']+'" "$UPSTREAM_INDEX" \
   | sed "s|from './||; s|'$||" \
   | sort -u > "$TMP_MODULES"
 
